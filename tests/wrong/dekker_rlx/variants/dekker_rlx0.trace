@@ -1,0 +1,11 @@
+[main] dekker_rlx0.c: 12: if (pthread_create(&t1, NULL, thread_one, NULL))
+[main] dekker_rlx0.c: 14: if (pthread_create(&t2, NULL, thread_two, NULL))
+[thread_two] dekker_rlx.c: 17: atomic_store_explicit(&x, 1, memory_order_relaxed);
+[thread_two] dekker_rlx.c: 18: if (!atomic_load_explicit(&y, memory_order_relaxed)) {
+[thread_two] dekker_rlx.c: 19: atomic_store_explicit(&c, 0, memory_order_relaxed);
+[thread_one] dekker_rlx.c: 7: atomic_store_explicit(&y, 1, memory_order_relaxed);
+[thread_one] dekker_rlx.c: 8: if (!atomic_load_explicit(&x, memory_order_relaxed)) {
+[thread_one] dekker_rlx.c: 9: atomic_store_explicit(&c, 1, memory_order_relaxed);
+[thread_two] dekker_rlx.c: 20: assert(atomic_load_explicit(&c, memory_order_relaxed) == 0);
+Assertion violation: atomic_load_explicit(&c, memory_order_relaxed) == 0
+Number of complete executions explored: 0

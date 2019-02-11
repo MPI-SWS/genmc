@@ -1,0 +1,62 @@
+1,3c1,5
+< #include <stdlib.h>
+< #include <pthread.h>
+< #include "stdatomic.h"
+---
+> #include <stdio.h>
+> #include <threads.h>
+> #include <stdatomic.h>
+> 
+> #include "librace.h"
+30,31c32,34
+< 		while (atomic_load_explicit(&rw->lock, memory_order_relaxed) <= 0)
+< 			; //thrd_yield();
+---
+> 		while (atomic_load_explicit(&rw->lock, memory_order_relaxed) <= 0) {
+> 			thrd_yield();
+> 		}
+41,42c44,46
+< 		while (atomic_load_explicit(&rw->lock, memory_order_relaxed) != RW_LOCK_BIAS)
+< 			; //thrd_yield();
+---
+> 		while (atomic_load_explicit(&rw->lock, memory_order_relaxed) != RW_LOCK_BIAS) {
+> 			thrd_yield();
+> 		}
+80c84
+< void *thread_fn(void *arg)
+---
+> static void a(void *obj)
+82c86,87
+< 	for (int i = 0; i < 2; i++) {
+---
+> 	int i;
+> 	for(i = 0; i < 2; i++) {
+85c90
+< 			int r = shareddata;
+---
+> 			load_32(&shareddata);
+89c94
+< 			shareddata = i;
+---
+> 			store_32(&shareddata,(unsigned int)i);
+93d97
+< 	return NULL;
+96c100
+< int main()
+---
+> int user_main(int argc, char **argv)
+98c102
+< 	pthread_t t1, t2;
+---
+> 	thrd_t t1, t2;
+101,104c105,109
+< 	if (pthread_create(&t1, NULL, thread_fn, NULL))
+< 		abort();
+< 	if (pthread_create(&t2, NULL, thread_fn, NULL))
+< 		abort();
+---
+> 	thrd_create(&t1, (thrd_start_t)&a, NULL);
+> 	thrd_create(&t2, (thrd_start_t)&a, NULL);
+> 
+> 	thrd_join(t1);
+> 	thrd_join(t2);

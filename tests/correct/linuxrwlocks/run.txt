@@ -1,0 +1,2 @@
+To run with cdschecker:
+       ./run.sh -m 2 -f 3 linuxrwlocks (not with fairness-support enabled)

@@ -1,0 +1,117 @@
+GenMC
+=====
+Generic Model Checking for C Programs
+-------------------------------------
+
+GenMC is a stateless model checker for C programs that works on the
+level of LLVM Intermediate Representation.
+
+Author: Michalis Kokologiannakis.
+
+* [License](#license)
+* [Dependencies](#dependencies)
+* [Installing](#installing)
+* [Troubleshooting](#troubleshooting)
+* [Usage](#usage)
+* [Notes](#notes)
+
+<a name="license">License</a>
+-----------------------------
+
+GenMC (with the exception of some files, see [Exceptions](#exceptions))
+is distributed under the GPL, version 3 or (at your option) later.
+Please see the COPYING file for details on GPLv3.
+
+### <a name="exceptions">Exceptions</a>
+
+Part of the code in the files listed below are originating from
+the [LLVM Compiler Framework](https://llvm.org), version 3.5.
+These parts are licensed under the University of Illinois/NCSA
+Open Source License as well as under GPLv3. Please see the LLVMLICENSE
+file for details on the University of Illinois/NCSA Open Source License.
+
+        src/Interpreter.h
+		src/Interpreter.cpp
+		src/Execution.cpp
+		src/ExternalFunctions.cpp
+
+In addition, the files within the `include` directory are licensed
+under their own licenses; please see the respective headers for more
+information.
+
+<a name="dependencies">Dependencies</a>
+---------------------------------------
+
+The LLVM versions currently supported are: 3.5.0, 3.8.1, 4.0.1,
+6.0.1, 7.0.1, 8.0.1.
+
+### GNU/Linux
+
+In order to use the tool on a Debian-based installation, you will need the
+following packages:
+
+		autoconf  automake  clang  libclang-dev  llvm  llvm-dev  libffi-dev
+		zlib1g-dev libedit-dev
+
+### Max OS X
+
+Using `brew`, the following packages are necessary:
+
+		autoconf automake llvm libffi
+
+<a name="installing">Installing</a>
+----------------------------------
+
+### GNU/Linux
+
+For a default build issue:
+
+		autoreconf --install
+		./configure
+		make
+
+This will leave the `genmc` executable in the `src` directory.
+You can either run it from there (as in the examples below), or issue
+`make install`.
+
+Alternatively, the following following command will build the `genmc`
+executable in parallel and will also run a subset of all the tests
+that come with the system to see if the system was built correctly or
+not:
+
+		make -j ftest
+
+### Mac OS X
+
+For a default build issue:
+
+		autoreconf --install
+		./configure AR=llvm-ar
+		make
+
+<a name="usage">Usage</a>
+-------------------------
+
+* To see a list of available options run:
+
+		./src/genmc --help
+
+* To run a particular testcase run:
+
+		./src/genmc [options] <file>
+
+<a name="troubleshooting">Troubleshooting</a>
+---------------------------------------------
+
+* Undefined references to symbols that involve types `std::__cxx11` during linking:
+
+	This probably indicates that you are using an old version of LLVM with a new
+	version of libstdc++. Configuring with the following flags should fix the problem:
+
+			CXXFLAGS="-D_GLIBCXX_USE_CXX11_ABI=0" ./configure --with-llvm=LLVM_PATH
+
+<a name="notes">Notes</a>
+------------------------
+
+For feedback, questions, and bug reports please send an e-mail to
+`michalis AT mpi-sws DOT org`.
