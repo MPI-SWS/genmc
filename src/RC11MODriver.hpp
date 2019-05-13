@@ -25,6 +25,9 @@
 
 class RC11MODriver : public GenMCDriver {
 
+protected:
+	int splitLocMOBefore(const llvm::GenericValue *addr, const View &before);
+
 public:
 
 	RC11MODriver(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Module> mod,
@@ -32,11 +35,12 @@ public:
 		     clock_t start)
 		: GenMCDriver(std::move(conf), std::move(mod), granted, toVerify, start) {};
 
-	std::vector<Event> getStoresToLoc(llvm::GenericValue *addr);
-	std::pair<int, int> getPossibleMOPlaces(llvm::GenericValue *addr, bool isRMW);
-	std::vector<Event> getRevisitLoads(EventLabel &lab);
-	std::pair<std::vector<EventLabel>, std::vector<std::pair<Event, Event> > >
-		  getPrefixToSaveNotBefore(EventLabel &lab, View &before);
+	std::vector<Event> getStoresToLoc(const llvm::GenericValue *addr);
+	std::pair<int, int> getPossibleMOPlaces(const llvm::GenericValue *addr, bool isRMW);
+	std::vector<Event> getRevisitLoads(const WriteLabel *lab);
+	std::pair<std::vector<std::unique_ptr<EventLabel> >,
+		  std::vector<std::pair<Event, Event> > >
+	getPrefixToSaveNotBefore(const WriteLabel *lab, View &before);
 	bool checkPscAcyclicity();
 	bool isExecutionValid();
 };

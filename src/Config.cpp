@@ -72,6 +72,9 @@ static llvm::cl::opt<std::string>
 clLibrarySpecsFile("library-specs", llvm::cl::init(""), llvm::cl::value_desc("file"),
 		   llvm::cl::cat(clGeneral),
 		   llvm::cl::desc("Check for library correctness"));
+static llvm::cl::opt<bool>
+clDisableRaceDetection("disable-race-detection", llvm::cl::cat(clGeneral),
+		     llvm::cl::desc("Disable race detection"));
 
 static llvm::cl::opt<int>
 clLoopUnroll("unroll", llvm::cl::init(-1), llvm::cl::value_desc("N"),
@@ -139,6 +142,7 @@ void Config::getConfigOptions(int argc, char **argv)
 	printErrorTrace = clPrintErrorTrace;
 	checkPscAcyclicity = clCheckPscAcyclicity;
 	checkWbAcyclicity = clCheckWbAcyclicity;
+	disableRaceDetection = clDisableRaceDetection;
 
 	/* Save transformation options */
 	unroll = clLoopUnroll;

@@ -53,11 +53,11 @@ AC_CHECK_HEADERS_ALT([llvm/InstVisitor.h llvm/IR/InstVisitor.h llvm/Support/Inst
 AC_CHECK_HEADERS_ALT([llvm/Module.h llvm/IR/Module.h],[],[AC_MSG_FAILURE([Could not find necessary headers.])],[AC_INCLUDES_DEFAULT])
 AC_CHECK_HEADERS_ALT([llvm/LLVMContext.h llvm/IR/LLVMContext.h],[],[AC_MSG_FAILURE([Could not find necessary headers.])],[AC_INCLUDES_DEFAULT])
 AC_CHECK_HEADERS_ALT([llvm/PassManager.h llvm/IR/PassManager.h],[],[AC_MSG_FAILURE([Could not find necessary headers.])],[AC_INCLUDES_DEFAULT])
+AC_CHECK_HEADERS_ALT([llvm/Transforms/Utils.h llvm/Transforms/Scalar.h],[],[AC_MSG_FAILURE([Could not find necessary headers.])],[AC_INCLUDES_DEFAULT])
 
 AC_CHECK_HEADERS([ffi/ffi.h],[],[
   AC_CHECK_HEADERS([ffi.h],[],[AC_MSG_FAILURE([Could not find header ffi.h.])],[AC_INCLUDES_DEFAULT])
 ],[AC_INCLUDES_DEFAULT])
-
 
 # Check various functions in LLVM
 
@@ -387,6 +387,19 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
          [Define if Pass::getPassName() returns a StringRef.])
          AC_MSG_RESULT([yes])],
         [AC_MSG_RESULT([no])])
+
+## Check whether llvm::Loop::getName exists (>= llvm 4)
+AC_MSG_CHECKING([whether llvm::Loop::getName exists])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/Analysis/LoopInfo.h>
+]],[[
+  llvm::Loop * L = 0;
+  L->getName();
+]])],
+  [AC_MSG_RESULT([yes])
+   AC_DEFINE([LLVM_HAVE_LOOP_GET_NAME],[1],
+   [Define if llvm::LoopInfo::getName exists])],
+  [AC_MSG_RESULT([no])])
 
 ## Check whether llvm::LoopInfo::erase exists (> llvm 4)
 AC_MSG_CHECKING([whether llvm::LoopInfo::erase exists])

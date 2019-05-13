@@ -3,8 +3,6 @@
 
 #include <stddef.h>
 
-typedef __SIZE_TYPE__ size_t;
-
 struct _IO_FILE;
 typedef struct _IO_FILE FILE;
 

@@ -21,7 +21,6 @@
 #ifndef __LIBRARY_HPP__
 #define __LIBRARY_HPP__
 
-#include "Event.hpp"
 #include <llvm/IR/Instructions.h>
 #include <vector>
 #include <string>
@@ -30,21 +29,26 @@
 enum LibType { Granted, ToVerify };
 
 /* Each library has some function that make the library up */
-struct LibMem {
-	std::string name;
-	EventType typ;
-	llvm::AtomicOrdering ord;
-	bool initial;
+class LibMem {
 
-	LibMem(std::string name, EventType typ, llvm::AtomicOrdering ord, bool isLibInit) :
+public:
+	enum LibMemType { LM_Read, LM_Write };
+
+	LibMem(std::string name, LibMemType typ, llvm::AtomicOrdering ord, bool isLibInit) :
 		name(name), typ(typ), ord(ord), initial(isLibInit) {};
 
-	std::string getName() { return name; };
-	EventType getType()   { return typ; };
-	llvm::AtomicOrdering getOrdering() { return ord; };
-	bool isLibInit()         { return initial; };
-	bool hasReadSemantics()  { return typ == ERead; };
-	bool hasWriteSemantics() { return typ == EWrite; };
+	const std::string& getName() const { return name; };
+	LibMemType getType()   const { return typ; };
+	llvm::AtomicOrdering getOrdering() const { return ord; };
+	bool isLibInit()         const { return initial; };
+	bool hasReadSemantics()  const { return typ == LM_Read; };
+	bool hasWriteSemantics() const { return typ == LM_Write; };
+
+private:
+	std::string name;
+	LibMemType typ;
+	llvm::AtomicOrdering ord;
+	bool initial;
 };
 
 struct Relation {
@@ -54,9 +58,9 @@ struct Relation {
 
 	Relation(std::string name) : transitive(false), name(name) {};
 
-	bool isTransitive()     { return transitive; };
-	std::string getName() { return name; };
-	std::vector<std::vector<std::string> > &getSteps() { return steps; };
+	bool isTransitive() const    { return transitive; };
+	const std::string &getName() const { return name; };
+	const std::vector<std::vector<std::string> > &getSteps() const { return steps; };
 
 	void addStep(std::vector<std::string> step) { steps.push_back(step); };
 	void makeTransitive()    { transitive = true; };
@@ -67,7 +71,7 @@ struct Constraint {
 
 	Constraint(std::string name) : name(name) {};
 
-	std::string getName() { return name; };
+	const std::string &getName() const { return name; };
 };
 
 /* Main class for libraries */
@@ -85,16 +89,16 @@ private:
 public:
 	Library(std::string name, LibType typ);
 
-	std::string getName();
-	LibType getType();
-	std::vector<LibMem> &getMembers();
-	std::vector<Relation> &getRelations();
-	std::vector<Constraint> &getConstraints();
-	bool hasFunctionalRfs() { return functionalRfs; };
-	bool tracksCoherence()  { return coherence; };
+	std::string getName() const;
+	LibType getType() const;
+	const std::vector<LibMem> &getMembers() const;
+	const std::vector<Relation> &getRelations() const;
+	const std::vector<Constraint> &getConstraints() const;
+	bool hasFunctionalRfs() const { return functionalRfs; };
+	bool tracksCoherence()  const { return coherence; };
 	void addMember(std::string name, std::string typ, std::string ord);
-	bool hasMember(std::string &name);
-	LibMem *getMember(std::string &name);
+	bool hasMember(const std::string &name) const;
+	const LibMem *getMember(const std::string &name) const;
 	void addRelation(std::string name);
 	void makeRelationTransitive(std::string name);
 	void addStepToRelation(std::string relation, std::vector<std::string> substeps);
@@ -102,7 +106,8 @@ public:
 	void markFunctionalRfs()  { functionalRfs = true; };
 	void markCoherenceTrack() { coherence = true; };
 
-	static Library *getLibByMemberName(std::vector<Library> &libs, std::string &functionName);
+	static const Library *getLibByMemberName(const std::vector<Library> &libs,
+						 const std::string &functionName);
 
 	friend llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const Library &l);
 };

@@ -36,15 +36,15 @@ Library::Library(std::string name, LibType typ)
  ** Basic getters/setters
  ***********************************************************/
 
-std::string Library::getName() { return name; }
+std::string Library::getName() const { return name; }
 
-LibType Library::getType() { return typ; }
+LibType Library::getType() const { return typ; }
 
-std::vector<LibMem> &Library::getMembers() { return mems; }
+const std::vector<LibMem> &Library::getMembers() const { return mems; }
 
-std::vector<Relation> &Library::getRelations() { return relations; }
+const std::vector<Relation> &Library::getRelations() const { return relations; }
 
-std::vector<Constraint> &Library::getConstraints() { return constraints; }
+const std::vector<Constraint> &Library::getConstraints() const { return constraints; }
 
 llvm::AtomicOrdering strToOrd(std::string &ord)
 {
@@ -63,24 +63,27 @@ llvm::AtomicOrdering strToOrd(std::string &ord)
 void Library::addMember(std::string name, std::string typ, std::string ord)
 {
 	if (typ == "read")
-		mems.push_back(LibMem(name, ERead, strToOrd(ord), false));
+		mems.push_back(LibMem(name, LibMem::LM_Read,
+				      strToOrd(ord), false));
 	else if (typ == "write")
-		mems.push_back(LibMem(name, EWrite, strToOrd(ord), false));
+		mems.push_back(LibMem(name, LibMem::LM_Write,
+				      strToOrd(ord), false));
 	else if (typ == "init")
-		mems.push_back(LibMem(name, EWrite, strToOrd(ord), true));
+		mems.push_back(LibMem(name, LibMem::LM_Write,
+				      strToOrd(ord), true));
 	else
 		WARN("Erroneous library member type in specs!\n");
 }
 
-bool Library::hasMember(std::string &name)
+bool Library::hasMember(const std::string &name) const
 {
 	return std::any_of(mems.begin(), mems.end(),
-			   [&name](LibMem &mem){ return mem.getName() == name; });
+			   [&](const LibMem &mem){ return mem.getName() == name; });
 }
 
-LibMem *Library::getMember(std::string &name)
+const LibMem *Library::getMember(const std::string &name) const
 {
-	for (auto &m : this->getMembers())
+	for (auto &m : getMembers())
 		  if (m.getName() == name)
 			  return &m;
 	return nullptr;
@@ -88,7 +91,8 @@ LibMem *Library::getMember(std::string &name)
 
 /* Given a collection of libraries, returns a pointer to the library that contains
  * the given name as a member, if there is any */
-Library *Library::getLibByMemberName(std::vector<Library> &libs, std::string &functionName)
+const Library *Library::getLibByMemberName(const std::vector<Library> &libs,
+				     const std::string &functionName)
 {
 	for (auto &l : libs)
 		if (l.hasMember(functionName))
@@ -103,14 +107,14 @@ void Library::addRelation(std::string name)
 
 void Library::makeRelationTransitive(std::string relation)
 {
-	for (auto &r : getRelations())
+	for (auto &r : relations)
 		if (r.getName() == relation)
 			r.makeTransitive();
 }
 
 void Library::addStepToRelation(std::string relation, std::vector<std::string> preds)
 {
-	for (auto &r : getRelations())
+	for (auto &r : relations)
 		if (r.getName() == relation)
 			r.addStep(preds);
 
@@ -133,6 +137,6 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const Library &l)
 {
 	s << "Library: " << l.name << "\t\nMembers:\n";
 	for (auto &m : l.mems)
-		s << "\t\t" << m.name << "\n";
+		s << "\t\t" << m.getName() << "\n";
 	return s;
 }

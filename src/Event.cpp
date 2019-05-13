@@ -20,37 +20,7 @@
 
 #include "Event.hpp"
 
-llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const EventType &t)
+llvm::raw_ostream& operator<<(llvm::raw_ostream &s, Event e)
 {
-	switch (t) {
-	case ERead    : return s << "R";
-	case EWrite   : return s << "W";
-	case EFence   : return s << "F";
-	case EMalloc  : return s << "A";
-	case EFree    : return s << "D";
-	case EStart   : return s << "B";
-	case EFinish  : return s << "E";
-	case ETCreate : return s << "C";
-	case ETJoin   : return s << "J";
-	default : return s;
-	}
-}
-
-llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const EventAttr &a)
-{
-	switch (a) {
-	case ATTR_PLAIN : return s;
-	case ATTR_CAS   : return s << "CAS";
-	case ATTR_FAI   : return s << "FAI";
-	case ATTR_LOCK  : return s << "LOCK";
-	case ATTR_UNLOCK: return s << "UNLOCK";
-	default : return s;
-	}
-}
-
-llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const Event &e)
-{
-	if (e.isInitializer())
-		return s << "INIT";
-	return s << "\"Event (" << e.thread << ", " << e.index << ")\"";
+	return s << "(" << e.thread << ", " << e.index << ")";
 }

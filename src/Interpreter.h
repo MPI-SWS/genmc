@@ -40,9 +40,8 @@
 #ifndef LLI_INTERPRETER_H
 #define LLI_INTERPRETER_H
 
-#include "Event.hpp"
-#include "EventLabel.hpp"
 #include "Library.hpp"
+#include "View.hpp"
 
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
@@ -70,6 +69,7 @@
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/raw_ostream.h>
 
+#include <random>
 #include <unordered_map>
 
 class GenMCDriver;
@@ -99,7 +99,12 @@ struct ExecutionContext {
 };
 
 class Thread {
+
 public:
+	using MyRNG  = std::minstd_rand;
+	using MyDist = std::uniform_int_distribution<MyRNG::result_type>;
+	static constexpr int seed = 1821;
+
 	int id;
 	int parentId;
 	llvm::Function *threadFun;
@@ -108,19 +113,19 @@ public:
 	std::unordered_map<void *, llvm::GenericValue> tls;
 	unsigned int globalInstructions;
 	bool isBlocked;
+	MyRNG rng;
 	std::vector<std::vector<std::pair<int, std::string> > > prefixLOC;
 
 	void block() { isBlocked = true; };
 	void unblock() { isBlocked = false; };
 
-	Thread() {}
-
-	Thread(llvm::Function *F, int id) : id(id), parentId(-1), threadFun(F),
-					    globalInstructions(0), isBlocked(false) {}
+	Thread(llvm::Function *F, int id)
+		: id(id), parentId(-1), threadFun(F), globalInstructions(0),
+		  isBlocked(false), rng(seed) {}
 
 	Thread(llvm::Function *F, int id, int pid, const llvm::ExecutionContext &SF)
 		: id(id), parentId(pid), threadFun(F), initSF(SF), globalInstructions(0),
-		  isBlocked(false) {}
+		  isBlocked(false), rng(seed) {}
 
 	llvm::raw_ostream& operator<<(llvm::raw_ostream &s) {
 		return s << "Thread (id: " << id << ", parent: " << parentId << ", function: "
@@ -150,6 +155,17 @@ public:
   explicit Interpreter(Module *M, GenMCDriver *driver);
   virtual ~Interpreter();
 
+  /* Enum to inform the driver about possible special attributes
+   * of the instruction being interpreted */
+  enum InstAttr {
+	  IA_None,
+	  IA_Fai,
+	  IA_Cas,
+	  IA_Lock,
+	  IA_Unlock,
+  };
+
+  /* Resets the interpreter at the beginning of a new execution */
   void reset();
 
   /* Stores the addresses of global values into globalVars and threadLocalVars */
@@ -158,11 +174,11 @@ public:
   std::vector<ExecutionContext> &ECStack();
 
   /* Checks whether an address is the address of a global variable */
-  bool isGlobal(void *);
-  bool isHeapAlloca(void *);
-  bool isStackAlloca(void *);
-  std::string getGlobalName(void *addr);
-  void freeRegion(void *addr, int size);
+  bool isGlobal(const void *);
+  bool isHeapAlloca(const void *);
+  bool isStackAlloca(const void *);
+  std::string getGlobalName(const void *addr);
+  void freeRegion(const void *addr, int size);
 
   /// runAtExitHandlers - Run any functions registered by the program's calls to
   /// atexit(3), which we intercept and store in AtExitHandlers.
@@ -225,16 +241,17 @@ public:
 
   /* Helper functions */
   void collectGPs(Module *M, void *ptr, Type *typ);
-  void replayExecutionBefore(View &before);
-  bool compareValues(llvm::Type *typ, const GenericValue &val1, const GenericValue &val2);
-  GenericValue loadValueFromWrite(Event &w, Type *typ, GenericValue *ptr);
-  void executeAtomicRMWOperation(GenericValue &result, GenericValue &oldVal,
-				 GenericValue &val, AtomicRMWInst::BinOp op);
+  void replayExecutionBefore(const View &before);
+  bool compareValues(const llvm::Type *typ, const GenericValue &val1, const GenericValue &val2);
+  GenericValue getLocInitVal(GenericValue *ptr, Type *typ);
+  void executeAtomicRMWOperation(GenericValue &result, const GenericValue &oldVal,
+				 const GenericValue &val, AtomicRMWInst::BinOp op);
 
   /* Custom Opcode Implementations */ // TODO: Remove call* from the class?
   void callAssertFail(Function *F, const std::vector<GenericValue> &ArgVals);
   void callEndLoop(Function *F, const std::vector<GenericValue> &ArgVals);
   void callVerifierAssume(Function *F, const std::vector<GenericValue> &ArgVals);
+  void callVerifierNondetInt(Function *F, const std::vector<GenericValue> &ArgVals);
   void callMalloc(Function *F, const std::vector<GenericValue> &ArgVals);
   void callFree(Function *F, const std::vector<GenericValue> &ArgVals);
   void callPthreadSelf(Function *F, const std::vector<GenericValue> &ArgVals);
@@ -245,8 +262,10 @@ public:
   void callPthreadMutexLock(Function *F, const std::vector<GenericValue> &ArgVals);
   void callPthreadMutexUnlock(Function *F, const std::vector<GenericValue> &ArgVals);
   void callPthreadMutexTrylock(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callReadFunction(Library &lib, LibMem &m, Function *F, const std::vector<GenericValue> &ArgVals);
-  void callWriteFunction(Library &lib, LibMem &m, Function *F, const std::vector<GenericValue> &ArgVals);
+  void callReadFunction(const Library &lib, const LibMem &m, Function *F,
+			const std::vector<GenericValue> &ArgVals);
+  void callWriteFunction(const Library &lib, const LibMem &m, Function *F,
+			 const std::vector<GenericValue> &ArgVals);
 
 
   // Methods used to execute code:

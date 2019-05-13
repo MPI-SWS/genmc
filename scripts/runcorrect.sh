@@ -21,8 +21,37 @@
 source terminal.sh
 GenMC=../src/genmc
 
+header_printed=""
 runtime=0
 model="${model:-wb}"
+
+printheader() {
+    if test -z "${header_printed}"
+    then
+        header_printed=1
+
+        # Update status
+	echo ''; printline
+	echo -n '--- Preparing to run testcases in '
+	echo "${testdir##*/}" 'under' "${model}" | awk '{ print toupper($1), $2, toupper($3) }'
+	printline; echo ''
+
+	# Print table's header
+	printline
+	printf "| ${CYAN}%-17s${NC} | ${CYAN}%-6s${NC} | ${CYAN}%-10s${NC} | ${CYAN}%-8s${NC} | ${CYAN}%-8s${NC} |\n" \
+	       "Testcase" "Result" "Executions" "Blocked" "Avg.time"
+	printline
+    fi
+}
+
+printfooter() {
+    if test -n "${header_printed}"
+    then
+        printline
+        echo '--- Test time: ' "${runtime}"
+        printline; echo ''
+    fi
+}
 
 runvariants() {
     printf "| ${POWDER_BLUE}%-17s${NC} | " "${dir##*/}${n}"
@@ -91,17 +120,7 @@ runtest() {
     fi
 }
 
-# Update status
-echo ''; printline
-echo -n '--- Preparing to run testcases in '
-echo "${testdir##*/}" 'under' "${model}" | awk '{ print toupper($1), $2, toupper($3) }'
-printline; echo ''
-
-# Print table's header
-printline
-printf "| ${CYAN}%-17s${NC} | ${CYAN}%-6s${NC} | ${CYAN}%-10s${NC} | ${CYAN}%-8s${NC} | ${CYAN}%-8s${NC} |\n" \
-       "Testcase" "Result" "Executions" "Blocked" "Avg.time"
-printline
+[ -z "${TESTFILTER}" ] && TESTFILTER=*
 
 # Run correct testcases and update status
 for dir in "${testdir}"/*
@@ -110,11 +129,16 @@ do
     then
 	case "${dir##*/}" in
 	    "big1"|"big2"|"fib_bench"|"lastzero") continue;;
-	    *)                                            ;;
+	    ${TESTFILTER})                                ;;
+	    *)                                    continue;;
+	esac
+    else
+	case "${dir##*/}" in
+	    ${TESTFILTER}) ;;
+	    *)     continue;;
 	esac
     fi
+    printheader
     runtest "${dir}"
 done
-printline
-echo '--- Test time: ' "${runtime}"
-printline; echo ''
+printfooter

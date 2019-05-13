@@ -45,12 +45,12 @@ ModOrder::const_iterator ModOrder::cend()   { return mo_.cend(); }
  ** Basic getter and setter methods
  ***********************************************************/
 
-llvm::GenericValue *ModOrder::getAddrAtPos(ModOrder::iterator it)
+const llvm::GenericValue *ModOrder::getAddrAtPos(ModOrder::iterator it)
 {
 	return it->first;
 }
 
-std::vector<Event> ModOrder::getMoAfter(llvm::GenericValue *addr, const Event &e)
+std::vector<Event> ModOrder::getMoAfter(const llvm::GenericValue *addr, Event e)
 {
 	std::vector<Event> res;
 
@@ -68,12 +68,12 @@ std::vector<Event> ModOrder::getMoAfter(llvm::GenericValue *addr, const Event &e
 	BUG();
 }
 
-void ModOrder::addAtLocEnd(llvm::GenericValue *addr, const Event &e)
+void ModOrder::addAtLocEnd(const llvm::GenericValue *addr, Event e)
 {
        mo_[addr].push_back(e);
 }
 
-void ModOrder::addAtLocAfter(llvm::GenericValue *addr, const Event &pred, const Event &e)
+void ModOrder::addAtLocAfter(const llvm::GenericValue *addr, Event pred, Event e)
 {
 	/* If there is no predecessor, put the store in the beginning */
 	if (pred == Event::getInitializer()) {
@@ -92,13 +92,13 @@ void ModOrder::addAtLocAfter(llvm::GenericValue *addr, const Event &pred, const 
 	BUG();
 }
 
-bool ModOrder::locContains(llvm::GenericValue *addr, const Event &e)
+bool ModOrder::locContains(const llvm::GenericValue *addr, Event e)
 {
 	return e == Event::getInitializer() ||
 	      std::any_of(mo_[addr].begin(), mo_[addr].end(), [&e](Event s){ return s == e; });
 }
 
-bool ModOrder::areOrdered(llvm::GenericValue *addr, const Event &a, const Event &b)
+bool ModOrder::areOrdered(const llvm::GenericValue *addr, Event a, Event b)
 {
 	if (b == Event::getInitializer())
 		return true;
@@ -116,7 +116,7 @@ bool ModOrder::areOrdered(llvm::GenericValue *addr, const Event &a, const Event 
 	return false;
 }
 
-int ModOrder::getStoreOffset(llvm::GenericValue *addr, const Event &e)
+int ModOrder::getStoreOffset(const llvm::GenericValue *addr, Event e)
 {
 	if (e == Event::getInitializer())
 		return -1;
@@ -128,7 +128,7 @@ int ModOrder::getStoreOffset(llvm::GenericValue *addr, const Event &e)
 	BUG();
 }
 
-void ModOrder::changeStoreOffset(llvm::GenericValue *addr, const Event &e, int newOffset)
+void ModOrder::changeStoreOffset(const llvm::GenericValue *addr, Event e, int newOffset)
 {
 	auto &locMO = mo_[addr];
 

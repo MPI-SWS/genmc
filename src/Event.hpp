@@ -23,14 +23,6 @@
 
 #include <llvm/Support/raw_ostream.h>
 
-enum EventType { EStart, EFinish, ETCreate, ETJoin,
-		 ERead, EWrite, EFence, EMalloc, EFree };
-
-enum EventAttr { ATTR_PLAIN, ATTR_CAS, ATTR_FAI, ATTR_LOCK, ATTR_UNLOCK };
-
-llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const EventType &t);
-llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const EventAttr &a);
-
 struct Event {
 	int thread;
 	int index;
@@ -56,8 +48,8 @@ struct Event {
 	inline bool operator>(const Event &e) const {
 		return (index > e.index) || (index == e.index && thread > e.thread);
 	}
-	friend llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const Event &e);
-	friend std::ostream& operator<<(std::ostream &s, const Event &e);
+	friend llvm::raw_ostream& operator<<(llvm::raw_ostream &s, Event e);
+	friend std::ostream& operator<<(std::ostream &s, Event e);
 };
 
 struct EventHasher {

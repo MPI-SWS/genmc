@@ -42,6 +42,7 @@ public:
 	std::string programEntryFun;
 	bool inputFromBitcodeFile;
 	bool validateExecGraphs;
+	bool disableRaceDetection;
 	bool randomizeSchedule;
 	bool printRandomizeScheduleSeed;
 	std::string randomizeScheduleSeed;

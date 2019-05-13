@@ -21,7 +21,27 @@
 #include "View.hpp"
 #include <algorithm>
 
+/************************************************************
+ ** Constructors
+ ***********************************************************/
+
 View::View() : view_(EventView(0)) { }
+
+
+/************************************************************
+ ** Iterators
+ ***********************************************************/
+
+View::iterator View::begin() { return &((*this)[0]); }
+View::iterator View::end()   { return &((*this)[0]) + size(); }
+
+View::const_iterator View::cbegin() { return &((*this)[0]); }
+View::const_iterator View::cend()   { return &((*this)[0]) + size(); }
+
+
+/************************************************************
+ ** Basic operations on Views
+ ***********************************************************/
 
 unsigned int View::size() const
 {
@@ -33,32 +53,28 @@ bool View::empty() const
 	return this->size() == 0;
 }
 
-void View::updateMax(View &v)
+bool View::contains(Event e) const
+{
+	return e.index <= (*this)[e.thread];
+}
+
+View& View::updateIdx(const Event e)
+{
+	if ((*this)[e.thread] < e.index)
+		(*this)[e.thread] = e.index;
+	return *this;
+}
+
+View& View::update(const View &v)
 {
 	if (v.empty())
-		return;
+		return *this;
 
 	auto size = std::max(this->size(), v.size());
 	for (auto i = 0u; i < size; i++)
 		if ((*this)[i] < v[i])
 			(*this)[i] = v[i];
-	return;
-}
-
-View View::getMax(View &v)
-{
-	if (this->empty())
-		return v;
-	if (v.empty())
-		return *this;
-
-	View result(*this);
-
-	auto size = std::max(this->size(), v.size());
-	for (auto i = 0u; i < size; i++)
-		if (result[i] < v[i])
-			result[i] = v[i];
-	return result;
+	return *this;
 }
 
 llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const View &v)

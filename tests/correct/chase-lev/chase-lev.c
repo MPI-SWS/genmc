@@ -4,6 +4,12 @@
 # define NUM 10
 #endif
 
+#ifdef CONFIG_DEQ_STEALERS
+#define DEFAULT_STEALERS (CONFIG_DEQ_STEALERS)
+#else
+#define DEFAULT_STEALERS 1
+#endif
+
 void thread0(struct Deque *que, int64_t N, int64_t X1, int64_t X2, int64_t X3,
 	     int64_t *result1, int64_t *result2, int64_t *result3)
 {
@@ -64,26 +70,18 @@ void thread2(struct Deque *que, int64_t N, int64_t X, int64_t *result)
 
 struct Deque deq;
 
-void *thread_0(void *unused)
+void *thread_pp(void *unused)
 {
 	int64_t res1, res2, res3;
 
-	thread0(&deq, NUM, 2, 1, 1, &res1, &res2, &res3);
+	thread0(&deq, NUM, 5, 3, 2, &res1, &res2, &res3);
 	return NULL;
 }
 
-void *thread_1(void *unused)
+void *thread_s(void *unused)
 {
 	int64_t res1;
 
-	thread1(&deq, NUM, 2, &res1);
-	return NULL;
-}
-
-void *thread_2(void *unused)
-{
-	int64_t res1;
-
-	thread2(&deq, NUM, 1, &res1);
+	thread1(&deq, NUM, 1, &res1);
 	return NULL;
 }

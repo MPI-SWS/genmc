@@ -39,6 +39,12 @@
  typedef llvm::Instruction TerminatorInst;
 #endif
 
+#ifdef LLVM_HAVE_LOOP_GET_NAME
+# define LOOP_NAME(l) (l->getName())
+#else
+# define LOOP_NAME(l) ((*l->block_begin())->getName())
+#endif
+
 void LoopUnrollPass::getAnalysisUsage(llvm::AnalysisUsage &au) const
 {
 	llvm::LoopPass::getAnalysisUsage(au);
@@ -46,204 +52,160 @@ void LoopUnrollPass::getAnalysisUsage(llvm::AnalysisUsage &au) const
 	au.addPreserved<DeclareEndLoopPass>();
 }
 
-llvm::BasicBlock *LoopUnrollPass::makeDivergeBlock(llvm::Loop *l)
+/*
+   This function creates a block that only calls the special __end_loop() function.
+   The Interpreter should drop the execution when such a call is encountered.
+*/
+llvm::BasicBlock *LoopUnrollPass::createLoopDivergeBlock(llvm::Loop *l)
 {
-	llvm::Function *parentFun, *endLoopFun;
-	llvm::BasicBlock *divergeBlock;
+	llvm::Function *parentFun = (*l->block_begin())->getParent();
+	llvm::Function *endLoopFun = parentFun->getParent()->getFunction("__end_loop");
 
-	parentFun = (*l->block_begin())->getParent();
-	divergeBlock = llvm::BasicBlock::Create(parentFun->getContext(), "diverge", parentFun);
-
-	endLoopFun = parentFun->getParent()->getFunction("__end_loop");
 	BUG_ON(!endLoopFun);
 
+	llvm::BasicBlock *divergeBlock = llvm::BasicBlock::Create(parentFun->getContext(), "diverge", parentFun);
 	llvm::CallInst::Create(endLoopFun, {}, "", divergeBlock);
 	llvm::BranchInst::Create(divergeBlock, divergeBlock);
+
 	return divergeBlock;
 }
 
-void LoopUnrollPass::redirectBranch(int bodyIdx, int blockIdx, int unrollDepth,
-				    llvm::BasicBlock *divergeBlock,
-				    std::map<llvm::BasicBlock const *, int> &loopBlockIdx,
-				    std::vector<std::vector<llvm::BasicBlock *> > &loopBodies)
+/*
+ * Creates an allocation for a variable that will be used for bounding this loop.
+ * The location return by the alloca() is initialized with the loop's bound.
+ */
+llvm::Value *LoopUnrollPass::createBoundAlloca(llvm::Loop *l)
 {
-	TerminatorInst *ti;
-	llvm::BasicBlock *succ;
-	int nsucc;
-	int targetBlock;
+	llvm::Function *parentFun = (*l->block_begin())->getParent();
+	llvm::BasicBlock::iterator entryInst;
 
-	ti = loopBodies[bodyIdx][blockIdx]->getTerminator();
-	nsucc = ti->getNumSuccessors();
-	for (int i = 0; i < nsucc; i++) {
-		/*
-		 * Check the successors of this block. If one of them directs
-		 * within the loop body we have to check whether it directs
-		 * to the header. Else, we do nothing.
-		 */
-		succ = ti->getSuccessor(i);
-		if (loopBlockIdx.count(succ)) {
-			/*
-			 * This successor directs to the loop header. We either have to
-			 * redirect it to the next loop body, or, if it is the last body,
-			 * to the divergence block. In a different case, we just connect
-			 * it to some block within the same loop body.
-			 */
-			targetBlock = loopBlockIdx[succ];
-			if (targetBlock == 0) {
-				if (bodyIdx < unrollDepth - 1)
-					ti->setSuccessor(i, loopBodies[bodyIdx+1][targetBlock]);
-				else
-					ti->setSuccessor(i, divergeBlock);
-			} else
-				ti->setSuccessor(i, loopBodies[bodyIdx][targetBlock]);
-		}
-	}
+	/*
+	 * LLVM expects all allocas() to be in the beginning of each function.
+	 * We first locate the position in which this alloca() will be inserted.
+	 */
+	for (entryInst = parentFun->begin()->begin();
+	     llvm::dyn_cast<llvm::AllocaInst>(&*entryInst); ++entryInst)
+		;
+
+	/* Create the alloca()), initialize the memory location, and return it */
+	llvm::Value *loopBound = llvm::ConstantInt::get(llvm::Type::getInt32Ty(parentFun->getContext()),
+							unrollDepth);
+	llvm::Value *alloca = new llvm::AllocaInst(llvm::Type::getInt32Ty(parentFun->getContext()),
+						   0, NULL, LOOP_NAME(l) + ".max", &*entryInst);
+	llvm::StoreInst *ptr = new llvm::StoreInst(loopBound, alloca, &*entryInst);
+	return alloca;
 }
 
-void LoopUnrollPass::redirectPHIOrValue(int bodyIdx, int blockIdx,
-					std::vector<llvm::ValueToValueMapTy> &VMaps,
-					std::map<llvm::BasicBlock const *, int> &loopBlockIdx,
-					std::vector<std::vector<llvm::BasicBlock *> > &loopBodies)
+/*
+ * Returns a basic block the only purpose of which is to initialize the bound variable
+ * for this loop to the maximum bound. This block needs to be executed before entering a
+ * loop for the first time.
+ */
+llvm::BasicBlock *LoopUnrollPass::createBoundInitBlock(llvm::Loop *l, llvm::Value *boundAlloca)
 {
-	llvm::PHINode *p;
-	int targetIdx;
-	int nvals;
-	int nops;
+	llvm::Function *parentFun = (*l->block_begin())->getParent();
+	llvm::BasicBlock *initBlock = llvm::BasicBlock::Create(parentFun->getContext(),
+							       "init." + LOOP_NAME(l) + ".bound",
+							       parentFun);
 
-	for (auto it = loopBodies[bodyIdx][blockIdx]->begin();
-	     it != loopBodies[bodyIdx][blockIdx]->end(); it++) {
-		if (llvm::isa<llvm::PHINode>(*it)) {
-			p = static_cast<llvm::PHINode *>(&*it);
-			nvals = p->getNumIncomingValues();
-			for (int k = 0; k < nvals; k++) {
-				if (loopBlockIdx.count(p->getIncomingBlock(k))) {
-					targetIdx = loopBlockIdx[p->getIncomingBlock(k)];
-					/*
-					 * Check whether this is an edge coming from outside the
-					 * loop or from a previous body
-					 */
-					if (blockIdx == 0) {
-						if (bodyIdx == 0) {
-							p->removeIncomingValue(k);
-							k--;
-							nvals--;
-						} else {
-							p->setIncomingBlock(k, loopBodies[bodyIdx-1][targetIdx]);
-							if (bodyIdx - 1 != 0 &&
-							    VMaps[bodyIdx].count(p->getIncomingValue(k)))
-								p->setIncomingValue(
-									k,
-									VMaps[bodyIdx-1][p->getIncomingValue(k)]);
-						}
-					} else {
-						p->setIncomingBlock(k, loopBodies[bodyIdx][targetIdx]);
-						if (bodyIdx != 0 &&
-						    VMaps[bodyIdx].count(p->getIncomingValue(k)))
-							p->setIncomingValue(
-								k,
-								VMaps[bodyIdx][p->getIncomingValue(k)]);
-					}
-				} else {
-					if (bodyIdx == 0)
-						;
-					else {
-						p->removeIncomingValue(k);
-						k--;
-						nvals--;
-					}
-				}
-			}
-		} else {
-			nops = it->getNumOperands();
-			for (int k = 0; k < nops; k++)
-				if (VMaps[bodyIdx].count(it->getOperand(k)))
-					it->setOperand(k, VMaps[bodyIdx][it->getOperand(k)]);
+	llvm::Value *initBound = llvm::ConstantInt::get(llvm::Type::getInt32Ty(parentFun->getContext()),
+							unrollDepth);
+	llvm::StoreInst *ptr = new llvm::StoreInst(initBound, boundAlloca, initBlock);
+	llvm::BranchInst::Create(l->getHeader(), initBlock); /* Branch to loop header */
+
+	return initBlock;
+}
+
+/*
+ * Returns a block which decrements the bound variable for this loop (boundAlloca).
+ * If the new value of the bound variable is 0, the returned block redirects to a
+ * divergence block. The returned block needs to be executed after each iteration of the loop.
+ */
+llvm::BasicBlock *LoopUnrollPass::createBoundDecrBlock(llvm::Loop *l, llvm::Value *boundAlloca)
+{
+	llvm::Function *parentFun = (*l->block_begin())->getParent();
+
+	/*
+	 * Create a divergence block for when the loop bound has been reached, and a
+	 * block that decreases the bound counter.
+	 */
+	llvm::BasicBlock *divergeBlock = createLoopDivergeBlock(l);
+	llvm::BasicBlock *boundBlock = llvm::BasicBlock::Create(parentFun->getContext(),
+								"dec." + LOOP_NAME(l) + ".bound",
+								parentFun);
+
+	/*
+	 * The form of boundBlock is the following:
+	 *
+	 * %bound.val = load i32, i32* LOOP_BOUND_VAR
+	 * %dec = add nsw i32 %bound.val, -1
+	 * store i32 %dec, i32* LOOP_BOUND_VAR
+	 * %cmp = icmp eq i32 %dec, 0
+	 * br i1 %cmp, label %diverge, label LOOP_HEAD
+	 */
+	llvm::Type *int32Typ = llvm::Type::getInt32Ty(parentFun->getContext());
+	llvm::Value *zero = llvm::ConstantInt::get(int32Typ, 0);
+	llvm::Value *minusOne = llvm::ConstantInt::get(int32Typ, -1, true);
+
+	llvm::Value *val = new llvm::LoadInst(boundAlloca, "bound.val", boundBlock);
+	llvm::Value *newVal = llvm::BinaryOperator::CreateNSW(llvm::Instruction::Add, val, minusOne,
+							      LOOP_NAME(l) + ".bound.dec", boundBlock);
+	llvm::StoreInst *ptr = new llvm::StoreInst(newVal, boundAlloca, boundBlock);
+	llvm::Value *cmp = new llvm::ICmpInst(*boundBlock, llvm::ICmpInst::ICMP_EQ, newVal, zero,
+					      LOOP_NAME(l) + ".bound.cmp");
+	llvm::BranchInst::Create(divergeBlock, l->getHeader(), cmp, boundBlock);
+
+	return boundBlock;
+}
+
+/* Redirects all predecessors of l that fulfill the condition f to the block toBlock. */
+template<typename Func>
+void LoopUnrollPass::redirectLoopPreds(llvm::Loop *l, llvm::BasicBlock *toBlock, Func &&f)
+{
+	llvm::BasicBlock *lh = l->getHeader();
+
+	for (auto bb = pred_begin(lh); bb != pred_end(lh); ++bb) {
+		if (!f(*bb))
+			continue;
+
+		TerminatorInst *ti = (*bb)->getTerminator();
+
+		/* Find the successor of bb that redirects to the header */
+		for (auto i = 0u; i < ti->getNumSuccessors(); i++) {
+			if (*bb != toBlock && ti->getSuccessor(i) == lh)
+				ti->setSuccessor(i, toBlock);
 		}
+
+		/* Fix any PHI nodes that had bb as incoming in the loop header */
+		for (auto it = lh->begin(); auto phi = llvm::dyn_cast<llvm::PHINode>(it); ++it) {
+			for (auto i = 0u; i < phi->getNumIncomingValues(); i++) {
+				llvm::BasicBlock *ib = phi->getIncomingBlock(i);
+				if (ib == *bb)
+					phi->setIncomingBlock(i, toBlock);
+			}
+		}
+
 	}
+	return;
 }
 
 bool LoopUnrollPass::runOnLoop(llvm::Loop *l, llvm::LPPassManager &lpm)
 {
-	llvm::SmallVector<llvm::BasicBlock *, 42> succBlocks;
-	llvm::BasicBlock *divergeBlock;
-	llvm::Function *parentFun;
-	std::vector<std::vector<llvm::BasicBlock *> > loopBodies(1, l->getBlocks());
-	std::vector<llvm::ValueToValueMapTy> VMaps(unrollDepth);
-	std::map<llvm::BasicBlock const *, int> loopBlockIdx;
+	llvm::Value *boundAlloca = createBoundAlloca(l);
+	llvm::BasicBlock *initBlock = createBoundInitBlock(l, boundAlloca);
+	llvm::BasicBlock *boundBlock = createBoundDecrBlock(l, boundAlloca);
 
-	l->getExitBlocks(succBlocks);
-	parentFun = (*l->block_begin())->getParent();
-	divergeBlock = makeDivergeBlock(l);
-	for (unsigned i = 0; i < loopBodies[0].size(); i++)
-		loopBlockIdx[loopBodies[0][i]] = i;
-
-	/* Clone the blocks making up the loop */
-	for (int d = 1; d < unrollDepth; d++) {
-		std::stringstream ss;
-		ss << "." << d;
-		loopBodies.push_back({});
-		for (auto it = loopBodies[0].begin(); it != loopBodies[0].end(); it++) {
-			llvm::BasicBlock *b = llvm::CloneBasicBlock(*it, VMaps[d], ss.str());
-			parentFun->getBasicBlockList().push_back(b);
-			loopBodies.back().push_back(b);
 #ifdef LLVM_GET_ANALYSIS_LOOP_INFO
-			l->addBasicBlockToLoop(b, lpm.getAnalysis<llvm::LoopInfo>().getBase());
+	l->addBasicBlockToLoop(boundBlock, lpm.getAnalysis<llvm::LoopInfo>().getBase());
 #else
-			l->addBasicBlockToLoop(b, lpm.getAnalysis<llvm::LoopInfoWrapperPass>().getLoopInfo());
+	l->addBasicBlockToLoop(boundBlock, lpm.getAnalysis<llvm::LoopInfoWrapperPass>().getLoopInfo());
 #endif
-		}
-	}
 
-	/* Redirect all branches, value uses, and Φ nodes to the correct loop version */
-	for (int i = 0; i < unrollDepth; i++) {
-		for (int j = 0; j < int(loopBodies[i].size()); j++) {
-			redirectBranch(i, j, unrollDepth, divergeBlock, loopBlockIdx, loopBodies);
-			redirectPHIOrValue(i, j, VMaps, loopBlockIdx, loopBodies);
-		}
-	}
+	redirectLoopPreds(l, boundBlock, [&](llvm::BasicBlock *bb){ return l->contains(bb); });
+	redirectLoopPreds(l, initBlock, [&](llvm::BasicBlock *bb){ return !l->contains(bb); });
 
-	VSet<llvm::BasicBlock *> uniqueSuccBlocks(succBlocks.begin(), succBlocks.end());
-	for (llvm::BasicBlock *sb : uniqueSuccBlocks) {
-		for (auto it = sb->begin(); llvm::isa<llvm::PHINode>(*it) && it != sb->end(); it++) {
-
-			llvm::PHINode *p = static_cast<llvm::PHINode *>(&*it);
-			std::vector<llvm::Value *> inVals;
-			std::vector<llvm::BasicBlock *> inBlocks;
-			std::vector<int> inBlockIdxs;
-
-			for (unsigned i = 0; i < p->getNumIncomingValues(); i++) {
-				llvm::BasicBlock *ib = p->getIncomingBlock(i);
-				if (loopBlockIdx.count(ib)) {
-					inVals.push_back(p->getIncomingValue(i));
-					inBlocks.push_back(p->getIncomingBlock(i));
-					inBlockIdxs.push_back(loopBlockIdx[ib]);;
-				}
-			}
-
-			for (int i = 1; i < int(loopBodies.size()); i++) {
-				for (int j = 0; j < int(inBlockIdxs.size()); j++) {
-					int k = inBlockIdxs[j];
-					if (VMaps[i].count(inVals[j]))
-						p->addIncoming(VMaps[i][inVals[j]], loopBodies[i][k]);
-					else
-						p->addIncoming(inVals[j], loopBodies[i][k]);
-				}
-			}
-		}
-	}
-#ifdef LLVM_HAVE_LOOPINFO_ERASE
-	lpm.getAnalysis<llvm::LoopInfoWrapperPass>().getLoopInfo().erase(l);
-	lpm.markLoopAsDeleted(*l);
-#elif  LLVM_HAVE_LOOPINFO_MARK_AS_REMOVED
-	lpm.getAnalysis<llvm::LoopInfoWrapperPass>().getLoopInfo().markAsRemoved(l);
-#else
-	lpm.deleteLoopFromQueue(l);
-#endif
 	return true;
 }
-
-
-
 
 char LoopUnrollPass::ID = 42;
 // static llvm::RegisterPass<LoopUnrollPass> P("loop-unroll",

@@ -1,2 +1,38 @@
-Race detected!
+Error detected: Non-Atomic race!
+Event (3, 2) conflicts with event (1, 1) in graph:
+Thread 0:
+	(0, 0): B
+	(0, 1): TC [forks 1]
+	(0, 2): TC [forks 2]
+	(0, 3): TC [forks 3]
+	(0, 4): E
+Thread 1:
+	(1, 0): B
+	(1, 1): Wna 1
+	(1, 2): Wrel 1
+	(1, 3): E
+Thread 2:
+	(2, 0): B
+	(2, 1): Urlx [(1, 2)]
+	(2, 2): Urlx 2
+	(2, 3): E
+Thread 3:
+	(3, 0): B
+	(3, 1): Rrlx [(2, 2)]
+	(3, 2): Wna 2
+Thread sizes:
+	5 4 4 3 
+
+Trace to (3, 2):
+[main] mpu+rel+rlx0.c: 11: if (pthread_create(&t1, NULL, thread_1, NULL))
+[main] mpu+rel+rlx0.c: 13: if (pthread_create(&t2, NULL, thread_2, NULL))
+[main] mpu+rel+rlx0.c: 15: if (pthread_create(&t3, NULL, thread_3, NULL))
+[thread_1] mpu+rel+rlx.c: 6: x = 1;
+[thread_1] mpu+rel+rlx.c: 7: atomic_store_explicit(&y, 1, memory_order_release);
+[thread_2] mpu+rel+rlx.c: 13: atomic_fetch_add_explicit(&y, 1, memory_order_relaxed);
+[thread_3] mpu+rel+rlx.c: 19: if (atomic_load_explicit(&y, memory_order_relaxed) > 1)
+[thread_3] mpu+rel+rlx.c: 20: x = 2;
+Trace to (1, 1):
+[main] mpu+rel+rlx0.c: 11: if (pthread_create(&t1, NULL, thread_1, NULL))
+[thread_1] mpu+rel+rlx.c: 6: x = 1;
 Number of complete executions explored: 4

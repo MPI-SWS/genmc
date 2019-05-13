@@ -21,8 +21,37 @@
 source terminal.sh
 GenMC=../src/genmc
 
+header_printed=""
 runtime=0
 model="${model:-wb}"
+
+printheader() {
+    if test -z "${header_printed}"
+    then
+	header_printed=1
+
+	# Update status
+	echo ''; printline
+	echo -n '--- Preparing to run testcases in '
+	echo "${testdir##*/}" 'under' "${model}" | awk '{ print toupper($1), $2, toupper($3) }'
+	printline; echo ''
+
+	# Print table's header
+	printline
+	printf "| ${CYAN}%-18s${NC} | ${CYAN}%-15s${NC} | ${CYAN}%-6s${NC} | ${CYAN}%-13s${NC} |\n" \
+	       "Testcase" "Result" "Files" "Avg. time"
+	printline
+    fi
+}
+
+printfooter() {
+    if test -n "${header_printed}"
+    then
+	printline
+	echo '--- Test time: ' "${runtime}"
+	printline; echo ''
+    fi
+}
 
 runvariants() {
     printf "| ${POWDER_BLUE}%-18s${NC} | " "${dir##*/}${n}"
@@ -88,23 +117,16 @@ runtest() {
     fi
 }
 
-# Update status
-echo ''; printline
-echo -n '--- Preparing to run testcases in '
-echo "${testdir##*/}" 'under' "${model}" | awk '{ print toupper($1), $2, toupper($3) }'
-printline; echo ''
-
-# Print table's header
-printline
-printf "| ${CYAN}%-18s${NC} | ${CYAN}%-15s${NC} | ${CYAN}%-6s${NC} | ${CYAN}%-13s${NC} |\n" \
-       "Testcase" "Result" "Files" "Avg. time"
-printline
+[ -z "${TESTFILTER}" ] && TESTFILTER=*
 
 # Run wrong testcases
 for dir in "${testdir}"/*
 do
+    case "${dir##*/}" in
+	${TESTFILTER}) ;;
+	*)     continue;;
+    esac
+    printheader
     runtest "${dir}"
 done
-printline
-echo '--- Test time: ' "${runtime}"
-printline; echo ''
+printfooter

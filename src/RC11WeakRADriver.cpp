@@ -24,10 +24,10 @@
  ** WEAK RA DRIVER -- UNIMPLEMENTED
  ***********************************************************/
 
-std::vector<Event> RC11WeakRADriver::getStoresToLoc(llvm::GenericValue *addr)
+std::vector<Event> RC11WeakRADriver::getStoresToLoc(const llvm::GenericValue *addr)
 {
 	auto &g = getGraph();
-	auto overwritten = g.findOverwrittenBoundary(addr, EE->getCurThr().id);
+	auto overwritten = g.findOverwrittenBoundary(addr, getEE()->getCurThr().id);
 	std::vector<Event> stores;
 
 	if (overwritten.empty()) {
@@ -40,26 +40,28 @@ std::vector<Event> RC11WeakRADriver::getStoresToLoc(llvm::GenericValue *addr)
 	auto before = g.getHbRfBefore(overwritten);
 	for (auto i = 0u; i < g.events.size(); i++) {
 		for (auto j = before[i] + 1u; j < g.events[i].size(); j++) {
-			EventLabel &lab = g.events[i][j];
-			if (lab.isWrite() && lab.getAddr() == addr)
-				stores.push_back(lab.getPos());
+			const EventLabel *lab = g.getEventLabel(Event(i, j));
+			if (auto *wLab = llvm::dyn_cast<WriteLabel>(lab))
+				if (wLab->getAddr() == addr)
+					stores.push_back(wLab->getPos());
 		}
 	}
 	return stores;
 }
 
-std::pair<int, int> RC11WeakRADriver::getPossibleMOPlaces(llvm::GenericValue *addr, bool isRMW)
+std::pair<int, int> RC11WeakRADriver::getPossibleMOPlaces(const llvm::GenericValue *addr, bool isRMW)
 {
 	BUG();
 }
 
-std::vector<Event> RC11WeakRADriver::getRevisitLoads(EventLabel &lab)
+std::vector<Event> RC11WeakRADriver::getRevisitLoads(const WriteLabel *lab)
 {
 	BUG();
 }
 
-std::pair<std::vector<EventLabel>, std::vector<std::pair<Event, Event> > >
-	  RC11WeakRADriver::getPrefixToSaveNotBefore(EventLabel &lab, View &before)
+std::pair<std::vector<std::unique_ptr<EventLabel> >,
+	  std::vector<std::pair<Event, Event> > >
+RC11WeakRADriver::getPrefixToSaveNotBefore(const WriteLabel *lab, View &before)
 {
 	BUG();
 }

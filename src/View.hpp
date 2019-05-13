@@ -23,9 +23,10 @@
 
 #include <llvm/ADT/IndexedMap.h>
 #include <llvm/Support/raw_ostream.h>
+#include "Event.hpp"
 
 class View {
-protected:
+private:
 	typedef llvm::IndexedMap<int> EventView;
 	EventView view_;
 
@@ -33,11 +34,20 @@ public:
 	/* Constructors */
 	View();
 
-	/* Basic operation on Views */
+	/* Iterators */
+	typedef int *iterator;
+	typedef const int *const_iterator;
+	iterator begin();
+	iterator end();
+	const_iterator cbegin();
+	const_iterator cend();
+
+	/* Basic operations on Views */
 	unsigned int size() const;
 	bool empty() const;
-	void updateMax(View &v);
-	View getMax(View &v);
+	bool contains(const Event e) const;
+	View& update(const View &v);
+	View& updateIdx(const Event e);
 
 	/* Overloaded operators */
 	inline int operator[](int idx) const {
@@ -56,6 +66,7 @@ public:
 				return false;
 		return true;
 	}
+
 	friend llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const View &v);
 };
 

@@ -31,7 +31,7 @@
  */
 class ModOrder {
 protected:
-	typedef std::unordered_map<llvm::GenericValue *, std::vector<Event> > ModifOrder;
+	typedef std::unordered_map<const llvm::GenericValue *, std::vector<Event> > ModifOrder;
 	ModifOrder mo_;
 
 public:
@@ -47,16 +47,18 @@ public:
 	const_iterator cend();
 
 	/* Basic getter/setter methods  */
-	llvm::GenericValue *getAddrAtPos(ModOrder::iterator it);
-	std::vector<Event> getMoAfter(llvm::GenericValue *addr, const Event &e);
-	void addAtLocEnd(llvm::GenericValue *addr, const Event &e);
-	void addAtLocAfter(llvm::GenericValue *addr, const Event &pred, const Event &e);
-	bool locContains(llvm::GenericValue *addr, const Event &e);
-	bool areOrdered(llvm::GenericValue *addr, const Event &a, const Event &b);
-	int getStoreOffset(llvm::GenericValue *addr, const Event &e);
-	void changeStoreOffset(llvm::GenericValue *addr, const Event &e, int newOffset);
+	const llvm::GenericValue *getAddrAtPos(ModOrder::iterator it);
+	std::vector<Event> getMoAfter(const llvm::GenericValue *addr, Event e);
+	void addAtLocEnd(const llvm::GenericValue *addr, Event e);
+	void addAtLocAfter(const llvm::GenericValue *addr, Event pred, Event e);
+	bool locContains(const llvm::GenericValue *addr, Event e);
+	bool areOrdered(const llvm::GenericValue *addr, Event a, Event b);
+	int getStoreOffset(const llvm::GenericValue *addr, Event e);
+	void changeStoreOffset(const llvm::GenericValue *addr, Event e, int newOffset);
 
-	inline std::vector<Event> &operator[](llvm::GenericValue *addr) { return mo_[addr]; };
+	unsigned int size() const { return mo_.size(); };
+
+	inline std::vector<Event> &operator[](const llvm::GenericValue *addr) { return mo_[addr]; };
 
 	/* Overloaded operators */
 	friend llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const ModOrder &rev);

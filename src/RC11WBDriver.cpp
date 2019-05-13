@@ -24,49 +24,169 @@
  ** WB DRIVER
  ***********************************************************/
 
-std::vector<Event> RC11WBDriver::getStoresToLoc(llvm::GenericValue *addr)
+/*
+ * Checks which of the stores are (rf?;hb)-before some event e, given the
+ * hb-before view of e
+ */
+View RC11WBDriver::getRfOptHbBeforeStores(const std::vector<Event> &stores,
+					  const View &hbBefore)
 {
 	auto &g = getGraph();
-	auto &thr = EE->getCurThr();
-	auto wb = g.calcWb(addr);
-	auto &stores = wb.first;
-	auto &wbMatrix = wb.second;
-	auto hbBefore = g.getHbBefore(g.getLastThreadEvent(thr.id));
-	auto porfBefore = g.getPorfBefore(g.getLastThreadEvent(thr.id));
+	View result;
 
-	// Find the stores from which we can read-from
+	for (const auto &w : stores) {
+		/* Check if w itself is in the hb view */
+		if (hbBefore.contains(w)) {
+			result.updateIdx(w);
+			continue;
+		}
+
+		const EventLabel *lab = g.getEventLabel(w);
+		BUG_ON(!llvm::isa<WriteLabel>(lab));
+		auto *wLab = static_cast<const WriteLabel *>(lab);
+
+		/* Check whether [w];rf;[r] is in the hb view, for some r */
+		for (const auto &r : wLab->getReadersList()) {
+			if (r.thread != w.thread && hbBefore.contains(r)) {
+				result.updateIdx(w);
+				result.updateIdx(r);
+				break;
+			}
+		}
+	}
+	return result;
+}
+
+void RC11WBDriver::expandMaximalAndMarkOverwritten(const std::vector<Event> &stores,
+						   View &storeView)
+{
+	auto &g = getGraph();
+
+	/* Expand view for maximal stores */
+	for (const auto &w : stores) {
+		/* If the store is not maximal, skip */
+		if (w.index != storeView[w.thread])
+			continue;
+
+		const EventLabel *lab = g.getEventLabel(w);
+		BUG_ON(!llvm::isa<WriteLabel>(lab));
+		auto *wLab = static_cast<const WriteLabel *>(lab);
+
+		for (const auto &r : wLab->getReadersList()) {
+			if (r.thread != w.thread)
+				storeView.updateIdx(r);
+		}
+	}
+
+	/* Check if maximal writes have been overwritten */
+	for (const auto &w : stores) {
+		/* If the store is not maximal, skip*/
+		if (w.index != storeView[w.thread])
+			continue;
+
+		const EventLabel *lab = g.getEventLabel(w);
+		BUG_ON(!llvm::isa<WriteLabel>(lab));
+		auto *wLab = static_cast<const WriteLabel *>(lab);
+
+		for (const auto &r : wLab->getReadersList()) {
+			if (r.thread != w.thread && r.index < storeView[r.thread]) {
+				const EventLabel *lab = g.getEventLabel(Event(r.thread, storeView[r.thread]));
+				if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab)) {
+					if (rLab->getRf() != w) {
+						storeView[w.thread]++;
+						break;
+					}
+				}
+			}
+		}
+	}
+	return;
+}
+
+std::vector<Event> RC11WBDriver::getStoresToLoc(const llvm::GenericValue *addr)
+{
+	auto &g = getGraph();
+	auto &thr = getEE()->getCurThr();
+	auto &allStores = g.modOrder[addr];
+	auto &hbBefore = g.getHbBefore(g.getLastThreadEvent(thr.id));
 	std::vector<Event> result;
+
+	auto view = getRfOptHbBeforeStores(allStores, hbBefore);
+
+	/* Can we read from the initializer event? */
+	if (std::none_of(view.begin(), view.end(), [](int i){ return i > 0; }))
+		result.push_back(Event::getInitializer());
+
+
+	expandMaximalAndMarkOverwritten(allStores, view);
+
+	int count = 0;
+	for (const auto &w : allStores) {
+		if (w.index >= view[w.thread]) {
+			if (count++ > 0) {
+				result.pop_back();
+				break;
+			}
+			result.push_back(w);
+		}
+	}
+	if (count <= 1)
+		return result;
+
+	auto wb = g.calcWb(addr);
+	auto &stores = wb.getElems();
+
+	/* Find the stores from which we can read-from */
 	for (auto i = 0u; i < stores.size(); i++) {
-		bool allowed = true;
+		auto allowed = true;
 		for (auto j = 0u; j < stores.size(); j++) {
-			if (wbMatrix[i * stores.size() + j] &&
-			    g.isWriteRfBefore(hbBefore, stores[j]))
+			if (wb(i, j) && g.isWriteRfBefore(hbBefore, stores[j])) {
 				allowed = false;
+				break;
+			}
 		}
 		if (allowed)
 			result.push_back(stores[i]);
 	}
 
-	// Also check the initializer event
-	bool allowed = true;
-	for (auto j = 0u; j < stores.size(); j++)
-		if (g.isWriteRfBefore(hbBefore, stores[j]))
-			allowed = false;
-	if (allowed)
-		result.insert(result.begin(), Event::getInitializer());
 	return result;
 }
 
-std::pair<int, int> RC11WBDriver::getPossibleMOPlaces(llvm::GenericValue *addr, bool isRMW)
+std::pair<int, int> RC11WBDriver::getPossibleMOPlaces(const llvm::GenericValue *addr, bool isRMW)
 {
 	auto locMOSize = (int) getGraph().modOrder[addr].size();
 	return std::make_pair(locMOSize, locMOSize);
 }
 
-std::vector<Event> RC11WBDriver::getRevisitLoads(EventLabel &sLab)
+std::vector<Event> RC11WBDriver::getRevisitLoads(const WriteLabel *sLab)
 {
 	auto &g = getGraph();
 	auto ls = g.getRevisitable(sLab);
+
+	/* Optimization:
+	 * Since sLab is a porf-maximal store, unless it is an RMW, it is
+	 * wb-maximal (and so, all revisitable loads can read from it).
+	 */
+	if (!llvm::isa<FaiWriteLabel>(sLab) && !llvm::isa<CasWriteLabel>(sLab))
+		return ls;
+
+	/* Optimization:
+	 * If sLab is maximal in WB, then all revisitable loads can read
+	 * from it.
+	 */
+	if (ls.size() > 1) {
+		auto wb = g.calcWb(sLab->getAddr());
+		auto i = wb.getIndex(sLab->getPos());
+		bool allowed = true;
+		for (auto j = 0u; j < wb.size(); j++)
+			if (wb(i,j)) {
+				allowed = false;
+				break;
+			}
+		if (allowed)
+			return ls;
+	}
+
 	std::vector<Event> result;
 
 	/*
@@ -80,20 +200,20 @@ std::vector<Event> RC11WBDriver::getRevisitLoads(EventLabel &sLab)
 	 */
 
 	for (auto &l : ls) {
-		auto v = g.getViewFromStamp(g.getEventLabel(l).getStamp());
-		v.updateMax(sLab.porfView);
+		auto v = g.getViewFromStamp(g.getEventLabel(l)->getStamp());
+		v.update(g.getPorfBefore(sLab->getPos()));
 
-		auto wb = g.calcWbRestricted(sLab.addr, v);
-		auto &stores = wb.first;
-		auto &wbMatrix = wb.second;
-		auto i = std::find(stores.begin(), stores.end(), sLab.pos) - stores.begin();
+		auto wb = g.calcWbRestricted(sLab->getAddr(), v);
+		auto &stores = wb.getElems();
+		auto i = wb.getIndex(sLab->getPos());
 
-		auto hbBefore = g.getHbBefore(l.prev());
+		auto &hbBefore = g.getHbBefore(l.prev());
 		bool allowed = true;
 		for (auto j = 0u; j < stores.size(); j++) {
-			if (wbMatrix[i * stores.size() + j] &&
-			    g.isWriteRfBefore(hbBefore, stores[j]))
+			if (wb(i, j) && g.isWriteRfBefore(hbBefore, stores[j])) {
 				allowed = false;
+				break;
+			}
 		}
 		if (allowed)
 			result.push_back(l);
@@ -101,16 +221,18 @@ std::vector<Event> RC11WBDriver::getRevisitLoads(EventLabel &sLab)
 	return result;
 }
 
-std::pair<std::vector<EventLabel>, std::vector<std::pair<Event, Event> > >
-	  RC11WBDriver::getPrefixToSaveNotBefore(EventLabel &lab, View &before)
+std::pair<std::vector<std::unique_ptr<EventLabel> >,
+	  std::vector<std::pair<Event, Event> > >
+RC11WBDriver::getPrefixToSaveNotBefore(const WriteLabel *lab, View &before)
 {
-	auto writePrefix = getGraph().getPrefixLabelsNotBefore(lab.porfView, before);
+	auto &g = getGraph();
+	auto writePrefix = g.getPrefixLabelsNotBefore(g.getPorfBefore(lab->getPos()), before);
 	return std::make_pair(std::move(writePrefix), std::vector<std::pair<Event, Event>>());
 }
 
 bool RC11WBDriver::checkPscAcyclicity()
 {
-	switch (userConf->checkPscAcyclicity) {
+	switch (getConf()->checkPscAcyclicity) {
 	case CheckPSCType::nocheck:
 		return true;
 	case CheckPSCType::weak:

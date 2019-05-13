@@ -33,15 +33,13 @@ class LoopUnrollPass : public llvm::LoopPass {
 protected:
 	int unrollDepth;
 
-	llvm::BasicBlock *makeDivergeBlock(llvm::Loop *l);
-	void redirectBranch(int bodyIdx, int blockIdx, int unrollDepth,
-			    llvm::BasicBlock *divergeBlock,
-			    std::map<llvm::BasicBlock const *, int> &loopBlockIdx,
-			    std::vector<std::vector<llvm::BasicBlock *> > &loopBodies);
-	void redirectPHIOrValue(int bodyIdx, int blockIdx,
-				std::vector<llvm::ValueToValueMapTy> &VMaps,
-				std::map<llvm::BasicBlock const *, int> &loopBlockIdx,
-				std::vector<std::vector<llvm::BasicBlock *> > &loopBodies);
+	llvm::Value *createBoundAlloca(llvm::Loop *l);
+	llvm::BasicBlock *createBoundInitBlock(llvm::Loop *l, llvm::Value *boundAlloca);
+	llvm::BasicBlock *createBoundDecrBlock(llvm::Loop *l, llvm::Value *boundAlloca);
+	llvm::BasicBlock *createLoopDivergeBlock(llvm::Loop *l);
+
+	template<typename Func>
+	void redirectLoopPreds(llvm::Loop *l, llvm::BasicBlock *toBlock, Func &&f);
 
 public:
 	static char ID;

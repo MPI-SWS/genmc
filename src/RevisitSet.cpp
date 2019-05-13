@@ -44,22 +44,9 @@ RevisitSet::const_iterator RevisitSet::cend()   { return rev_.cend(); }
  ** Basic getter/setter methods and existential checks
  ***********************************************************/
 
-void RevisitSet::add(std::vector<Event> &es)
-{
-	rev_.push_back(std::make_pair(es, std::vector<std::pair<Event, Event> >()));
-}
-
-void RevisitSet::add(std::vector<Event> &es, std::vector<std::pair<Event, Event> > &mos)
+void RevisitSet::add(const std::vector<Event> &es, const std::vector<std::pair<Event, Event> > &mos)
 {
 	rev_.push_back(std::make_pair(es, mos));
-}
-
-bool RevisitSet::contains(std::vector<Event> &es)
-{
-	for (auto &p : rev_)
-		if (p.first == es)
-			return true;
-	return false;
 }
 
 bool RevisitSet::contains(const std::vector<Event> &es,

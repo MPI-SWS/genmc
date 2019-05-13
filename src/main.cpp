@@ -124,6 +124,10 @@ int main(int argc, char **argv)
 
 	SmallVector<const char *, 16> Args;//(argv, argv + argc);
 	Args.push_back("-fsyntax-only");
+#ifdef HAVE_CLANG_DISABLE_OPTNONE
+	Args.push_back("-Xclang");
+	Args.push_back("-disable-O0-optnone");
+#endif
 	Args.push_back("-g"); /* Compile with -g to get debugging mdata */
 	for (auto &f : conf->cflags)
 		Args.push_back(f.c_str());

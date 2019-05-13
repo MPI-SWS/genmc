@@ -9,14 +9,14 @@
 
 int main()
 {
-	pthread_t t0, t1, t2;
+	pthread_t t0, ts[DEFAULT_STEALERS];
 
-	if (pthread_create(&t0, NULL, thread_0, NULL))
+	if (pthread_create(&t0, NULL, thread_pp, NULL))
 		abort();
-	if (pthread_create(&t1, NULL, thread_1, NULL))
-		abort();
-	if (pthread_create(&t2, NULL, thread_2, NULL))
-		abort();
+	for (int i = 0; i < DEFAULT_STEALERS; i++) {
+		if (pthread_create(&ts[i], NULL, thread_s, NULL))
+			abort();
+	}
 
 	return 0;
 }

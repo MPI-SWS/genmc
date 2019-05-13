@@ -1,10 +1,7 @@
 #ifndef __STDLIB_H__
 #define __STDLIB_H__
 
-#undef NULL
-#define NULL ((void *)0)
-
-typedef __SIZE_TYPE__ size_t;
+#include <stddef.h>
 
 void exit(int);
 
