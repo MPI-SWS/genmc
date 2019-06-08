@@ -1,28 +1,26 @@
 Error detected: Non-Atomic race!
 Event (3, 2) conflicts with event (1, 1) in graph:
-Thread 0:
+<-1, 0> main:
 	(0, 0): B
-	(0, 1): TC [forks 1]
-	(0, 2): TC [forks 2]
-	(0, 3): TC [forks 3]
+	(0, 1): TC [forks 1] L.11
+	(0, 2): TC [forks 2] L.13
+	(0, 3): TC [forks 3] L.15
 	(0, 4): E
-Thread 1:
+<0, 1> thread_1:
 	(1, 0): B
-	(1, 1): Wna 1
-	(1, 2): Wrel 0
-	(1, 3): Wrlx 1
+	(1, 1): Wna (x, 1) L.6: mpu+rels+rlx.c
+	(1, 2): Wrel (y, 0) L.7: mpu+rels+rlx.c
+	(1, 3): Wrlx (y, 1) L.8: mpu+rels+rlx.c
 	(1, 4): E
-Thread 2:
+<0, 2> thread_2:
 	(2, 0): B
-	(2, 1): Urlx [(1, 3)]
-	(2, 2): Urlx 2
+	(2, 1): Urlx (y, 1) [(1, 3)] L.14: mpu+rels+rlx.c
+	(2, 2): Urlx (y, 2) L.14: mpu+rels+rlx.c
 	(2, 3): E
-Thread 3:
+<0, 3> thread_3:
 	(3, 0): B
-	(3, 1): Rrlx [(2, 2)]
-	(3, 2): Wna 2
-Thread sizes:
-	5 5 4 3 
+	(3, 1): Rrlx (y, 2) [(2, 2)] L.20: mpu+rels+rlx.c
+	(3, 2): Wna (x, 2) L.21: mpu+rels+rlx.c
 
 Trace to (3, 2):
 [main] mpu+rels+rlx0.c: 11: if (pthread_create(&t1, NULL, thread_1, NULL))

@@ -48,9 +48,9 @@ struct Event {
 	inline bool operator>(const Event &e) const {
 		return (index > e.index) || (index == e.index && thread > e.thread);
 	}
-	friend llvm::raw_ostream& operator<<(llvm::raw_ostream &s, Event e);
-	friend std::ostream& operator<<(std::ostream &s, Event e);
 };
+
+llvm::raw_ostream& operator<<(llvm::raw_ostream &s, Event e);
 
 struct EventHasher {
 

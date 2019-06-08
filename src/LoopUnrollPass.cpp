@@ -31,8 +31,6 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
-#include <sstream>
-
 #ifdef LLVM_HAS_TERMINATORINST
  typedef llvm::TerminatorInst TerminatorInst;
 #else

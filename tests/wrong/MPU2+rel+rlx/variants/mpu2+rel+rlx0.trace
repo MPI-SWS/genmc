@@ -1,33 +1,31 @@
 Error detected: Non-Atomic race!
 Event (4, 2) conflicts with event (1, 1) in graph:
-Thread 0:
+<-1, 0> main:
 	(0, 0): B
-	(0, 1): TC [forks 1]
-	(0, 2): TC [forks 2]
-	(0, 3): TC [forks 3]
-	(0, 4): TC [forks 4]
+	(0, 1): TC [forks 1] L.11
+	(0, 2): TC [forks 2] L.13
+	(0, 3): TC [forks 3] L.15
+	(0, 4): TC [forks 4] L.17
 	(0, 5): E
-Thread 1:
+<0, 1> thread_1:
 	(1, 0): B
-	(1, 1): Wna 1
-	(1, 2): Wrel 1
+	(1, 1): Wna (x, 1) L.6: mpu2+rel+rlx.c
+	(1, 2): Wrel (y, 1) L.7: mpu2+rel+rlx.c
 	(1, 3): E
-Thread 2:
+<0, 2> thread_2:
 	(2, 0): B
-	(2, 1): Crlx [(3, 2)]
-	(2, 2): Crlx 3
+	(2, 1): Crlx (y, 2) [(3, 2)] L.14: mpu2+rel+rlx.c
+	(2, 2): Crlx (y, 3) L.14: mpu2+rel+rlx.c
 	(2, 3): E
-Thread 3:
+<0, 3> thread_3:
 	(3, 0): B
-	(3, 1): Crlx [(1, 2)]
-	(3, 2): Crlx 2
+	(3, 1): Crlx (y, 1) [(1, 2)] L.23: mpu2+rel+rlx.c
+	(3, 2): Crlx (y, 2) L.23: mpu2+rel+rlx.c
 	(3, 3): E
-Thread 4:
+<0, 4> thread_4:
 	(4, 0): B
-	(4, 1): Rrlx [(2, 2)]
-	(4, 2): Wna 2
-Thread sizes:
-	6 4 4 4 3 
+	(4, 1): Rrlx (y, 3) [(2, 2)] L.31: mpu2+rel+rlx.c
+	(4, 2): Wna (x, 2) L.32: mpu2+rel+rlx.c
 
 Trace to (4, 2):
 [main] mpu2+rel+rlx0.c: 11: if (pthread_create(&t1, NULL, thread_1, NULL))

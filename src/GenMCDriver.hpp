@@ -290,15 +290,20 @@ private:
 	/* Prints the source-code instructions leading to Event e */
 	void printTraceBefore(Event e);
 
-	/* Nicely outputs the graph at the end of each execution */
+	/* Helper for printTraceBefore() that prints events according to po U rf */
+	void recPrintTraceBefore(const Event &e, View &a,
+				 llvm::raw_ostream &ss = llvm::dbgs());
+
+	/* Outputs the full graph. If getMetadata is set, it outputs
+	 * more debugging information */
+	void printGraph(bool getMetadata = false);
+
+	/* Outputs the graph in a condensed form */
 	void prettyPrintGraph();
 
 	/* Outputs the current graph into a file (DOT format), and marks
 	 * Events e and c */
 	void dotPrintToFile(const std::string &filename, Event e, Event c);
-
-	/* Collects metadata for all events leading up to e in buf */
-	void calcTraceBefore(const Event &e, View &a, std::stringstream &buf);
 
 	/*** To be overrided by instances of the Driver ***/
 

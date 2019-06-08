@@ -1,4 +1,4 @@
-AC_INIT([genmc], [0.1], [michalis@mpi-sws.org])
+AC_INIT([genmc], [0.2], [michalis@mpi-sws.org])
 
 m4_include([m4/ax_llvm.m4])
 m4_include([m4/ax_clang.m4])
@@ -475,6 +475,20 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
          AC_DEFINE([LLVM_PASSMANAGER_TEMPLATE],[1],
          [Define if llvm::PassManager requires a template argument.])
          AC_CHECK_HEADERS([llvm/IR/LegacyPassManager.h],[],[AC_MSG_FAILURE([Could not find necessary headers.])],[AC_INCLUDES_DEFAULT])])
+
+## Check if we can get metadata for global variables (LLVM > 4)
+AC_MSG_CHECKING([whether getMetadata() for GlobalObject exists])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/IR/DebugInfo.h>
+#include <llvm/IR/GlobalObject.h>
+]],[[
+          llvm::GlobalObject *o = nullptr;
+          llvm::MDNode *md = o->getMetadata("dbg");
+        ]])],
+        [AC_DEFINE([LLVM_HAS_GLOBALOBJECT_GET_METADATA],[1],
+            [Define if we can get metadata from a GlobalObject.])
+         AC_MSG_RESULT([yes])],
+        [AC_MSG_RESULT([no])])
 
 ## Checking if an llvm::DILocation is an llvm::MDNode
 AC_MSG_CHECKING([if an llvm::DILocation is an llvm::MDNode])

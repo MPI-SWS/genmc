@@ -20,7 +20,55 @@
 
 #include "EventLabel.hpp"
 
-llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const llvm::AtomicOrdering &o)
+llvm::raw_ostream& operator<<(llvm::raw_ostream& s,
+			      const EventLabel::EventLabelKind k)
+{
+	switch (k) {
+	case EventLabel::EL_Read:
+	case EventLabel::EL_LibRead:
+		s << "R";
+		break;
+	case EventLabel::EL_FaiRead:
+	case EventLabel::EL_FaiWrite:
+		s << "U";
+		break;
+	case EventLabel::EL_CasRead:
+	case EventLabel::EL_CasWrite:
+		s << "C";
+		break;
+	case EventLabel::EL_Write:
+	case EventLabel::EL_LibWrite:
+		s << "W";
+		break;
+	case EventLabel::EL_Fence:
+		s << "F";
+		break;
+	case EventLabel::EL_ThreadCreate:
+		s << "TC";
+		break;
+	case EventLabel::EL_ThreadJoin:
+		s << "TJ";
+		break;
+	case EventLabel::EL_ThreadStart:
+		s << "B";
+		break;
+	case EventLabel::EL_ThreadFinish:
+		s << "E";
+		break;
+	case EventLabel::EL_Malloc:
+		s << "M";
+		break;
+	case EventLabel::EL_Free:
+		s << "D";
+		break;
+	default:
+		s << "UNKNOWN";
+		break;
+	}
+	return s;
+}
+
+llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const llvm::AtomicOrdering o)
 {
 	switch (o) {
 	case llvm::AtomicOrdering::NotAtomic : return s << "na";
@@ -32,6 +80,7 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const llvm::AtomicOrdering &
 	case llvm::AtomicOrdering::SequentiallyConsistent : return s << "sc";
 	default : return s;
 	}
+	return s;
 }
 
 #define PRINT_RF(s, e)				\
@@ -49,28 +98,28 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const EventLabel &lab)
 	switch (lab.getKind()) {
 	case EventLabel::EL_Read: {
 		auto &rLab = static_cast<const ReadLabel&>(lab);
-		s << "R" << rLab.getOrdering() << " [";
+		s << rLab.getKind() << rLab.getOrdering() << " [";
 		PRINT_RF(s, rLab.getRf());
 		s << "]";
 		break;
 	}
 	case EventLabel::EL_FaiRead: {
 		auto &rLab = static_cast<const FaiReadLabel&>(lab);
-		s << "U" << rLab.getOrdering() << " [";
+		s << rLab.getKind() << rLab.getOrdering() << " [";
 		PRINT_RF(s, rLab.getRf());
 		s << "]";
 		break;
 	}
 	case EventLabel::EL_CasRead: {
 		auto &rLab = static_cast<const CasReadLabel&>(lab);
-		s << "C" << rLab.getOrdering() << " [";
+		s << rLab.getKind() << rLab.getOrdering() << " [";
 		PRINT_RF(s, rLab.getRf());
 		s << "]";
 		break;
 	}
 	case EventLabel::EL_LibRead: {
 		auto &rLab = static_cast<const LibReadLabel&>(lab);
-		s << "R" << rLab.getOrdering() << " ("
+		s << rLab.getKind() << rLab.getOrdering() << " ("
 		  << rLab.getFunctionName() << ") [";
 		PRINT_RF(s, rLab.getRf());
 		s << "]";
@@ -78,60 +127,60 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const EventLabel &lab)
 	}
 	case EventLabel::EL_Write: {
 		auto &wLab = static_cast<const WriteLabel&>(lab);
-		s << "W" << wLab.getOrdering() << " " << wLab.getVal().IntVal;
+		s << wLab.getKind() << wLab.getOrdering() << " " << wLab.getVal().IntVal;
 		break;
 	}
 	case EventLabel::EL_FaiWrite: {
 		auto &wLab = static_cast<const FaiWriteLabel&>(lab);
-		s << "U" << wLab.getOrdering() << " "
+		s << wLab.getKind() << wLab.getOrdering() << " "
 		  << wLab.getVal().IntVal;
 		break;
 	}
 	case EventLabel::EL_CasWrite: {
 		auto &wLab = static_cast<const CasWriteLabel&>(lab);
-		s << "C" << wLab.getOrdering() << " "
+		s << wLab.getKind() << wLab.getOrdering() << " "
 		  << wLab.getVal().IntVal << "";
 		break;
 	}
 	case EventLabel::EL_LibWrite: {
 		auto &wLab = static_cast<const LibWriteLabel&>(lab);
-		s << "W" << wLab.getOrdering() << " ("
+		s << wLab.getKind() << wLab.getOrdering() << " ("
 		  << wLab.getFunctionName() << ") " << wLab.getVal().IntVal;
 		break;
 	}
 	case EventLabel::EL_Fence: {
 		auto &fLab = static_cast<const FenceLabel&>(lab);
-		s << "F" << fLab.getOrdering();
+		s << fLab.getKind() << fLab.getOrdering();
 		break;
 	}
 	case EventLabel::EL_ThreadCreate: {
 		auto &cLab = static_cast<const ThreadCreateLabel&>(lab);
-		s << "TC [forks " << cLab.getChildId() << "]";
+		s << cLab.getKind() << " [forks " << cLab.getChildId() << "]";
 		break;
 	}
 	case EventLabel::EL_ThreadJoin: {
 		auto &jLab = static_cast<const ThreadJoinLabel&>(lab);
-		s << "TJ";
+		s << jLab.getKind();
 		break;
 	}
 	case EventLabel::EL_ThreadStart: {
 		auto &bLab = static_cast<const ThreadStartLabel&>(lab);
-		s << "B";
+		s << bLab.getKind();
 		break;
 	}
 	case EventLabel::EL_ThreadFinish: {
 		auto &eLab = static_cast<const ThreadFinishLabel&>(lab);
-		s << "E";
+		s << eLab.getKind();
 		break;
 	}
 	case EventLabel::EL_Malloc: {
 		auto &bLab = static_cast<const MallocLabel&>(lab);
-		s << "M";
+		s << bLab.getKind();
 		break;
 	}
 	case EventLabel::EL_Free: {
 		auto &bLab = static_cast<const FreeLabel&>(lab);
-		s << "D";
+		s << bLab.getKind();
 		break;
 	}
 	default:

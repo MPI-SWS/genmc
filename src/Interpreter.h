@@ -114,7 +114,7 @@ public:
 	unsigned int globalInstructions;
 	bool isBlocked;
 	MyRNG rng;
-	std::vector<std::vector<std::pair<int, std::string> > > prefixLOC;
+	std::vector<std::pair<int, std::string> > prefixLOC;
 
 	void block() { isBlocked = true; };
 	void unblock() { isBlocked = false; };
@@ -126,12 +126,9 @@ public:
 	Thread(llvm::Function *F, int id, int pid, const llvm::ExecutionContext &SF)
 		: id(id), parentId(pid), threadFun(F), initSF(SF), globalInstructions(0),
 		  isBlocked(false), rng(seed) {}
-
-	llvm::raw_ostream& operator<<(llvm::raw_ostream &s) {
-		return s << "Thread (id: " << id << ", parent: " << parentId << ", function: "
-			 << threadFun->getName().str() << ")";
-	}
 };
+
+llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const Thread &thr);
 
 // Interpreter - This class represents the entirety of the interpreter.
 //
@@ -240,7 +237,12 @@ public:
   std::vector<void *> freedMem;
 
   /* Helper functions */
-  void collectGPs(Module *M, void *ptr, Type *typ);
+#ifdef LLVM_HAS_GLOBALOBJECT_GET_METADATA
+  void collectGVNames(Module *M, char *ptr, Type *typ,
+		      DIType *md, std::string nameBuilder);
+#else
+  void collectGVNames(const GlobalVariable &v, char *ptr, unsigned int typeSize);
+#endif
   void replayExecutionBefore(const View &before);
   bool compareValues(const llvm::Type *typ, const GenericValue &val1, const GenericValue &val2);
   GenericValue getLocInitVal(GenericValue *ptr, Type *typ);

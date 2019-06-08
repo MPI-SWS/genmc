@@ -63,22 +63,25 @@ void Parser::stripSlashes(std::string &absPath)
 		absPath = absPath.substr(i + 1);
 }
 
-void Parser::parseInstFromMData(std::stringstream &ss, std::vector<std::pair<int, std::string> > &prefix,
-				std::string functionName)
+void Parser::parseInstFromMData(std::pair<int, std::string> &locAndFile,
+				std::string functionName,
+				llvm::raw_ostream &os /* llvm::dbgs() */)
 {
-	for (auto &pair : prefix) {
-		int line = pair.first;
-		std::string absPath = pair.second;
+	int line = locAndFile.first;
+	std::string absPath = locAndFile.second;
 
-		auto s = getFileLineByNumber(absPath, line);
-		stripWhitespace(s);
-		stripSlashes(absPath);
+	/* If line is default-valued or malformed, skip... */
+	if (line <= 0)
+		return;
 
-		if (functionName != "")
-			ss << "[" << functionName << "] ";
-		ss << absPath << ": " << line << ": ";
-		ss << s << std::endl;
-	}
+	auto s = getFileLineByNumber(absPath, line);
+	stripWhitespace(s);
+	stripSlashes(absPath);
+
+	if (functionName != "")
+		os << "[" << functionName << "] ";
+	os << absPath << ": " << line << ": ";
+	os << s << "\n";
 }
 
 std::vector<Library> Parser::parseSpecs(const string &fileName)

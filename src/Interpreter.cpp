@@ -37,6 +37,7 @@
  */
 
 #include "config.h"
+#include "Error.hpp"
 
 #include "Interpreter.h"
 #include <llvm/CodeGen/IntrinsicLowering.h>
@@ -99,6 +100,12 @@ ExecutionEngine *Interpreter::create(Module *M, GenMCDriver *driver,
 /* Thread::seed is ODR-used -- we need to provide a definition (C++14) */
 constexpr int Thread::seed;
 
+llvm::raw_ostream& llvm::operator<<(llvm::raw_ostream &s, const Thread &thr)
+{
+	return s << "<" << thr.parentId << ", " << thr.id << ">"
+		 << " " << thr.threadFun->getName().str();
+}
+
 /* Resets the interpreter for a new exploration */
 void Interpreter::reset()
 {
@@ -139,27 +146,67 @@ std::vector<ExecutionContext> &Interpreter::ECStack()
 	(M)->getDataLayout().getTypeAllocSize((x))
 #endif
 
-void Interpreter::collectGPs(Module *M, void *ptr, llvm::Type *typ)
+#ifdef LLVM_HAS_GLOBALOBJECT_GET_METADATA
+void Interpreter::collectGVNames(Module *M, char *ptr, llvm::Type *typ,
+				 llvm::DIType *dit, std::string nameBuilder)
 {
-	if (!(typ->isPointerTy() || typ->isAggregateType() || typ->isVectorTy()))
+	if(!isa<CompositeType>(typ)) {
+		globalVarNames.push_back(std::make_pair(ptr, nameBuilder));
 		return;
+	}
 
 	unsigned int offset = 0;
-	if (ArrayType *AT = dyn_cast<ArrayType>(typ)) {
-		unsigned int elemSize = GET_TYPE_ALLOC_SIZE(M, AT->getElementType());
-		for (auto i = 0u; i < AT->getNumElements(); i++) {
-			collectGPs(M, (char *) ptr + offset, AT->getElementType());
-			offset += elemSize;
+	if (SequentialType *AT = dyn_cast<SequentialType>(typ)) {
+		if (auto *dict = dyn_cast<DICompositeType>(dit)) {
+			unsigned int elemSize = GET_TYPE_ALLOC_SIZE(M, AT->getElementType());
+			for (auto i = 0u; i < AT->getNumElements(); i++) {
+				if (!dict->getBaseType()) {
+					collectGVNames(M, ptr + offset,
+						       AT->getElementType(), dict,
+						       nameBuilder + "[" +
+						       std::to_string(i) + "]");
+				} else if (auto *dibt = dyn_cast<DIType>(dict->getBaseType())) {
+					collectGVNames(M, ptr + offset,
+						       AT->getElementType(), dibt,
+						       nameBuilder + "[" +
+						       std::to_string(i) + "]");
+				}
+				offset += elemSize;
+			}
 		}
 	} else if (StructType *ST = dyn_cast<StructType>(typ)) {
-		for (auto it = ST->element_begin(); it != ST->element_end(); ++it) {
-			unsigned int elemSize = GET_TYPE_ALLOC_SIZE(M, *it);
-			collectGPs(M, (char *) ptr + offset, *it);
-			offset += elemSize;
+		if (auto *dict = llvm::dyn_cast<DICompositeType>(dit)) {
+			auto dictElems = dict->getElements();
+			auto eb = ST->element_begin();
+			for (auto it = ST->element_begin(); it != ST->element_end(); ++it) {
+				unsigned int elemSize = GET_TYPE_ALLOC_SIZE(M, *it);
+				auto didt = dictElems[it - eb];
+				if (auto *dit = dyn_cast<DIDerivedType>(didt)) {
+					if (auto ditb = dyn_cast<DIType>(dit->getBaseType()))
+						collectGVNames(M, ptr + offset, *it,
+							       ditb, nameBuilder + "."
+							       + dit->getName().str());
+				}
+				offset += elemSize;
+			}
 		}
 	}
 	return;
 }
+#else
+void Interpreter::collectGVNames(const GlobalVariable &v, char *ptr, unsigned int typeSize)
+{
+	if (ArrayType *AT = dyn_cast<ArrayType>(v.getType()->getElementType())) {
+		unsigned int elemTypeSize = typeSize / AT->getArrayNumElements();
+		for (auto i = 0u, s = 0u; s < typeSize; i++, s += elemTypeSize) {
+			std::string name = v.getName().str() + "[" + std::to_string(i) + "]";
+			globalVarNames.push_back(std::make_pair(ptr + s, name));
+		}
+	} else {
+		globalVarNames.push_back(std::make_pair(ptr, v.getName()));
+	}
+}
+#endif
 
 void Interpreter::storeGlobals(Module *M)
 {
@@ -176,19 +223,21 @@ void Interpreter::storeGlobals(Module *M)
 				globalVars.push_back(ptr + i);
 		}
 
-		/* Check whether it is a global pointer */
-		collectGPs(M, ptr, v.getType()->getElementType());
+#ifdef LLVM_HAS_GLOBALOBJECT_GET_METADATA
+		if (!v.getMetadata("dbg"))
+			continue;
 
-		/* Store the variable's name for printing and debugging */
-		if (ArrayType *AT = dyn_cast<ArrayType>(v.getType()->getElementType())) {
-			unsigned int elemTypeSize = typeSize / AT->getArrayNumElements();
-			for (auto i = 0u, s = 0u; s < typeSize; i++, s += elemTypeSize) {
-				std::string name = v.getName().str() + "[" + std::to_string(i) + "]";
-				globalVarNames.push_back(std::make_pair(ptr + s, name));
-			}
-		} else {
-			globalVarNames.push_back(std::make_pair(ptr, v.getName()));
-		}
+		BUG_ON(!isa<DIGlobalVariableExpression>(v.getMetadata("dbg")));
+		auto *dive = static_cast<DIGlobalVariableExpression *>(v.getMetadata("dbg"));
+		auto dit = dive->getVariable()->getType();
+
+		/* Check whether it is a global pointer */
+		if (auto ditc = dyn_cast<DIType>(dit))
+			collectGVNames(M, ptr, v.getType()->getElementType(),
+				       ditc, v.getName());
+#else
+		collectGVNames(v, ptr, typeSize);
+#endif
 	}
 	/* We sort all vectors to facilitate searching */
 	std::sort(globalVars.begin(), globalVars.end());

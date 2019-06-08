@@ -125,7 +125,8 @@ public:
 	/* Returns a clone object (virtual to allow deep copying from base) */
 	virtual EventLabel *clone() const = 0;
 
-	friend llvm::raw_ostream& operator<<(llvm::raw_ostream& rhs, const EventLabel &lab);
+	friend llvm::raw_ostream& operator<<(llvm::raw_ostream& rhs,
+					     const EventLabel &lab);
 
 private:
 	/* Methods that get/set the vector clocks for this label.
@@ -154,6 +155,11 @@ private:
 	/* Events that are (po U rf)-before this label */
 	View porfView;
 };
+
+llvm::raw_ostream& operator<<(llvm::raw_ostream& rhs,
+			      const llvm::AtomicOrdering o);
+llvm::raw_ostream& operator<<(llvm::raw_ostream& rhs,
+			      const EventLabel::EventLabelKind k);
 
 
 /*******************************************************************************

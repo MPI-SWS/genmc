@@ -2371,21 +2371,23 @@ void Interpreter::replayExecutionBefore(const View &before)
 			int snap = thr.globalInstructions;
 			ExecutionContext &SF = thr.ECStack.back();
 			Instruction &I = *SF.CurInst++;
-			if (I.getMetadata("dbg")) {
-				int line = I.getDebugLoc().getLine();
-				std::string file = getFilenameFromMData(I.getMetadata("dbg"));
-				std::vector<std::pair<int, std::string> > &prefix =
-					thr.prefixLOC[snap + 1];
-				if (prefix.empty()) {
-					std::vector<std::pair<int, std::string> > &prev =
-						thr.prefixLOC[snap];
-					if (prev.empty() || prev.back().first != line )
-						prefix.push_back(std::pair<int, std::string>(line, file));
-				} else if (prefix.back().first != line) {
-					prefix.push_back(std::pair<int, std::string>(line, file));
-				}
-			}
 			visit(I);
+
+			/* Collect metadata only for global instructions */
+			if (thr.globalInstructions == snap)
+				continue;
+			/* If there are no metadata for this instruction, skip */
+			if (!I.getMetadata("dbg"))
+				continue;
+
+			/* Store relevant trace information in the appropriate spot */
+			int line = I.getDebugLoc().getLine();
+			std::string file = getFilenameFromMData(I.getMetadata("dbg"));
+			thr.prefixLOC[snap + 1] = std::make_pair(line, file);
+
+			/* If I was an RMW, we have to fill two spots */
+			if (thr.globalInstructions == snap + 2)
+				thr.prefixLOC[snap + 2] = std::make_pair(line, file);
 		}
 	}
 }

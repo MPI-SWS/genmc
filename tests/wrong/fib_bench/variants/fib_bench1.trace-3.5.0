@@ -1,104 +1,84 @@
 Error detected: Safety violation!
 Event (3, 1) in graph:
-Thread 0:
+<-1, 0> main:
 	(0, 0): B
-	(0, 1): TC [forks 1]
-	(0, 2): TC [forks 2]
-	(0, 3): TC [forks 3]
+	(0, 1): TC [forks 1] L.11
+	(0, 2): TC [forks 2] L.12
+	(0, 3): TC [forks 3] L.13
 	(0, 4): E
-Thread 1:
+<0, 1> t2:
 	(1, 0): B
-	(1, 1): Rrlx [INIT]
-	(1, 2): Rrlx [INIT]
-	(1, 3): Wrlx 2
-	(1, 4): Rrlx [(2, 3)]
-	(1, 5): Rrlx [(1, 3)]
-	(1, 6): Wrlx 5
-	(1, 7): Rrlx [(2, 6)]
-	(1, 8): Rrlx [(1, 6)]
-	(1, 9): Wrlx 13
-	(1, 10): Rrlx [(2, 9)]
-	(1, 11): Rrlx [(1, 9)]
-	(1, 12): Wrlx 34
-	(1, 13): Rrlx [(2, 12)]
-	(1, 14): Rrlx [(1, 12)]
-	(1, 15): Wrlx 89
+	(1, 1): Rrlx (i, 1) [INIT] L.19: fib_bench.c
+	(1, 2): Rrlx (j, 1) [INIT] L.20: fib_bench.c
+	(1, 3): Wrlx (j, 2) L.21: fib_bench.c
+	(1, 4): Rrlx (i, 3) [(2, 3)] L.19: fib_bench.c
+	(1, 5): Rrlx (j, 2) [(1, 3)] L.20: fib_bench.c
+	(1, 6): Wrlx (j, 5) L.21: fib_bench.c
+	(1, 7): Rrlx (i, 8) [(2, 6)] L.19: fib_bench.c
+	(1, 8): Rrlx (j, 5) [(1, 6)] L.20: fib_bench.c
+	(1, 9): Wrlx (j, 13) L.21: fib_bench.c
+	(1, 10): Rrlx (i, 21) [(2, 9)] L.19: fib_bench.c
+	(1, 11): Rrlx (j, 13) [(1, 9)] L.20: fib_bench.c
+	(1, 12): Wrlx (j, 34) L.21: fib_bench.c
+	(1, 13): Rrlx (i, 55) [(2, 12)] L.19: fib_bench.c
+	(1, 14): Rrlx (j, 34) [(1, 12)] L.20: fib_bench.c
+	(1, 15): Wrlx (j, 89) L.21: fib_bench.c
 	(1, 16): E
-Thread 2:
+<0, 2> t1:
 	(2, 0): B
-	(2, 1): Rrlx [INIT]
-	(2, 2): Rrlx [(1, 3)]
-	(2, 3): Wrlx 3
-	(2, 4): Rrlx [(2, 3)]
-	(2, 5): Rrlx [(1, 6)]
-	(2, 6): Wrlx 8
-	(2, 7): Rrlx [(2, 6)]
-	(2, 8): Rrlx [(1, 9)]
-	(2, 9): Wrlx 21
-	(2, 10): Rrlx [(2, 9)]
-	(2, 11): Rrlx [(1, 12)]
-	(2, 12): Wrlx 55
-	(2, 13): Rrlx [(2, 12)]
-	(2, 14): Rrlx [(1, 15)]
-	(2, 15): Wrlx 144
+	(2, 1): Rrlx (i, 1) [INIT] L.9: fib_bench.c
+	(2, 2): Rrlx (j, 2) [(1, 3)] L.10: fib_bench.c
+	(2, 3): Wrlx (i, 3) L.11: fib_bench.c
+	(2, 4): Rrlx (i, 3) [(2, 3)] L.9: fib_bench.c
+	(2, 5): Rrlx (j, 5) [(1, 6)] L.10: fib_bench.c
+	(2, 6): Wrlx (i, 8) L.11: fib_bench.c
+	(2, 7): Rrlx (i, 8) [(2, 6)] L.9: fib_bench.c
+	(2, 8): Rrlx (j, 13) [(1, 9)] L.10: fib_bench.c
+	(2, 9): Wrlx (i, 21) L.11: fib_bench.c
+	(2, 10): Rrlx (i, 21) [(2, 9)] L.9: fib_bench.c
+	(2, 11): Rrlx (j, 34) [(1, 12)] L.10: fib_bench.c
+	(2, 12): Wrlx (i, 55) L.11: fib_bench.c
+	(2, 13): Rrlx (i, 55) [(2, 12)] L.9: fib_bench.c
+	(2, 14): Rrlx (j, 89) [(1, 15)] L.10: fib_bench.c
+	(2, 15): Wrlx (i, 144) L.11: fib_bench.c
 	(2, 16): E
-Thread 3:
+<0, 3> t3:
 	(3, 0): B
-	(3, 1): Rrlx [(2, 15)]
-Thread sizes:
-	5 17 17 2 
+	(3, 1): Rrlx (i, 144) [(2, 15)] L.28: fib_bench.c
 
 Trace to (3, 1):
 [main] fib_bench1.c: 11: pthread_create(&id2, NULL, t2, NULL);
 [main] fib_bench1.c: 12: pthread_create(&id1, NULL, t1, NULL);
 [main] fib_bench1.c: 13: pthread_create(&id3, NULL, t3, NULL);
-[t1] fib_bench.c: 8: for (int k = 0; k < NUM; k++) {
 [t1] fib_bench.c: 9: int prevI = atomic_load_explicit(&i, memory_order_relaxed);
-[t2] fib_bench.c: 18: for (int k = 0; k < NUM; k++) {
 [t2] fib_bench.c: 19: int prevI = atomic_load_explicit(&i, memory_order_relaxed);
 [t2] fib_bench.c: 20: int prevJ = atomic_load_explicit(&j, memory_order_relaxed);
 [t2] fib_bench.c: 21: atomic_store_explicit(&j, prevI + prevJ, memory_order_relaxed);
 [t1] fib_bench.c: 10: int prevJ = atomic_load_explicit(&j, memory_order_relaxed);
 [t1] fib_bench.c: 11: atomic_store_explicit(&i, prevI + prevJ, memory_order_relaxed);
-[t1] fib_bench.c: 12: }
-[t1] fib_bench.c: 8: for (int k = 0; k < NUM; k++) {
 [t1] fib_bench.c: 9: int prevI = atomic_load_explicit(&i, memory_order_relaxed);
 [t2] fib_bench.c: 21: atomic_store_explicit(&j, prevI + prevJ, memory_order_relaxed);
-[t2] fib_bench.c: 22: }
-[t2] fib_bench.c: 18: for (int k = 0; k < NUM; k++) {
 [t2] fib_bench.c: 19: int prevI = atomic_load_explicit(&i, memory_order_relaxed);
 [t2] fib_bench.c: 20: int prevJ = atomic_load_explicit(&j, memory_order_relaxed);
 [t2] fib_bench.c: 21: atomic_store_explicit(&j, prevI + prevJ, memory_order_relaxed);
 [t1] fib_bench.c: 10: int prevJ = atomic_load_explicit(&j, memory_order_relaxed);
 [t1] fib_bench.c: 11: atomic_store_explicit(&i, prevI + prevJ, memory_order_relaxed);
-[t1] fib_bench.c: 12: }
-[t1] fib_bench.c: 8: for (int k = 0; k < NUM; k++) {
 [t1] fib_bench.c: 9: int prevI = atomic_load_explicit(&i, memory_order_relaxed);
 [t2] fib_bench.c: 21: atomic_store_explicit(&j, prevI + prevJ, memory_order_relaxed);
-[t2] fib_bench.c: 22: }
-[t2] fib_bench.c: 18: for (int k = 0; k < NUM; k++) {
 [t2] fib_bench.c: 19: int prevI = atomic_load_explicit(&i, memory_order_relaxed);
 [t2] fib_bench.c: 20: int prevJ = atomic_load_explicit(&j, memory_order_relaxed);
 [t2] fib_bench.c: 21: atomic_store_explicit(&j, prevI + prevJ, memory_order_relaxed);
 [t1] fib_bench.c: 10: int prevJ = atomic_load_explicit(&j, memory_order_relaxed);
 [t1] fib_bench.c: 11: atomic_store_explicit(&i, prevI + prevJ, memory_order_relaxed);
-[t1] fib_bench.c: 12: }
-[t1] fib_bench.c: 8: for (int k = 0; k < NUM; k++) {
 [t1] fib_bench.c: 9: int prevI = atomic_load_explicit(&i, memory_order_relaxed);
 [t2] fib_bench.c: 21: atomic_store_explicit(&j, prevI + prevJ, memory_order_relaxed);
-[t2] fib_bench.c: 22: }
-[t2] fib_bench.c: 18: for (int k = 0; k < NUM; k++) {
 [t2] fib_bench.c: 19: int prevI = atomic_load_explicit(&i, memory_order_relaxed);
 [t2] fib_bench.c: 20: int prevJ = atomic_load_explicit(&j, memory_order_relaxed);
 [t2] fib_bench.c: 21: atomic_store_explicit(&j, prevI + prevJ, memory_order_relaxed);
 [t1] fib_bench.c: 10: int prevJ = atomic_load_explicit(&j, memory_order_relaxed);
 [t1] fib_bench.c: 11: atomic_store_explicit(&i, prevI + prevJ, memory_order_relaxed);
-[t1] fib_bench.c: 12: }
-[t1] fib_bench.c: 8: for (int k = 0; k < NUM; k++) {
 [t1] fib_bench.c: 9: int prevI = atomic_load_explicit(&i, memory_order_relaxed);
 [t2] fib_bench.c: 21: atomic_store_explicit(&j, prevI + prevJ, memory_order_relaxed);
-[t2] fib_bench.c: 22: }
-[t2] fib_bench.c: 18: for (int k = 0; k < NUM; k++) {
 [t2] fib_bench.c: 19: int prevI = atomic_load_explicit(&i, memory_order_relaxed);
 [t2] fib_bench.c: 20: int prevJ = atomic_load_explicit(&j, memory_order_relaxed);
 [t2] fib_bench.c: 21: atomic_store_explicit(&j, prevI + prevJ, memory_order_relaxed);

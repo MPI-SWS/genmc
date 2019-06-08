@@ -22,9 +22,10 @@
 #define __PARSER_HPP__
 
 #include "Library.hpp"
+#include <llvm/Support/Debug.h>
+#include <llvm/Support/raw_ostream.h>
 #include <iostream>
 #include <fstream>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -36,9 +37,9 @@ public:
 	static std::string getFileLineByNumber(const std::string &absPath, int line);
 	static void stripWhitespace(std::string &s);
 	static void stripSlashes(std::string &absPath);
-	static void parseInstFromMData(std::stringstream &ss,
-				       std::vector<std::pair<int, std::string> > &prefix,
-				       std::string functionName);
+	static void parseInstFromMData(std::pair<int, std::string> &locAndFile,
+				       std::string functionName,
+				       llvm::raw_ostream &os = llvm::dbgs());
 	std::vector<Library> parseSpecs(const string &fileName);
 };
 
