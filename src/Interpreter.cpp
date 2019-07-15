@@ -59,7 +59,8 @@ extern "C" void LLVMLinkInInterpreter() { }
 
 /// create - Create a new interpreter object.  This can never fail.
 ///
-ExecutionEngine *Interpreter::create(Module *M, GenMCDriver *driver,
+ExecutionEngine *Interpreter::create(Module *M, VariableInfo &&VI,
+				     GenMCDriver *driver,
 				     std::string* ErrStr) {
   // Tell this Module to materialize everything and release the GVMaterializer.
 #ifdef LLVM_MODULE_MATERIALIZE_ALL_PERMANENTLY_ERRORCODE_BOOL
@@ -94,7 +95,7 @@ ExecutionEngine *Interpreter::create(Module *M, GenMCDriver *driver,
   }
 #endif
 
-  return new Interpreter(M, driver);
+  return new Interpreter(M, std::move(VI), driver);
 }
 
 /* Thread::seed is ODR-used -- we need to provide a definition (C++14) */
@@ -122,182 +123,147 @@ void Interpreter::reset()
 		threads[i].globalInstructions = 0;
 		threads[i].rng.seed(Thread::seed);
 	}
-
-	/*
-	 * Free all allocated memory, and no longer track the stack addresses
-	 * for this execution
-	 */
-	for (auto mem : stackMem)
-		free(mem);
-	stackMem.clear();
-	stackAllocas.clear();
 }
 
-std::vector<ExecutionContext> &Interpreter::ECStack()
+/* Creates an entry for the main() function */
+Thread Interpreter::createMainThread(llvm::Function *F)
 {
-	return getCurThr().ECStack;
+	Thread thr(F, 0);
+	thr.tls = threadLocalVars;
+	return thr;
 }
 
-#ifdef LLVM_EXECUTIONENGINE_DATALAYOUT_PTR
-# define GET_TYPE_ALLOC_SIZE(M, x)		\
-	(M)->getDataLayout()->getTypeAllocSize((x))
-#else
-# define GET_TYPE_ALLOC_SIZE(M, x)		\
-	(M)->getDataLayout().getTypeAllocSize((x))
-#endif
-
-#ifdef LLVM_HAS_GLOBALOBJECT_GET_METADATA
-void Interpreter::collectGVNames(Module *M, char *ptr, llvm::Type *typ,
-				 llvm::DIType *dit, std::string nameBuilder)
+/* Creates an entry for another thread */
+Thread Interpreter::createNewThread(llvm::Function *F, int tid, int pid,
+				    const llvm::ExecutionContext &SF)
 {
-	if(!isa<CompositeType>(typ)) {
-		globalVarNames.push_back(std::make_pair(ptr, nameBuilder));
-		return;
+	Thread thr(F, tid, pid, SF);
+	thr.ECStack.push_back(SF);
+	thr.tls = threadLocalVars;
+	return thr;
+}
+
+/* Returns true if "addr" points to global memory (static or heap) */
+bool Interpreter::isGlobal(const void *addr)
+{
+	auto ha = std::equal_range(heapAllocas.begin(), heapAllocas.end(), addr);
+	return (globalVars.count(addr) || (ha.first != ha.second));
+}
+
+/* Returns true if "addr" points to the stack */
+bool Interpreter::isStackAlloca(const void *addr)
+{
+	return stackAllocas.count(addr);
+}
+
+/* Returns ture if "addr" points to heap-allocated memory */
+bool Interpreter::isHeapAlloca(const void *addr)
+{
+	return heapAllocas.count(addr);
+}
+
+/* Returns the (source-code) variable name corresponding to "addr" */
+std::string Interpreter::getVarName(const void *addr)
+{
+	if (isStackAlloca(addr))
+		return stackVars[addr];
+	if (isGlobal(addr))
+		return globalVars[addr];
+	return "";
+}
+
+/* Returns a fresh address to be used from the interpreter */
+void *Interpreter::getFreshAddr(unsigned int size, bool isLocal /* false */)
+{
+	char *newAddr = allocRangeBegin; /* Fetch the next from the pool */
+	allocRangeBegin += size;
+
+	/* Track the allocated space */
+	if (isLocal) {
+		for (auto i = 0u; i < size; i++)
+			stackAllocas.insert(newAddr + i);
+		/* The name information will be updated after control
+		 * returns to the interpreter */
+	} else {
+		for (auto i = 0u; i < size; i++)
+			heapAllocas.insert(newAddr + i);
 	}
+	return newAddr;
+}
 
-	unsigned int offset = 0;
-	if (SequentialType *AT = dyn_cast<SequentialType>(typ)) {
-		if (auto *dict = dyn_cast<DICompositeType>(dit)) {
-			unsigned int elemSize = GET_TYPE_ALLOC_SIZE(M, AT->getElementType());
-			for (auto i = 0u; i < AT->getNumElements(); i++) {
-				if (!dict->getBaseType()) {
-					collectGVNames(M, ptr + offset,
-						       AT->getElementType(), dict,
-						       nameBuilder + "[" +
-						       std::to_string(i) + "]");
-				} else if (auto *dibt = dyn_cast<DIType>(dict->getBaseType())) {
-					collectGVNames(M, ptr + offset,
-						       AT->getElementType(), dibt,
-						       nameBuilder + "[" +
-						       std::to_string(i) + "]");
-				}
-				offset += elemSize;
-			}
-		}
-	} else if (StructType *ST = dyn_cast<StructType>(typ)) {
-		if (auto *dict = llvm::dyn_cast<DICompositeType>(dit)) {
-			auto dictElems = dict->getElements();
-			auto eb = ST->element_begin();
-			for (auto it = ST->element_begin(); it != ST->element_end(); ++it) {
-				unsigned int elemSize = GET_TYPE_ALLOC_SIZE(M, *it);
-				auto didt = dictElems[it - eb];
-				if (auto *dit = dyn_cast<DIDerivedType>(didt)) {
-					if (auto ditb = dyn_cast<DIType>(dit->getBaseType()))
-						collectGVNames(M, ptr + offset, *it,
-							       ditb, nameBuilder + "."
-							       + dit->getName().str());
-				}
-				offset += elemSize;
-			}
-		}
+/* Stops tracking of a memory allocation after deletion from the graph */
+void Interpreter::deallocateAddr(const void *addr, unsigned int size, bool isLocal /* false */)
+{
+	if (isLocal) {
+		for (auto i = 0u; i < size; i++)
+			stackAllocas.erase((char *) addr + i);
+		for (auto i = 0u; i < size; i++)
+			stackVars.erase((char *) addr + i);
+	} else {
+		for (auto i = 0u; i < size; i++)
+			heapAllocas.erase((char *) addr + i);
 	}
 	return;
 }
-#else
-void Interpreter::collectGVNames(const GlobalVariable &v, char *ptr, unsigned int typeSize)
-{
-	if (ArrayType *AT = dyn_cast<ArrayType>(v.getType()->getElementType())) {
-		unsigned int elemTypeSize = typeSize / AT->getArrayNumElements();
-		for (auto i = 0u, s = 0u; s < typeSize; i++, s += elemTypeSize) {
-			std::string name = v.getName().str() + "[" + std::to_string(i) + "]";
-			globalVarNames.push_back(std::make_pair(ptr + s, name));
-		}
-	} else {
-		globalVarNames.push_back(std::make_pair(ptr, v.getName()));
-	}
-}
-#endif
 
-void Interpreter::storeGlobals(Module *M)
+/* Updates the name corresponding to an address based on the collected VariableInfo */
+void Interpreter::updateVarNameInfo(Value *v, char *ptr, unsigned int typeSize,
+				    bool isLocal /* false */)
+{
+	auto &vars = (isLocal) ? stackVars : globalVars;
+	auto &vi = (isLocal) ? VI.localInfo[v] : VI.globalInfo[v];
+
+	if (vi.empty())
+		return;
+
+	for (auto i = 0u; i < vi.size() - 1; i++) {
+		for (auto j = 0u; j < vi[i + 1].first - vi[i].first; j++)
+			vars[ptr + vi[i].first + j] = vi[i].second;
+	}
+	auto &last = vi.back();
+	for (auto j = 0u; j < typeSize - last.first; j++)
+		vars[ptr + last.first + j] = last.second;
+}
+
+/* Updates the names for all global variables, and calculates the
+ * starting address of the allocation pool */
+void Interpreter::collectGlobalAddresses(Module *M)
 {
 	/* Collect all global and thread-local variables */
 	for (auto &v : M->getGlobalList()) {
 		char *ptr = static_cast<char *>(GVTOP(getConstantValue(&v)));
-		unsigned int typeSize = GET_TYPE_ALLOC_SIZE(M, v.getType()->getElementType());
+		unsigned int typeSize =
+		        TD.getTypeAllocSize(v.getType()->getElementType());
+
+		/* The allocation pool will point just after the static address */
+		if (!allocRangeBegin || ptr > allocRangeBegin)
+			allocRangeBegin = ptr + typeSize;
 
 		/* Record whether this is a thread local variable or not */
-		for (auto i = 0u; i < typeSize; i++) {
-			if (v.isThreadLocal())
+		if (v.isThreadLocal()) {
+			for (auto i = 0u; i < typeSize; i++)
 				threadLocalVars[ptr + i] = getConstantValue(v.getInitializer());
-			else
-				globalVars.push_back(ptr + i);
+			continue;
 		}
 
-#ifdef LLVM_HAS_GLOBALOBJECT_GET_METADATA
-		if (!v.getMetadata("dbg"))
-			continue;
-
-		BUG_ON(!isa<DIGlobalVariableExpression>(v.getMetadata("dbg")));
-		auto *dive = static_cast<DIGlobalVariableExpression *>(v.getMetadata("dbg"));
-		auto dit = dive->getVariable()->getType();
-
-		/* Check whether it is a global pointer */
-		if (auto ditc = dyn_cast<DIType>(dit))
-			collectGVNames(M, ptr, v.getType()->getElementType(),
-				       ditc, v.getName());
-#else
-		collectGVNames(v, ptr, typeSize);
-#endif
+		/* Update the name for this global */
+		updateVarNameInfo(&v, ptr, typeSize);
 	}
-	/* We sort all vectors to facilitate searching */
-	std::sort(globalVars.begin(), globalVars.end());
-	std::unique(globalVars.begin(), globalVars.end());
-
-	std::sort(globalVarNames.begin(), globalVarNames.end());
-	std::unique(globalVarNames.begin(), globalVarNames.end());
-}
-
-bool Interpreter::isGlobal(const void *addr)
-{
-	auto gv = std::equal_range(globalVars.begin(), globalVars.end(), addr);
-	auto ha = std::equal_range(heapAllocas.begin(), heapAllocas.end(), addr);
-	return (gv.first != gv.second) || (ha.first != ha.second);
-}
-
-bool Interpreter::isStackAlloca(const void *addr)
-{
-	auto sa = std::find(stackAllocas.begin(), stackAllocas.end(), addr);
-	return sa != stackAllocas.end();
-}
-
-bool Interpreter::isHeapAlloca(const void *addr)
-{
-	auto sa = std::find(heapAllocas.begin(), heapAllocas.end(), addr);
-	return sa != stackAllocas.end();
-}
-
-std::string Interpreter::getGlobalName(const void *addr)
-{
-	typedef std::pair<const void *, std::string> namePair;
-	namePair loc = std::make_pair(addr, "");
-	auto res = std::equal_range(globalVarNames.begin(), globalVarNames.end(), loc,
-				    [](namePair kv1, namePair kv2)
-				    { return kv1.first < kv2.first; });
-	if (res.first != res.second)
-		return res.first->second;
-	return "";
-}
-
-void Interpreter::freeRegion(const void *addr, int size)
-{
-	heapAllocas.erase(std::remove_if(heapAllocas.begin(), heapAllocas.end(),
-					 [&](void *loc)
-					 { return loc >= addr &&
-						  (char *) loc < (const char *) addr + size; }),
-			  heapAllocas.end());
-	return;
+	/* If there are no global variables, pick a random address for the pool */
+	if (!allocRangeBegin)
+		allocRangeBegin = (char *) 0x25031821;
 }
 
 //===----------------------------------------------------------------------===//
 // Interpreter ctor - Initialize stuff
 //
-Interpreter::Interpreter(Module *M, GenMCDriver *driver)
+Interpreter::Interpreter(Module *M, VariableInfo &&VI, GenMCDriver *driver)
 #ifdef LLVM_EXECUTIONENGINE_MODULE_UNIQUE_PTR
   : ExecutionEngine(std::unique_ptr<Module>(M)),
 #else
   : ExecutionEngine(M),
 #endif
-    TD(M), driver(driver) {
+    TD(M), VI(std::move(VI)), driver(driver) {
 
   memset(&ExitValue.Untyped, 0, sizeof(ExitValue.Untyped));
 #ifdef LLVM_EXECUTIONENGINE_DATALAYOUT_PTR
@@ -308,8 +274,7 @@ Interpreter::Interpreter(Module *M, GenMCDriver *driver)
   initializeExternalFunctions();
   emitGlobals();
 
-  /* Store the addresses of all global variables */
-  storeGlobals(M);
+  collectGlobalAddresses(M);
 
   IL = new IntrinsicLowering(TD);
 }

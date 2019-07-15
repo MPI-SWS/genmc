@@ -27,6 +27,7 @@
 #include "Error.hpp"
 #include "IntrinsicLoweringPass.hpp"
 #include "LoopUnrollPass.hpp"
+#include "MDataCollectionPass.hpp"
 #include "SpinAssumePass.hpp"
 #if defined(HAVE_LLVM_PASSMANAGER_H)
 # include <llvm/PassManager.h>
@@ -104,7 +105,8 @@ namespace LLVMModule {
 		return std::unique_ptr<llvm::Module>(mod);
 	}
 
-	bool transformLLVMModule(llvm::Module &mod, bool spinAssume, int unroll)
+	bool transformLLVMModule(llvm::Module &mod, llvm::VariableInfo &VI,
+				 bool spinAssume, int unroll)
 	{
 		llvm::PassRegistry &Registry = *llvm::PassRegistry::getPassRegistry();
 		PassManager OptPM, BndPM;
@@ -126,6 +128,7 @@ namespace LLVMModule {
 
 		OptPM.add(new DeclareAssumePass());
 		OptPM.add(new DefineLibcFunsPass());
+		OptPM.add(new MDataCollectionPass(VI));
 #ifdef LLVM_EXECUTIONENGINE_DATALAYOUT_PTR
 		OptPM.add(new IntrinsicLoweringPass(*mod.getDataLayout()));
 #else

@@ -2,10 +2,16 @@ Error detected: Safety violation!
 Event (3, 2) in graph:
 <-1, 0> main:
 	(0, 0): B
-	(0, 1): TC [forks 1] L.11
-	(0, 2): TC [forks 2] L.12
-	(0, 3): TC [forks 3] L.13
-	(0, 4): E
+	(0, 1): M
+	(0, 2): M
+	(0, 3): M
+	(0, 4): TC [forks 1] L.11
+	(0, 5): Wna (id1, 1) L.11
+	(0, 6): TC [forks 2] L.12
+	(0, 7): Wna (id2, 2) L.12
+	(0, 8): TC [forks 3] L.13
+	(0, 9): Wna (id3, 3) L.13
+	(0, 10): E
 <0, 1> t1:
 	(1, 0): B
 	(1, 1): Rrlx (i, 1) [INIT] L.9: fib_bench.c

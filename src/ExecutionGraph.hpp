@@ -111,7 +111,7 @@ public:
 	const FenceLabel *addFenceToGraph(int tid, llvm::AtomicOrdering ord);
 
 	const MallocLabel *addMallocToGraph(int tid, const void *addr,
-					    unsigned int size);
+					    unsigned int size, bool isLocal = false);
 
 	const FreeLabel *addFreeToGraph(int tid, const void *addr,
 					unsigned int size);

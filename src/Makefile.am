@@ -27,6 +27,7 @@ libgenmc_a_SOURCES = \
   LLVMModule.cpp LLVMModule.hpp \
   LoopUnrollPass.cpp LoopUnrollPass.hpp \
   Matrix2D.hpp Matrix2D.tcc \
+  MDataCollectionPass.hpp MDataCollectionPass.cpp \
   ModOrder.cpp ModOrder.hpp \
   Parser.cpp Parser.hpp \
   GenMCDriver.cpp GenMCDriver.hpp \

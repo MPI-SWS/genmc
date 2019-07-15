@@ -33,13 +33,16 @@ unsigned int input[MAX_THREADS];
 unsigned int output[MAX_THREADS];
 pthread_t threads[MAX_THREADS];
 
+int __thread tid;
+
+void set_thread_num(int i)
+{
+	tid = i;
+}
+
 int get_thread_num()
 {
-	pthread_t curr = pthread_self();
-	for (int i = 0; i < num_threads; i++)
-		if (curr == threads[i])
-			return i;
-	assert(0);
+	return tid;
 }
 
 bool succ[MAX_THREADS];
@@ -48,6 +51,8 @@ void *threadW(void *param)
 {
 	unsigned int val;
 	int pid = *((int *)param);
+
+	set_thread_num(pid);
 
 	input[pid] = pid * 10;
 	enqueue(queue, input[pid]);
@@ -61,6 +66,8 @@ void *threadR(void *param)
 	unsigned int val;
 	int pid = *((int *)param);
 
+	set_thread_num(pid);
+
 //	input[pid] = pid * 10;
 //	enqueue(queue, input[pid]);
 	succ[pid] = dequeue(queue, &output[pid]);
@@ -72,6 +79,8 @@ void *threadRW(void *param)
 {
 	unsigned int val;
 	int pid = *((int *)param);
+
+	set_thread_num(pid);
 
 	input[pid] = pid * 10;
 	enqueue(queue, input[pid]);

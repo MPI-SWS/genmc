@@ -173,7 +173,7 @@ public:
 
 	/* Returns an appropriate result for malloc() */
 	llvm::GenericValue
-	visitMalloc(const llvm::GenericValue &size);
+	visitMalloc(uint64_t allocSize, bool isLocal = false);
 
 	/* A call to free() has been interpreted, nothing for the intepreter */
 	void

@@ -176,13 +176,14 @@ void GenMCDriver::handleFinishedExecution()
 void GenMCDriver::run()
 {
 	std::string buf;
+	llvm::VariableInfo VI;
 
-	LLVMModule::transformLLVMModule(*mod, userConf->spinAssume, userConf->unroll);
+	LLVMModule::transformLLVMModule(*mod, VI, userConf->spinAssume, userConf->unroll);
 	if (userConf->transformFile != "")
 		LLVMModule::printLLVMModule(*mod, userConf->transformFile);
 
 	/* Create an interpreter for the program's instructions. */
-	EE = (llvm::Interpreter *) llvm::Interpreter::create(&*mod, this, &buf);
+	EE = (llvm::Interpreter *) llvm::Interpreter::create(&*mod, std::move(VI), this, &buf);
 
 	/* Create main thread and start event */
 	auto mainFun = mod->getFunction(userConf->programEntryFun);
@@ -190,7 +191,7 @@ void GenMCDriver::run()
 		WARN("ERROR: Could not find program's entry point function!\n");
 		abort();
 	}
-	auto main = llvm::Thread(mainFun, 0);
+	auto main = EE->createMainThread(mainFun);
 	EE->threads.push_back(main);
 
 	/* Explore all graphs and print the results */
@@ -246,8 +247,9 @@ void GenMCDriver::restrictGraph(unsigned int stamp)
 		for (auto j = v[i] + 1u; j < g.events[i].size(); j++) {
 			const EventLabel *lab = g.getEventLabel(Event(i, j));
 			if (auto *mLab = llvm::dyn_cast<MallocLabel>(lab))
-				EE->freeRegion(mLab->getAllocAddr(),
-					       mLab->getAllocSize());
+				EE->deallocateAddr(mLab->getAllocAddr(),
+						   mLab->getAllocSize(),
+						   mLab->isLocal());
 		}
 	}
 
@@ -310,7 +312,7 @@ void GenMCDriver::visitGraph()
 
 		/* Get main program function and run the program */
 		EE->runStaticConstructorsDestructors(false);
-		EE->runFunctionAsMain(mod->getFunction(userConf->programEntryFun), {"prog"}, 0);
+		EE->runFunctionAsMain(mod->getFunction(userConf->programEntryFun), {"prog"}, nullptr);
 		EE->runStaticConstructorsDestructors(true);
 
 		auto validExecution = true;
@@ -553,9 +555,7 @@ int GenMCDriver::visitThreadCreate(llvm::Function *calledFun, const llvm::Execut
 	g.addTCreateToGraph(cur.thread, cid);
 
 	/* Prepare the execution context for the new thread */
-	llvm::Thread thr(calledFun, cid, cur.thread, SF);
-	thr.ECStack.push_back(SF);
-	thr.tls = EE->threadLocalVars;
+	llvm::Thread thr = EE->createNewThread(calledFun, cid, cur.thread, SF);
 
 	if (cid == (int) g.events.size()) {
 		/* If the thread does not exist in the graph, make an entry for it */
@@ -747,7 +747,7 @@ void GenMCDriver::visitStore(llvm::Interpreter::InstAttr attr,
 	return;
 }
 
-llvm::GenericValue GenMCDriver::visitMalloc(const llvm::GenericValue &argSize)
+llvm::GenericValue GenMCDriver::visitMalloc(uint64_t allocSize, bool isLocal /* false */)
 {
 	auto &g = getGraph();
 	auto &thr = EE->getCurThr();
@@ -762,22 +762,14 @@ llvm::GenericValue GenMCDriver::visitMalloc(const llvm::GenericValue &argSize)
 		BUG();
 	}
 
-	WARN_ON_ONCE(argSize.IntVal.getBitWidth() > 64, "malloc-alignment",
+	WARN_ON_ONCE(allocSize > 64, "malloc-alignment",
 		     "WARNING: malloc()'s alignment larger than 64-bit! Limiting...\n");
 
-	/* Get a fresh address and also store the size of this allocation */
-	allocBegin.PointerVal = EE->heapAllocas.empty() ? (char *) EE->globalVars.back() + 1
-		                                        : (char *) EE->heapAllocas.back() + 1;
-	uint64_t size = argSize.IntVal.getLimitedValue();
+	/* Get a fresh address and also track this allocation */
+	allocBegin.PointerVal = EE->getFreshAddr(allocSize, isLocal);
 
-	/* Track the address allocated*/
-	char *ptr = static_cast<char *>(allocBegin.PointerVal);
-	for (auto i = 0u; i < size; i++)
-		EE->heapAllocas.push_back(ptr + i);
-
-	/* Add a relevant label to the graph */
-	g.addMallocToGraph(thr.id, allocBegin.PointerVal, size);
-
+	/* Add a relevant label to the graph and return the new address */
+	g.addMallocToGraph(thr.id, allocBegin.PointerVal, allocSize, isLocal);
 	return allocBegin;
 }
 
@@ -1430,6 +1422,21 @@ static void executeMDPrint(const EventLabel *lab,
 		os << ": " << errPath;
 }
 
+/* Returns true if the corresponding LOC should be printed for this label type */
+bool shouldPrintLOC(const EventLabel *lab)
+{
+	/* Begin/End labels don't have a corresponding LOC */
+	if (llvm::isa<ThreadStartLabel>(lab) ||
+	    llvm::isa<ThreadFinishLabel>(lab))
+		return false;
+
+	/* Similarly for allocas() (stack variables) */
+	if (auto *mLab = llvm::dyn_cast<MallocLabel>(lab))
+		return !mLab->isLocal();
+
+	return true;
+}
+
 void GenMCDriver::printGraph(bool getMetadata /* false */)
 {
 	auto &g = getGraph();
@@ -1443,19 +1450,17 @@ void GenMCDriver::printGraph(bool getMetadata /* false */)
 			const EventLabel *lab = g.getEventLabel(Event(i, j));
 			llvm::dbgs() << "\t";
 			if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab)) {
-				auto name = EE->getGlobalName(rLab->getAddr());
+				auto name = EE->getVarName(rLab->getAddr());
 				auto val = getWriteValue(rLab->getRf(), rLab->getAddr(),
 							 rLab->getType());
 				executeRLPrint(rLab, name, val);
 			} else if (auto *wLab = llvm::dyn_cast<WriteLabel>(lab)) {
-				auto name = EE->getGlobalName(wLab->getAddr());
+				auto name = EE->getVarName(wLab->getAddr());
 				executeWLPrint(wLab, name);
 			} else {
 				llvm::dbgs() << *lab;
 			}
-			if (getMetadata &&
-			    !llvm::isa<ThreadStartLabel>(lab) &&
-			    !llvm::isa<ThreadFinishLabel>(lab)) {
+			if (getMetadata && shouldPrintLOC(lab)) {
 				executeMDPrint(lab, thr.prefixLOC[j], getConf()->inputFile);
 			}
 			llvm::dbgs() << "\n";
@@ -1477,11 +1482,11 @@ void GenMCDriver::prettyPrintGraph()
 					llvm::dbgs().changeColor(llvm::raw_ostream::Colors::GREEN);
 				auto val = getWriteValue(rLab->getRf(), rLab->getAddr(),
 							 rLab->getType());
-				llvm::dbgs() << "R" << EE->getGlobalName(rLab->getAddr()) << ","
+				llvm::dbgs() << "R" << EE->getVarName(rLab->getAddr()) << ","
 					     << val.IntVal << " ";
 				llvm::dbgs().resetColor();
 			} else if (auto *wLab = llvm::dyn_cast<WriteLabel>(lab)) {
-				llvm::dbgs() << "W" << EE->getGlobalName(wLab->getAddr()) << ","
+				llvm::dbgs() << "W" << EE->getVarName(wLab->getAddr()) << ","
 					     << wLab->getVal().IntVal << " ";
 			}
 		}
@@ -1522,12 +1527,12 @@ void GenMCDriver::dotPrintToFile(const std::string &filename,
 
 			/* First, print the graph label for this node */
 			if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab)) {
-				auto name = EE->getGlobalName(rLab->getAddr());
+				auto name = EE->getVarName(rLab->getAddr());
 				auto val = getWriteValue(rLab->getRf(), rLab->getAddr(),
 							 rLab->getType());
 				executeRLPrint(rLab, name, val, ss);
 			} else if (auto *wLab = llvm::dyn_cast<WriteLabel>(lab)) {
-				auto name = EE->getGlobalName(wLab->getAddr());
+				auto name = EE->getVarName(wLab->getAddr());
 				executeWLPrint(wLab, name, ss);
 			} else {
 				ss << *lab;
@@ -1599,9 +1604,13 @@ void GenMCDriver::recPrintTraceBefore(const Event &e, View &a,
 			if (!bLab->getParentCreate().isInitializer())
 				recPrintTraceBefore(bLab->getParentCreate(), a, ss);
 
-		/* Do not print the line if it is an RMW write, since it will
-		 * be the same as the previous one */
+		/* Do not print the line if it is an RMW write, since it will be
+		 * the same as the previous one */
 		if (llvm::isa<CasWriteLabel>(lab) || llvm::isa<FaiWriteLabel>(lab))
+			continue;
+		/* Similarly for a Wna just after the creation of a thread
+		 * (it is the store of the PID) */
+		if (i > 0 && llvm::isa<ThreadCreateLabel>(g.getPreviousLabel(lab)))
 			continue;
 		Parser::parseInstFromMData(thr.prefixLOC[i], thr.threadFun->getName().str(), ss);
 	}

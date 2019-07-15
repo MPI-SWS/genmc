@@ -1042,22 +1042,15 @@ void Interpreter::visitAllocaInst(AllocaInst &I) {
   // Avoid malloc-ing zero bytes, use max()...
   unsigned MemToAlloc = std::max(1U, NumElements * TypeSize);
 
-  // Allocate enough memory to hold the type...
-  void *Memory = malloc(MemToAlloc);
+  /* The driver will provide the address this alloca returns */
+  GenericValue Result = driver->visitMalloc(MemToAlloc, true);
 
-  // DEBUG(dbgs() << "Allocated Type: " << *Ty << " (" << TypeSize << " bytes) x "
-  //              << NumElements << " (Total: " << MemToAlloc << ") at "
-  //              << uintptr_t(Memory) << '\n');
+  /* If this is not a replay, update naming information for this variable
+   * based on previously collected information */
+  if (!stackVars.count(Result.PointerVal))
+	  updateVarNameInfo(&I, (char *) Result.PointerVal, MemToAlloc, true);
 
-  GenericValue Result = PTOGV(Memory);
-  assert(Result.PointerVal && "Null pointer returned by malloc!");
   SetValue(&I, Result, SF);
-
-  if (I.getOpcode() == Instruction::Alloca) {
-    stackMem.push_back(Memory);
-    for (auto i = 0u; i < MemToAlloc; i++)
-      stackAllocas.push_back((char *) Memory + i);
-  }
 }
 
 // getElementOffset - The workhorse for getelementptr.
@@ -1123,27 +1116,16 @@ void Interpreter::visitLoadInst(LoadInst &I)
 	GenericValue *ptr = (GenericValue *) GVTOP(src);
 	Type *typ = I.getType();
 
-	/*
-	 * A global access is an access to a global variable, or an access
-	 * to some offset of a global variable (obtained by getelementptr).
-	 * If this is not a global access just perform the load.
-	 */
-	if (!isGlobal(ptr)) {
-		GenericValue Result;
-		if (thr.tls.count(ptr)) {
-			Result = thr.tls[ptr];
-		} else {
-			if (!isStackAlloca(ptr)) {
-				llvm::dbgs() << "Tried to read from unallocated memory!\n";
-				abort();
-			}
-			LoadValueFromMemory(Result, ptr, typ);
-		}
-		SetValue(&I, Result, SF);
+	/* If this is a thread-local access it is not recorded in the graph,
+	 * so just perform the load. */
+	if (thr.tls.count(ptr)) {
+		SetValue(&I, thr.tls[ptr], SF);
 		return;
 	}
 
+	/* Otherwise, the driver will provide the appropriate value */
 	auto val = driver->visitLoad(IA_None, I.getOrdering(), ptr, typ);
+
 	/* Last, set the return value for this instruction */
 	SetValue(&I, val, SF);
 	return;
@@ -1158,16 +1140,9 @@ void Interpreter::visitStoreInst(StoreInst &I)
 	GenericValue *ptr = (GenericValue *) GVTOP(src);
 	Type *typ = I.getOperand(0)->getType();
 
-	if (!isGlobal(ptr)) {
-		if (thr.tls.count(ptr)) {
-			thr.tls[ptr] = val;
-		} else {
-			if (!isStackAlloca(ptr)) {
-				llvm::dbgs() << "Tried to store to unallocated memory!\n";
-				abort();
-			}
-			StoreValueToMemory(val, ptr, typ);
-		}
+	/* Do not bother with thread-local accesses */
+	if (thr.tls.count(ptr)) {
+		thr.tls[ptr] = val;
 		return;
 	}
 
@@ -1193,18 +1168,11 @@ void Interpreter::visitAtomicCmpXchgInst(AtomicCmpXchgInst &I)
 	Type *typ = I.getCompareOperand()->getType();
 	GenericValue oldVal, result;
 
-	if (!isGlobal(ptr)) {
-		if (thr.tls.count(ptr))
-			oldVal = thr.tls[ptr];
-		else
-			LoadValueFromMemory(oldVal, ptr, typ);
+	if (thr.tls.count(ptr)) {
+		oldVal = thr.tls[ptr];
 		GenericValue cmpRes = executeICMP_EQ(oldVal, cmpVal, typ);
-		if (cmpRes.IntVal.getBoolValue()) {
-			if (thr.tls.count(ptr))
-				thr.tls[ptr] = newVal;
-			else
-				StoreValueToMemory(newVal, ptr, typ);
-		}
+		if (cmpRes.IntVal.getBoolValue())
+			thr.tls[ptr] = newVal;
 		result.AggregateVal.push_back(oldVal);
 		result.AggregateVal.push_back(cmpRes);
 		SetValue(&I, result, SF);
@@ -1265,16 +1233,10 @@ void Interpreter::visitAtomicRMWInst(AtomicRMWInst &I)
 
 	BUG_ON(!typ->isIntegerTy());
 
-	if (!isGlobal(ptr)) {
-		if (thr.tls.count(ptr))
-			oldVal = thr.tls[ptr];
-		else
-			LoadValueFromMemory(oldVal, ptr, typ);
+	if (thr.tls.count(ptr)) {
+		oldVal = thr.tls[ptr];
 		executeAtomicRMWOperation(newVal, oldVal, val, I.getOperation());
-		if (thr.tls.count(ptr))
-			thr.tls[ptr] = newVal;
-		else
-			StoreValueToMemory(newVal, ptr, typ);
+		thr.tls[ptr] = newVal;
 		SetValue(&I, oldVal, SF);
 		return;
 	}
@@ -2365,14 +2327,14 @@ std::string getFilenameFromMData(MDNode *node)
 
 void Interpreter::replayExecutionBefore(const View &before)
 {
-	threads[0].ECStack = mainECStack;
 	threads[0].initSF = mainECStack.back();
 	for (auto i = 0u; i < before.size(); i++) {
 		auto &thr = getThrById(i);
+		thr.ECStack.clear();
 		thr.ECStack.push_back(thr.initSF);
 		thr.globalInstructions = 0;
 		thr.prefixLOC.clear();
-		thr.prefixLOC.resize(before[i] + 1);
+		thr.prefixLOC.resize(before[i] + 2); /* Grow since it can be accessed */
 		currentThread = i;
 		while ((int) thr.globalInstructions < before[i]) {
 			int snap = thr.globalInstructions;
@@ -2392,7 +2354,7 @@ void Interpreter::replayExecutionBefore(const View &before)
 			std::string file = getFilenameFromMData(I.getMetadata("dbg"));
 			thr.prefixLOC[snap + 1] = std::make_pair(line, file);
 
-			/* If I was an RMW, we have to fill two spots */
+			/* If I was an RMW or a TCreate, we have to fill two spots */
 			if (thr.globalInstructions == snap + 2)
 				thr.prefixLOC[snap + 2] = std::make_pair(line, file);
 		}
@@ -2439,7 +2401,7 @@ void Interpreter::callVerifierNondetInt(Function *F,
 
 void Interpreter::callMalloc(Function *F, const std::vector<GenericValue> &ArgVals)
 {
-	GenericValue address = driver->visitMalloc(ArgVals[0]);
+	GenericValue address = driver->visitMalloc(ArgVals[0].IntVal.getLimitedValue());
 	returnValueToCaller(F->getReturnType(), address);
 	return;
 }
@@ -2466,28 +2428,30 @@ void Interpreter::callPthreadSelf(Function *F,
 void Interpreter::callPthreadCreate(Function *F,
 				    const std::vector<GenericValue> &ArgVals)
 {
+	GenericValue *ptr = (GenericValue *) GVTOP(ArgVals[0]); /* tid */
 	Function *calledFun = (Function*) GVTOP(ArgVals[2]);
 	ExecutionContext SF;
-	GenericValue result;
+	GenericValue val, result;
 
+	WARN_ON(ptr == nullptr, "NULL argument to pthread_create()!\n");
+
+	/* First, set up the stack frame for the new function.
+	 * Calling function needs to take only one argument ... */
 	SF.CurFunction = calledFun;
 	SF.CurBB = &calledFun->front();
 	SF.CurInst = SF.CurBB->begin();
 
-	/* Calling function needs to take only one argument ... */
 	SetValue(&*calledFun->arg_begin(), ArgVals[3], SF);
 
+	/* Then, inform the driver about the thread creation */
 	auto tid = driver->visitThreadCreate(calledFun, SF);
 
-	/* Save the TID in the location pointed by the 1st arg */
-	GenericValue val;
-	GenericValue *ptr = (GenericValue *) GVTOP(ArgVals[0]);
-	WARN_ON(ptr == nullptr, "NULL argument to pthread_create()!\n");
+	/* ..and save the TID in the location pointed by the 1st arg */
 	Type *typ = static_cast<PointerType *>(F->arg_begin()->getType())->getElementType();
 	val.IntVal = APInt(typ->getIntegerBitWidth(), tid);
-	StoreValueToMemory(val, ptr, typ);
+	driver->visitStore(IA_None, AtomicOrdering::NotAtomic, ptr, typ, val);
 
-	/* Return a value indicating that pthread_create() succeeded */
+	/* Finally, return a value indicating that pthread_create() succeeded */
 	result.IntVal = APInt(F->getReturnType()->getIntegerBitWidth(), 0);
 	returnValueToCaller(F->getReturnType(), result);
 }
@@ -2542,10 +2506,6 @@ void Interpreter::callPthreadMutexLock(Function *F,
 		abort();
 	}
 
-	if (!isGlobal(ptr))
-		WARN_ONCE("pthread-mutex-not-global",
-			  "WARNING: Use of non-global pthread_mutex.\n");
-
 	cmpVal.IntVal = APInt(typ->getIntegerBitWidth(), 0);
 	newVal.IntVal = APInt(typ->getIntegerBitWidth(), 1);
 
@@ -2582,10 +2542,6 @@ void Interpreter::callPthreadMutexUnlock(Function *F,
 		abort();
 	}
 
-	if (!isGlobal(ptr))
-		WARN_ONCE("pthread-mutex-not-global",
-			  "WARNING: Use of non-global pthread_mutex.\n");
-
 	val.IntVal = APInt(typ->getIntegerBitWidth(), 0);
 
 	driver->visitStore(IA_Unlock, AtomicOrdering::Release, ptr, typ, val);
@@ -2605,10 +2561,6 @@ void Interpreter::callPthreadMutexTrylock(Function *F,
 		WARN("ERROR: pthread_mutex_lock called with NULL pointer!");
 		abort();
 	}
-
-	if (!isGlobal(ptr))
-		WARN_ONCE("pthread-mutex-not-global",
-			  "WARNING: Use of non-global pthread_mutex.\n");
 
 	cmpVal.IntVal = APInt(typ->getIntegerBitWidth(), 0);
 	newVal.IntVal = APInt(typ->getIntegerBitWidth(), 1);
@@ -2630,10 +2582,6 @@ void Interpreter::callReadFunction(const Library &lib, const LibMem &mem, Functi
 {
 	GenericValue *ptr = (GenericValue *) GVTOP(ArgVals[0]);
 	Type *typ = F->getReturnType();
-
-	if (!isGlobal(ptr))
-		WARN_ONCE("library-mem-not-global",
-			  "WARNING: Use of non-global library.\n");
 
 	auto res = driver->visitLibLoad(IA_None, mem.getOrdering(), ptr,
 					typ, F->getName().str());
@@ -2660,10 +2608,6 @@ void Interpreter::callWriteFunction(const Library &lib, const LibMem &mem, Funct
 		WARN("ERROR: " + F->getName().str() + " called with NULL pointer!");
 		abort();
 	}
-
-	if (!isGlobal(ptr))
-		WARN_ONCE("library-mem-not-global",
-			  "WARNING: Use of non-global library.\n");
 
 	driver->visitLibStore(IA_None, mem.getOrdering(), ptr, typ, val,
 			      F->getName().str(), mem.isLibInit());

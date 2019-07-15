@@ -71,6 +71,7 @@
 
 #include <random>
 #include <unordered_map>
+#include <unordered_set>
 
 class GenMCDriver;
 
@@ -98,6 +99,27 @@ struct ExecutionContext {
   std::vector<GenericValue>  VarArgs; // Values passed through an ellipsis
 };
 
+/*
+ * VariableInfo struct -- This struct contains source-code level (naming)
+ * information for variables.
+ */
+struct VariableInfo {
+
+  /*
+   * We keep a map (Values -> (offset, name_at_offset)), and after
+   * the interpreter and the variables are allocated and initialized,
+   * we use the map to dynamically find out the name corresponding to
+   * a particular address.
+   */
+  using NameInfo = std::vector<std::pair<unsigned, std::string > >;
+
+  std::unordered_map<Value *, NameInfo> globalInfo;
+  std::unordered_map<Value *, NameInfo> localInfo;
+};
+
+/*
+ * Thread class -- Contains information specific to each thread.
+ */
 class Thread {
 
 public:
@@ -110,7 +132,7 @@ public:
 	llvm::Function *threadFun;
 	std::vector<llvm::ExecutionContext> ECStack;
 	llvm::ExecutionContext initSF;
-	std::unordered_map<void *, llvm::GenericValue> tls;
+	std::unordered_map<const void *, llvm::GenericValue> tls;
 	unsigned int globalInstructions;
 	bool isBlocked;
 	MyRNG rng;
@@ -118,6 +140,9 @@ public:
 
 	void block() { isBlocked = true; };
 	void unblock() { isBlocked = false; };
+
+protected:
+	friend class Interpreter;
 
 	Thread(llvm::Function *F, int id)
 		: id(id), parentId(-1), threadFun(F), globalInstructions(0),
@@ -137,7 +162,28 @@ class Interpreter : public ExecutionEngine, public InstVisitor<Interpreter> {
   DataLayout TD;
   IntrinsicLowering *IL;
 
-  /* Composition pointers */
+  /* Naming information for all variables */
+  VariableInfo VI;
+
+  /* List of all stack addresses, and a map that maps these addresses to names.
+   * We keep two separate structures because this set of addresses changes dynamically. */
+  std::unordered_set<const void *> stackAllocas;
+  std::unordered_map<const void *, std::string> stackVars;
+
+
+  /* Lists of global variables with their corresponding names. We do not need to
+   * keep a separate structure with the addresses, since they do not change
+   * dynamically. We only keep a list of (dynamic) heap allocations. */
+  std::unordered_map<const void *, std::string> globalVars;
+  std::unordered_set<const void *> heapAllocas;
+
+  /* List of thread-local variables, with their initializing values */
+  std::unordered_map<const void *, llvm::GenericValue> threadLocalVars;
+
+  /* The address from which the interpreter will start allocating new vars */
+  char *allocRangeBegin = nullptr;
+
+  /* (Composition) pointer to the driver */
   GenMCDriver *driver;
 
   // The runtime stack of executing code.  The top of the stack is the current
@@ -149,7 +195,7 @@ class Interpreter : public ExecutionEngine, public InstVisitor<Interpreter> {
   std::vector<Function*> AtExitHandlers;
 
 public:
-  explicit Interpreter(Module *M, GenMCDriver *driver);
+  explicit Interpreter(Module *M, VariableInfo &&VI, GenMCDriver *driver);
   virtual ~Interpreter();
 
   /* Enum to inform the driver about possible special attributes
@@ -165,17 +211,42 @@ public:
   /* Resets the interpreter at the beginning of a new execution */
   void reset();
 
-  /* Stores the addresses of global values into globalVars and threadLocalVars */
-  void storeGlobals(Module *M);
+  /* Updates the names of the variables corresponding to addresses
+   * in the range [ptr, ptr + typeSize) */
+  void updateVarNameInfo(Value *v, char *ptr, unsigned int typeSize,
+			 bool isLocal = false);
 
-  std::vector<ExecutionContext> &ECStack();
+  std::vector<void *> freedMem;
+
+  /* Information about threads as well as the currently executing thread */
+  std::vector<Thread> threads;
+  int currentThread = 0;
+
+  /* Creates an entry for the main() function. More information are
+   * filled from the execution engine when the exploration starts */
+  Thread createMainThread(llvm::Function *F);
+
+  /* Creates a new thread, but does _not_ add it to the thread list */
+  Thread createNewThread(llvm::Function *F, int tid, int pid,
+			 const llvm::ExecutionContext &SF);
+
+  /* Returns the currently executing thread */
+  Thread& getCurThr() { return threads[currentThread]; };
+
+  /* Returns the thread with the specified ID (taken from the graph) */
+  Thread& getThrById(int id) { return threads[id]; };
+
+  /* Returns the stack frame of the currently executing thread */
+  std::vector<ExecutionContext> &ECStack() { return getCurThr().ECStack; }
 
   /* Checks whether an address is the address of a global variable */
   bool isGlobal(const void *);
   bool isHeapAlloca(const void *);
   bool isStackAlloca(const void *);
-  std::string getGlobalName(const void *addr);
-  void freeRegion(const void *addr, int size);
+  std::string getVarName(const void *addr);
+  void deallocateAddr(const void *addr, unsigned int size, bool isLocal = false);
+  void *getFreshAddr(unsigned int size, bool isLocal = false);
+  void collectGlobalAddresses(Module *M);
 
   /// runAtExitHandlers - Run any functions registered by the program's calls to
   /// atexit(3), which we intercept and store in AtExitHandlers.
@@ -184,7 +255,8 @@ public:
 
   /// create - Create an interpreter ExecutionEngine. This can never fail.
   ///
-  static ExecutionEngine *create(Module *M, GenMCDriver *driver,
+  static ExecutionEngine *create(Module *M, VariableInfo &&VI,
+				 GenMCDriver *driver,
 				 std::string *ErrorStr = nullptr);
 
   /// run - Start execution with the specified function and arguments.
@@ -220,29 +292,7 @@ public:
   ///
   void freeMachineCodeForFunction(Function *F) { }
 
-  std::vector<Thread> threads;
-  int currentThread = 0;
-
-  Thread& getCurThr() { return threads[currentThread]; };
-  Thread& getThrById(int id) { return threads[id]; };
-
-  /* List of global and thread-local variables */
-  llvm::SmallVector<void *, 1021> globalVars;
-  std::vector<std::pair<void *, std::string > > globalVarNames;
-  std::unordered_map<void *, llvm::GenericValue> threadLocalVars;
-
-  std::vector<void *> stackAllocas;
-  std::vector<void *> heapAllocas;
-  std::vector<void *> stackMem;
-  std::vector<void *> freedMem;
-
   /* Helper functions */
-#ifdef LLVM_HAS_GLOBALOBJECT_GET_METADATA
-  void collectGVNames(Module *M, char *ptr, Type *typ,
-		      DIType *md, std::string nameBuilder);
-#else
-  void collectGVNames(const GlobalVariable &v, char *ptr, unsigned int typeSize);
-#endif
   void replayExecutionBefore(const View &before);
   bool compareValues(const llvm::Type *typ, const GenericValue &val1, const GenericValue &val2);
   GenericValue getLocInitVal(GenericValue *ptr, Type *typ);

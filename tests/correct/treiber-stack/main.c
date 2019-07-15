@@ -12,20 +12,24 @@ unsigned int a, b;
 
 atomic_int x[3];
 
+int __thread tid;
+
+void set_thread_num(int i)
+{
+	tid = i;
+}
+
 int get_thread_num()
 {
-	pthread_t curr = pthread_self();
-	for (int i = 0; i < num_threads; i++)
-		if (curr == threads[i])
-			return i;
-	assert(0);
-	return -1;
+	return tid;
 }
 
 void *main_task(void *param)
 {
 	unsigned int val;
 	int pid = *((int *)param);
+
+	set_thread_num(pid);
 
 	if (pid % 4 == 0) {
 		atomic_store_explicit(&x[1], 17, relaxed);

@@ -414,12 +414,13 @@ ExecutionGraph::addFenceToGraph(int tid, llvm::AtomicOrdering ord)
 }
 
 const MallocLabel *
-ExecutionGraph::addMallocToGraph(int tid, const void *addr, unsigned int size)
+ExecutionGraph::addMallocToGraph(int tid, const void *addr,
+				 unsigned int size, bool isLocal /* false */)
 {
 	Event pos(tid, events[tid].size());
 	std::unique_ptr<MallocLabel> lab(
 		new MallocLabel(nextStamp(), llvm::AtomicOrdering::NotAtomic,
-				pos, addr, size));
+				pos, addr, size, isLocal));
 
 	View hb = calcBasicHbView(lab.get());
 	View porf = calcBasicPorfView(lab.get());

@@ -2,9 +2,13 @@ Error detected: Non-Atomic race!
 Event (1, 2) conflicts with event (2, 1) in graph:
 <-1, 0> main:
 	(0, 0): B
-	(0, 1): TC [forks 1] L.11
-	(0, 2): TC [forks 2] L.13
-	(0, 3): E
+	(0, 1): M
+	(0, 2): M
+	(0, 3): TC [forks 1] L.11
+	(0, 4): Wna (t2, 1) L.11
+	(0, 5): TC [forks 2] L.13
+	(0, 6): Wna (t1, 2) L.13
+	(0, 7): E
 <0, 1> thread_2:
 	(1, 0): B
 	(1, 1): Rrlx (y, 1) [(2, 2)] L.15: mp+rlx+rlx.c

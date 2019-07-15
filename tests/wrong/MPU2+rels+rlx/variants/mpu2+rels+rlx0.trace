@@ -2,11 +2,19 @@ Error detected: Non-Atomic race!
 Event (4, 2) conflicts with event (1, 1) in graph:
 <-1, 0> main:
 	(0, 0): B
-	(0, 1): TC [forks 1] L.11
-	(0, 2): TC [forks 2] L.13
-	(0, 3): TC [forks 3] L.15
-	(0, 4): TC [forks 4] L.17
-	(0, 5): E
+	(0, 1): M
+	(0, 2): M
+	(0, 3): M
+	(0, 4): M
+	(0, 5): TC [forks 1] L.11
+	(0, 6): Wna (t1, 1) L.11
+	(0, 7): TC [forks 2] L.13
+	(0, 8): Wna (t2, 2) L.13
+	(0, 9): TC [forks 3] L.15
+	(0, 10): Wna (t3, 3) L.15
+	(0, 11): TC [forks 4] L.17
+	(0, 12): Wna (t4, 4) L.17
+	(0, 13): E
 <0, 1> thread_1:
 	(1, 0): B
 	(1, 1): Wna (x, 1) L.6: mpu2+rels+rlx.c

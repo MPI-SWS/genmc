@@ -750,9 +750,9 @@ friend class ExecutionGraph;
 
 protected:
 	MallocLabel(unsigned int st, llvm::AtomicOrdering ord, Event pos,
-		    const void *addr, unsigned int size)
+		    const void *addr, unsigned int size, bool local = false)
 		: EventLabel(EL_Malloc, st, ord, pos),
-		  allocAddr(addr), allocSize(size) {}
+		  allocAddr(addr), allocSize(size), local(local) {}
 
 public:
 	/* Returns the (fresh) address returned by the allocation */
@@ -760,6 +760,9 @@ public:
 
 	/* Returns the size of this allocation */
 	unsigned int getAllocSize() const { return allocSize; }
+
+	/* Returns whether this models allocation of stack or heap memory */
+	bool isLocal() const { return local; }
 
 	MallocLabel *clone() const override { return new MallocLabel(*this); }
 
@@ -773,6 +776,9 @@ private:
 
 	/* The size of the requested allocation */
 	unsigned int allocSize;
+
+	/* Whether this is an allocation for stack memory or heap memory */
+	bool local;
 };
 
 
