@@ -349,17 +349,39 @@ const EventLabel *GenMCDriver::getCurrentLabel()
 	return g.getEventLabel(Event(thr.id, thr.globalInstructions));
 }
 
+/* Given an event in the graph, returns the value of it */
 llvm::GenericValue GenMCDriver::getWriteValue(Event write,
 					      const llvm::GenericValue *ptr,
 					      const llvm::Type *typ)
 {
+	/* If the event is the initializer, ask the interpreter about
+	 * the initial value of that memory location */
 	if (write.isInitializer())
 		return getEE()->getLocInitVal((llvm::GenericValue *)ptr,
 					      (llvm::Type *) typ);
 
+	/* Otherwise, we will get the value from the execution graph */
 	const EventLabel *lab = getGraph().getEventLabel(write);
 	BUG_ON(!llvm::isa<WriteLabel>(lab));
-	return static_cast<const WriteLabel *>(lab)->getVal();
+	auto *wLab = static_cast<const WriteLabel *>(lab);
+
+	/* If the type of the R and the W are the same, we are done */
+	if (wLab->getType() == typ)
+		return wLab->getVal();
+
+	/* Otherwise, make sure that we return a value of the expected type.
+	 * (Required because of how CAS produces code in LLVM -- see troep.c) */
+	llvm::GenericValue result;
+	if (typ->isIntegerTy() && wLab->getType()->isPointerTy()) {
+		result.IntVal = llvm::APInt(
+			getEE()->getTypeSize((llvm::Type *) wLab->getType()) * 8,
+			(uint64_t) wLab->getVal().PointerVal);
+	} else if (typ->isPointerTy() && wLab->getType()->isIntegerTy()) {
+		result.PointerVal = (void *) wLab->getVal().IntVal.getZExtValue();
+	} else {
+		BUG();
+	}
+	return result;
 }
 
 

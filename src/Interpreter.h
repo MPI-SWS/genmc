@@ -246,6 +246,7 @@ public:
   void replayExecutionBefore(const View &before);
   bool compareValues(const llvm::Type *typ, const GenericValue &val1, const GenericValue &val2);
   GenericValue getLocInitVal(GenericValue *ptr, Type *typ);
+  unsigned int getTypeSize(Type *typ);
   void executeAtomicRMWOperation(GenericValue &result, const GenericValue &oldVal,
 				 const GenericValue &val, AtomicRMWInst::BinOp op);
 

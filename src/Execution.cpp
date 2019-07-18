@@ -75,11 +75,18 @@ bool Interpreter::compareValues(const llvm::Type *typ, const GenericValue &val1,
 	return executeICMP_EQ(val1, val2, (Type *)typ).IntVal.getBoolValue();
 }
 
+/* Returns the initial value for the specified memory location */
 GenericValue Interpreter::getLocInitVal(GenericValue *ptr, Type *typ)
 {
 	GenericValue result;
 	LoadValueFromMemory(result, ptr, typ);
 	return result;
+}
+
+/* Returns the size (in bytes) for a given type */
+unsigned int Interpreter::getTypeSize(Type *typ)
+{
+	return (size_t) TD.getTypeAllocSize(typ);
 }
 
 
