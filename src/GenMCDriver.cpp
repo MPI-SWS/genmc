@@ -804,17 +804,29 @@ void GenMCDriver::visitFree(llvm::GenericValue *ptr)
 		BUG(); /* visitError() should abort */
 	}
 
-	/* FIXME: Check the whole graph */
-	/* Check to see whether this memory block has already been freed */
-	if (std::find(EE->freedMem.begin(), EE->freedMem.end(), ptr)
-	    != EE->freedMem.end()) {
-		WARN("ERROR: Double-free error!\n");
-		abort();
+	/* Check to see whether this memory block has already been freed, but
+	 * do not report the error yet, until the current event is added as well */
+	Event f = Event::getInitializer();
+	for (auto i = 0u; i < g.events.size(); i++) {
+		for (auto j = 1u; j < g.events[i].size(); j++) {
+			const EventLabel *lab = g.getEventLabel(Event(i, j));
+			if (auto *dLab = llvm::dyn_cast<FreeLabel>(lab)) {
+				if (dLab->getFreedAddr() == ptr) {
+					f = dLab->getPos();
+					break;
+				}
+			}
+		}
 	}
-	EE->freedMem.push_back(ptr);
 
 	/* Add a label with the appropriate store */
 	g.addFreeToGraph(thr.id, ptr, m->getAllocSize());
+
+	/* If there was a previous free() operation, report the error */
+	if (!f.isInitializer()) {
+		visitError("", f, DE_DoubleFree);
+		BUG(); /* visitError() should stop the exploration */
+	}
 	return;
 }
 

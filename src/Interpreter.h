@@ -216,8 +216,6 @@ public:
   void updateVarNameInfo(Value *v, char *ptr, unsigned int typeSize,
 			 bool isLocal = false);
 
-  std::vector<void *> freedMem;
-
   /* Information about threads as well as the currently executing thread */
   std::vector<Thread> threads;
   int currentThread = 0;
