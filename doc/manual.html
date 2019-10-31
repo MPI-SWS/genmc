@@ -1,0 +1,880 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<!-- 2019-10-30 Wed 15:56 -->
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title><font style="font-variant: small-caps">GenMC</font>: A Generic Model Checker for C Programs</title>
+<meta name="generator" content="Org mode" />
+<style type="text/css">
+ <!--/*--><![CDATA[/*><!--*/
+  .title  { text-align: center;
+             margin-bottom: .2em; }
+  .subtitle { text-align: center;
+              font-size: medium;
+              font-weight: bold;
+              margin-top:0; }
+  .todo   { font-family: monospace; color: red; }
+  .done   { font-family: monospace; color: green; }
+  .priority { font-family: monospace; color: orange; }
+  .tag    { background-color: #eee; font-family: monospace;
+            padding: 2px; font-size: 80%; font-weight: normal; }
+  .timestamp { color: #bebebe; }
+  .timestamp-kwd { color: #5f9ea0; }
+  .org-right  { margin-left: auto; margin-right: 0px;  text-align: right; }
+  .org-left   { margin-left: 0px;  margin-right: auto; text-align: left; }
+  .org-center { margin-left: auto; margin-right: auto; text-align: center; }
+  .underline { text-decoration: underline; }
+  #postamble p, #preamble p { font-size: 90%; margin: .2em; }
+  p.verse { margin-left: 3%; }
+  pre {
+    border: 1px solid #ccc;
+    box-shadow: 3px 3px 3px #eee;
+    padding: 8pt;
+    font-family: monospace;
+    overflow: auto;
+    margin: 1.2em;
+  }
+  pre.src {
+    position: relative;
+    overflow: visible;
+    padding-top: 1.2em;
+  }
+  pre.src:before {
+    display: none;
+    position: absolute;
+    background-color: white;
+    top: -10px;
+    right: 10px;
+    padding: 3px;
+    border: 1px solid black;
+  }
+  pre.src:hover:before { display: inline;}
+  /* Languages per Org manual */
+  pre.src-asymptote:before { content: 'Asymptote'; }
+  pre.src-awk:before { content: 'Awk'; }
+  pre.src-C:before { content: 'C'; }
+  /* pre.src-C++ doesn't work in CSS */
+  pre.src-clojure:before { content: 'Clojure'; }
+  pre.src-css:before { content: 'CSS'; }
+  pre.src-D:before { content: 'D'; }
+  pre.src-ditaa:before { content: 'ditaa'; }
+  pre.src-dot:before { content: 'Graphviz'; }
+  pre.src-calc:before { content: 'Emacs Calc'; }
+  pre.src-emacs-lisp:before { content: 'Emacs Lisp'; }
+  pre.src-fortran:before { content: 'Fortran'; }
+  pre.src-gnuplot:before { content: 'gnuplot'; }
+  pre.src-haskell:before { content: 'Haskell'; }
+  pre.src-hledger:before { content: 'hledger'; }
+  pre.src-java:before { content: 'Java'; }
+  pre.src-js:before { content: 'Javascript'; }
+  pre.src-latex:before { content: 'LaTeX'; }
+  pre.src-ledger:before { content: 'Ledger'; }
+  pre.src-lisp:before { content: 'Lisp'; }
+  pre.src-lilypond:before { content: 'Lilypond'; }
+  pre.src-lua:before { content: 'Lua'; }
+  pre.src-matlab:before { content: 'MATLAB'; }
+  pre.src-mscgen:before { content: 'Mscgen'; }
+  pre.src-ocaml:before { content: 'Objective Caml'; }
+  pre.src-octave:before { content: 'Octave'; }
+  pre.src-org:before { content: 'Org mode'; }
+  pre.src-oz:before { content: 'OZ'; }
+  pre.src-plantuml:before { content: 'Plantuml'; }
+  pre.src-processing:before { content: 'Processing.js'; }
+  pre.src-python:before { content: 'Python'; }
+  pre.src-R:before { content: 'R'; }
+  pre.src-ruby:before { content: 'Ruby'; }
+  pre.src-sass:before { content: 'Sass'; }
+  pre.src-scheme:before { content: 'Scheme'; }
+  pre.src-screen:before { content: 'Gnu Screen'; }
+  pre.src-sed:before { content: 'Sed'; }
+  pre.src-sh:before { content: 'shell'; }
+  pre.src-sql:before { content: 'SQL'; }
+  pre.src-sqlite:before { content: 'SQLite'; }
+  /* additional languages in org.el's org-babel-load-languages alist */
+  pre.src-forth:before { content: 'Forth'; }
+  pre.src-io:before { content: 'IO'; }
+  pre.src-J:before { content: 'J'; }
+  pre.src-makefile:before { content: 'Makefile'; }
+  pre.src-maxima:before { content: 'Maxima'; }
+  pre.src-perl:before { content: 'Perl'; }
+  pre.src-picolisp:before { content: 'Pico Lisp'; }
+  pre.src-scala:before { content: 'Scala'; }
+  pre.src-shell:before { content: 'Shell Script'; }
+  pre.src-ebnf2ps:before { content: 'ebfn2ps'; }
+  /* additional language identifiers per "defun org-babel-execute"
+       in ob-*.el */
+  pre.src-cpp:before  { content: 'C++'; }
+  pre.src-abc:before  { content: 'ABC'; }
+  pre.src-coq:before  { content: 'Coq'; }
+  pre.src-groovy:before  { content: 'Groovy'; }
+  /* additional language identifiers from org-babel-shell-names in
+     ob-shell.el: ob-shell is the only babel language using a lambda to put
+     the execution function name together. */
+  pre.src-bash:before  { content: 'bash'; }
+  pre.src-csh:before  { content: 'csh'; }
+  pre.src-ash:before  { content: 'ash'; }
+  pre.src-dash:before  { content: 'dash'; }
+  pre.src-ksh:before  { content: 'ksh'; }
+  pre.src-mksh:before  { content: 'mksh'; }
+  pre.src-posh:before  { content: 'posh'; }
+  /* Additional Emacs modes also supported by the LaTeX listings package */
+  pre.src-ada:before { content: 'Ada'; }
+  pre.src-asm:before { content: 'Assembler'; }
+  pre.src-caml:before { content: 'Caml'; }
+  pre.src-delphi:before { content: 'Delphi'; }
+  pre.src-html:before { content: 'HTML'; }
+  pre.src-idl:before { content: 'IDL'; }
+  pre.src-mercury:before { content: 'Mercury'; }
+  pre.src-metapost:before { content: 'MetaPost'; }
+  pre.src-modula-2:before { content: 'Modula-2'; }
+  pre.src-pascal:before { content: 'Pascal'; }
+  pre.src-ps:before { content: 'PostScript'; }
+  pre.src-prolog:before { content: 'Prolog'; }
+  pre.src-simula:before { content: 'Simula'; }
+  pre.src-tcl:before { content: 'tcl'; }
+  pre.src-tex:before { content: 'TeX'; }
+  pre.src-plain-tex:before { content: 'Plain TeX'; }
+  pre.src-verilog:before { content: 'Verilog'; }
+  pre.src-vhdl:before { content: 'VHDL'; }
+  pre.src-xml:before { content: 'XML'; }
+  pre.src-nxml:before { content: 'XML'; }
+  /* add a generic configuration mode; LaTeX export needs an additional
+     (add-to-list 'org-latex-listings-langs '(conf " ")) in .emacs */
+  pre.src-conf:before { content: 'Configuration File'; }
+
+  table { border-collapse:collapse; }
+  caption.t-above { caption-side: top; }
+  caption.t-bottom { caption-side: bottom; }
+  td, th { vertical-align:top;  }
+  th.org-right  { text-align: center;  }
+  th.org-left   { text-align: center;   }
+  th.org-center { text-align: center; }
+  td.org-right  { text-align: right;  }
+  td.org-left   { text-align: left;   }
+  td.org-center { text-align: center; }
+  dt { font-weight: bold; }
+  .footpara { display: inline; }
+  .footdef  { margin-bottom: 1em; }
+  .figure { padding: 1em; }
+  .figure p { text-align: center; }
+  .inlinetask {
+    padding: 10px;
+    border: 2px solid gray;
+    margin: 10px;
+    background: #ffffcc;
+  }
+  #org-div-home-and-up
+   { text-align: right; font-size: 70%; white-space: nowrap; }
+  textarea { overflow-x: auto; }
+  .linenr { font-size: smaller }
+  .code-highlighted { background-color: #ffff00; }
+  .org-info-js_info-navigation { border-style: none; }
+  #org-info-js_console-label
+    { font-size: 10px; font-weight: bold; white-space: nowrap; }
+  .org-info-js_search-highlight
+    { background-color: #ffff00; color: #000000; font-weight: bold; }
+  .org-svg { width: 90%; }
+  /*]]>*/-->
+</style>
+<script type="text/javascript">
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this tag.
+
+Copyright (C) 2012-2017 Free Software Foundation, Inc.
+
+The JavaScript code in this tag is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU GPL) as published by the Free Software
+Foundation, either version 3 of the License, or (at your option)
+any later version.  The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+
+@licend  The above is the entire license notice
+for the JavaScript code in this tag.
+*/
+<!--/*--><![CDATA[/*><!--*/
+ function CodeHighlightOn(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(null != target) {
+     elem.cacheClassElem = elem.className;
+     elem.cacheClassTarget = target.className;
+     target.className = "code-highlighted";
+     elem.className   = "code-highlighted";
+   }
+ }
+ function CodeHighlightOff(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(elem.cacheClassElem)
+     elem.className = elem.cacheClassElem;
+   if(elem.cacheClassTarget)
+     target.className = elem.cacheClassTarget;
+ }
+/*]]>*///-->
+</script>
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        displayAlign: "center",
+        displayIndent: "0em",
+
+        "HTML-CSS": { scale: 100,
+                        linebreaks: { automatic: "false" },
+                        webFont: "TeX"
+                       },
+        SVG: {scale: 100,
+              linebreaks: { automatic: "false" },
+              font: "TeX"},
+        NativeMML: {scale: 100},
+        TeX: { equationNumbers: {autoNumber: "AMS"},
+               MultLineWidth: "85%",
+               TagSide: "right",
+               TagIndent: ".8em"
+             }
+});
+</script>
+<script type="text/javascript"
+        src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_HTML"></script>
+</head>
+<body>
+<div id="content">
+<h1 class="title"><font style="font-variant: small-caps">GenMC</font>: A Generic Model Checker for C Programs</h1>
+<div id="table-of-contents">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents">
+<ul>
+<li><a href="#org10aa84d">1. Introduction </a></li>
+<li><a href="#orgf7c0314">2. Basic Usage</a>
+<ul>
+<li><a href="#orge4d7798">2.1. A First Example</a></li>
+<li><a href="#org13cf6a4">2.2. Reducing the state space of a program with <code>assume()</code> statements </a></li>
+<li><a href="#org25536c9">2.3. Handling Infinite Loops </a></li>
+<li><a href="#orgf3268ef">2.4. Error Reporting </a></li>
+</ul>
+</li>
+<li><a href="#orga1b487d">3. Command-line Options </a></li>
+<li><a href="#org5d91792">4. Supported APIs </a>
+<ul>
+<li><a href="#orgdf1f385">4.1. Supported <code>stdio</code> API</a></li>
+<li><a href="#org814cf1c">4.2. Supported <code>stdlib</code> API</a></li>
+<li><a href="#orga13c3ea">4.3. Supported <code>pthread</code> API</a></li>
+<li><a href="#orgee4ee0a">4.4. Supported SV-COMP<sup>3</sup> API</a></li>
+</ul>
+</li>
+<li><a href="#orgbe8603e">5. Contact </a></li>
+<li><a href="#orgec588ef">6. Bibliography </a></li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-org10aa84d" class="outline-2">
+<h2 id="org10aa84d"><span class="section-number-2">1</span> Introduction <a id="org666cd7e"></a></h2>
+<div class="outline-text-2" id="text-1">
+<p>
+<font style="font-variant: small-caps">GenMC</font> is a model checker that is an instantiation of the
+respective algorithm<sup>1</sup> for programs written under the
+RC11<sup>2</sup> memory model.  <font style="font-variant: small-caps">GenMC</font> works for C programs that use
+<code>C11</code> atomics and the <code>pthread</code> library for concurrency. It uses a
+very effective dynamic partial order reduction technique, and can
+verify safety properties in a sound, complete, and optimal fashion.
+</p>
+
+<p>
+<font style="font-variant: small-caps">GenMC</font> works at the level of LLVM Intermediate Representation (LLVM-IR)
+and uses <code>clang</code> to translate C programs to LLVM-IR. This means it
+can miss some bugs that are removed during the translation to LLVM-IR,
+but it is guaranteed to encounter at least as many bugs as the
+compiler backend will encounter.
+</p>
+
+<p>
+<font style="font-variant: small-caps">GenMC</font> should compile on Linux and Mac OSX provided that the relevant
+dependencies are installed.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgf7c0314" class="outline-2">
+<h2 id="orgf7c0314"><span class="section-number-2">2</span> Basic Usage</h2>
+<div class="outline-text-2" id="text-2">
+<p>
+A generic invocation of <font style="font-variant: small-caps">GenMC</font> looks like the following:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sh">genmc [OPTIONS] -- [CFLAGS] &lt;file&gt;
+</pre>
+</div>
+
+<p>
+In the above command, <code>OPTIONS</code> include several options that can be
+passed to <font style="font-variant: small-caps">GenMC</font> (see Section <a href="#org8eecb96">3</a> for more details), and
+<code>CFLAGS</code> are the options that one would normally pass to the C
+compiler. If no such flags exist, the <code>--</code> can be omitted.
+Lastly, <code>file</code> should be a C file that uses the <code>stdatomic.h</code>
+and <code>pthread.h</code> APIs for concurrency.
+</p>
+
+<p>
+Note that, in order for <font style="font-variant: small-caps">GenMC</font> to be able to verify it, <code>file</code>
+needs to meet two requirements: finiteness and data-determinism.
+Finiteness means that all tests need to have finite traces,
+i.e., no infinite loops (these need to be bounded; see
+Section <a href="#orgdd7c455">2.3</a>). Data-determinism means that
+the code under test should be data-deterministic, i.e.,
+not perform actions like calling <code>rand()</code>, performing
+actions based on user input or the clock, etc. In other words,
+all non-determinism should originate either from the scheduler
+or the employed (weak) memory model.
+</p>
+
+<p>
+As long as these requirements as satisfied, <font style="font-variant: small-caps">GenMC</font> will detect safety
+errors, races on non-atomic variables, as well as some memory errors
+(e.g., double-free error). Users can provide safety specifications for
+their programs by using <code>assert()</code> statements.
+</p>
+</div>
+
+<div id="outline-container-orge4d7798" class="outline-3">
+<h3 id="orge4d7798"><span class="section-number-3">2.1</span> A First Example</h3>
+<div class="outline-text-3" id="text-2-1">
+<p>
+Consider the following program, demonstrating the Message-Passing (MP)
+idiom:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-C"><span style="color: #586e75; font-style: italic;">/* </span><span style="color: #586e75; font-style: italic;">file: mp.c </span><span style="color: #586e75; font-style: italic;">*/</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdlib.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;pthread.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdatomic.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdbool.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;assert.h&gt;</span>
+
+<span style="color: #268bd2;">atomic_int</span> <span style="color: #6c71c4;">data</span>;
+<span style="color: #268bd2;">atomic_bool</span> <span style="color: #6c71c4;">ready</span>;
+
+<span style="color: #268bd2;">void</span> *<span style="color: #b58900;">thread_1</span>(<span style="color: #268bd2;">void</span> *<span style="color: #6c71c4;">unused</span>)
+{
+        atomic_store_explicit(&amp;data, 42, memory_order_relaxed);
+        atomic_store_explicit(&amp;ready, <span style="color: #268bd2;">true</span>, memory_order_release);
+        <span style="color: #859900;">return</span> <span style="color: #268bd2;">NULL</span>;
+}
+
+<span style="color: #268bd2;">void</span> *<span style="color: #b58900;">thread_2</span>(<span style="color: #268bd2;">void</span> *<span style="color: #6c71c4;">unused</span>)
+{
+        <span style="color: #859900;">if</span> (atomic_load_explicit(&amp;ready, memory_order_acquire)) {
+                <span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">d</span> = atomic_load_explicit(&amp;data, memory_order_relaxed);
+                assert(d == 42);
+        }
+        <span style="color: #859900;">return</span> <span style="color: #268bd2;">NULL</span>;
+}
+
+<span style="color: #268bd2;">int</span> <span style="color: #b58900;">main</span>()
+{
+        <span style="color: #268bd2;">pthread_t</span> <span style="color: #6c71c4;">t1</span>, <span style="color: #6c71c4;">t2</span>;
+
+        <span style="color: #859900;">if</span> (pthread_create(&amp;t1, <span style="color: #268bd2;">NULL</span>, thread_1, <span style="color: #268bd2;">NULL</span>))
+                abort();
+        <span style="color: #859900;">if</span> (pthread_create(&amp;t2, <span style="color: #268bd2;">NULL</span>, thread_2, <span style="color: #268bd2;">NULL</span>))
+                abort();
+
+        <span style="color: #859900;">return</span> 0;
+}
+</pre>
+</div>
+
+<p>
+In order to analyze the code above with <font style="font-variant: small-caps">GenMC</font>, we can use the
+following command:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sh">genmc mp.c
+</pre>
+</div>
+<p>
+with which <font style="font-variant: small-caps">GenMC</font> will yield the following result:
+</p>
+<div class="org-src-container">
+<pre class="src src-sh">Number of complete executions explored: 2
+Total wall-clock time: 0.02s
+</pre>
+</div>
+<p>
+As can be seen, <font style="font-variant: small-caps">GenMC</font> will explore two executions: one where
+\(ready = data =0\), and one where \(ready = data = 1\).
+</p>
+</div>
+</div>
+
+
+<div id="outline-container-org13cf6a4" class="outline-3">
+<h3 id="org13cf6a4"><span class="section-number-3">2.2</span> Reducing the state space of a program with <code>assume()</code> statements <a id="org240753e"></a></h3>
+<div class="outline-text-3" id="text-2-2">
+<p>
+In some programs, we only care about what happens when certain
+reads read certain values of interest. That said, <font style="font-variant: small-caps">GenMC</font>, being
+a model checker, will explore all the consistent values values
+for each read of interest, as well as all consistent options for
+all reads after the reads of interest, leading to the exploration
+of an exponential number of executions that are not of interest.
+</p>
+
+<p>
+To alleviate this problem, <font style="font-variant: small-caps">GenMC</font> supports the <code>__VERIFIER_assume()</code>
+function (similar to the one specified in SV-COMP<sup>3</sup>). This
+function takes an integer argument (possibly the value read from
+a read), and only continues the execution if the argument is non-zero.
+</p>
+
+<p>
+For example, let us consider the MP program from the previous section,
+and suppose that we are only interested in verifying the assertion
+in cases where the first read of the second thread reads 1. We can
+use an <code>assume()</code> statement to achieve this, as shown below:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-C"><span style="color: #586e75; font-style: italic;">/* </span><span style="color: #586e75; font-style: italic;">file: mp-assume.c </span><span style="color: #586e75; font-style: italic;">*/</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdlib.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;pthread.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdatomic.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdbool.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;assert.h&gt;</span>
+
+<span style="color: #268bd2;">void</span> <span style="color: #b58900;">__VERIFIER_assume</span>(<span style="color: #268bd2;">int</span>);
+
+<span style="color: #268bd2;">atomic_int</span> <span style="color: #6c71c4;">data</span>;
+<span style="color: #268bd2;">atomic_bool</span> <span style="color: #6c71c4;">ready</span>;
+
+<span style="color: #268bd2;">void</span> *<span style="color: #b58900;">thread_1</span>(<span style="color: #268bd2;">void</span> *<span style="color: #6c71c4;">unused</span>)
+{
+        atomic_store_explicit(&amp;data, 42, memory_order_relaxed);
+        atomic_store_explicit(&amp;ready, <span style="color: #268bd2;">true</span>, memory_order_release);
+        <span style="color: #859900;">return</span> <span style="color: #268bd2;">NULL</span>;
+}
+
+<span style="color: #268bd2;">void</span> *<span style="color: #b58900;">thread_2</span>(<span style="color: #268bd2;">void</span> *<span style="color: #6c71c4;">unused</span>)
+{
+        <span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">r</span> = atomic_load_explicit(&amp;ready, memory_order_acquire);
+        __VERIFIER_assume(r);
+        <span style="color: #859900;">if</span> (r) {
+                <span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">d</span> = atomic_load_explicit(&amp;data, memory_order_relaxed);
+                assert(d == 42);
+        }
+        <span style="color: #859900;">return</span> <span style="color: #268bd2;">NULL</span>;
+}
+
+<span style="color: #268bd2;">int</span> <span style="color: #b58900;">main</span>()
+{
+        <span style="color: #268bd2;">pthread_t</span> <span style="color: #6c71c4;">t1</span>, <span style="color: #6c71c4;">t2</span>;
+
+        <span style="color: #859900;">if</span> (pthread_create(&amp;t1, <span style="color: #268bd2;">NULL</span>, thread_1, <span style="color: #268bd2;">NULL</span>))
+                abort();
+        <span style="color: #859900;">if</span> (pthread_create(&amp;t2, <span style="color: #268bd2;">NULL</span>, thread_2, <span style="color: #268bd2;">NULL</span>))
+                abort();
+
+        <span style="color: #859900;">return</span> 0;
+}
+</pre>
+</div>
+<p>
+Note that the <code>__VERIFIER_assume()</code> function has to be declared. Alternatively,
+one can include the &lt;genmc.h&gt; header, that contains the declarations for all
+the special function that <font style="font-variant: small-caps">GenMC</font> offers (see Section <a href="#orge327e3c">4</a>).
+</p>
+
+<p>
+If we ran <font style="font-variant: small-caps">GenMC</font> on the <code>mp-assume.c</code> program above, we get the following
+output:
+</p>
+<div class="org-src-container">
+<pre class="src src-sh">Number of complete executions explored: 1
+Number of blocked executions seen: 1
+Total wall-clock time: 0.02s
+</pre>
+</div>
+<p>
+As can be seen, <font style="font-variant: small-caps">GenMC</font> only explored one full execution (the one where
+\(r = 1\), while the execution where \(r = 0\) was blocked, because of
+the <code>assume()</code> statement.
+</p>
+
+<p>
+We note that, while the usage of <code>assume()</code> does not make any
+practical difference in this small example, this is not the case in
+programs where there are a lot of (global) accesses after the
+<code>assume()</code> statement.
+</p>
+</div>
+</div>
+
+
+<div id="outline-container-org25536c9" class="outline-3">
+<h3 id="org25536c9"><span class="section-number-3">2.3</span> Handling Infinite Loops <a id="orgdd7c455"></a></h3>
+<div class="outline-text-3" id="text-2-3">
+<p>
+As mentioned in the beginning of this section, all programs that
+<font style="font-variant: small-caps">GenMC</font> can handle need to have finite traces. That said, many programs
+of interest do not fulfill this requirement, because, for example,
+they have some infinite loop. <font style="font-variant: small-caps">GenMC</font> offers two solutions for such
+cases, depending on the type of the loop.
+</p>
+
+<p>
+For simple spin loops, like the one shown below, <font style="font-variant: small-caps">GenMC</font> automatically
+transforms them into <code>assume()</code> statements:
+</p>
+<div class="org-src-container">
+<pre class="src src-C"><span style="color: #859900;">while</span> (<span style="color: #268bd2;">!</span>condition)
+        ;
+</pre>
+</div>
+<p>
+The <code>condition</code> should be a simple condition (e.g., a load from
+a global variable), and the body of the loop should have no
+side-effects. In cases where <code>condition</code> is a complex expression,
+or has side-effects (e.g., if it is a compare-and-exchange instruction),
+<font style="font-variant: small-caps">GenMC</font> will <i>not</i> transform the loop into an <code>assume()</code> statement.
+</p>
+
+<p>
+For infinite loops with side effects, one has to use the <code>-unroll=N</code>
+command-line option (see Section <a href="#org8eecb96">3</a>). This option
+bounds all loops so that they are executed at most <code>N</code> times.
+Naturally, in this case, any verification guarantees that <font style="font-variant: small-caps">GenMC</font>
+provides hold up to that bound.
+</p>
+
+<p>
+Finally, note that the loop-bounding happens at the LLVM-IR level,
+which means that the loops there may not directly correspond to loops
+in the C code (depending on the enabled compiled optimizations, etc).
+</p>
+</div>
+</div>
+
+
+<div id="outline-container-orgf3268ef" class="outline-3">
+<h3 id="orgf3268ef"><span class="section-number-3">2.4</span> Error Reporting <a id="org65683dc"></a></h3>
+<div class="outline-text-3" id="text-2-4">
+<p>
+In the previous sections, saw how <font style="font-variant: small-caps">GenMC</font> verifies the small MP program.
+Let us now proceed with an erroneous version of this program, in order
+to show how <font style="font-variant: small-caps">GenMC</font> reports errors to the user.
+</p>
+
+<p>
+Consider the following variant of the MP program below, where the
+store to <code>ready</code> in the first thread is now performed using a relaxed
+access:
+</p>
+<div class="org-src-container">
+<pre class="src src-C"><span style="color: #586e75; font-style: italic;">/* </span><span style="color: #586e75; font-style: italic;">file: mp-error.c </span><span style="color: #586e75; font-style: italic;">*/</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdlib.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;pthread.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdatomic.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdbool.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;assert.h&gt;</span>
+
+<span style="color: #268bd2;">atomic_int</span> <span style="color: #6c71c4;">data</span>;
+<span style="color: #268bd2;">atomic_bool</span> <span style="color: #6c71c4;">ready</span>;
+
+<span style="color: #268bd2;">void</span> *<span style="color: #b58900;">thread_1</span>(<span style="color: #268bd2;">void</span> *<span style="color: #6c71c4;">unused</span>)
+{
+        atomic_store_explicit(&amp;data, 42, memory_order_relaxed);
+        atomic_store_explicit(&amp;ready, <span style="color: #268bd2;">true</span>, memory_order_relaxed);
+        <span style="color: #859900;">return</span> <span style="color: #268bd2;">NULL</span>;
+}
+
+<span style="color: #268bd2;">void</span> *<span style="color: #b58900;">thread_2</span>(<span style="color: #268bd2;">void</span> *<span style="color: #6c71c4;">unused</span>)
+{
+        <span style="color: #859900;">if</span> (atomic_load_explicit(&amp;ready, memory_order_acquire)) {
+                <span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">d</span> = atomic_load_explicit(&amp;data, memory_order_relaxed);
+                assert(d == 42);
+        }
+        <span style="color: #859900;">return</span> <span style="color: #268bd2;">NULL</span>;
+}
+
+<span style="color: #268bd2;">int</span> <span style="color: #b58900;">main</span>()
+{
+        <span style="color: #268bd2;">pthread_t</span> <span style="color: #6c71c4;">t1</span>, <span style="color: #6c71c4;">t2</span>;
+
+        <span style="color: #859900;">if</span> (pthread_create(&amp;t1, <span style="color: #268bd2;">NULL</span>, thread_1, <span style="color: #268bd2;">NULL</span>))
+                abort();
+        <span style="color: #859900;">if</span> (pthread_create(&amp;t2, <span style="color: #268bd2;">NULL</span>, thread_2, <span style="color: #268bd2;">NULL</span>))
+                abort();
+
+        <span style="color: #859900;">return</span> 0;
+}
+</pre>
+</div>
+<p>
+This program is buggy since the load from <code>ready</code> no longer
+synchronizes with the corresponding store, which in turn means that
+the load from <code>data</code> may also read 0 (the initial value), and
+not just 42.
+</p>
+
+<p>
+Running <font style="font-variant: small-caps">GenMC</font> on the above program, we get the following outcome:
+</p>
+<div class="org-src-container">
+<pre class="src src-sh">Error detected: Safety violation!
+<span style="color: #b58900;">Event</span> (2, 2) <span style="color: #859900;">in</span> graph:
+&lt;-1, 0&gt; main:
+        (0, 0): B
+        (0, 1): M
+        (0, 2): M
+        (0, 3): TC [forks 1] L.30
+        (0, 4): Wna (t1, 1) L.30
+        (0, 5): TC [forks 2] L.32
+        (0, 6): Wna (t2, 2) L.32
+        (0, 7): E
+&lt;0, 1&gt; thread_1:
+        (1, 0): B
+        (1, 1): Wrlx (data, 42) L.12
+        (1, 2): Wrlx (ready, 1) L.13
+        (1, 3): E
+&lt;0, 2&gt; thread_2:
+        (2, 0): B
+        (2, 1): Racq (ready, 1) [(1, 2)] L.19
+        (2, 2): Rrlx (data, 0) [INIT] L.20
+
+Assertion violation: <span style="color: #6c71c4;">d</span> == 42
+Number of complete executions explored: 1
+Total wall-clock time: 0.02s
+</pre>
+</div>
+
+<p>
+<font style="font-variant: small-caps">GenMC</font> reports an error and prints some information relevant for
+debugging. First, it prints the type of the error, then the execution
+graph representing the erroneous execution, and finally the error
+message, along with the executions explored so far and the time that
+was required.
+</p>
+
+<p>
+The graph contains the events of each thread along with some
+information about the corresponding source-code instructions.  For
+example, for write events (e.g., event (1, 1)), the access mode, the
+name of the variable accessed, the value written, as well as the
+corresponding source-code line are printed. The situation is similar
+for reads (e.g., event (2, 1)), but also the position in the graph
+from which the read is reading from is printed.
+</p>
+
+<p>
+Note that there are many different types of events. However, many of
+them are <font style="font-variant: small-caps">GenMC</font>-related and not of particular interest to users (e.g.,
+events labeled with `B', which correspond to the beginning of a
+thread). Thus, <font style="font-variant: small-caps">GenMC</font> only prints the source-code lines for events
+that correspond to actual user instructions, thus helping the
+debugging procedure.
+</p>
+
+<p>
+Finally, when more information regarding an error are required,
+two command-line switches are provided. The <code>-dump-error-graph=&lt;file&gt;</code>
+switch provides a visual representation of the erroneous execution,
+as it will output the reported graph in DOT format in <code>&lt;file&gt;</code>,
+so that it can be viewed by a PDF viewer. Finally, the <code>-print-error-trace</code>
+switch will print a sequence of source-code lines leading to
+the error. The latter is especially useful for cases where
+the bug is not caused by some weak-memory effect but rather from
+some particular interleaving (e.g., if all accesses are
+ <code>memory_order_seq_cst</code>), and the write where each read is reading
+from can be determined simply by locating the previous write in the
+same memory location in the sequence.
+</p>
+</div>
+</div>
+</div>
+
+
+<div id="outline-container-orga1b487d" class="outline-2">
+<h2 id="orga1b487d"><span class="section-number-2">3</span> Command-line Options <a id="org8eecb96"></a></h2>
+<div class="outline-text-2" id="text-3">
+<p>
+A full list of the available command-line options can by viewed
+by issuing <code>genmc -help</code>. Below we will describe the ones that
+are most useful when verifying user programs.
+</p>
+
+<dl class="org-dl">
+<dt><code>-wb</code></dt><dd>Perform the exploration based on the <span style="color: #808080; font-family: monospace">po</span><span style="color: #00ff00; font-family: monospace">rf</span>
+equivalence partitioning (default).</dd>
+<dt><code>-mo</code></dt><dd>Perform the exploration based on the <span style="color: #808080; font-family: monospace">po</span> \(\cup\) <span style="color: #00ff00; font-family: monospace">rf</span> \(\cup\) <span style="color: #ffa500; font-family: monospace">mo</span>
+equivalence partitioning.</dd>
+<dt><code>-unroll=&lt;N&gt;</code></dt><dd>All loops will be executed at most \(N\) times.</dd>
+<dt><code>-dump-error-graph=&lt;file&gt;</code></dt><dd>Outputs an erroneous graph to file
+<code>&lt;file&gt;</code>.</dd>
+<dt><code>-print-error-trace</code></dt><dd>Outputs a sequence of source-code instructions
+that lead to an error.</dd>
+<dt><code>-disable-race-detection</code></dt><dd>Disables race detection for non-atomic
+accesses.</dd>
+<dt><code>-program-entry-function=&lt;fun_name&gt;</code></dt><dd>Uses function <code>&lt;fun_name&gt;</code>
+as the program's entry point, instead of <code>main()</code>.</dd>
+<dt><code>-disable-spin-assume</code></dt><dd>Disables the transformation of spin loops to
+<code>assume()</code> statements.</dd>
+</dl>
+</div>
+</div>
+
+
+<div id="outline-container-org5d91792" class="outline-2">
+<h2 id="org5d91792"><span class="section-number-2">4</span> Supported APIs <a id="orge327e3c"></a></h2>
+<div class="outline-text-2" id="text-4">
+<p>
+Apart from C11 API (defined in <code>stdatomic.h</code>) and the <code>assert()</code>
+function used to define safety specifications, below we list supported
+functions from different libraries.
+</p>
+</div>
+
+<div id="outline-container-orgdf1f385" class="outline-3">
+<h3 id="orgdf1f385"><span class="section-number-3">4.1</span> Supported <code>stdio</code> API</h3>
+<div class="outline-text-3" id="text-4-1">
+<p>
+The following functions are supported from <code>stdio.h</code>:
+</p>
+
+<dl class="org-dl">
+<dt><code>int fclose(FILE *)</code></dt><dd></dd>
+
+<dt><code>int fflush(FILE *)</code></dt><dd></dd>
+
+<dt><code>FILE *fopen(const char *, const char *)</code></dt><dd></dd>
+
+<dt><code>int printf(const char *, ...)</code></dt><dd></dd>
+
+<dt><code>int fprintf(FILE *, const char *, ...)</code></dt><dd></dd>
+
+<dt><code>size_t fwrite(const void *, size_t, size_t, FILE *)</code></dt><dd></dd>
+</dl>
+
+<p>
+Note that, in this case, said support is provided only for programs to
+compile, and is not meant to provide functional substitutes for the
+actual functions of <code>stdio.h</code>. (In addition, reading from files can
+violate the data non-determinism requirement of stateless model checking.)
+That said, functions like <code>printf()</code> should execute normally on Linux
+machines.
+</p>
+</div>
+</div>
+
+<div id="outline-container-org814cf1c" class="outline-3">
+<h3 id="org814cf1c"><span class="section-number-3">4.2</span> Supported <code>stdlib</code> API</h3>
+<div class="outline-text-3" id="text-4-2">
+<p>
+The following functions are supported from <code>stdlib.h</code>:
+</p>
+
+<dl class="org-dl">
+<dt><code>void abort(void)</code></dt><dd></dd>
+
+<dt><code>int abs(int)</code></dt><dd></dd>
+
+<dt><code>int atoi(const char *)</code></dt><dd></dd>
+
+<dt><code>void free(void *)</code></dt><dd></dd>
+
+<dt><code>void *malloc(size_t)</code></dt><dd></dd>
+</dl>
+</div>
+</div>
+
+<div id="outline-container-orga13c3ea" class="outline-3">
+<h3 id="orga13c3ea"><span class="section-number-3">4.3</span> Supported <code>pthread</code> API</h3>
+<div class="outline-text-3" id="text-4-3">
+<p>
+The following functions are supported from <code>pthread.h</code>:
+</p>
+
+<dl class="org-dl">
+<dt><code>int pthread_create (pthread_t *, const pthread_attr_t *, void *(*) (void *), void *)</code></dt><dd></dd>
+
+<dt><code>int pthread_join (pthread_t, void **)</code></dt><dd></dd>
+
+<dt><code>pthread_t pthread_self (void)</code></dt><dd></dd>
+
+<dt><code>void pthread_exit (void *)</code></dt><dd></dd>
+
+<dt><code>int pthread_mutex_init (pthread_mutex_t *, const pthread_mutexattr_t *)</code></dt><dd></dd>
+
+<dt><code>int pthread_mutex_lock (pthread_mutex_t *)</code></dt><dd></dd>
+
+<dt><code>int pthread_mutex_unlock (pthread_mutex_t *)</code></dt><dd></dd>
+
+<dt><code>int pthread_mutex_trylock (pthread_mutex_t *)</code></dt><dd></dd>
+</dl>
+</div>
+</div>
+
+
+<div id="outline-container-orgee4ee0a" class="outline-3">
+<h3 id="orgee4ee0a"><span class="section-number-3">4.4</span> Supported SV-COMP<sup>3</sup> API</h3>
+<div class="outline-text-3" id="text-4-4">
+<p>
+The following functions from the ones defined in SV-COMP<sup>3</sup> are supported:
+</p>
+
+<dl class="org-dl">
+<dt><code>void __VERIFIER_assume(int)</code></dt><dd></dd>
+
+<dt><code>int __VERIFIER_nondet_int(void)</code></dt><dd></dd>
+</dl>
+
+<p>
+Note that, since <font style="font-variant: small-caps">GenMC</font> is a stateless model checker, <code>__VERIFIER_nondet_int()</code>
+only "simulates" data non-determism, and does actually provide support for it.
+More specifically, the sequence of numbers it produces for each thread, remains
+the same across different executions.
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgbe8603e" class="outline-2">
+<h2 id="orgbe8603e"><span class="section-number-2">5</span> Contact <a id="orgade1497"></a></h2>
+<div class="outline-text-2" id="text-5">
+<p>
+For feedback, questions, and bug reports please send an e-mail to
+<a href="mailto:michalis@mpi-sws.org">michalis@mpi-sws.org</a>.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgec588ef" class="outline-2">
+<h2 id="orgec588ef"><span class="section-number-2">6</span> Bibliography <a id="org078a644"></a></h2>
+<div class="outline-text-2" id="text-6">
+<ol class="org-ol">
+<li>Kokologiannakis,  Michalis; Raad,  Azalea and Vafeiadis,  Viktor, <i>Model Checking for Weakly Consistent Libraries</i>, PLDI 2019(2019). <br></li>
+<li>Lahav,  Ori; Vafeiadis,  Viktor; Kang,  Jeehoon; Hur,  Chung-Kil and Dreyer,  Derek, <i>Repairing Sequential Consistency in {C/C++11}</i>, PLDI 2017(2017). <br></li>
+<li>SV-COMP, , <i>Competition on Software Verification (SV-COMP)</i>,  <a href="http://dx.doi.org/https://sv-comp.sosy-lab.org/2019/">http://dx.doi.org/https://sv-comp.sosy-lab.org/2019/</a>. <a href="http://dx.doi.org/nil">http://dx.doi.org/nil</a>.</li>
+</ol>
+</div>
+</div>
+</div>
+<div id="postamble" class="status">
+<p class="date">Created: 2019-10-30 Wed 15:56</p>
+<p class="validation"><a href="http://validator.w3.org/check?uri=referer">Validate</a></p>
+</div>
+</body>
+</html>

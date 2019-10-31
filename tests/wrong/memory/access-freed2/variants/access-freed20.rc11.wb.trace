@@ -1,0 +1,48 @@
+Error detected: Attempt to access freed memory!
+Event (2, 5) conflicts with event (1, 2) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): M
+	(0, 2): M
+	(0, 3): M L.11
+	(0, 4): Wsc (p, 43525064) L.11
+	(0, 5): Rsc (p, 43525064) [(0, 4)] L.12
+	(0, 6): Wna (, 0) L.12
+	(0, 7): TC [forks 1] L.14
+	(0, 8): Wna (t1, 1) L.14
+	(0, 9): TC [forks 2] L.16
+	(0, 10): Wna (t2, 2) L.16
+	(0, 11): E
+<0, 1> thread1:
+	(1, 0): B
+	(1, 1): Rsc (p, 43525064) [(0, 4)] L.7: access-freed2.c
+	(1, 2): D L.7: access-freed2.c
+	(1, 3): E
+<0, 2> thread2:
+	(2, 0): B
+	(2, 1): M
+	(2, 2): Racq (p, 43525064) [(0, 4)] L.13: access-freed2.c
+	(2, 3): Wna (, 43525064) L.13: access-freed2.c
+	(2, 4): Rna (, 0x29823c8) [(2, 3)] L.13: access-freed2.c
+	(2, 5): Wrlx (, 42) L.14: access-freed2.c
+
+Trace to (2, 5):
+[main] access-freed20.c: 11: p = malloc(sizeof(atomic_int));
+[main] access-freed20.c: 11: p = malloc(sizeof(atomic_int));
+[main] access-freed20.c: 12: atomic_init(p, 0);
+[main] access-freed20.c: 12: atomic_init(p, 0);
+[main] access-freed20.c: 14: if (pthread_create(&t1, NULL, thread1, NULL))
+[main] access-freed20.c: 16: if (pthread_create(&t2, NULL, thread2, NULL))
+[thread2] access-freed2.c: 13: atomic_int *a = atomic_load_explicit(&p, memory_order_acquire);
+[thread2] access-freed2.c: 13: atomic_int *a = atomic_load_explicit(&p, memory_order_acquire);
+[thread2] access-freed2.c: 13: atomic_int *a = atomic_load_explicit(&p, memory_order_acquire);
+[thread2] access-freed2.c: 14: atomic_store_explicit(a, 42, memory_order_relaxed);
+Trace to (1, 2):
+[main] access-freed20.c: 11: p = malloc(sizeof(atomic_int));
+[main] access-freed20.c: 11: p = malloc(sizeof(atomic_int));
+[main] access-freed20.c: 12: atomic_init(p, 0);
+[main] access-freed20.c: 12: atomic_init(p, 0);
+[main] access-freed20.c: 14: if (pthread_create(&t1, NULL, thread1, NULL))
+[thread1] access-freed2.c: 7: free(p);
+[thread1] access-freed2.c: 7: free(p);
+Number of complete executions explored: 0

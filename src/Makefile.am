@@ -10,10 +10,16 @@ libgenmc_a_HEADERS = $(top_builddir)/include/*.h
 noinst_LIBRARIES = libgenmc.a
 libgenmc_a_SOURCES = \
   $(libgenmc_a_HEADERS) \
+  CoherenceCalculator.hpp \
   Config.cpp Config.hpp \
   DeclareAssumePass.cpp DeclareAssumePass.hpp \
   DeclareEndLoopPass.cpp DeclareEndLoopPass.hpp \
   DefineLibcFunsPass.cpp DefineLibcFunsPass.hpp \
+  DepExecutionGraph.cpp DepExecutionGraph.hpp \
+  DepInfo.cpp DepInfo.hpp \
+  DepTracker.hpp \
+  DepView.cpp DepView.hpp \
+  DriverGraphEnumAPI.hpp \
   DriverFactory.cpp DriverFactory.hpp \
   Error.cpp Error.hpp \
   Event.cpp Event.hpp \
@@ -21,6 +27,10 @@ libgenmc_a_SOURCES = \
   Execution.cpp \
   ExecutionGraph.cpp ExecutionGraph.hpp \
   ExternalFunctions.cpp \
+  GenMCDriver.cpp GenMCDriver.hpp \
+  GraphBuilder.hpp \
+  IMMDepTracker.hpp \
+  IMMDriver.cpp IMMDriver.hpp \
   Interpreter.cpp Interpreter.h \
   IntrinsicLoweringPass.cpp IntrinsicLoweringPass.hpp \
   Library.cpp Library.hpp \
@@ -28,16 +38,16 @@ libgenmc_a_SOURCES = \
   LoopUnrollPass.cpp LoopUnrollPass.hpp \
   Matrix2D.hpp Matrix2D.tcc \
   MDataCollectionPass.hpp MDataCollectionPass.cpp \
-  ModOrder.cpp ModOrder.hpp \
+  MOCoherenceCalculator.hpp MOCoherenceCalculator.cpp \
   Parser.cpp Parser.hpp \
-  GenMCDriver.cpp GenMCDriver.hpp \
-  RC11WeakRADriver.cpp RC11WeakRADriver.hpp \
-  RC11WBDriver.cpp RC11WBDriver.hpp \
-  RC11MODriver.cpp RC11MODriver.hpp \
+  RC11Driver.cpp RC11Driver.hpp \
   RevisitSet.cpp RevisitSet.hpp \
   SpinAssumePass.cpp SpinAssumePass.hpp \
-  VSet.hpp VSet.tcc \
-  View.hpp View.cpp
+  WBCoherenceCalculator.cpp WBCoherenceCalculator.hpp \
+  VectorClock.hpp VectorClock.cpp \
+  View.hpp View.cpp \
+  VSet.hpp VSet.tcc
+
 
 CXX = clang++
 AM_CXXFLAGS = -std=c++1z -Wno-unknown-warning-option -DINCLUDE_DIR=\"$(pkgincludedir)/$(pkg)\" -DSRC_INCLUDE_DIR=\"$(abs_top_builddir)/include\"

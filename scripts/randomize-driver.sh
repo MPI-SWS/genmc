@@ -18,13 +18,15 @@
 #
 # Author: Michalis Kokologiannakis <mixaskok@gmail.com>
 
-source terminal.sh
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+source "${DIR}/terminal.sh"
+
 iterations="${iterations:-10}"
 
 for i in `seq 1 "${iterations}"`
 do
     echo -ne "Iteration: $i"
-    res=$(GENMCFLAGS="-randomize-schedule" ./driver.sh --fast)
+    res=$(GENMCFLAGS="-randomize-schedule -print-randomize-schedule-seed" "${DIR}/driver.sh" --fast)
     if [[ $? -ne 0 ]]
     then
 	echo "${RED} Error detected! ${NC}"

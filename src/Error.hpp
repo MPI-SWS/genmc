@@ -26,10 +26,11 @@
 #include <llvm/Support/raw_ostream.h>
 #include <string>
 
-#define WARN(msg) GenMCError::warn() << (msg)
-#define WARN_ONCE(id, msg) GenMCError::warnOnce(id) << (msg)
-#define WARN_ON(condition, msg) GenMCError::warnOn(condition) << (msg)
-#define WARN_ON_ONCE(condition, id, msg) GenMCError::warnOnOnce(condition, id) << (msg)
+#define WARN_MESSAGE(msg) "WARNING: " << (msg)
+#define WARN(msg) GenMCError::warn() << WARN_MESSAGE(msg)
+#define WARN_ONCE(id, msg) GenMCError::warnOnce(id) << WARN_MESSAGE(msg)
+#define WARN_ON(condition, msg) GenMCError::warnOn(condition) << WARN_MESSAGE(msg)
+#define WARN_ON_ONCE(condition, id, msg) GenMCError::warnOnOnce(condition, id) << WARN_MESSAGE(msg)
 
 #define BUG() do { \
 	llvm::errs() << "BUG: Failure at " << __FILE__ ":" << __LINE__ \

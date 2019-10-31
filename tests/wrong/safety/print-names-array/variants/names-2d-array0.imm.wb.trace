@@ -1,0 +1,53 @@
+Error detected: Safety violation!
+Event (0, 12) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): M
+	(0, 2): M
+	(0, 3): TC [forks 1] L.12
+	(0, 4): Wna (t1, 1) L.12
+	(0, 5): TC [forks 2] L.14
+	(0, 6): Wna (t2, 2) L.14
+	(0, 7): Rna (t1, 1) [(0, 4)] L.17
+	(0, 8): TJ L.17
+	(0, 9): Rna (t2, 2) [(0, 6)] L.19
+	(0, 10): TJ L.19
+	(0, 11): Rna (a[1][1], 42) [(1, 4)] L.22
+	(0, 12): Rna (stack.nodes[1][1].value, 42) [(2, 2)] L.22
+<0, 1> thread_1:
+	(1, 0): B
+	(1, 1): Wna (stack.nodes[2][1].next, 2) L.20: names-2d-array.c
+	(1, 2): Wna (stack.nodes[3][1].value, 3) L.21: names-2d-array.c
+	(1, 3): Rsc (x, 42) [(2, 3)] L.23: names-2d-array.c
+	(1, 4): Wna (a[1][1], 42) L.24: names-2d-array.c
+	(1, 5): Wna (a[0][0], 17) L.25: names-2d-array.c
+	(1, 6): E
+<0, 2> thread_2:
+	(2, 0): B
+	(2, 1): Wna (a[1][0], 3) L.32: names-2d-array.c
+	(2, 2): Wna (stack.nodes[1][1].value, 42) L.33: names-2d-array.c
+	(2, 3): Wsc (x, 42) L.34: names-2d-array.c
+	(2, 4): E
+
+Trace to (0, 12):
+[main] names-2d-array0.c: 12: if (pthread_create(&t1, NULL, thread_1, NULL))
+[main] names-2d-array0.c: 14: if (pthread_create(&t2, NULL, thread_2, NULL))
+[main] names-2d-array0.c: 17: if (pthread_join(t1, NULL))
+[thread_1] names-2d-array.c: 20: stack.nodes[2][1].next = 2;
+[thread_1] names-2d-array.c: 21: stack.nodes[3][1].value = 3;
+[thread_2] names-2d-array.c: 32: a[1][0] = 3;
+[thread_2] names-2d-array.c: 33: stack.nodes[1][1].value = 42;
+[thread_2] names-2d-array.c: 34: x = 42;
+[thread_1] names-2d-array.c: 23: if (x == 42) {
+[thread_1] names-2d-array.c: 24: a[1][1] = 42;
+[thread_1] names-2d-array.c: 25: a[0][0] = 17;
+[thread_1] names-2d-array.c: 27: return NULL;
+[main] names-2d-array0.c: 17: if (pthread_join(t1, NULL))
+[main] names-2d-array0.c: 19: if (pthread_join(t2, NULL))
+[thread_2] names-2d-array.c: 34: x = 42;
+[thread_2] names-2d-array.c: 35: return NULL;
+[main] names-2d-array0.c: 19: if (pthread_join(t2, NULL))
+[main] names-2d-array0.c: 22: if (a[1][1] == 42 && stack.nodes[1][1].value == 42)
+[main] names-2d-array0.c: 22: if (a[1][1] == 42 && stack.nodes[1][1].value == 42)
+Assertion violation: 0
+Number of complete executions explored: 1

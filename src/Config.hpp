@@ -21,11 +21,12 @@
 #ifndef __CONFIG_HPP__
 #define __CONFIG_HPP__
 
+#include "DriverGraphEnumAPI.hpp"
+
 #include <string>
 #include <vector>
 
-enum class ModelType { weakra, mo, wb };
-enum class CheckPSCType { nocheck, weak, wb, full };
+enum class ModelType { rc11, imm };
 
 struct Config {
 
@@ -36,6 +37,8 @@ public:
 	std::string dotFile;
 	std::string specsFile;
 	ModelType model;
+	bool isDepTrackingModel;
+	CoherenceType coherence;
 	CheckPSCType checkPscAcyclicity;
 	int unroll;
 	bool spinAssume;
@@ -50,7 +53,6 @@ public:
 	bool prettyPrintExecGraphs;
 	bool countDuplicateExecs;
 	bool printErrorTrace;
-	bool checkWbAcyclicity;
 
 	void getConfigOptions(int argc, char **argv);
 };

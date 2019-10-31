@@ -54,41 +54,55 @@ void MDataCollectionPass::collectVarName(Module &M, unsigned int ptr, Type *typ,
 
 	unsigned int offset = 0;
 	if (SequentialType *AT = dyn_cast<SequentialType>(typ)) {
+		auto *newDit = dit;
 		if (auto *dict = dyn_cast<DICompositeType>(dit)) {
-			unsigned int elemSize = GET_TYPE_ALLOC_SIZE(M, AT->getElementType());
-			for (auto i = 0u; i < AT->getNumElements(); i++) {
-				if (!dict->getBaseType()) {
-					collectVarName(M, ptr + offset,
-						       AT->getElementType(), dict,
-						       nameBuilder + "[" +
-						       std::to_string(i) + "]",
-						       names);
-				} else if (auto *dibt = dyn_cast<DIType>(dict->getBaseType())) {
-					collectVarName(M, ptr + offset,
-						       AT->getElementType(), dibt,
-						       nameBuilder + "[" +
-						       std::to_string(i) + "]",
-						       names);
-				}
-				offset += elemSize;
-			}
+			newDit = (!dict->getBaseType()) ? dict :
+				llvm::dyn_cast<DIType>(dict->getBaseType());
+		}
+		unsigned int elemSize = GET_TYPE_ALLOC_SIZE(M, AT->getElementType());
+		for (auto i = 0u; i < AT->getNumElements(); i++) {
+			collectVarName(M, ptr + offset, AT->getElementType(), newDit,
+				       nameBuilder + "[" + std::to_string(i) + "]", names);
+			offset += elemSize;
 		}
 	} else if (StructType *ST = dyn_cast<StructType>(typ)) {
+		DINodeArray dictElems;
+
+		/* Since this is a struct type, the metadata should yield a
+		 * composite type, or a derived type that will eventually
+		 * yield a composite type. */
 		if (auto *dict = dyn_cast<DICompositeType>(dit)) {
-			auto dictElems = dict->getElements();
-			auto eb = ST->element_begin();
-			for (auto it = ST->element_begin(); it != ST->element_end(); ++it) {
-				unsigned int elemSize = GET_TYPE_ALLOC_SIZE(M, *it);
-				auto didt = dictElems[it - eb];
-				if (auto *dit = dyn_cast<DIDerivedType>(didt)) {
-					if (auto ditb = dyn_cast<DIType>(dit->getBaseType()))
-						collectVarName(M, ptr + offset, *it,
-							       ditb, nameBuilder + "."
-							       + dit->getName().str(),
-							       names);
-				}
-				offset += elemSize;
+			dictElems = dict->getElements();
+		}
+		if (auto *dict = dyn_cast<DIDerivedType>(dit)) {
+			DIType *dbt = dict;
+			while (auto *dbtc = dyn_cast<DIDerivedType>(dbt))
+				dbt = dyn_cast<DIType>(dbtc->getBaseType());
+
+			if (auto *dbtc = dyn_cast<DICompositeType>(dbt))
+				dictElems = dbtc->getElements();
+			else {
+				/* Take some precautions, in case we got this
+				 * metadata thing all wrong... */
+				WARN_ONCE("struct-mdata", "Could not get " \
+					  "naming info for variable!\n" \
+					  "Please submit a bug report to " \
+					  PACKAGE_BUGREPORT "\n");
+				return;
 			}
+		}
+
+		auto eb = ST->element_begin();
+		for (auto it = ST->element_begin(); it != ST->element_end(); ++it) {
+			unsigned int elemSize = GET_TYPE_ALLOC_SIZE(M, *it);
+			auto didt = dictElems[it - eb];
+			if (auto *dit = dyn_cast<DIDerivedType>(didt)) {
+				if (auto ditb = dyn_cast<DIType>(dit->getBaseType()))
+					collectVarName(M, ptr + offset, *it, ditb,
+						       nameBuilder + "." + dit->getName().str(),
+						       names);
+			}
+			offset += elemSize;
 		}
 	}
 	return;
@@ -122,15 +136,17 @@ void MDataCollectionPass::collectGlobalInfo(Module &M)
 		auto dit = dive->getVariable()->getType();
 
 		/* Check whether it is a global pointer */
-		if (auto ditc = dyn_cast<DIType>(dit))
+		if (auto ditc = dyn_cast<DIType>(dit)) {
 			collectVarName(M, 0, v.getType()->getElementType(),
 				       ditc, v.getName(), VI.globalInfo[&v]);
+		}
 #else
 		unsigned int typeSize = GET_TYPE_ALLOC_SIZE(M, v.getType()->getElementType());
 		collectVarName(0, typeSize, v.getType()->getElementType(),
 			       v.getName(), VI.globalInfo[&v]);
 #endif
 		std::sort(VI.globalInfo[&v].begin(), VI.globalInfo[&v].end());
+		std::unique(VI.globalInfo[&v].begin(), VI.globalInfo[&v].end());
 	}
 }
 
@@ -138,25 +154,25 @@ void MDataCollectionPass::runOnBasicBlock(BasicBlock &BB, Module &M)
 {
 	for (auto it = BB.begin(); it != BB.end();  ++it) {
 		if (auto *DD = dyn_cast<DbgDeclareInst>(&*it)) {
+
+			auto *v = DD->getAddress();
+			BUG_ON(!isa<PointerType>(v->getType()));
+		        auto *vt = static_cast<PointerType *>(v->getType());
+			unsigned int typeSize =
+				GET_TYPE_ALLOC_SIZE(M, vt->getElementType());
+
 #ifdef LLVM_HAS_GLOBALOBJECT_GET_METADATA
 			auto dit = DD->getVariable()->getType();
-
-			auto *v = DD->getAddress();
-			BUG_ON(!isa<PointerType>(v->getType()));
-		        auto *vt = static_cast<PointerType *>(v->getType());
-
 			if (auto ditc = dyn_cast<DIType>(dit))
 				collectVarName(M, 0, vt->getElementType(),
-					       ditc, v->getName(), VI.localInfo[v]);
+					       ditc, v->getName(),
+					       VI.localInfo[v]);
 #else
-			auto *v = DD->getAddress();
-			BUG_ON(!isa<PointerType>(v->getType()));
-		        auto *vt = static_cast<PointerType *>(v->getType());
-
-			unsigned int typeSize = GET_TYPE_ALLOC_SIZE(M, vt->getElementType());
-			collectVarName(0, typeSize, vt->getElementType(), v->getName(), VI.localInfo[v]);
+			collectVarName(0, typeSize, vt->getElementType(),
+				       v->getName(), VI.localInfo[v]);
 #endif
 			std::sort(VI.localInfo[v].begin(), VI.localInfo[v].end());
+			std::unique(VI.localInfo[v].begin(), VI.localInfo[v].end());
 		}
 	}
 	return;

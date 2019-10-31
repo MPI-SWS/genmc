@@ -18,48 +18,144 @@
 #
 # Author: Michalis Kokologiannakis <mixaskok@gmail.com>
 
-source terminal.sh
-GenMC=./src/genmc
+# Get binary's full path
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+GenMC="${GenMC:-$DIR/../src/genmc}"
+
+source "${DIR}/terminal.sh"
 
 # We need to get the LLVM version for this particular configuration
-LLVM_VERSION=`cat ../config.h | awk '/LLVM_VERSION/ {gsub(/\"/, "", $3); print $3}'`
+LLVM_VERSION=`cat ${DIR}/../config.h | awk '/LLVM_VERSION/ {gsub(/\"/, "", $3); print $3}'`
 
-total_time=0
-result=""
+# test whether arrays are supported
+arrtest[0]='test' ||
+    (echo 'Failure: arrays not supported in this version of bash.' && exit 2)
 
-# Check for command line options
-if test "$1" = "--fast"
-then
-    fastrun=1
-fi
-
-# First run the testcases in the correct/ directory
-# ... under WB
-model=wb && testdir=../tests/correct && source runcorrect.sh
-total_time=`echo "scale=2; ${total_time}+${runtime}" | bc -l`
-# ... and under MO
-model=mo && testdir=../tests/correct && source runcorrect.sh
-total_time=`echo "scale=2; ${total_time}+${runtime}" | bc -l`
-
-# Then, do all the library tests
-model=wb && testdir=../tests/libs && source runcorrect.sh
-total_time=`echo "scale=2; ${total_time}+${runtime}" | bc -l`
-model=mo && testdir=../tests/libs && source runcorrect.sh
-total_time=`echo "scale=2; ${total_time}+${runtime}" | bc -l`
-
-# Then, run the testcases in the wrong/ directory
-model=wb && testdir=../tests/wrong && source runwrong.sh
-total_time=`echo "scale=2; ${total_time}+${runtime}" | bc -l`
-
-if test -n "$result"
-then
-    echo ''; printline
-    echo '!!! ' UNEXPECTED TESTING RESULTS ' !!!' Total time: "${total_time}"
-    printline
+# test whether getopt works
+getopt --test > /dev/null
+if [[ $? -ne 4 ]]; then
+    echo "`getopt --test` failed in this environment."
     exit 1
-else
-    echo ''; printline
-    echo '--- ' Testing proceeded as expected. Total time: "${total_time}"
-    printline
-    exit 0
 fi
+
+# command-line arguments
+SHORT=f,o,v:
+LONG=debug,fast,verbose:
+
+# temporarily store output to be able to check for errors
+PARSED=$(getopt --options $SHORT --longoptions $LONG --name "$0" -- "$@")
+if [[ $? -ne 0 ]]; then
+    # getopt has complained about wrong arguments to stdout
+    exit 2
+fi
+# use eval with "$PARSED" to properly handle the quoting
+eval set -- "$PARSED"
+
+# actually parse the options until we see --
+while true; do
+    case "$1" in
+	-f|--fast)
+	    fastrun=1
+	    shift
+	    ;;
+	-d|--debug)
+	    debug_mode=1
+	    shift
+	    ;;
+        -v|--verbose)
+            verbosity_level="$2"
+            shift 2
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            echo "Programming error"
+            exit 3
+            ;;
+    esac
+done
+
+# assumes that the result variable is appropriate set by the child script
+initialize_results() {
+    total_time=0
+    result=""
+    header_printed=""
+}
+
+# assumes that the (sourced) child script sets the runtime variable
+increase_total_time() {
+    total_time=`echo "scale=2; ${total_time}+${runtime}" | bc -l`
+}
+
+print_results() {
+    if test -n "$result"
+    then
+	echo ''; printline
+	echo '!!! ' UNEXPECTED TESTING RESULTS ' !!!' Total time: "${total_time}"
+	printline
+	exit 1
+    else
+	echo ''; printline
+	echo '--- ' Testing proceeded as expected. Total time: "${total_time}"
+	printline
+	exit 0
+    fi
+}
+
+# Do initializations
+initialize_results
+
+# First, run the test cases in the correct/ directory
+correctdir="${DIR}/../tests/correct"
+for model in rc11 imm
+do
+    for coherence in wb mo
+    do
+	for testdir in "${correctdir}/litmus" "${correctdir}/synthetic" "${correctdir}/data-structures"
+	do
+	    source "${DIR}/runcorrect.sh" # the env variables for runcorrect.sh are set
+	    increase_total_time
+	done
+    done
+done
+
+# Then, do all the library tests (and reprint header)
+header_printed=""
+libdir="${DIR}/../tests/libs"
+for model in rc11
+do
+    for coherence in wb mo
+    do
+	testdir="${libdir}" && source "${DIR}/runcorrect.sh"
+	increase_total_time
+    done
+done
+
+# Finally, run the testcases in the wrong/ directory
+header_printed=""
+wrongdir="${DIR}/../tests/wrong"
+for model in rc11 imm
+do
+    for cat in safety racy memory
+    do
+	# under IMM, only run safety tests
+	if test "${model}" = "imm" -a "${cat}" != "safety"
+	then
+	    continue
+	fi
+	testdir="${wrongdir}/${cat}"
+	coherence="wb"
+	suppress_diff=""
+	if test "${cat}" = "memory"
+	then
+	    suppress_diff=1
+	fi
+	source "${DIR}/runwrong.sh"
+	increase_total_time
+    done
+done
+
+# Print results
+print_results

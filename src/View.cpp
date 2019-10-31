@@ -18,6 +18,7 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
+#include "Error.hpp"
 #include "View.hpp"
 #include <algorithm>
 
@@ -77,11 +78,22 @@ View& View::update(const View &v)
 	return *this;
 }
 
-llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const View &v)
+DepView& View::update(const DepView &v)
+{
+	BUG();
+}
+
+VectorClock &View::update(const VectorClock &vc)
+{
+	if (auto *v = llvm::dyn_cast<View>(&vc))
+		this->update(*v);
+	BUG();
+}
+
+void View::printData(llvm::raw_ostream &s) const
 {
 	s << "[ ";
-	for (auto i = 0u; i < v.size(); i++)
-		s << i << ":" << v[i] << " ";
+	for (auto i = 0u; i < size(); i++)
+		s << i << ":" << (*this)[i] << " ";
 	s << "]";
-	return s;
 }

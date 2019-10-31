@@ -5,7 +5,8 @@
 
 void exit(int);
 
-void abort(void) ;
+void abort(void);
+int abs(int);
 int atoi(const char *);
 void free(void *);
 char *getenv(const char *);

@@ -1,0 +1,42 @@
+Error detected: Attempt to access freed memory!
+Event (2, 5) conflicts with event (1, 4) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): M
+	(0, 2): M
+	(0, 3): TC [forks 1] L.11
+	(0, 4): Wna (t1, 1) L.11
+	(0, 5): TC [forks 2] L.13
+	(0, 6): Wna (t2, 2) L.13
+	(0, 7): E
+<0, 1> thread1:
+	(1, 0): B
+	(1, 1): M L.7: access-freed.c
+	(1, 2): Wsc (p, 59011832) L.7: access-freed.c
+	(1, 3): Rsc (p, 59011832) [(1, 2)] L.8: access-freed.c
+	(1, 4): D L.8: access-freed.c
+	(1, 5): E
+<0, 2> thread2:
+	(2, 0): B
+	(2, 1): M
+	(2, 2): Racq (p, 59011832) [(1, 2)] L.14: access-freed.c
+	(2, 3): Wna (, 59011832) L.14: access-freed.c
+	(2, 4): Rna (, 0x38472f8) [(2, 3)] L.14: access-freed.c
+	(2, 5): Wna (, 18) L.16: access-freed.c
+
+Trace to (2, 5):
+[main] access-freed0.c: 11: if (pthread_create(&t1, NULL, thread1, NULL))
+[main] access-freed0.c: 13: if (pthread_create(&t2, NULL, thread2, NULL))
+[thread1] access-freed.c: 7: p = malloc(sizeof(int));
+[thread1] access-freed.c: 7: p = malloc(sizeof(int));
+[thread2] access-freed.c: 14: int *r = atomic_load_explicit(&p, mo_acq);
+[thread2] access-freed.c: 14: int *r = atomic_load_explicit(&p, mo_acq);
+[thread2] access-freed.c: 14: int *r = atomic_load_explicit(&p, mo_acq);
+[thread2] access-freed.c: 16: *r = 18;
+Trace to (1, 4):
+[main] access-freed0.c: 11: if (pthread_create(&t1, NULL, thread1, NULL))
+[thread1] access-freed.c: 7: p = malloc(sizeof(int));
+[thread1] access-freed.c: 7: p = malloc(sizeof(int));
+[thread1] access-freed.c: 8: free(p);
+[thread1] access-freed.c: 8: free(p);
+Number of complete executions explored: 1

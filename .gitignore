@@ -6,6 +6,17 @@ genmc
 *.backup
 .*.sw[a-z]
 
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.toc
+*.xdv
+*.tex
+*.out
+
 *.ll
 
 *.annot

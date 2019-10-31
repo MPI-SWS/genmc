@@ -324,10 +324,16 @@ static GenericValue executeICMP_SGE(GenericValue Src1, GenericValue Src2,
 
 void Interpreter::visitICmpInst(ICmpInst &I) {
   ExecutionContext &SF = ECStack().back();
+  Thread &thr = getCurThr();
   Type *Ty    = I.getOperand(0)->getType();
   GenericValue Src1 = getOperandValue(I.getOperand(0), SF);
   GenericValue Src2 = getOperandValue(I.getOperand(1), SF);
   GenericValue R;   // Result
+
+  updateDataDeps(thr.id, &I, I.getOperand(0));
+  updateDataDeps(thr.id, &I, I.getOperand(1));
+  // thr.dataDeps[&I] = thr.dataDeps[I.getOperand(0)].
+  // 	  depUnion(thr.dataDeps[I.getOperand(1)]);
 
   switch (I.getPredicate()) {
   case ICmpInst::ICMP_EQ:  R = executeICMP_EQ(Src1,  Src2, Ty); break;
@@ -727,10 +733,17 @@ static GenericValue executeCmpInst(unsigned predicate, GenericValue Src1,
 
 void Interpreter::visitBinaryOperator(BinaryOperator &I) {
   ExecutionContext &SF = ECStack().back();
+  Thread &thr = getCurThr();
   Type *Ty    = I.getOperand(0)->getType();
   GenericValue Src1 = getOperandValue(I.getOperand(0), SF);
   GenericValue Src2 = getOperandValue(I.getOperand(1), SF);
   GenericValue R;   // Result
+
+  /* Update dependencies */
+  updateDataDeps(thr.id, &I, I.getOperand(0));
+  updateDataDeps(thr.id, &I, I.getOperand(1));
+  // thr.dataDeps[&I] = thr.dataDeps[I.getOperand(0)].
+  // 	  depUnion(thr.dataDeps[I.getOperand(1)]);
 
   // First process vector operation
   if (Ty->isVectorTy()) {
@@ -893,6 +906,7 @@ void Interpreter::popStackAndReturnValueToCaller(Type *RetTy,
   //     memset(&ExitValue.Untyped, 0, sizeof(ExitValue.Untyped));
   //   }
   if (ECStack().empty()) {
+    setCurrentDeps(nullptr, nullptr, nullptr, nullptr, nullptr);
     driver->visitThreadFinish();
   } else {
     // If we have a previous stack frame, and we have a previous call,
@@ -944,6 +958,7 @@ void Interpreter::visitUnreachableInst(UnreachableInst &I) {
 
 void Interpreter::visitBranchInst(BranchInst &I) {
   ExecutionContext &SF = ECStack().back();
+  Thread &thr = getCurThr();
   BasicBlock *Dest;
 
   Dest = I.getSuccessor(0);          // Uncond branches have a fixed dest...
@@ -951,6 +966,7 @@ void Interpreter::visitBranchInst(BranchInst &I) {
     Value *Cond = I.getCondition();
     if (getOperandValue(Cond, SF).IntVal == 0) // If false cond...
       Dest = I.getSuccessor(1);
+    updateCtrlDeps(thr.id, Cond);
   }
   SwitchToNewBasicBlock(Dest, SF);
 }
@@ -1014,6 +1030,8 @@ void Interpreter::SwitchToNewBasicBlock(BasicBlock *Dest, ExecutionContext &SF){
 
     // Save the incoming value for this PHI node...
     ResultValues.push_back(getOperandValue(IncomingValue, SF));
+    updateDataDeps(getCurThr().id, PN, IncomingValue);
+    // getCurThr().dataDeps[PN] = getCurThr().dataDeps[IncomingValue];
   }
 
   // Now loop over all of the PHI nodes setting their values...
@@ -1043,7 +1061,12 @@ void Interpreter::visitAllocaInst(AllocaInst &I) {
   unsigned MemToAlloc = std::max(1U, NumElements * TypeSize);
 
   /* The driver will provide the address this alloca returns */
+  setCurrentDeps(nullptr, nullptr, getCtrlDeps(getCurThr().id),
+		 getAddrPoDeps(getCurThr().id), nullptr);
+
   GenericValue Result = driver->visitMalloc(MemToAlloc, true);
+
+  updateDataDeps(getCurThr().id, &I, Event(getCurThr().id, getCurThr().globalInstructions));
 
   /* If this is not a replay, update naming information for this variable
    * based on previously collected information */
@@ -1061,9 +1084,12 @@ GenericValue Interpreter::executeGEPOperation(Value *Ptr, gep_type_iterator I,
   assert(Ptr->getType()->isPointerTy() &&
          "Cannot getElementOffset of a nonpointer type!");
 
+  Thread &thr = getCurThr();
   uint64_t Total = 0;
 
   for (; I != E; ++I) {
+    updateDataDeps(thr.id, SF.CurInst->getPrevNode(), I.getOperand());
+      // thr.dataDeps[SF.CurInst->getPrevNode()].update(thr.dataDeps[I.getOperand()]);
 #ifdef LLVM_NEW_GEP_TYPE_ITERATOR_API
     if (StructType *STy = I.getStructTypeOrNull()) {
 #else
@@ -1105,7 +1131,7 @@ GenericValue Interpreter::executeGEPOperation(Value *Ptr, gep_type_iterator I,
 void Interpreter::visitGetElementPtrInst(GetElementPtrInst &I) {
   ExecutionContext &SF = ECStack().back();
   SetValue(&I, executeGEPOperation(I.getPointerOperand(),
-                                   gep_type_begin(I), gep_type_end(I), SF), SF);
+				    gep_type_begin(I), gep_type_end(I), SF), SF);
 }
 
 void Interpreter::visitLoadInst(LoadInst &I)
@@ -1121,10 +1147,18 @@ void Interpreter::visitLoadInst(LoadInst &I)
 	if (thr.tls.count(ptr)) {
 		SetValue(&I, thr.tls[ptr], SF);
 		return;
+
 	}
 
-	/* Otherwise, the driver will provide the appropriate value */
+	/* Otherwise, set the dependencies for this instruction.. */
+	setCurrentDeps(getDataDeps(thr.id, I.getPointerOperand()), nullptr,
+		       getCtrlDeps(thr.id), getAddrPoDeps(thr.id), nullptr);
+
+	/* ... and then the driver will provide the appropriate value */
 	auto val = driver->visitLoad(IA_None, I.getOrdering(), ptr, typ);
+
+	updateDataDeps(thr.id, &I, getCurrentPosition());
+	updateAddrPoDeps(thr.id, I.getPointerOperand());
 
 	/* Last, set the return value for this instruction */
 	SetValue(&I, val, SF);
@@ -1146,13 +1180,23 @@ void Interpreter::visitStoreInst(StoreInst &I)
 		return;
 	}
 
-	/* Add store to graph and (possibly) revisit some reads */
+	/* First, record the dependencies for this instruction */
+	setCurrentDeps(getDataDeps(thr.id, I.getPointerOperand()),
+		       getDataDeps(thr.id, I.getOperand(0)), getCtrlDeps(thr.id),
+		       getAddrPoDeps(thr.id), nullptr);
+
+	/* Inform the Driver about the newly interpreter store */
 	driver->visitStore(IA_None, I.getOrdering(), ptr, typ, val);
+
+	updateAddrPoDeps(thr.id, I.getPointerOperand());
+	// thr.addrPoDeps.update(thr.dataDeps[I.getPointerOperand()]);
 	return;
 }
 
 void Interpreter::visitFenceInst(FenceInst &I)
 {
+	setCurrentDeps(nullptr, nullptr, getCtrlDeps(getCurThr().id),
+		       nullptr, nullptr);
 	driver->visitFence(I.getOrdering());
 	return;
 }
@@ -1166,10 +1210,10 @@ void Interpreter::visitAtomicCmpXchgInst(AtomicCmpXchgInst &I)
 	GenericValue src = getOperandValue(I.getPointerOperand(), SF);
 	GenericValue *ptr = (GenericValue *) GVTOP(src);
 	Type *typ = I.getCompareOperand()->getType();
-	GenericValue oldVal, result;
+	GenericValue result;
 
 	if (thr.tls.count(ptr)) {
-		oldVal = thr.tls[ptr];
+		GenericValue oldVal = thr.tls[ptr];
 		GenericValue cmpRes = executeICMP_EQ(oldVal, cmpVal, typ);
 		if (cmpRes.IntVal.getBoolValue())
 			thr.tls[ptr] = newVal;
@@ -1179,14 +1223,29 @@ void Interpreter::visitAtomicCmpXchgInst(AtomicCmpXchgInst &I)
 		return;
 	}
 
-	oldVal = driver->visitLoad(IA_Cas, I.getSuccessOrdering(),
-				   ptr, typ, cmpVal, newVal);
-	auto cmpRes = executeICMP_EQ(oldVal, cmpVal, typ);
-	if (cmpRes.IntVal.getBoolValue())
-		driver->visitStore(IA_Cas, I.getSuccessOrdering(),
-				   ptr, typ, newVal);
+	setCurrentDeps(getDataDeps(thr.id, I.getPointerOperand()),
+		       getDataDeps(thr.id, I.getNewValOperand()),
+		       getCtrlDeps(thr.id), getAddrPoDeps(thr.id),
+		       getDataDeps(thr.id, I.getCompareOperand()));
 
-	result.AggregateVal.push_back(oldVal);
+	auto ret = driver->visitLoad(IA_Cas, I.getSuccessOrdering(), ptr, typ,
+				     cmpVal, newVal);
+
+	updateDataDeps(thr.id, &I, getCurrentPosition());
+	// thr.dataDeps[&I] = thr.dataDeps[&I].depUnion(ret.second);
+	updateAddrPoDeps(thr.id, I.getPointerOperand());
+	// thr.addrPoDeps.update(thr.dataDeps[I.getPointerOperand()]);
+
+	auto cmpRes = executeICMP_EQ(ret, cmpVal, typ);
+	if (cmpRes.IntVal.getBoolValue()) {
+		setCurrentDeps(getDataDeps(thr.id, I.getPointerOperand()),
+			       getDataDeps(thr.id, I.getNewValOperand()),
+			       getCtrlDeps(thr.id), getAddrPoDeps(thr.id), nullptr);
+		driver->visitStore(IA_Cas, I.getSuccessOrdering(), ptr, typ, newVal);
+		// address: .depUnion(ret.second),
+	}
+
+	result.AggregateVal.push_back(ret);
 	result.AggregateVal.push_back(cmpRes);
 	SetValue(&I, result, SF);
 	return;
@@ -1216,7 +1275,7 @@ void Interpreter::executeAtomicRMWOperation(GenericValue &result, const GenericV
 		break;
 	default:
 		WARN_ONCE("invalid-rmw-op",
-			  "WARNING: Unsupported operation in RMW instruction!\n");
+			  "Unsupported operation in RMW instruction!\n");
 		result.IntVal = oldVal.IntVal;
 	}
 }
@@ -1229,24 +1288,39 @@ void Interpreter::visitAtomicRMWInst(AtomicRMWInst &I)
 	GenericValue *ptr = (GenericValue *) GVTOP(src);
 	GenericValue val = getOperandValue(I.getValOperand(), SF);
 	Type *typ = I.getType();
-	GenericValue oldVal, newVal;
+	GenericValue newVal;
 
 	BUG_ON(!typ->isIntegerTy());
 
 	if (thr.tls.count(ptr)) {
-		oldVal = thr.tls[ptr];
+		GenericValue oldVal = thr.tls[ptr];
 		executeAtomicRMWOperation(newVal, oldVal, val, I.getOperation());
 		thr.tls[ptr] = newVal;
 		SetValue(&I, oldVal, SF);
 		return;
 	}
 
-	oldVal = driver->visitLoad(IA_Fai, I.getOrdering(), ptr, typ,
-				   GenericValue(), val, I.getOperation());
-	executeAtomicRMWOperation(newVal, oldVal, val, I.getOperation());
+	setCurrentDeps(getDataDeps(thr.id, I.getPointerOperand()),
+		       getDataDeps(thr.id, I.getValOperand()),
+		       getCtrlDeps(thr.id), getAddrPoDeps(thr.id), nullptr);
+
+	auto ret = driver->visitLoad(IA_Fai, I.getOrdering(), ptr, typ,
+				     GenericValue(), val, I.getOperation());
+
+	updateDataDeps(thr.id, &I, getCurrentPosition());
+	// thr.dataDeps[&I] = thr.dataDeps[&I].depUnion(ret.second);
+	updateAddrPoDeps(thr.id, I.getPointerOperand());
+	// thr.addrPoDeps.update(thr.dataDeps[I.getPointerOperand()]);
+
+	executeAtomicRMWOperation(newVal, ret, val, I.getOperation());
+
+	setCurrentDeps(getDataDeps(thr.id, I.getPointerOperand()),
+		       getDataDeps(thr.id, I.getValOperand()),
+		       getCtrlDeps(thr.id), getAddrPoDeps(thr.id), nullptr);
 
 	driver->visitStore(IA_Fai, I.getOrdering(), ptr, typ, newVal);
-	SetValue(&I, oldVal, SF);
+
+	SetValue(&I, ret, SF);
 	return;
 }
 
@@ -1274,7 +1348,7 @@ void Interpreter::visitInlineAsm(CallSite &CS, const std::string &asmStr)
 		; /* Plain compiler fence */
 	else
 		WARN_ONCE("invalid-inline-asm",
-			  "WARNING: Arbitrary inline assembly not supported: " +
+			  "Arbitrary inline assembly not supported: " +
 			  asmStr + "! Skipping...\n");
 	return;
 }
@@ -1312,7 +1386,7 @@ void Interpreter::visitCallSite(CallSite CS) {
       SetValue(CS.getInstruction(), getOperandValue(*CS.arg_begin(), SF), SF);
       return;
     default:
-	    WARN_ONCE("unknown-intrinsic", "WARNING: Unknown intrinstic function" \
+	    WARN_ONCE("unknown-intrinsic", "Unknown intrinstic function" \
 		      "encountered. Attempting to lower it...\n");
       // If it is an unknown intrinsic function, use the intrinsic lowering
       // class to transform it into hopefully tasty LLVM code.
@@ -1345,6 +1419,15 @@ void Interpreter::visitCallSite(CallSite CS) {
          e = SF.Caller.arg_end(); i != e; ++i, ++pNum) {
     Value *V = *i;
     ArgVals.push_back(getOperandValue(V, SF));
+  }
+
+  if (CS.getCalledFunction()->getName() == "__VERIFIER_assume") {
+	  Thread &thr = getCurThr();
+	  for (CallSite::arg_iterator i = SF.Caller.arg_begin(),
+		       e = SF.Caller.arg_end(); i != e; ++i, ++pNum) {
+		  updateCtrlDeps(thr.id, *i);
+		  // thr.ctrlDeps.update(thr.dataDeps[*i]);
+	  }
   }
 
   // To handle indirect calls, we must get the pointer value from the argument
@@ -1885,16 +1968,25 @@ GenericValue Interpreter::executeBitCastInst(Value *SrcVal, Type *DstTy,
 
 void Interpreter::visitTruncInst(TruncInst &I) {
   ExecutionContext &SF = ECStack().back();
+  Thread &thr = getCurThr();
+  updateDataDeps(thr.id, &I, I.getOperand(0)),
+  // thr.dataDeps[&I] = thr.dataDeps[&I].depUnion(thr.dataDeps[I.getOperand(0)]);
   SetValue(&I, executeTruncInst(I.getOperand(0), I.getType(), SF), SF);
 }
 
 void Interpreter::visitSExtInst(SExtInst &I) {
   ExecutionContext &SF = ECStack().back();
+  Thread &thr = getCurThr();
+  updateDataDeps(thr.id, &I, I.getOperand(0)),
+  // thr.dataDeps[&I] = thr.dataDeps[&I].depUnion(thr.dataDeps[I.getOperand(0)]);
   SetValue(&I, executeSExtInst(I.getOperand(0), I.getType(), SF), SF);
 }
 
 void Interpreter::visitZExtInst(ZExtInst &I) {
   ExecutionContext &SF = ECStack().back();
+  Thread &thr = getCurThr();
+  updateDataDeps(thr.id, &I, I.getOperand(0)),
+  // thr.dataDeps[&I] = thr.dataDeps[&I].depUnion(thr.dataDeps[I.getOperand(0)]);
   SetValue(&I, executeZExtInst(I.getOperand(0), I.getType(), SF), SF);
 }
 
@@ -1934,12 +2026,15 @@ void Interpreter::visitPtrToIntInst(PtrToIntInst &I) {
 }
 
 void Interpreter::visitIntToPtrInst(IntToPtrInst &I) {
-  ExecutionContext &SF =ECStack().back();
+  ExecutionContext &SF = ECStack().back();
   SetValue(&I, executeIntToPtrInst(I.getOperand(0), I.getType(), SF), SF);
 }
 
 void Interpreter::visitBitCastInst(BitCastInst &I) {
   ExecutionContext &SF = ECStack().back();
+  Thread &thr = getCurThr();
+  updateDataDeps(thr.id, &I, I.getOperand(0)),
+  // thr.dataDeps[&I] = thr.dataDeps[&I].depUnion(thr.dataDeps[I.getOperand(0)]);
   SetValue(&I, executeBitCastInst(I.getOperand(0), I.getType(), SF), SF);
 }
 
@@ -2127,6 +2222,10 @@ void Interpreter::visitExtractValueInst(ExtractValueInst &I) {
     pSrc = &pSrc->AggregateVal[*IdxBegin];
     ++IdxBegin;
   }
+
+  Thread &thr = getCurThr();
+  updateDataDeps(thr.id, &I, getDataDeps(thr.id, Agg));
+  // thr.dataDeps[&I] = thr.dataDeps[&I].depUnion(thr.dataDeps[Agg]);
 
   Type *IndexedType = ExtractValueInst::getIndexedType(Agg->getType(), I.getIndices());
   switch (IndexedType->getTypeID()) {
@@ -2325,7 +2424,7 @@ std::string getFilenameFromMData(MDNode *node)
 	return absPath;
 }
 
-void Interpreter::replayExecutionBefore(const View &before)
+void Interpreter::replayExecutionBefore(const VectorClock &before)
 {
 	threads[0].initSF = mainECStack.back();
 	for (auto i = 0u; i < before.size(); i++) {
@@ -2401,6 +2500,8 @@ void Interpreter::callVerifierNondetInt(Function *F,
 
 void Interpreter::callMalloc(Function *F, const std::vector<GenericValue> &ArgVals)
 {
+	setCurrentDeps(nullptr, nullptr, getCtrlDeps(getCurThr().id),
+		       getAddrPoDeps(getCurThr().id), nullptr);
 	GenericValue address = driver->visitMalloc(ArgVals[0].IntVal.getLimitedValue());
 	returnValueToCaller(F->getReturnType(), address);
 	return;
@@ -2410,6 +2511,8 @@ void Interpreter::callFree(Function *F, const std::vector<GenericValue> &ArgVals
 {
 	GenericValue *ptr = (GenericValue *) GVTOP(ArgVals[0]);
 
+	setCurrentDeps(nullptr, nullptr, getCtrlDeps(getCurThr().id),
+		       getAddrPoDeps(getCurThr().id), nullptr);
 	driver->visitFree(ptr);
 	return;
 }
@@ -2444,11 +2547,14 @@ void Interpreter::callPthreadCreate(Function *F,
 	SetValue(&*calledFun->arg_begin(), ArgVals[3], SF);
 
 	/* Then, inform the driver about the thread creation */
+	setCurrentDeps(nullptr, nullptr, getCtrlDeps(getCurThr().id),
+		       getAddrPoDeps(getCurThr().id), nullptr);
 	auto tid = driver->visitThreadCreate(calledFun, SF);
 
-	/* ..and save the TID in the location pointed by the 1st arg */
+	/* ...and save the TID in the location pointed by the 1st arg */
 	Type *typ = static_cast<PointerType *>(F->arg_begin()->getType())->getElementType();
 	val.IntVal = APInt(typ->getIntegerBitWidth(), tid);
+
 	driver->visitStore(IA_None, AtomicOrdering::NotAtomic, ptr, typ, val);
 
 	/* Finally, return a value indicating that pthread_create() succeeded */
@@ -2460,6 +2566,8 @@ void Interpreter::callPthreadCreate(Function *F,
 void Interpreter::callPthreadJoin(Function *F,
 				  const std::vector<GenericValue> &ArgVals)
 {
+	setCurrentDeps(nullptr, nullptr, getCtrlDeps(getCurThr().id),
+		       getAddrPoDeps(getCurThr().id), nullptr);
 	auto result = driver->visitThreadJoin(F, ArgVals[0]);
 	returnValueToCaller(F->getReturnType(), result);
 }
@@ -2481,10 +2589,10 @@ void Interpreter::callPthreadMutexInit(Function *F,
 
 	if (attr)
 		WARN_ONCE("pthread-mutex-init-arg",
-			  "WARNING: Ignoring non-null argument given to pthread_mutex_init.\n");
+			  "Ignoring non-null argument given to pthread_mutex_init.\n");
 
 	if (lock == nullptr) {
-		WARN("ERROR: pthread_mutex_init called with NULL pointer as first argument!");
+		WARN("pthread_mutex_init called with NULL pointer as first argument!");
 		abort();
 	}
 
@@ -2497,25 +2605,32 @@ void Interpreter::callPthreadMutexInit(Function *F,
 void Interpreter::callPthreadMutexLock(Function *F,
 				       const std::vector<GenericValue> &ArgVals)
 {
+	Thread &thr = getCurThr();
 	GenericValue *ptr = (GenericValue *) GVTOP(ArgVals[0]);
 	Type *typ = F->getReturnType();
 	GenericValue cmpVal, newVal, result;
 
 	if (ptr == nullptr) {
-		WARN("ERROR: pthread_mutex_lock called with NULL pointer!");
+		WARN("pthread_mutex_lock called with NULL pointer!");
 		abort();
 	}
 
 	cmpVal.IntVal = APInt(typ->getIntegerBitWidth(), 0);
 	newVal.IntVal = APInt(typ->getIntegerBitWidth(), 1);
 
-	auto oldVal = driver->visitLoad(IA_Lock, AtomicOrdering::Acquire,
-					ptr, typ, cmpVal, newVal);
+	setCurrentDeps(nullptr, nullptr, getCtrlDeps(thr.id),
+		       getAddrPoDeps(thr.id), nullptr);
 
-	auto cmpRes = executeICMP_EQ(oldVal, cmpVal, typ);
+	auto ret = driver->visitLoad(IA_Lock, AtomicOrdering::Acquire,
+				     ptr, typ, cmpVal, newVal);
+
+	auto cmpRes = executeICMP_EQ(ret, cmpVal, typ);
 	if (cmpRes.IntVal.getBoolValue() == 0) {
-		getCurThr().block();
+		thr.block();
 	} else {
+		setCurrentDeps(nullptr, nullptr, getCtrlDeps(thr.id),
+			       getAddrPoDeps(thr.id), nullptr);
+
 		driver->visitStore(IA_Lock, AtomicOrdering::Acquire,
 				   ptr, typ, newVal);
 	}
@@ -2533,6 +2648,7 @@ void Interpreter::callPthreadMutexLock(Function *F,
 void Interpreter::callPthreadMutexUnlock(Function *F,
 					 const std::vector<GenericValue> &ArgVals)
 {
+	Thread &thr = getCurThr();
 	GenericValue *ptr = (GenericValue *) GVTOP(ArgVals[0]);
 	Type *typ = F->getReturnType();
 	GenericValue val, result;
@@ -2544,7 +2660,11 @@ void Interpreter::callPthreadMutexUnlock(Function *F,
 
 	val.IntVal = APInt(typ->getIntegerBitWidth(), 0);
 
+	setCurrentDeps(nullptr, nullptr, getCtrlDeps(thr.id),
+		       getAddrPoDeps(thr.id), nullptr);
+
 	driver->visitStore(IA_Unlock, AtomicOrdering::Release, ptr, typ, val);
+
 	result.IntVal = APInt(typ->getIntegerBitWidth(), 0); /* Success */
 	returnValueToCaller(F->getReturnType(), result);
 	return;
@@ -2553,6 +2673,7 @@ void Interpreter::callPthreadMutexUnlock(Function *F,
 void Interpreter::callPthreadMutexTrylock(Function *F,
 					 const std::vector<GenericValue> &ArgVals)
 {
+	Thread &thr = getCurThr();
 	GenericValue *ptr = (GenericValue *) GVTOP(ArgVals[0]);
 	Type *typ = F->getReturnType();
 	GenericValue cmpVal, newVal, result;
@@ -2565,12 +2686,20 @@ void Interpreter::callPthreadMutexTrylock(Function *F,
 	cmpVal.IntVal = APInt(typ->getIntegerBitWidth(), 0);
 	newVal.IntVal = APInt(typ->getIntegerBitWidth(), 1);
 
-	auto oldVal = driver->visitLoad(IA_Cas, AtomicOrdering::Acquire,
-					ptr, typ, cmpVal, newVal);
+	setCurrentDeps(nullptr, nullptr, getCtrlDeps(thr.id),
+		       getAddrPoDeps(thr.id), nullptr);
 
-	auto cmpRes = executeICMP_EQ(oldVal, cmpVal, typ);
-	if (cmpRes.IntVal.getBoolValue())
-		driver->visitStore(IA_Cas, AtomicOrdering::Acquire, ptr, typ, newVal);
+	auto ret = driver->visitLoad(IA_Cas, AtomicOrdering::Acquire, ptr,
+				     typ, cmpVal, newVal);
+
+	auto cmpRes = executeICMP_EQ(ret, cmpVal, typ);
+	if (cmpRes.IntVal.getBoolValue()) {
+		setCurrentDeps(nullptr, nullptr, getCtrlDeps(thr.id),
+			       getAddrPoDeps(thr.id), nullptr);
+
+		driver->visitStore(IA_Cas, AtomicOrdering::Acquire,
+				   ptr, typ, newVal);
+	}
 
 	result.IntVal = APInt(typ->getIntegerBitWidth(), !cmpRes.IntVal.getBoolValue());
 	returnValueToCaller(F->getReturnType(), result);
@@ -2583,6 +2712,8 @@ void Interpreter::callReadFunction(const Library &lib, const LibMem &mem, Functi
 	GenericValue *ptr = (GenericValue *) GVTOP(ArgVals[0]);
 	Type *typ = F->getReturnType();
 
+	setCurrentDeps(nullptr, nullptr, getCtrlDeps(getCurThr().id),
+		       getAddrPoDeps(getCurThr().id), nullptr);
 	auto res = driver->visitLibLoad(IA_None, mem.getOrdering(), ptr,
 					typ, F->getName().str());
 	auto &val = res.first;
@@ -2609,6 +2740,8 @@ void Interpreter::callWriteFunction(const Library &lib, const LibMem &mem, Funct
 		abort();
 	}
 
+	setCurrentDeps(nullptr, nullptr, getCtrlDeps(getCurThr().id),
+		       getAddrPoDeps(getCurThr().id), nullptr);
 	driver->visitLibStore(IA_None, mem.getOrdering(), ptr, typ, val,
 			      F->getName().str(), mem.isLibInit());
 	return;

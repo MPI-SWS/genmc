@@ -43,7 +43,7 @@ void DefineLibcFunsPass::replaceFunWithNop(llvm::Module &M, std::string name)
 	else if (retTy->isPointerTy())
 		res = llvm::ConstantPointerNull::get(static_cast<llvm::PointerType *>(retTy));
 	else
-		WARN("WARNING: Could not add definition for " + name + "!\n");
+		WARN("Could not add definition for " + name + "!\n");
 
 	llvm::BasicBlock *BB = llvm::BasicBlock::Create(F->getContext(), "", F);
 	llvm::ReturnInst::Create(F->getContext(), res, BB);

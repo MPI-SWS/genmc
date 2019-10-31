@@ -3,9 +3,13 @@ SUBDIRS = src
 .PHONY: test ftest
 test:
 	$(MAKE) -C src
-	cd $(top_builddir)/scripts && ./driver.sh
+	cd $(top_builddir)/scripts && ./driver.sh --debug
 
 ftest:
+	$(MAKE) -C src
+	cd $(top_builddir)/scripts && ./driver.sh --fast --debug
+
+ctest:
 	$(MAKE) -C src
 	cd $(top_builddir)/scripts && ./driver.sh --fast
 

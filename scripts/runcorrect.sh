@@ -18,72 +18,86 @@
 #
 # Author: Michalis Kokologiannakis <mixaskok@gmail.com>
 
-source terminal.sh
-GenMC=../src/genmc
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+GenMC="${GenMC:-$DIR/../src/genmc}"
 
-header_printed=""
+source "${DIR}/terminal.sh"
+
+model="${model:-rc11}"
+coherence="${coherence:-wb}"
+testdir="${testdir:-${DIR}/../tests/correct/litmus}"
+
 runtime=0
-model="${model:-wb}"
+tests_success=0
+tests_fail=0
 
-printheader() {
+print_debug_header() {
+    # Print status
+    echo ''; printline
+    echo -n '--- Preparing to run testcases in '
+    echo "${testdir##*/}" 'under' "${model}" 'with' "${coherence}" |
+	awk '{ print toupper($1), $2, toupper($3), $4, toupper($5) }'
+    printline; echo ''
+
+    # Print table's header
+    printline
+    printf "| ${CYAN}%-17s${NC} | ${CYAN}%-6s${NC} | ${CYAN}%-10s${NC} | ${CYAN}%-8s${NC} | ${CYAN}%-8s${NC} |\n" \
+	   "Testcase" "Result" "Executions" "Blocked" "Avg.time"
+    printline
+}
+
+print_condensed_header() {
     if test -z "${header_printed}"
     then
-        header_printed=1
+       # Print table's header
+       echo ''; printline
+       printf "| ${CYAN}%-10s${NC} | ${CYAN}%-15s${NC} | ${CYAN}%-10s${NC} | ${CYAN}%-9s${NC} | ${CYAN}%-5s${NC} |\n" \
+	      "Model" "Category" "Successful" "Failed" "Time"
+       printline
 
-        # Update status
-	echo ''; printline
-	echo -n '--- Preparing to run testcases in '
-	echo "${testdir##*/}" 'under' "${model}" | awk '{ print toupper($1), $2, toupper($3) }'
-	printline; echo ''
-
-	# Print table's header
-	printline
-	printf "| ${CYAN}%-17s${NC} | ${CYAN}%-6s${NC} | ${CYAN}%-10s${NC} | ${CYAN}%-8s${NC} | ${CYAN}%-8s${NC} |\n" \
-	       "Testcase" "Result" "Executions" "Blocked" "Avg.time"
-	printline
+       header_printed=1
+    else
+	echo ''
     fi
 }
+
+printheader() {
+    if test -n "${debug_mode}"
+    then
+	print_debug_header
+    else
+	print_condensed_header
+    fi
+}
+
+print_debug_footer() {
+    printline
+    echo '--- Test time: ' "${runtime}"
+    printline; echo ''
+}
+
+# print_condensed_footer() {
+#     echo''
+# }
 
 printfooter() {
-    if test -n "${header_printed}"
+    if test -n "${debug_mode}"
     then
-        printline
-        echo '--- Test time: ' "${runtime}"
-        printline; echo ''
+	print_debug_footer
+    # else
+    # 	print_condensed_footer
     fi
 }
 
-runvariants() {
-    printf "| ${POWDER_BLUE}%-17s${NC} | " "${dir##*/}${n}"
-    vars=0
-    test_time=0
-    failure=""
-    outcome_failure=""
-    unroll="" && [[ -f "${dir}/unroll.in" ]] && unroll="-unroll="`head -1 "${dir}/unroll.in"`
-    checker_args="" && [[ -f "${dir}/genmc.${model}.in" ]] && checker_args=`head -1 "${dir}/genmc.${model}.in"`
-    for t in $dir/variants/*.c
-    do
-	vars=$((vars+1))
-	output=`"${GenMC}" ${GENMCFLAGS} "-${model}" "${unroll}" ${checker_args} -- ${CFLAGS} ${test_args} "${t}" 2>&1`
-	if test "$?" -ne 0
-	then
-	    outcome_failure=1
-	fi
-	explored=`echo "${output}" | awk '/explored/ { print $6 }'`
-	blocked=`echo "${output}" | awk '/blocked/ { print $6 }'`
-	time=`echo "${output}" | awk '/time/ { print substr($4, 1, length($4)-1) }'`
-	time="${time}" && [[ -z "${time}" ]] && time=0 # if pattern was NOT found
-	test_time=`echo "${test_time}+${time}" | bc -l`
-	runtime=`echo "scale=2; ${runtime}+${time}" | bc -l`
-	expected="${expected:-${explored}}"
-	if test "${expected}" != "${explored}"
-	then
-	    explored_failed="${explored}"
-	    failure=1
-	fi
-    done
-    average_time=`echo "scale=2; ${test_time}/${vars}" | bc -l`
-    if test -n "${outcome_failure}"
+print_variant_info() {
+    if test -n "${debug_mode}"
+    then
+	printf "| ${POWDER_BLUE}%-17s${NC} | " "${dir##*/}${n}"
+    fi
+}
+
+print_variant_debug_results() {
+   if test -n "${outcome_failure}"
     then
 	outcome="${RED}ERROR ${NC}"
 	result=1
@@ -96,7 +110,80 @@ runvariants() {
 	outcome="${GREEN}SAFE  ${NC}"
     fi
     printf "${outcome} | % 10s | % 8s | % 8s |\n" \
-       "${explored}" "${blocked}" "${average_time}"
+	   "${explored}" "${blocked}" "${average_time}"
+
+    if test -n "${failure}" -o -n "${outcome_failure}"
+    then
+	echo "${failure_output}"
+    fi
+}
+
+print_variant_condensed_results() {
+    if test -n "${outcome_failure}"
+    then
+	((tests_fail++))
+	result=1
+    elif test -n "${failure}"
+    then
+	((tests_fail++))
+	result=1
+    else
+	((tests_success++))
+    fi
+
+    # replace previous results
+    for ((i=0;i<1000;i++)); do printf "\r"; done
+
+    # print results so far
+    print_fail="" && [[ "${tests_fail}" -ne 0 ]] && print_fail="${tests_fail}"
+    printf "| ${POWDER_BLUE}%-10s${NC} | ${NC}%-15s${NC} | ${GREEN}%-10s${NC} | ${RED}%-9s${NC} | ${NC}%-5s${NC} |" \
+	   "${model^^}-${coherence^^}" "${testdir##*/}" "${tests_success}" "${print_fail}" "${runtime}"
+}
+
+print_variant_results() {
+    if test -n "${debug_mode}"
+    then
+	print_variant_debug_results
+    else
+	print_variant_condensed_results
+    fi
+}
+
+runvariants() {
+    print_variant_info
+    vars=0
+    test_time=0
+    failure=""
+    outcome_failure=""
+    failure_output=""
+    unroll="" && [[ -f "${dir}/unroll.in" ]] && unroll="-unroll="`head -1 "${dir}/unroll.in"`
+    checker_args="" && [[ -f "${dir}/genmc.${model}.${coherence}.in" ]] &&
+	checker_args=`head -1 "${dir}/genmc.${model}.${coherence}.in"`
+    for t in $dir/variants/*.c
+    do
+	vars=$((vars+1))
+	output=`"${GenMC}" ${GENMCFLAGS} "-${model}" "-${coherence}" "${unroll}" ${checker_args} -- ${CFLAGS} ${test_args} "${t}" 2>&1`
+	if test "$?" -ne 0
+	then
+	    failure_output="${output}"
+	    outcome_failure=1
+	fi
+	explored=`echo "${output}" | awk '/explored/ { print $6 }'`
+	blocked=`echo "${output}" | awk '/blocked/ { print $6 }'`
+	time=`echo "${output}" | awk '/time/ { print substr($4, 1, length($4)-1) }'`
+	time="${time}" && [[ -z "${time}" ]] && time=0 # if pattern was NOT found
+	test_time=`echo "${test_time}+${time}" | bc -l`
+	runtime=`echo "scale=2; ${runtime}+${time}" | bc -l`
+	expected="${expected:-${explored}}"
+	if test "${expected}" != "${explored}"
+	then
+	    explored_failed="${explored}"
+	    failure_output="${output}"
+	    failure=1
+	fi
+    done
+    average_time=`echo "scale=2; ${test_time}/${vars}" | bc -l`
+    print_variant_results
 }
 
 runtest() {
@@ -105,17 +192,17 @@ runtest() {
     then
 	return
     fi
-    if test -f "${dir}/args.${model}.in"
+    if test -f "${dir}/args.${model}.${coherence}.in"
     then
 	while read test_args <&3 && read expected <&4; do
 	    n="/`echo ${test_args} |
                  awk ' { if (match($0, /-DN=[0-9]+/)) print substr($0, RSTART+4, RLENGTH-4) } '`"
 	    runvariants
-	done 3<"${dir}/args.${model}.in" 4<"${dir}/expected.${model}.in"
+	done 3<"${dir}/args.${model}.${coherence}.in" 4<"${dir}/expected.${model}.${coherence}.in"
     else
 	test_args=""
 	n=""
-	expected=`head -n 1 "${dir}/expected.${model}.in"`
+	expected=`head -n 1 "${dir}/expected.${model}.${coherence}.in"`
 	runvariants
     fi
 }
@@ -123,6 +210,7 @@ runtest() {
 [ -z "${TESTFILTER}" ] && TESTFILTER=*
 
 # Run correct testcases and update status
+printheader
 for dir in "${testdir}"/*
 do
     if test -n "${fastrun}"
@@ -138,7 +226,6 @@ do
 	    *)     continue;;
 	esac
     fi
-    printheader
     runtest "${dir}"
 done
 printfooter

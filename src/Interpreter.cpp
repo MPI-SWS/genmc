@@ -61,7 +61,7 @@ extern "C" void LLVMLinkInInterpreter() { }
 ///
 ExecutionEngine *Interpreter::create(Module *M, VariableInfo &&VI,
 				     GenMCDriver *driver,
-				     std::string* ErrStr) {
+				     bool shouldTrackDeps, std::string* ErrStr) {
   // Tell this Module to materialize everything and release the GVMaterializer.
 #ifdef LLVM_MODULE_MATERIALIZE_ALL_PERMANENTLY_ERRORCODE_BOOL
   if (std::error_code EC = M->materializeAllPermanently()) {
@@ -95,7 +95,7 @@ ExecutionEngine *Interpreter::create(Module *M, VariableInfo &&VI,
   }
 #endif
 
-  return new Interpreter(M, std::move(VI), driver);
+  return new Interpreter(M, std::move(VI), driver, shouldTrackDeps);
 }
 
 /* Thread::seed is ODR-used -- we need to provide a definition (C++14) */
@@ -122,6 +122,7 @@ void Interpreter::reset()
 		threads[i].isBlocked = false;
 		threads[i].globalInstructions = 0;
 		threads[i].rng.seed(Thread::seed);
+		clearDeps(i);
 	}
 }
 
@@ -143,11 +144,15 @@ Thread Interpreter::createNewThread(llvm::Function *F, int tid, int pid,
 	return thr;
 }
 
+bool Interpreter::isShared(const void *addr)
+{
+	return isGlobal(addr) || isStackAlloca(addr);
+}
+
 /* Returns true if "addr" points to global memory (static or heap) */
 bool Interpreter::isGlobal(const void *addr)
 {
-	auto ha = std::equal_range(heapAllocas.begin(), heapAllocas.end(), addr);
-	return (globalVars.count(addr) || (ha.first != ha.second));
+	return globalVars.count(addr) || isHeapAlloca(addr);
 }
 
 /* Returns true if "addr" points to the stack */
@@ -191,8 +196,21 @@ void *Interpreter::getFreshAddr(unsigned int size, bool isLocal /* false */)
 	return newAddr;
 }
 
+void Interpreter::allocateBlock(const void *addr, unsigned int size, bool isLocal)
+{
+	if (isLocal) {
+		for (auto i = 0u; i < size; i++)
+			stackAllocas.insert((char *) addr + i);
+		/* The name information will be updated after control
+		 * returns to the interpreter */
+	} else {
+		for (auto i = 0u; i < size; i++)
+			heapAllocas.insert((char *) addr + i);
+	}
+}
+
 /* Stops tracking of a memory allocation after deletion from the graph */
-void Interpreter::deallocateAddr(const void *addr, unsigned int size, bool isLocal /* false */)
+void Interpreter::deallocateBlock(const void *addr, unsigned int size, bool isLocal /* false */)
 {
 	if (isLocal) {
 		for (auto i = 0u; i < size; i++)
@@ -206,6 +224,26 @@ void Interpreter::deallocateAddr(const void *addr, unsigned int size, bool isLoc
 	return;
 }
 
+void collectUnnamedGlobalAddress(Value *v, char *ptr, unsigned int typeSize,
+				 std::unordered_map<const void *, std::string> &vars)
+{
+	BUG_ON(!isa<GlobalVariable>(v));
+	auto gv = static_cast<GlobalVariable *>(v);
+
+	/* Exit if it is a private variable it is not accessible in the program */
+	if (gv->hasPrivateLinkage())
+		return;
+
+	/* Otherwise, collect the addresses anyway and use a default name */
+	WARN_ONCE("name-info", ("Inadequate naming info for variable " +
+				v->getName() + ".\nPlease submit a bug report to "
+				PACKAGE_BUGREPORT "\n"));
+	for (auto i = 0u; i < typeSize; i++) {
+		vars[ptr + i] = v->getName();
+	}
+	return;
+}
+
 /* Updates the name corresponding to an address based on the collected VariableInfo */
 void Interpreter::updateVarNameInfo(Value *v, char *ptr, unsigned int typeSize,
 				    bool isLocal /* false */)
@@ -213,9 +251,23 @@ void Interpreter::updateVarNameInfo(Value *v, char *ptr, unsigned int typeSize,
 	auto &vars = (isLocal) ? stackVars : globalVars;
 	auto &vi = (isLocal) ? VI.localInfo[v] : VI.globalInfo[v];
 
-	if (vi.empty())
+	if (vi.empty()) {
+		/* If it is not a local value, then we should collect the address
+		 * anyway, since globalVars will be used to check whether some
+		 * access accesses a global variable */
+		if (!isLocal)
+			collectUnnamedGlobalAddress(v, ptr, typeSize, vars);
 		return;
+	}
 
+	/* If there is no name for the beginning of the block, use a default one */
+	if (vi[0].first != 0) {
+		WARN_ONCE("name-info", ("Inadequate naming info for variable " +
+					v->getName() + ".\nPlease submit a bug report to "
+					PACKAGE_BUGREPORT "\n"));
+		for (auto j = 0u; j < vi[0].first; j++)
+			vars[ptr + j] = v->getName();
+	}
 	for (auto i = 0u; i < vi.size() - 1; i++) {
 		for (auto j = 0u; j < vi[i + 1].first - vi[i].first; j++)
 			vars[ptr + vi[i].first + j] = vi[i].second;
@@ -254,10 +306,124 @@ void Interpreter::collectGlobalAddresses(Module *M)
 		allocRangeBegin = (char *) 0x25031821;
 }
 
+const DepInfo *Interpreter::getAddrPoDeps(unsigned int tid)
+{
+	if (!depTracker)
+		return nullptr;
+	return depTracker->getAddrPoDeps(tid);
+}
+
+const DepInfo *Interpreter::getDataDeps(unsigned int tid, Value *i)
+{
+	if (!depTracker)
+		return nullptr;
+	return depTracker->getDataDeps(tid, i);
+}
+
+const DepInfo *Interpreter::getCtrlDeps(unsigned int tid)
+{
+	if (!depTracker)
+		return nullptr;
+	return depTracker->getCtrlDeps(tid);
+}
+
+const DepInfo *Interpreter::getCurrentAddrDeps() const
+{
+	if (!depTracker)
+		return nullptr;
+	return depTracker->getCurrentAddrDeps();
+}
+
+const DepInfo *Interpreter::getCurrentDataDeps() const
+{
+	if (!depTracker)
+		return nullptr;
+	return depTracker->getCurrentDataDeps();
+}
+
+const DepInfo *Interpreter::getCurrentCtrlDeps() const
+{
+	if (!depTracker)
+		return nullptr;
+	return depTracker->getCurrentCtrlDeps();
+}
+
+const DepInfo *Interpreter::getCurrentAddrPoDeps() const
+{
+	if (!depTracker)
+		return nullptr;
+	return depTracker->getCurrentAddrPoDeps();
+}
+
+const DepInfo *Interpreter::getCurrentCasDeps() const
+{
+	if (!depTracker)
+		return nullptr;
+	return depTracker->getCurrentCasDeps();
+}
+
+void Interpreter::setCurrentDeps(const DepInfo *addr, const DepInfo *data,
+				 const DepInfo *ctrl, const DepInfo *addrPo,
+				 const DepInfo *cas)
+{
+	if (!depTracker)
+		return;
+
+	depTracker->setCurrentAddrDeps(addr);
+	depTracker->setCurrentDataDeps(data);
+	depTracker->setCurrentCtrlDeps(ctrl);
+	depTracker->setCurrentAddrPoDeps(addrPo);
+	depTracker->setCurrentCasDeps(cas);
+}
+
+void Interpreter::updateDataDeps(unsigned int tid, Value *dst, Value *src)
+{
+	if (depTracker)
+		depTracker->updateDataDeps(tid, dst, src);
+}
+
+void Interpreter::updateDataDeps(unsigned int tid, Value *dst, const DepInfo *e)
+{
+	if (depTracker)
+		depTracker->updateDataDeps(tid, dst, *e);
+}
+
+void Interpreter::updateDataDeps(unsigned int tid, Value *dst, Event e)
+{
+	if (depTracker)
+		depTracker->updateDataDeps(tid, dst, e);
+}
+
+void Interpreter::updateAddrPoDeps(unsigned int tid, Value *src)
+{
+	if (!depTracker)
+		return;
+
+	depTracker->updateAddrPoDeps(tid, src);
+	depTracker->setCurrentAddrPoDeps(getAddrPoDeps(tid));
+}
+
+void Interpreter::updateCtrlDeps(unsigned int tid, Value *src)
+{
+	if (!depTracker)
+		return;
+
+	depTracker->updateCtrlDeps(tid, src);
+	depTracker->setCurrentCtrlDeps(getCtrlDeps(tid));
+}
+
+void Interpreter::clearDeps(unsigned int tid)
+{
+	if (depTracker)
+		depTracker->clearDeps(tid);
+}
+
+
 //===----------------------------------------------------------------------===//
 // Interpreter ctor - Initialize stuff
 //
-Interpreter::Interpreter(Module *M, VariableInfo &&VI, GenMCDriver *driver)
+Interpreter::Interpreter(Module *M, VariableInfo &&VI, GenMCDriver *driver,
+			 bool shouldTrackDeps)
 #ifdef LLVM_EXECUTIONENGINE_MODULE_UNIQUE_PTR
   : ExecutionEngine(std::unique_ptr<Module>(M)),
 #else
@@ -275,6 +441,9 @@ Interpreter::Interpreter(Module *M, VariableInfo &&VI, GenMCDriver *driver)
   emitGlobals();
 
   collectGlobalAddresses(M);
+
+  if (shouldTrackDeps)
+	  depTracker = make_unique<IMMDepTracker>();
 
   IL = new IntrinsicLowering(TD);
 }

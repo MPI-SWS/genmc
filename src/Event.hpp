@@ -31,8 +31,11 @@ struct Event {
 	Event(int t, int e) : thread(t), index(e) {};
 
 	static Event getInitializer() { return Event(0, 0); };
+	static Event getBottom() { return Event(-42, -42); };
 
 	bool isInitializer() const { return *this == getInitializer(); };
+	bool isBottom() const { return *this == getBottom(); };
+
 	Event prev() const { return Event(thread, index-1); };
 	Event next() const { return Event(thread, index+1); };
 

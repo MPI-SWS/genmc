@@ -36,16 +36,26 @@ clInputFile(llvm::cl::Positional, llvm::cl::Required, llvm::cl::desc("<input fil
 
 llvm::cl::opt<ModelType>
 clModelType(llvm::cl::values(
-		    clEnumValN(ModelType::weakra, "weakra", "Weak RA model"),
-		    clEnumValN(ModelType::mo, "mo",         "MO model"),
-		    clEnumValN(ModelType::wb, "wb",         "WB model")
+		    clEnumValN(ModelType::rc11, "rc11", "RC11 memory model"),
+		    clEnumValN(ModelType::imm, "imm",       "IMM model")
 #ifdef LLVM_CL_VALUES_NEED_SENTINEL
 		    , NULL
 #endif
 		    ),
 	    llvm::cl::cat(clGeneral),
-	    llvm::cl::init(ModelType::wb),
+	    llvm::cl::init(ModelType::rc11),
 	    llvm::cl::desc("Choose model type:"));
+llvm::cl::opt<CoherenceType>
+clCoherenceType(llvm::cl::values(
+			clEnumValN(CoherenceType::mo, "mo", "Track modification order"),
+			clEnumValN(CoherenceType::wb, "wb", "Calculate writes-before")
+#ifdef LLVM_CL_VALUES_NEED_SENTINEL
+			, NULL
+#endif
+			),
+		llvm::cl::cat(clGeneral),
+		llvm::cl::init(CoherenceType::wb),
+		llvm::cl::desc("Choose coherence type:"));
 static llvm::cl::opt<bool>
 clPrintErrorTrace("print-error-trace", llvm::cl::cat(clGeneral),
 		  llvm::cl::desc("Print error trace"));
@@ -65,9 +75,6 @@ clCheckPscAcyclicity("check-psc-acyclicity", llvm::cl::init(CheckPSCType::nochec
 		    , NULL
 #endif
 		    ));
-static llvm::cl::opt<bool>
-clCheckWbAcyclicity("check-wb-acyclicity", llvm::cl::cat(clGeneral),
-		     llvm::cl::desc("Check whether WB is acyclic at the end of each execution"));
 static llvm::cl::opt<std::string>
 clLibrarySpecsFile("library-specs", llvm::cl::init(""), llvm::cl::value_desc("file"),
 		   llvm::cl::cat(clGeneral),
@@ -139,9 +146,10 @@ void Config::getConfigOptions(int argc, char **argv)
 	specsFile = clLibrarySpecsFile;
 	dotFile = clDotGraphFile;
 	model = clModelType;
+	isDepTrackingModel = (model == ModelType::imm);
+	coherence = clCoherenceType;
 	printErrorTrace = clPrintErrorTrace;
 	checkPscAcyclicity = clCheckPscAcyclicity;
-	checkWbAcyclicity = clCheckWbAcyclicity;
 	disableRaceDetection = clDisableRaceDetection;
 
 	/* Save transformation options */

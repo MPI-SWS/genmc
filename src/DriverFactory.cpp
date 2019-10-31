@@ -19,9 +19,8 @@
  */
 
 #include "DriverFactory.hpp"
-#include "RC11WeakRADriver.hpp"
-#include "RC11WBDriver.hpp"
-#include "RC11MODriver.hpp"
+#include "IMMDriver.hpp"
+#include "RC11Driver.hpp"
 
 std::unique_ptr<GenMCDriver>
 DriverFactory::create(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Module> mod,
@@ -29,18 +28,14 @@ DriverFactory::create(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Module
 		      clock_t start)
 {
 	switch (conf->model) {
-	case ModelType::weakra:
-		return std::unique_ptr<RC11WeakRADriver>(
-			new RC11WeakRADriver(std::move(conf), std::move(mod),
-					     granted, toVerify, start));
-	case ModelType::mo:
-		return std::unique_ptr<RC11MODriver>(
-			new RC11MODriver(std::move(conf), std::move(mod),
-					 granted, toVerify, start));
-	case ModelType::wb:
-		return std::unique_ptr<RC11WBDriver>(
-			new RC11WBDriver(std::move(conf), std::move(mod),
-					 granted, toVerify, start));
+	case ModelType::rc11:
+		return std::unique_ptr<RC11Driver>(
+			new RC11Driver(std::move(conf), std::move(mod),
+				       granted, toVerify, start));
+	case ModelType::imm:
+		return std::unique_ptr<IMMDriver>(
+			new IMMDriver(std::move(conf), std::move(mod),
+				      granted, toVerify, start));
 	default:
 		WARN("Unsupported model type! Exiting...\n");
 		abort();

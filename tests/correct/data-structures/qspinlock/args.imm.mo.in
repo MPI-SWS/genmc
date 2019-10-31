@@ -1,0 +1,1 @@
+-I../tests/correct/data-structures/qspinlock/ -I../tests/correct/data-structures/mcs_spinlock -DN=2

@@ -96,6 +96,10 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const EventLabel &lab)
 	s << lab.getPos() << ": ";
 
 	switch (lab.getKind()) {
+	case EventLabel::EL_Empty: {
+		s << "EMPTY";
+		break;
+	}
 	case EventLabel::EL_Read: {
 		auto &rLab = static_cast<const ReadLabel&>(lab);
 		s << rLab.getKind() << rLab.getOrdering() << " [";

@@ -79,7 +79,6 @@ std::pair<typename VSet<T>::iterator, bool> VSet<T>::insert(const T &el)
 	return std::make_pair(it, false);
 }
 
-
 /*
  * A slightly optimized function for bulk insertions, that takes
  * into account the structure of a VSet
@@ -96,7 +95,7 @@ int VSet<T>::insert(const VSet<T> &s)
 	/* Check s for trivial cases */
 	if (s.empty())
 		return 0;
-	if (s.size == 1)
+	if (s.size() == 1)
 		return insert(s[0]).second ? 1 : 0;
 
 	/*
@@ -136,29 +135,43 @@ int VSet<T>::insert(const VSet<T> &s)
 	 */
 
 	/* Keep the index of the last elements of a and b before resizing */
-	auto idxA = size() - 1;
-	auto idxB = s.size() - 1;
+	int idxA = size() - 1;
+	int idxB = s.size() - 1;
 	vset_.resize(vset_.size() + count, vset_[0]); /* a is not empty */
 
 	/* Iterate over the new a, and move fill each position appropriately */
-	for (auto i = size() - 1; i >= 0; i--) {
+	for (int i = size() - 1; i >= 0; i--) {
 		if (idxA < 0 || (idxB >= 0 && (*this)[idxA] < s[idxB])) {
 			/* No more elements in a, or a[idxA] < b[idxB] */
-			(*this)[i] = s[idxB];
+			vset_[i] = s[idxB];
 			--idxB;
 		} else if (idxA >= 0 && idxB >= 0 && (*this)[idxA] == s[idxB]) {
 			/* since equal, it does not matter from where we copy */
-			(*this)[i] = (*this)[idxA];
+			vset_[i] = (*this)[idxA];
 			--idxA;
 			--idxB;
 		} else {
 			/* No more elements in b, or a[i] > b[i] */
-			(*this)[i] = (*this)[idxA];
+			vset_[i] = (*this)[idxA];
 			--idxA;
 		}
 	}
 	return count;
 }
+
+template<typename T>
+template<typename ITER>
+void VSet<T>::insert(ITER begin, ITER end)
+{
+	for (; begin != end; ++begin) {
+		if (size() && max() < *begin) {
+			vset_.push_back(*begin);
+		} else {
+			insert(*begin);
+		}
+	}
+}
+
 
 template<typename T>
 int VSet<T>::erase(const T &el)
@@ -252,7 +265,7 @@ template<typename T>
 bool VSet<T>::intersects(const VSet<T> &s) const
 {
 	auto a = begin();
-	auto b = begin();
+	auto b = s.begin();
 	while(a != end() && b != s.end()) {
 		if (*a == *b)
 			return true;
@@ -263,6 +276,27 @@ bool VSet<T>::intersects(const VSet<T> &s) const
 			++b;
 	}
 	return false;
+}
+
+template<typename T>
+VSet<T> VSet<T>::intersectWith(const VSet<T> &s) const
+{
+	VSet<T> result;
+
+	auto a = begin();
+	auto b = s.begin();
+	while(a != end() && b != s.end()) {
+		if (*a == *b) {
+			result.insert(*a);
+			++a;
+			++b;
+		} else if (*a < *b) {
+			++a;
+		} else {
+			++b;
+		}
+	}
+	return result;
 }
 
 template <typename T>

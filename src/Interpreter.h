@@ -34,16 +34,15 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-
 #include "config.h"
 
 #ifndef LLI_INTERPRETER_H
 #define LLI_INTERPRETER_H
 
+#include "IMMDepTracker.hpp"
 #include "Library.hpp"
 #include "View.hpp"
 
-#include <llvm/ADT/SmallVector.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/GenericValue.h>
 #include "llvm/IR/CallSite.h"
@@ -186,6 +185,9 @@ class Interpreter : public ExecutionEngine, public InstVisitor<Interpreter> {
   /* (Composition) pointer to the driver */
   GenMCDriver *driver;
 
+  /* Pointer to the dependency tracker */
+  std::unique_ptr<DepTracker> depTracker = nullptr;
+
   // The runtime stack of executing code.  The top of the stack is the current
   // function record.
   std::vector<ExecutionContext> mainECStack;
@@ -195,7 +197,7 @@ class Interpreter : public ExecutionEngine, public InstVisitor<Interpreter> {
   std::vector<Function*> AtExitHandlers;
 
 public:
-  explicit Interpreter(Module *M, VariableInfo &&VI, GenMCDriver *driver);
+  explicit Interpreter(Module *M, VariableInfo &&VI, GenMCDriver *driver, bool shouldTrackDeps);
   virtual ~Interpreter();
 
   /* Enum to inform the driver about possible special attributes
@@ -237,13 +239,67 @@ public:
   /* Returns the stack frame of the currently executing thread */
   std::vector<ExecutionContext> &ECStack() { return getCurThr().ECStack; }
 
-  /* Checks whether an address is the address of a global variable */
+  /* Returns the current (global) position (thread, index) interpreted */
+  Event getCurrentPosition() {
+	  const Thread &thr = getCurThr();
+	  return Event(thr.id, thr.globalInstructions);
+  };
+
+
+  /* Dependency tracking */
+
+  const DepInfo *getAddrPoDeps(unsigned int tid);
+  const DepInfo *getDataDeps(unsigned int tid, Value *i);
+  const DepInfo *getCtrlDeps(unsigned int tid);
+
+  const DepInfo *getCurrentAddrDeps() const;
+  const DepInfo *getCurrentDataDeps() const;
+  const DepInfo *getCurrentCtrlDeps() const;
+  const DepInfo *getCurrentAddrPoDeps() const;
+  const DepInfo *getCurrentCasDeps() const;
+
+  void setCurrentDeps(const DepInfo *addrDeps, const DepInfo *dataDeps,
+		      const DepInfo *ctrlDeps, const DepInfo *addrPoDeps,
+		      const DepInfo *casDeps);
+
+  void updateDataDeps(unsigned int tid, Value *dst, Value *src);
+  void updateDataDeps(unsigned int tid, Value *dst, const DepInfo *e);
+  void updateDataDeps(unsigned int tid, Value *dst, Event e);
+  void updateAddrPoDeps(unsigned int tid, Value *src);
+  void updateCtrlDeps(unsigned int tid, Value *src);
+
+  void clearDeps(unsigned int tid);
+
+
+  /* Memory pools checks */
+
+  /* Check whether the given address is shared among threads */
+  bool isShared(const void *);
+
+  /* Returns true is this is a global variable or a heap allocation */
   bool isGlobal(const void *);
+
+  /* Returns true if it is a heap allocation */
   bool isHeapAlloca(const void *);
+
+  /* Returns true if it is a stack allocation*/
   bool isStackAlloca(const void *);
+
+  /* Returns the name of the variable residing in addr */
   std::string getVarName(const void *addr);
-  void deallocateAddr(const void *addr, unsigned int size, bool isLocal = false);
+
+  /* Records that the memory block in addr is no longer used, so that the
+   * interpreter stops tracking the address */
+  void deallocateBlock(const void *addr, unsigned int size, bool isLocal = false);
+
+  /* Records that the memory block in addr is used, so that we track it */
+  void allocateBlock(const void *addr, unsigned int size, bool isLocal = false);
+
+  /* Returns a fresh address for a new allocation */
   void *getFreshAddr(unsigned int size, bool isLocal = false);
+
+  /* Updates the names for all global variables, and calculates the
+   * starting address of the allocation pool */
   void collectGlobalAddresses(Module *M);
 
   /// runAtExitHandlers - Run any functions registered by the program's calls to
@@ -255,6 +311,7 @@ public:
   ///
   static ExecutionEngine *create(Module *M, VariableInfo &&VI,
 				 GenMCDriver *driver,
+				 bool shouldTrackDeps,
 				 std::string *ErrorStr = nullptr);
 
   /// run - Start execution with the specified function and arguments.
@@ -290,8 +347,9 @@ public:
   ///
   void freeMachineCodeForFunction(Function *F) { }
 
+
   /* Helper functions */
-  void replayExecutionBefore(const View &before);
+  void replayExecutionBefore(const VectorClock &before);
   bool compareValues(const llvm::Type *typ, const GenericValue &val1, const GenericValue &val2);
   GenericValue getLocInitVal(GenericValue *ptr, Type *typ);
   unsigned int getTypeSize(Type *typ);

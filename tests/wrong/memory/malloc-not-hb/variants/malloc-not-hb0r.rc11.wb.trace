@@ -1,0 +1,45 @@
+Error detected: Attempt to access non-allocated memory!
+Event (1, 6) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): M
+	(0, 2): M
+	(0, 3): M
+	(0, 4): TC [forks 1] L.11
+	(0, 5): Wna (t3, 1) L.11
+	(0, 6): TC [forks 2] L.13
+	(0, 7): Wna (t2, 2) L.13
+	(0, 8): TC [forks 3] L.15
+	(0, 9): Wna (t1, 3) L.15
+	(0, 10): E
+<0, 1> thread3:
+	(1, 0): B
+	(1, 1): M
+	(1, 2): Rsc (y, 17) [(2, 2)] L.22: malloc-not-hb.c
+	(1, 3): Racq (p, 0) [INIT] L.23: malloc-not-hb.c
+	(1, 4): Wna (, 0) L.23: malloc-not-hb.c
+	(1, 5): Rna (, 0x0) [(1, 4)] L.23: malloc-not-hb.c
+	(1, 6): Wrlx (, 42) L.24: malloc-not-hb.c
+<0, 2> thread2:
+	(2, 0): B
+	(2, 1): Rsc (x, 42) [(3, 1)] L.13: malloc-not-hb.c
+	(2, 2): Wsc (y, 17) L.16: malloc-not-hb.c
+<0, 3> thread1:
+	(3, 0): B
+	(3, 1): Wsc (x, 42) L.7: malloc-not-hb.c
+
+Trace to (1, 6):
+[main] malloc-not-hb0r.c: 11: if (pthread_create(&t3, NULL, thread3, NULL))
+[main] malloc-not-hb0r.c: 11: if (pthread_create(&t3, NULL, thread3, NULL))
+[main] malloc-not-hb0r.c: 13: if (pthread_create(&t2, NULL, thread2, NULL))
+[main] malloc-not-hb0r.c: 13: if (pthread_create(&t2, NULL, thread2, NULL))
+[main] malloc-not-hb0r.c: 15: if (pthread_create(&t1, NULL, thread1, NULL))
+[thread1] malloc-not-hb.c: 7: x = 42;
+[thread2] malloc-not-hb.c: 13: if (x == 0)
+[thread2] malloc-not-hb.c: 16: y = 17;
+[thread3] malloc-not-hb.c: 22: if (y == 17) {
+[thread3] malloc-not-hb.c: 23: atomic_int *a = atomic_load_explicit(&p, memory_order_acquire);
+[thread3] malloc-not-hb.c: 23: atomic_int *a = atomic_load_explicit(&p, memory_order_acquire);
+[thread3] malloc-not-hb.c: 23: atomic_int *a = atomic_load_explicit(&p, memory_order_acquire);
+[thread3] malloc-not-hb.c: 24: atomic_store_explicit(a, 42, memory_order_relaxed);
+Number of complete executions explored: 2

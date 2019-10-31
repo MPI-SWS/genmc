@@ -24,8 +24,18 @@
 #include <llvm/ADT/IndexedMap.h>
 #include <llvm/Support/raw_ostream.h>
 #include "Event.hpp"
+#include "VectorClock.hpp"
 
-class View {
+/*******************************************************************************
+ **                             View Class
+ ******************************************************************************/
+
+/*
+ * An instantiation of a vector clock where it is assumed that if an index
+ * is contained in the clock, all of its po-predecessors are also contained
+ * in the clock.
+ */
+class View : public VectorClock {
 private:
 	typedef llvm::IndexedMap<int> EventView;
 	EventView view_;
@@ -42,11 +52,23 @@ public:
 	const_iterator cbegin();
 	const_iterator cend();
 
-	/* Basic operations on Views */
+	/* Returns the size of this view (i.e., number of threads seen) */
 	unsigned int size() const;
+
+	/* Returns true if this view is empty */
 	bool empty() const;
+
+	/* Returns true if e is contained in the clock */
 	bool contains(const Event e) const;
+
+	/* Updates the view based on another vector clock. We can
+	 * only update the current view given another View (and not
+	 * some other subclass of VectorClock) */
 	View& update(const View &v);
+	DepView& update(const DepView &dv);
+	VectorClock &update(const VectorClock &vc);
+
+	/* Makes the maximum event seen in e's thread equal to e */
 	View& updateIdx(const Event e);
 
 	/* Overloaded operators */
@@ -67,7 +89,11 @@ public:
 		return true;
 	}
 
-	friend llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const View &v);
+	void printData(llvm::raw_ostream &s) const;
+
+	static bool classof(const VectorClock *vc) {
+		return vc->getKind() == VC_View;
+	}
 };
 
 #endif /* __VIEW_HPP__ */
