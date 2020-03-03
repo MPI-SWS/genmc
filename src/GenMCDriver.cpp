@@ -475,14 +475,12 @@ void GenMCDriver::findMemoryRaceForAllocAccess(const FreeLabel *fLab)
 				if (dLab->getFreedAddr() == ptr &&
 				    dLab->getPos() != fLab->getPos()) {
 					visitError("", dLab->getPos(), DE_DoubleFree);
-					BUG();
 				}
 			}
 			if (auto *mLab = llvm::dyn_cast<MemAccessLabel>(lab)) {
 				if (mLab->getAddr() == ptr &&
 				    !before.contains(mLab->getPos())) {
 					visitError("", mLab->getPos(), DE_AccessFreed);
-					BUG();
 				}
 
 			}
@@ -491,7 +489,6 @@ void GenMCDriver::findMemoryRaceForAllocAccess(const FreeLabel *fLab)
 
 	if (!m) {
 		visitError("", Event::getInitializer(), DE_FreeNonMalloc);
-		BUG(); /* visitError() should abort */
 	}
 	return;
 }
@@ -534,7 +531,6 @@ void GenMCDriver::checkForDataRaces()
 	/* If a race is found and the execution is consistent, return it */
 	if (!racy.isInitializer()) {
 		visitError("", racy, DE_RaceNotAtomic);
-		BUG(); /* visitError() should abort in any case */
 	}
 	return;
 }
@@ -550,7 +546,6 @@ void GenMCDriver::checkAccessValidity()
 	if (!getEE()->isShared(mLab->getAddr())) {
 		visitError("", Event::getInitializer(),
 			   DE_AccessNonMalloc);
-		BUG();
 	}
 	return;
 }
@@ -966,7 +961,6 @@ void GenMCDriver::visitError(std::string err, Event confEvent,
 
 	/* If the execution that led to the error is not consistent, block */
 	if (!isExecutionValid()) {
-		getEE()->ECStack().clear();
 		thr.block();
 		return;
 	}
@@ -1206,7 +1200,6 @@ GenMCDriver::visitLibLoad(llvm::Interpreter::InstAttr attr,
 			   lib->getName() + ", member " + functionName +
 			   std::string(" found"), Event::getInitializer(),
 			   DE_UninitializedMem);
-		BUG();
 	}
 
 	auto preds = g.getViewFromStamp(lab->getStamp());
@@ -1320,7 +1313,6 @@ void GenMCDriver::visitLibStore(llvm::Interpreter::InstAttr attr,
 			   lib->getName() + "\", member \"" + functionName +
 			   std::string("\" found"), Event::getInitializer(),
 			   DE_UninitializedMem);
-		BUG();
 	}
 
 	calcLibRevisits(sLab);

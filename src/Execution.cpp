@@ -1231,19 +1231,17 @@ void Interpreter::visitAtomicCmpXchgInst(AtomicCmpXchgInst &I)
 	auto ret = driver->visitLoad(IA_Cas, I.getSuccessOrdering(), ptr, typ,
 				     cmpVal, newVal);
 
-	updateDataDeps(thr.id, &I, getCurrentPosition());
-	// thr.dataDeps[&I] = thr.dataDeps[&I].depUnion(ret.second);
-	updateAddrPoDeps(thr.id, I.getPointerOperand());
-	// thr.addrPoDeps.update(thr.dataDeps[I.getPointerOperand()]);
-
 	auto cmpRes = executeICMP_EQ(ret, cmpVal, typ);
 	if (cmpRes.IntVal.getBoolValue()) {
 		setCurrentDeps(getDataDeps(thr.id, I.getPointerOperand()),
 			       getDataDeps(thr.id, I.getNewValOperand()),
 			       getCtrlDeps(thr.id), getAddrPoDeps(thr.id), nullptr);
 		driver->visitStore(IA_Cas, I.getSuccessOrdering(), ptr, typ, newVal);
-		// address: .depUnion(ret.second),
 	}
+
+	/* After the RMW operation is done, update dependencies */
+	updateDataDeps(thr.id, &I, getCurrentPosition());
+	updateAddrPoDeps(thr.id, I.getPointerOperand());
 
 	result.AggregateVal.push_back(ret);
 	result.AggregateVal.push_back(cmpRes);
@@ -1307,11 +1305,6 @@ void Interpreter::visitAtomicRMWInst(AtomicRMWInst &I)
 	auto ret = driver->visitLoad(IA_Fai, I.getOrdering(), ptr, typ,
 				     GenericValue(), val, I.getOperation());
 
-	updateDataDeps(thr.id, &I, getCurrentPosition());
-	// thr.dataDeps[&I] = thr.dataDeps[&I].depUnion(ret.second);
-	updateAddrPoDeps(thr.id, I.getPointerOperand());
-	// thr.addrPoDeps.update(thr.dataDeps[I.getPointerOperand()]);
-
 	executeAtomicRMWOperation(newVal, ret, val, I.getOperation());
 
 	setCurrentDeps(getDataDeps(thr.id, I.getPointerOperand()),
@@ -1319,6 +1312,10 @@ void Interpreter::visitAtomicRMWInst(AtomicRMWInst &I)
 		       getCtrlDeps(thr.id), getAddrPoDeps(thr.id), nullptr);
 
 	driver->visitStore(IA_Fai, I.getOrdering(), ptr, typ, newVal);
+
+	/* After the RMW operation is done, update dependencies */
+	updateDataDeps(thr.id, &I, getCurrentPosition());
+	updateAddrPoDeps(thr.id, I.getPointerOperand());
 
 	SetValue(&I, ret, SF);
 	return;
