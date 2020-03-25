@@ -61,6 +61,12 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s,
 	case EventLabel::EL_Free:
 		s << "D";
 		break;
+	case EventLabel::EL_LockLabelLAPOR:
+		s << "LL";
+		break;
+	case EventLabel::EL_UnlockLabelLAPOR:
+		s << "LU";
+		break;
 	default:
 		s << "UNKNOWN";
 		break;
@@ -185,6 +191,16 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const EventLabel &lab)
 	case EventLabel::EL_Free: {
 		auto &bLab = static_cast<const FreeLabel&>(lab);
 		s << bLab.getKind();
+		break;
+	}
+	case EventLabel::EL_LockLabelLAPOR: {
+		auto &lLab = static_cast<const LockLabelLAPOR&>(lab);
+		s << lLab.getKind();
+		break;
+	}
+	case EventLabel::EL_UnlockLabelLAPOR: {
+		auto &uLab = static_cast<const UnlockLabelLAPOR&>(lab);
+		s << uLab.getKind();
 		break;
 	}
 	default:

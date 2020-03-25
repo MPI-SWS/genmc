@@ -21,11 +21,22 @@
 #ifndef __GRAPH_BUILDER_HPP__
 #define __GRAPH_BUILDER_HPP__
 
-#include "ExecutionGraph.hpp"
 #include "DepExecutionGraph.hpp"
+#include "LBCalculatorLAPOR.hpp"
 #include "MOCoherenceCalculator.hpp"
 #include "WBCoherenceCalculator.hpp"
 
+/*******************************************************************************
+ **                           GraphBuilder Class
+ ******************************************************************************/
+
+/*
+ * A class that builds a graph object to be handed over to the
+ * driver. This class abstracts away all the functionality that is
+ * common across different driver instances (and only dependent on the
+ * given configuration options), like creating the execution graph and
+ * some basic relations on the graph (e.g., coherence).
+ */
 class GraphBuilder {
 
 public:
@@ -33,24 +44,35 @@ public:
 	GraphBuilder(bool shouldTrackDeps) {
                 tracksDeps = shouldTrackDeps;
 		if (tracksDeps)
-			graph = std::unique_ptr<DepExecutionGraph>(new DepExecutionGraph);
+			graph = std::unique_ptr<DepExecutionGraph>(new DepExecutionGraph());
 		else
-			graph = std::unique_ptr<ExecutionGraph>(new ExecutionGraph);
+			graph = std::unique_ptr<ExecutionGraph>(new ExecutionGraph());
 	};
 
 	GraphBuilder &withCoherenceType(CoherenceType co) {
 		switch (co) {
 		case CoherenceType::mo:
-			graph->setCoherenceCalculator(
-				llvm::make_unique<MOCoherenceCalculator>(*graph, tracksDeps));
+			graph->addCalculator(
+				llvm::make_unique<MOCoherenceCalculator>(*graph, tracksDeps),
+				ExecutionGraph::RelationId::co, true, true);
 			break;
 		case CoherenceType::wb:
-			graph->setCoherenceCalculator(
-				llvm::make_unique<WBCoherenceCalculator>(*graph, tracksDeps));
+			graph->addCalculator(
+				llvm::make_unique<WBCoherenceCalculator>(*graph, tracksDeps),
+				ExecutionGraph::RelationId::co, true, true);
 			break;
 		default:
 			WARN("Unhandled coherence type!\n");
 			BUG();
+		}
+		return *this;
+	}
+
+	GraphBuilder &withEnabledLAPOR(bool lapor) {
+		if (lapor) {
+			graph->addCalculator(
+				llvm::make_unique<LBCalculatorLAPOR>(*graph),
+				ExecutionGraph::RelationId::lb, true, true);
 		}
 		return *this;
 	}
@@ -64,7 +86,7 @@ private:
 	/* Keep the type of graph constructed */
         bool tracksDeps = false;
 
-	/* The execution graph to be constructed */
+	/* The graph to be constructed */
 	std::unique_ptr<ExecutionGraph> graph = nullptr;
 };
 

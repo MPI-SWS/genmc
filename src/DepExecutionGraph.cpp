@@ -120,7 +120,11 @@ void DepExecutionGraph::cutToStamp(unsigned int stamp)
 {
 	/* First remove events from the modification order */
 	auto preds = getDepViewFromStamp(stamp);
-	getCoherenceCalculator()->removeStoresAfter(preds);
+
+	/* Inform all calculators about the events cutted */
+	auto &calcs = getCalcs();
+	for (auto i = 0u; i < calcs.size(); i++)
+		calcs[i]->removeAfter(preds);
 
 	/* Then, restrict the graph */
 	for (auto i = 0u; i < getNumThreads(); i++) {

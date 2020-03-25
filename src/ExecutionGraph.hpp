@@ -21,19 +21,22 @@
 #ifndef __EXECUTION_GRAPH_HPP__
 #define __EXECUTION_GRAPH_HPP__
 
+#include "AdjList.hpp"
+#include "Calculator.hpp"
 #include "DriverGraphEnumAPI.hpp"
 #include "DepInfo.hpp"
 #include "Error.hpp"
 #include "Event.hpp"
 #include "EventLabel.hpp"
 #include "Library.hpp"
-#include "Matrix2D.hpp"
 #include "VectorClock.hpp"
 #include <llvm/ADT/StringMap.h>
 
 #include <memory>
 
 class CoherenceCalculator;
+class LBCalculatorLAPOR;
+class PSCCalculator;
 
 /*******************************************************************************
  **                           ExecutionGraph Class
@@ -55,6 +58,9 @@ private:
 public:
 	/* Should be used for the contruction of execution graphs */
 	class Builder;
+
+	/* Different relations that might exist in the graph */
+	enum class RelationId { hb, co, lb, psc, ar };
 
 protected:
 	/* Constructor should only be called from the builder */
@@ -79,17 +85,6 @@ public:
 	const_reverse_iterator rend()   const { return events.rend(); };
 
 
-	/* Modification order methods */
-	void trackCoherenceAtLoc(const llvm::GenericValue *addr);
-	const std::vector<Event>& getStoresToLoc(const llvm::GenericValue *addr) const;
-	const std::vector<Event>& getStoresToLoc(const llvm::GenericValue *addr);
-	std::vector<Event> getCoherentStores(const llvm::GenericValue *addr,
-					     Event pos);
-	std::pair<int, int> getCoherentPlacings(const llvm::GenericValue *addr,
-						Event pos, bool isRMW);
-	std::vector<Event> getCoherentRevisits(const WriteLabel *wLab);
-
-
 	/* Thread-related methods */
 
 	/* Creates a new thread in the execution graph */
@@ -110,12 +105,15 @@ public:
 	/* Returns the next available stamp (and increases the counter) */
 	unsigned int nextStamp();
 
+	/* Event addition methods should be called from the managing objects,
+	 * so that the relation managing objects are also informed */
 	const ReadLabel *addReadLabelToGraph(std::unique_ptr<ReadLabel> lab,
 					     Event rf);
 	const WriteLabel *addWriteLabelToGraph(std::unique_ptr<WriteLabel> lab,
 					       unsigned int offsetMO);
 	const WriteLabel *addWriteLabelToGraph(std::unique_ptr<WriteLabel> lab,
 					       Event pred);
+	const LockLabelLAPOR *addLockLabelToGraphLAPOR(std::unique_ptr<LockLabelLAPOR> lab);
 	const EventLabel *addOtherLabelToGraph(std::unique_ptr<EventLabel> lab);
 
 
@@ -137,6 +135,10 @@ public:
 	const EventLabel *getPreviousNonEmptyLabel(Event e) const;
 	const EventLabel *getPreviousNonEmptyLabel(const EventLabel *lab) const;
 
+	/* Returns the previous non-trivial predecessor of e.
+	 * Returns INIT in case no such event is found */
+	Event getPreviousNonTrivial(const Event e) const;
+
 	/* Returns the last label in the thread tid */
 	const EventLabel *getLastThreadLabel(int tid) const;
 
@@ -154,11 +156,38 @@ public:
 	/* Returns a list of acquire (R or F) in upperLimit's thread (before it) */
 	std::vector<Event> getThreadAcquiresAndFences(const Event upperLimit) const;
 
+	/* Returns the unlock that matches UNLOCK.
+	 * If no such event exists, returns INIT */
+	Event getMatchingLock(const Event unlock) const;
+
+	/* Returns the unlock that matches LOCK. LOCK needs to be the
+	 * read part of a lock operation. If no such event exists,
+	 * returns INIT */
+	Event getMatchingUnlock(const Event lock) const;
+
+	/* LAPOR: Returns the last lock that is not matched before "upperLimit".
+	 * If no such event exists, returns INIT */
+	Event getLastThreadUnmatchedLockLAPOR(const Event upperLimit) const;
+
+	/* LAPOR: Returns the unlock that matches "lock". If no such event
+	 * exists, returns INIT */
+	Event getMatchingUnlockLAPOR(const Event lock) const;
+
+	/* LAPOR: Returns the last lock at location "loc" before "upperLimit".
+	 * If no such event exists, returns INIT */
+	Event getLastThreadLockAtLocLAPOR(const Event upperLimit,
+					  const llvm::GenericValue *loc) const;
+
+	/* LAPOR: Returns the last unlock at location "loc" before "upperLimit".
+	 * If no such event exists, returns INIT */
+	Event getLastThreadUnlockAtLocLAPOR(const Event upperLimit,
+					    const llvm::GenericValue *loc) const;
+
+	/* LAPOR: Returns a linear extension of LB */
+	std::vector<Event> getLbOrderingLAPOR() const;
+
 	/* Returns pair with all SC accesses and all SC fences */
 	std::pair<std::vector<Event>, std::vector<Event> > getSCs() const;
-
-	/* Returns a list with all accesses that are accessed at least twice */
-	std::vector<const llvm::GenericValue *> getDoubleLocs() const;
 
 	/* Given an write label sLab that is part of an RMW, return all
 	 * other RMWs that read from the same write. Of course, there must
@@ -168,35 +197,116 @@ public:
 	/* Similar to getPendingRMWs() but for libraries (w/ functional RF) */
 	Event getPendingLibRead(const LibReadLabel *lab) const;
 
-	/* Returns a list of stores that access location loc, not part chain,
-	 * that are hb-after some store in chain */
-	std::vector<Event> getStoresHbAfterStores(const llvm::GenericValue *loc,
-						  const std::vector<Event> &chain) const;
-
 	virtual std::unique_ptr<VectorClock> getRevisitView(const ReadLabel *rLab,
 							    const WriteLabel *wLab) const;
 
+	/* Returns a list of all events satisfying property F */
+	template <typename F>
+	std::vector<Event> collectAllEvents(F cond) const {
+		std::vector<Event> result;
 
-	/* Calculation of [(po U rf)*] predecessors and successors */
+		for (auto i = 0u; i < getNumThreads(); i++)
+			for (auto j = 0u; j < getThreadSize(i); j++)
+				if (cond(getEventLabel(Event(i, j))))
+					result.push_back(Event(i, j));
+		return result;
+	}
+
+
+	/* Calculation of relations in the graph */
+
+	/* Adds the specified calculator to the list */
+	void addCalculator(std::unique_ptr<Calculator> cc, RelationId r,
+			   bool perLoc, bool partial = false);
+
+	/* Returns the list of the calculators */
+	const std::vector<Calculator *> getCalcs() const;
+
+	/* Returns the list of the partial calculators */
+	const std::vector<Calculator *> getPartialCalcs() const;
+
+	/* Returns a reference to the specified relation matrix */
+	Calculator::GlobalRelation& getGlobalRelation(RelationId id);
+	Calculator::PerLocRelation& getPerLocRelation(RelationId id);
+
+	/* Returns a reference to the cached version of the
+	 * specified relation matrix */
+	Calculator::GlobalRelation& getCachedGlobalRelation(RelationId id);
+	Calculator::PerLocRelation& getCachedPerLocRelation(RelationId id);
+
+	/* Caches all calculated relations. If "copy" is true then a
+	 * copy of each relation is cached */
+	void cacheRelations(bool copy = true);
+
+	/* Restores all relations to their most recently cached versions.
+	 * If "move" is true then the cache is cleared as well */
+	void restoreCached(bool move = false);
+
+	/* Returns a pointer to the specified relation's calculator */
+	Calculator *getCalculator(RelationId id);
+
+	/* Commonly queried calculator getters */
+	CoherenceCalculator *getCoherenceCalculator();
+	CoherenceCalculator *getCoherenceCalculator() const;
+	LBCalculatorLAPOR *getLbCalculatorLAPOR();
+	LBCalculatorLAPOR *getLbCalculatorLAPOR() const;
+
 	const DepView &getPPoRfBefore(Event e) const;
 	const View &getPorfBefore(Event e) const;
 	const View &getHbBefore(Event e) const;
 	const View &getHbPoBefore(Event e) const;
 	View getHbBefore(const std::vector<Event> &es) const;
-	View getHbRfBefore(const std::vector<Event> &es) const;
 	View getPorfBeforeNoRfs(const std::vector<Event> &es) const;
 	std::vector<Event> getInitRfsAtLoc(const llvm::GenericValue *addr) const;
 
+	void doInits(bool fullCalc = false);
+
+	/* Performs a step of all the specified calculations. Takes as
+	 * a parameter whether a full calculation needs to be performed */
+	Calculator::CalculationResult doCalcs(bool fullCalc = false);
+
+
+	/* Matrix filling for external relation calculation */
+	void populatePorfEntries(AdjList<Event, EventHasher> &relation) const;
+	void populatePPoRfEntries(AdjList<Event, EventHasher> &relation) const;
+	void populateHbEntries(AdjList<Event, EventHasher> &relation) const;
+
 
 	/* Boolean helper functions */
+
+	/* Returns true if the event should be taken into account when
+	 * calculating some relation (e.g., hb, ar, etc) */
+	bool isNonTrivial(const Event e) const;
+	bool isNonTrivial(const EventLabel *lab) const;
+
+	/* LAPOR: Returns true if the critical section started by lLab is empty */
+	bool isCSEmptyLAPOR(const LockLabelLAPOR *lLab) const;
+
+	/* Return true if its argument is the load part of a successful RMW */
+	bool isRMWLoad(const Event e) const;
+	bool isRMWLoad(const EventLabel *lab) const;
 
 	/* Returns true if e is hb-before w, or any of the reads that read from w */
 	bool isHbOptRfBefore(const Event e, const Event write) const;
 	bool isHbOptRfBeforeInView(const Event e, const Event write,
 				   const VectorClock &v) const;
 
+	/* Returns true if e is hb-before w, or any of the reads that read from w
+	 * in the relation "rel".
+	 * Pre: all examined events need to be a part of rel */
+	template <typename F = bool (*)(Event)>
+	bool isHbOptRfBeforeRel(const AdjList<Event, EventHasher> &rel, Event a, Event b,
+				F prop = [](Event e){ return true; }) const;
+
 	/* Returns true if a (or any of the reads reading from a) is hb-before b */
 	bool isWriteRfBefore(Event a, Event b) const;
+
+	/* Returns true if a (or any of the reads reading from a) is before b in
+	 * the relation "rel".
+	 * Pre: all examined events need to be a part of rel */
+	template <typename F = bool (*)(Event)>
+	bool isWriteRfBeforeRel(const AdjList<Event, EventHasher> &rel, Event a, Event b,
+				F prop = [](Event e){ return true; }) const;
 
 	/* Returns true if store is read a successful RMW in the location ptr */
 	bool isStoreReadByExclusiveRead(Event store, const llvm::GenericValue *ptr) const;
@@ -210,20 +320,6 @@ public:
 	 * will be the same as the current one */
 	virtual bool revisitModifiesGraph(const ReadLabel *rLab,
 					  const EventLabel *sLab) const;
-
-
-	/* Consistency checks */
-
-	/* Returns true if the current graph is consistent */
-	bool isConsistent() const;
-
-	/* Checks whether the provided condition "cond" holds for PSC.
-	 * The calculation type (e.g., weak, full, etc) is determined by "t" */
-	template <typename F>
-	bool checkPscCondition(CheckPSCType t, F cond) const;
-
-	/* Returns true if PSC is acyclic */
-	bool isPscAcyclic(CheckPSCType t) const;
 
 
 	/* Library consistency checks */
@@ -240,6 +336,18 @@ public:
 	/* Debugging methods */
 
 	void validate(void);
+
+
+	/* Modification order methods */
+
+	void trackCoherenceAtLoc(const llvm::GenericValue *addr);
+	const std::vector<Event>& getStoresToLoc(const llvm::GenericValue *addr) const;
+	const std::vector<Event>& getStoresToLoc(const llvm::GenericValue *addr);
+	std::vector<Event> getCoherentStores(const llvm::GenericValue *addr,
+					     Event pos);
+	std::pair<int, int> getCoherentPlacings(const llvm::GenericValue *addr,
+						Event pos, bool isRMW);
+	std::vector<Event> getCoherentRevisits(const WriteLabel *wLab);
 
 
 	/* Graph modification methods */
@@ -312,10 +420,6 @@ public:
 	friend llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const ExecutionGraph &g);
 
 protected:
-	/* Returns a reference to the graph's coherence calculator */
-	CoherenceCalculator *getCoherenceCalculator() { return cohTracker.get(); };
-	const CoherenceCalculator *getCoherenceCalculator() const { return cohTracker.get(); };
-
 	void resizeThread(unsigned int tid, unsigned int size) {
 		events[tid].resize(size);
 	};
@@ -325,65 +429,6 @@ protected:
 	};
 
 	void calcPorfAfter(const Event e, View &a);
-	void calcHbRfBefore(Event e, const llvm::GenericValue *addr, View &a) const;
-	void calcRelRfPoBefore(const Event last, View &v) const;
-	std::vector<Event> calcSCFencesSuccs(const std::vector<Event> &fcs,
-					     const Event e) const;
-	std::vector<Event> calcSCFencesPreds(const std::vector<Event> &fcs,
-					     const Event e) const;
-	std::vector<Event> calcSCSuccs(const std::vector<Event> &fcs,
-				       const Event e) const;
-	std::vector<Event> calcSCPreds(const std::vector<Event> &fcs,
-				       const Event e) const;
-	std::vector<Event> calcRfSCSuccs(const std::vector<Event> &fcs,
-					 const Event e) const;
-	std::vector<Event> calcRfSCFencesSuccs(const std::vector<Event> &fcs,
-					       const Event e) const;
-	bool isRMWLoad(const Event e) const;
-	bool isRMWLoad(const EventLabel *lab) const;
-
-	void spawnAllChildren(int thread);
-
-	void addRbEdges(const std::vector<Event> &fcs,
-			const std::vector<Event> &moAfter,
-			const std::vector<Event> &moRfAfter,
-			Matrix2D<Event> &matrix, const Event &e) const;
-	void addMoRfEdges(const std::vector<Event> &fcs,
-			  const std::vector<Event> &moAfter,
-			  const std::vector<Event> &moRfAfter,
-			  Matrix2D<Event> &matrix, const Event &e) const;
-	void addSCEcos(const std::vector<Event> &fcs,
-		       const std::vector<Event> &mo,
-		       Matrix2D<Event> &matrix) const;
-	void addSCEcos(const std::vector<Event> &fcs,
-		       Matrix2D<Event> &wbMatrix,
-		       Matrix2D<Event> &pscMatrix) const;
-
-	template <typename F>
-	bool addSCEcosMO(const std::vector<Event> &fcs,
-			 const std::vector<const llvm::GenericValue *> &scLocs,
-			 Matrix2D<Event> &psc, F cond) const;
-	template <typename F>
-	bool addSCEcosWBWeak(const std::vector<Event> &fcs,
-			     const std::vector<const llvm::GenericValue *> &scLocs,
-			     Matrix2D<Event> &psc, F cond) const;
-	template <typename F>
-	bool addSCEcosWB(const std::vector<Event> &fcs,
-			 const std::vector<const llvm::GenericValue *> &scLocs,
-			 Matrix2D<Event> &matrix, F cond) const;
-	template <typename F>
-	bool addSCEcosWBFull(const std::vector<Event> &fcs,
-			     const std::vector<const llvm::GenericValue *> &scLocs,
-			     Matrix2D<Event> &matrix, F cond) const;
-
-	void addInitEdges(const std::vector<Event> &fcs,
-			  Matrix2D<Event> &matrix) const;
-	void addSbHbEdges(Matrix2D<Event> &matrix) const;
-	template <typename F>
-	bool addEcoEdgesAndCheckCond(CheckPSCType t,
-				     const std::vector<Event> &fcs,
-				     Matrix2D<Event> &psc, F cond) const;
-
 	void getPoEdgePairs(std::vector<std::pair<Event, std::vector<Event> > > &froms,
 			    std::vector<Event> &tos);
 	void getRfEdgePairs(std::vector<std::pair<Event, std::vector<Event> > > &froms,
@@ -399,28 +444,77 @@ protected:
 	void calcSingleStepPairs(std::vector<std::pair<Event, std::vector<Event> > > &froms,
 				 const std::string &step, std::vector<Event> &tos);
 	void addStepEdgeToMatrix(std::vector<Event> &es,
-				 Matrix2D<Event> &relMatrix,
+				 AdjList<Event, EventHasher> &relMatrix,
 				 const std::vector<std::string> &substeps);
-	llvm::StringMap<Matrix2D<Event> >
+	llvm::StringMap<AdjList<Event, EventHasher> >
 	calculateAllRelations(const Library &lib, std::vector<Event> &es);
 
 private:
-
-	/* Sets the coherence calculator to the specified one */
-	void setCoherenceCalculator(std::unique_ptr<CoherenceCalculator> cc) {
-		cohTracker = std::move(cc);
-	};
-
 	/* A collection of threads and the events for each threads */
 	Graph events;
 
-	/* A coherence calculator for the graph */
-	std::unique_ptr<CoherenceCalculator> cohTracker = nullptr;
-
 	/* The next available timestamp */
 	unsigned int timestamp;
+
+	/* A list of all the calculations that need to be performed
+	 * when checking for full consistency*/
+	std::vector<std::unique_ptr<Calculator> > consistencyCalculators;
+
+	/* The indices of all the calculations that need to be performed
+	 * at each step of the algorithm (partial consistency check) */
+	std::vector<int> partialConsCalculators;
+
+	/* The relation matrices (and caches) maintained in the manager */
+	std::vector<Calculator::GlobalRelation> globalRelations;
+	std::vector<Calculator::GlobalRelation> globalRelationsCache;
+	std::vector<Calculator::PerLocRelation> perLocRelations;
+	std::vector<Calculator::PerLocRelation> perLocRelationsCache;
+
+	/* Keeps track of calculator indices */
+	std::unordered_map<RelationId, unsigned int> calculatorIndex;
+
+	/* Keeps track of relation indices. Note that an index might
+	 * refer to either globalRelations or perLocRelations */
+	std::unordered_map<RelationId, unsigned int> relationIndex;
 };
 
+template <typename F>
+bool ExecutionGraph::isHbOptRfBeforeRel(const AdjList<Event, EventHasher> &rel, Event a, Event b,
+					F prop /* = [](Event e){ return true; } */) const
+{
+	if (rel(a, b))
+		return true;
+
+	const EventLabel *lab = getEventLabel(b);
+
+	BUG_ON(!llvm::isa<WriteLabel>(lab));
+	auto *wLab = static_cast<const WriteLabel *>(lab);
+	for (auto &r : wLab->getReadersList()) {
+		if (prop(r) && rel(a, r))
+			return true;
+	}
+	return false;
+}
+
+template <typename F>
+bool ExecutionGraph::isWriteRfBeforeRel(const AdjList<Event, EventHasher> &rel, Event a, Event b,
+					F prop /* = [&](Event e){ return true; } */) const
+{
+	if (rel(a, b))
+		return true;
+
+	const EventLabel *lab = getEventLabel(a);
+
+	BUG_ON(!llvm::isa<WriteLabel>(lab));
+	auto *wLab = static_cast<const WriteLabel *>(lab);
+	for (auto &r : wLab->getReadersList())
+		if (prop(r) && rel(r, b))
+			return true;
+	return false;
+}
+
 #include "CoherenceCalculator.hpp"
+#include "LBCalculatorLAPOR.hpp"
+#include "PSCCalculator.hpp"
 
 #endif /* __EXECUTION_GRAPH_HPP__ */

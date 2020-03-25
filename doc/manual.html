@@ -3,7 +3,7 @@
 "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
 <head>
-<!-- 2019-10-30 Wed 15:56 -->
+<!-- 2020-03-11 Wed 20:09 -->
 <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title><font style="font-variant: small-caps">GenMC</font>: A Generic Model Checker for C Programs</title>
@@ -255,40 +255,42 @@ for the JavaScript code in this tag.
 <h2>Table of Contents</h2>
 <div id="text-table-of-contents">
 <ul>
-<li><a href="#org10aa84d">1. Introduction </a></li>
-<li><a href="#orgf7c0314">2. Basic Usage</a>
+<li><a href="#org221a4ef">1. Introduction </a></li>
+<li><a href="#org1a11228">2. Basic Usage</a>
 <ul>
-<li><a href="#orge4d7798">2.1. A First Example</a></li>
-<li><a href="#org13cf6a4">2.2. Reducing the state space of a program with <code>assume()</code> statements </a></li>
-<li><a href="#org25536c9">2.3. Handling Infinite Loops </a></li>
-<li><a href="#orgf3268ef">2.4. Error Reporting </a></li>
+<li><a href="#orgc7f2504">2.1. A First Example</a></li>
+<li><a href="#orga8a03e5">2.2. Reducing the state space of a program with <code>assume()</code> statements </a></li>
+<li><a href="#org773da6a">2.3. Handling Infinite Loops </a></li>
+<li><a href="#org962dddc">2.4. Error Reporting </a></li>
 </ul>
 </li>
-<li><a href="#orga1b487d">3. Command-line Options </a></li>
-<li><a href="#org5d91792">4. Supported APIs </a>
+<li><a href="#org6810481">3. Command-line Options </a></li>
+<li><a href="#org088a67e">4. Supported APIs </a>
 <ul>
-<li><a href="#orgdf1f385">4.1. Supported <code>stdio</code> API</a></li>
-<li><a href="#org814cf1c">4.2. Supported <code>stdlib</code> API</a></li>
-<li><a href="#orga13c3ea">4.3. Supported <code>pthread</code> API</a></li>
-<li><a href="#orgee4ee0a">4.4. Supported SV-COMP<sup>3</sup> API</a></li>
+<li><a href="#org9073936">4.1. Supported <code>stdio</code> API</a></li>
+<li><a href="#org97dd3b3">4.2. Supported <code>stdlib</code> API</a></li>
+<li><a href="#orgd693de8">4.3. Supported <code>pthread</code> API</a></li>
+<li><a href="#org4045707">4.4. Supported SV-COMP<sup>4</sup> API</a></li>
 </ul>
 </li>
-<li><a href="#orgbe8603e">5. Contact </a></li>
-<li><a href="#orgec588ef">6. Bibliography </a></li>
+<li><a href="#org37ae943">5. Contact </a></li>
+<li><a href="#org9714e51">6. Bibliography </a></li>
 </ul>
 </div>
 </div>
 
-<div id="outline-container-org10aa84d" class="outline-2">
-<h2 id="org10aa84d"><span class="section-number-2">1</span> Introduction <a id="org666cd7e"></a></h2>
+<div id="outline-container-org221a4ef" class="outline-2">
+<h2 id="org221a4ef"><span class="section-number-2">1</span> Introduction <a id="org49b0b07"></a></h2>
 <div class="outline-text-2" id="text-1">
 <p>
 <font style="font-variant: small-caps">GenMC</font> is a model checker that is an instantiation of the
-respective algorithm<sup>1</sup> for programs written under the
-RC11<sup>2</sup> memory model.  <font style="font-variant: small-caps">GenMC</font> works for C programs that use
-<code>C11</code> atomics and the <code>pthread</code> library for concurrency. It uses a
-very effective dynamic partial order reduction technique, and can
-verify safety properties in a sound, complete, and optimal fashion.
+respective algorithm<sup>1</sup> for programs
+written under the RC11<sup>2</sup> and IMM
+<sup>3</sup> memory model.  <font style="font-variant: small-caps">GenMC</font> works for C programs
+that use <code>C11</code> atomics and the <code>pthread</code> library for concurrency. It
+uses a very effective dynamic partial order reduction technique, and
+can verify safety properties in a sound, complete, and optimal
+fashion.
 </p>
 
 <p>
@@ -306,8 +308,8 @@ dependencies are installed.
 </div>
 </div>
 
-<div id="outline-container-orgf7c0314" class="outline-2">
-<h2 id="orgf7c0314"><span class="section-number-2">2</span> Basic Usage</h2>
+<div id="outline-container-org1a11228" class="outline-2">
+<h2 id="org1a11228"><span class="section-number-2">2</span> Basic Usage</h2>
 <div class="outline-text-2" id="text-2">
 <p>
 A generic invocation of <font style="font-variant: small-caps">GenMC</font> looks like the following:
@@ -320,7 +322,7 @@ A generic invocation of <font style="font-variant: small-caps">GenMC</font> look
 
 <p>
 In the above command, <code>OPTIONS</code> include several options that can be
-passed to <font style="font-variant: small-caps">GenMC</font> (see Section <a href="#org8eecb96">3</a> for more details), and
+passed to <font style="font-variant: small-caps">GenMC</font> (see Section <a href="#org0825bcf">3</a> for more details), and
 <code>CFLAGS</code> are the options that one would normally pass to the C
 compiler. If no such flags exist, the <code>--</code> can be omitted.
 Lastly, <code>file</code> should be a C file that uses the <code>stdatomic.h</code>
@@ -332,7 +334,7 @@ Note that, in order for <font style="font-variant: small-caps">GenMC</font> to b
 needs to meet two requirements: finiteness and data-determinism.
 Finiteness means that all tests need to have finite traces,
 i.e., no infinite loops (these need to be bounded; see
-Section <a href="#orgdd7c455">2.3</a>). Data-determinism means that
+Section <a href="#org80ef5bd">2.3</a>). Data-determinism means that
 the code under test should be data-deterministic, i.e.,
 not perform actions like calling <code>rand()</code>, performing
 actions based on user input or the clock, etc. In other words,
@@ -348,8 +350,8 @@ their programs by using <code>assert()</code> statements.
 </p>
 </div>
 
-<div id="outline-container-orge4d7798" class="outline-3">
-<h3 id="orge4d7798"><span class="section-number-3">2.1</span> A First Example</h3>
+<div id="outline-container-orgc7f2504" class="outline-3">
+<h3 id="orgc7f2504"><span class="section-number-3">2.1</span> A First Example</h3>
 <div class="outline-text-3" id="text-2-1">
 <p>
 Consider the following program, demonstrating the Message-Passing (MP)
@@ -422,8 +424,8 @@ As can be seen, <font style="font-variant: small-caps">GenMC</font> will explore
 </div>
 
 
-<div id="outline-container-org13cf6a4" class="outline-3">
-<h3 id="org13cf6a4"><span class="section-number-3">2.2</span> Reducing the state space of a program with <code>assume()</code> statements <a id="org240753e"></a></h3>
+<div id="outline-container-orga8a03e5" class="outline-3">
+<h3 id="orga8a03e5"><span class="section-number-3">2.2</span> Reducing the state space of a program with <code>assume()</code> statements <a id="org6dfb006"></a></h3>
 <div class="outline-text-3" id="text-2-2">
 <p>
 In some programs, we only care about what happens when certain
@@ -436,7 +438,7 @@ of an exponential number of executions that are not of interest.
 
 <p>
 To alleviate this problem, <font style="font-variant: small-caps">GenMC</font> supports the <code>__VERIFIER_assume()</code>
-function (similar to the one specified in SV-COMP<sup>3</sup>). This
+function (similar to the one specified in SV-COMP<sup>4</sup>). This
 function takes an integer argument (possibly the value read from
 a read), and only continues the execution if the argument is non-zero.
 </p>
@@ -495,7 +497,7 @@ use an <code>assume()</code> statement to achieve this, as shown below:
 <p>
 Note that the <code>__VERIFIER_assume()</code> function has to be declared. Alternatively,
 one can include the &lt;genmc.h&gt; header, that contains the declarations for all
-the special function that <font style="font-variant: small-caps">GenMC</font> offers (see Section <a href="#orge327e3c">4</a>).
+the special function that <font style="font-variant: small-caps">GenMC</font> offers (see Section <a href="#org528145e">4</a>).
 </p>
 
 <p>
@@ -524,8 +526,8 @@ programs where there are a lot of (global) accesses after the
 </div>
 
 
-<div id="outline-container-org25536c9" class="outline-3">
-<h3 id="org25536c9"><span class="section-number-3">2.3</span> Handling Infinite Loops <a id="orgdd7c455"></a></h3>
+<div id="outline-container-org773da6a" class="outline-3">
+<h3 id="org773da6a"><span class="section-number-3">2.3</span> Handling Infinite Loops <a id="org80ef5bd"></a></h3>
 <div class="outline-text-3" id="text-2-3">
 <p>
 As mentioned in the beginning of this section, all programs that
@@ -554,7 +556,7 @@ or has side-effects (e.g., if it is a compare-and-exchange instruction),
 
 <p>
 For infinite loops with side effects, one has to use the <code>-unroll=N</code>
-command-line option (see Section <a href="#org8eecb96">3</a>). This option
+command-line option (see Section <a href="#org0825bcf">3</a>). This option
 bounds all loops so that they are executed at most <code>N</code> times.
 Naturally, in this case, any verification guarantees that <font style="font-variant: small-caps">GenMC</font>
 provides hold up to that bound.
@@ -569,8 +571,8 @@ in the C code (depending on the enabled compiled optimizations, etc).
 </div>
 
 
-<div id="outline-container-orgf3268ef" class="outline-3">
-<h3 id="orgf3268ef"><span class="section-number-3">2.4</span> Error Reporting <a id="org65683dc"></a></h3>
+<div id="outline-container-org962dddc" class="outline-3">
+<h3 id="org962dddc"><span class="section-number-3">2.4</span> Error Reporting <a id="org3929ad5"></a></h3>
 <div class="outline-text-3" id="text-2-4">
 <p>
 In the previous sections, saw how <font style="font-variant: small-caps">GenMC</font> verifies the small MP program.
@@ -707,8 +709,8 @@ same memory location in the sequence.
 </div>
 
 
-<div id="outline-container-orga1b487d" class="outline-2">
-<h2 id="orga1b487d"><span class="section-number-2">3</span> Command-line Options <a id="org8eecb96"></a></h2>
+<div id="outline-container-org6810481" class="outline-2">
+<h2 id="org6810481"><span class="section-number-2">3</span> Command-line Options <a id="org0825bcf"></a></h2>
 <div class="outline-text-2" id="text-3">
 <p>
 A full list of the available command-line options can by viewed
@@ -717,10 +719,13 @@ are most useful when verifying user programs.
 </p>
 
 <dl class="org-dl">
+<dt><code>-rc11</code></dt><dd>Perform the exploration under the RC11 memory model</dd>
+<dt><code>-imm</code></dt><dd>Perform the exploration under the IMM memory model</dd>
 <dt><code>-wb</code></dt><dd>Perform the exploration based on the <span style="color: #808080; font-family: monospace">po</span><span style="color: #00ff00; font-family: monospace">rf</span>
 equivalence partitioning (default).</dd>
 <dt><code>-mo</code></dt><dd>Perform the exploration based on the <span style="color: #808080; font-family: monospace">po</span> \(\cup\) <span style="color: #00ff00; font-family: monospace">rf</span> \(\cup\) <span style="color: #ffa500; font-family: monospace">mo</span>
 equivalence partitioning.</dd>
+<dt><code>-lapor</code></dt><dd>Enable Lock-Aware Partial Order Reduction (LAPOR)</dd>
 <dt><code>-unroll=&lt;N&gt;</code></dt><dd>All loops will be executed at most \(N\) times.</dd>
 <dt><code>-dump-error-graph=&lt;file&gt;</code></dt><dd>Outputs an erroneous graph to file
 <code>&lt;file&gt;</code>.</dd>
@@ -737,8 +742,8 @@ as the program's entry point, instead of <code>main()</code>.</dd>
 </div>
 
 
-<div id="outline-container-org5d91792" class="outline-2">
-<h2 id="org5d91792"><span class="section-number-2">4</span> Supported APIs <a id="orge327e3c"></a></h2>
+<div id="outline-container-org088a67e" class="outline-2">
+<h2 id="org088a67e"><span class="section-number-2">4</span> Supported APIs <a id="org528145e"></a></h2>
 <div class="outline-text-2" id="text-4">
 <p>
 Apart from C11 API (defined in <code>stdatomic.h</code>) and the <code>assert()</code>
@@ -747,8 +752,8 @@ functions from different libraries.
 </p>
 </div>
 
-<div id="outline-container-orgdf1f385" class="outline-3">
-<h3 id="orgdf1f385"><span class="section-number-3">4.1</span> Supported <code>stdio</code> API</h3>
+<div id="outline-container-org9073936" class="outline-3">
+<h3 id="org9073936"><span class="section-number-3">4.1</span> Supported <code>stdio</code> API</h3>
 <div class="outline-text-3" id="text-4-1">
 <p>
 The following functions are supported from <code>stdio.h</code>:
@@ -779,8 +784,8 @@ machines.
 </div>
 </div>
 
-<div id="outline-container-org814cf1c" class="outline-3">
-<h3 id="org814cf1c"><span class="section-number-3">4.2</span> Supported <code>stdlib</code> API</h3>
+<div id="outline-container-org97dd3b3" class="outline-3">
+<h3 id="org97dd3b3"><span class="section-number-3">4.2</span> Supported <code>stdlib</code> API</h3>
 <div class="outline-text-3" id="text-4-2">
 <p>
 The following functions are supported from <code>stdlib.h</code>:
@@ -800,8 +805,8 @@ The following functions are supported from <code>stdlib.h</code>:
 </div>
 </div>
 
-<div id="outline-container-orga13c3ea" class="outline-3">
-<h3 id="orga13c3ea"><span class="section-number-3">4.3</span> Supported <code>pthread</code> API</h3>
+<div id="outline-container-orgd693de8" class="outline-3">
+<h3 id="orgd693de8"><span class="section-number-3">4.3</span> Supported <code>pthread</code> API</h3>
 <div class="outline-text-3" id="text-4-3">
 <p>
 The following functions are supported from <code>pthread.h</code>:
@@ -828,11 +833,11 @@ The following functions are supported from <code>pthread.h</code>:
 </div>
 
 
-<div id="outline-container-orgee4ee0a" class="outline-3">
-<h3 id="orgee4ee0a"><span class="section-number-3">4.4</span> Supported SV-COMP<sup>3</sup> API</h3>
+<div id="outline-container-org4045707" class="outline-3">
+<h3 id="org4045707"><span class="section-number-3">4.4</span> Supported SV-COMP<sup>4</sup> API</h3>
 <div class="outline-text-3" id="text-4-4">
 <p>
-The following functions from the ones defined in SV-COMP<sup>3</sup> are supported:
+The following functions from the ones defined in SV-COMP<sup>4</sup> are supported:
 </p>
 
 <dl class="org-dl">
@@ -851,8 +856,8 @@ the same across different executions.
 </div>
 </div>
 
-<div id="outline-container-orgbe8603e" class="outline-2">
-<h2 id="orgbe8603e"><span class="section-number-2">5</span> Contact <a id="orgade1497"></a></h2>
+<div id="outline-container-org37ae943" class="outline-2">
+<h2 id="org37ae943"><span class="section-number-2">5</span> Contact <a id="org690ade4"></a></h2>
 <div class="outline-text-2" id="text-5">
 <p>
 For feedback, questions, and bug reports please send an e-mail to
@@ -861,19 +866,20 @@ For feedback, questions, and bug reports please send an e-mail to
 </div>
 </div>
 
-<div id="outline-container-orgec588ef" class="outline-2">
-<h2 id="orgec588ef"><span class="section-number-2">6</span> Bibliography <a id="org078a644"></a></h2>
+<div id="outline-container-org9714e51" class="outline-2">
+<h2 id="org9714e51"><span class="section-number-2">6</span> Bibliography <a id="org34b0dc1"></a></h2>
 <div class="outline-text-2" id="text-6">
 <ol class="org-ol">
-<li>Kokologiannakis,  Michalis; Raad,  Azalea and Vafeiadis,  Viktor, <i>Model Checking for Weakly Consistent Libraries</i>, PLDI 2019(2019). <br></li>
-<li>Lahav,  Ori; Vafeiadis,  Viktor; Kang,  Jeehoon; Hur,  Chung-Kil and Dreyer,  Derek, <i>Repairing Sequential Consistency in {C/C++11}</i>, PLDI 2017(2017). <br></li>
-<li>SV-COMP, , <i>Competition on Software Verification (SV-COMP)</i>,  <a href="http://dx.doi.org/https://sv-comp.sosy-lab.org/2019/">http://dx.doi.org/https://sv-comp.sosy-lab.org/2019/</a>. <a href="http://dx.doi.org/nil">http://dx.doi.org/nil</a>.</li>
+<li>Kokologiannakis,  Michalis; Raad,  Azalea and Vafeiadis,  Viktor, <i>Model Checking for Weakly Consistent Libraries</i>, \bibPLDI{2019}(2019). <br></li>
+<li>Kokologiannakis,  Michalis; Lahav,  Ori; Sagonas,  Konstantinos and Vafeiadis,  Viktor, <i>Effective Stateless Model Checking for {C/C++} Concurrency</i>, \bibPACMPL, 2<b>(POPL)</b>, pp. 17:1&#x2013;17:32 (2017). <a href="http://dx.doi.org/10.1145/3158105">http://dx.doi.org/10.1145/3158105</a>. <br></li>
+<li>Podkopaev,  Anton; Lahav,  Ori and Vafeiadis,  Viktor, <i>Bridging the Gap Between Programming Languages and Hardware Weak Memory Models</i>, \bibPACMPL, 3<b>(POPL)</b>, pp. 69:1&#x2013;69:31 (2019). <a href="http://dx.doi.org/10.1145/3290382">http://dx.doi.org/10.1145/3290382</a>. <br></li>
+<li>SV-COMP, , <i>Competition on Software Verification ({SV-COMP})</i>,  <a href="http://dx.doi.org/https://sv-comp.sosy-lab.org/2019/">http://dx.doi.org/https://sv-comp.sosy-lab.org/2019/</a>. <a href="http://dx.doi.org/nil">http://dx.doi.org/nil</a>.</li>
 </ol>
 </div>
 </div>
 </div>
 <div id="postamble" class="status">
-<p class="date">Created: 2019-10-30 Wed 15:56</p>
+<p class="date">Created: 2020-03-11 Wed 20:09</p>
 <p class="validation"><a href="http://validator.w3.org/check?uri=referer">Validate</a></p>
 </div>
 </body>

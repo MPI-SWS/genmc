@@ -22,6 +22,7 @@
 #define __WB_COHERENCE_CALCULATOR_HPP__
 
 #include "CoherenceCalculator.hpp"
+#include "ExecutionGraph.hpp"
 #include <unordered_map>
 
 /*******************************************************************************
@@ -38,8 +39,8 @@ class WBCoherenceCalculator : public CoherenceCalculator {
 public:
 
 	/* Constructor */
-	WBCoherenceCalculator(ExecutionGraph &g, bool ooo)
-		: CoherenceCalculator(CC_WritesBefore, g, ooo) {}
+	WBCoherenceCalculator(ExecutionGraph &m, bool ooo)
+		: CoherenceCalculator(CC_WritesBefore, m, ooo) {}
 
 	/* Track coherence at location addr */
 	void
@@ -78,25 +79,46 @@ public:
 	saveCoherenceStatus(const std::vector<std::unique_ptr<EventLabel> > &prefix,
 			    const ReadLabel *rLab) const override;
 
-	/* Restores a previously saved coherence status */
-	void
-	restoreCoherenceStatus(std::vector<std::pair<Event, Event> > &status) override;
-
-	void removeStoresAfter(VectorClock &preds) override;
-
 	/* Calculates WB */
-	Matrix2D<Event> calcWb(const llvm::GenericValue *addr) const;
+	GlobalRelation calcWb(const llvm::GenericValue *addr) const;
 
 	/* Calculates WB restricted in v */
-	Matrix2D<Event> calcWbRestricted(const llvm::GenericValue *addr,
-					 const VectorClock &v) const;
+	GlobalRelation calcWbRestricted(const llvm::GenericValue *addr,
+					const VectorClock &v) const;
+
+	/* Populates "wb" so that it represents coherence at loc "addr".
+	 * If "prop" is provided, only stores satisfying it are considered.
+	 * If "rel" is provided, "rel" is used instead of hb to provide ordering */
+	template <typename F>
+	Calculator::CalculationResult
+	calcWbRelation(const llvm::GenericValue *addr, GlobalRelation &wb,
+		       F prop = [](Event e){ return true; });
+	template <typename F>
+	Calculator::CalculationResult
+	calcWbRelation(const llvm::GenericValue *addr, GlobalRelation &wb,
+		       const GlobalRelation &rel,
+		       F prop = [](Event e){ return true; });
+
+
+	void initCalc() override;
+
+	Calculator::CalculationResult doCalc() override;
+
+	/* Restores a previously saved coherence status */
+	void
+	restorePrefix(const ReadLabel *rLab,
+		      const std::vector<std::unique_ptr<EventLabel> > &storePrefix,
+		      const std::vector<std::pair<Event, Event> > &status) override;
+
+	/* Will remove stores not in preds */
+	void removeAfter(const VectorClock &preds) override;
 
 	static bool classof(const CoherenceCalculator *cohTracker) {
 		return cohTracker->getKind() == CC_WritesBefore;
 	}
 
 private:
-	std::vector<unsigned int> calcRMWLimits(const Matrix2D<Event> &wb) const;
+	std::vector<unsigned int> calcRMWLimits(const GlobalRelation &wb) const;
 
 	View getRfOptHbBeforeStores(const std::vector<Event> &stores,
 				    const View &hbBefore);
@@ -109,17 +131,102 @@ private:
 	bool isWbMaximal(const WriteLabel *wLab, const std::vector<Event> &ls) const;
 
 	bool isCoherentRf(const llvm::GenericValue *addr,
-			  const Matrix2D<Event> &wb, Event read,
+			  const GlobalRelation &wb, Event read,
 			  Event store, int storeWbIdx);
-	bool isInitCoherentRf(const Matrix2D<Event> &wb, Event read);
+	bool isInitCoherentRf(const GlobalRelation &wb, Event read);
 
 	bool isCoherentRevisit(const WriteLabel *sLab, Event read) const;
-
-
 
 	typedef std::unordered_map<const llvm::GenericValue *,
 				   std::vector<Event> > StoresList;
 	StoresList stores_;
 };
+
+template <typename F>
+Calculator::CalculationResult
+WBCoherenceCalculator::calcWbRelation(const llvm::GenericValue *addr, GlobalRelation &wb,
+				      F prop /* = [](Event e){ return true; } */)
+{
+	auto &gm = getGraph();
+	auto &hbRelation = gm.getGlobalRelation(ExecutionGraph::RelationId::hb);
+
+	return calcWbRelation(addr, wb, hbRelation, prop);
+}
+
+template <typename F>
+Calculator::CalculationResult
+WBCoherenceCalculator::calcWbRelation(const llvm::GenericValue *addr, GlobalRelation &matrix,
+				      const GlobalRelation &rel,
+				      F prop /* = [](Event e){ return true; } */)
+{
+	auto &g = getGraph();
+
+	bool changed = false;
+	for (auto locIt = stores_.begin(); locIt != stores_.end(); ++locIt) {
+		auto &stores = matrix.getElems();
+
+		/* If it is empty, nothing to do */
+		if (stores.empty())
+			continue;
+
+		auto upperLimit = calcRMWLimits(matrix);
+		if (upperLimit.empty()) {
+			for (auto i = 0u; i < stores.size(); i++)
+				matrix.addEdge(i, i);
+			return Calculator::CalculationResult(true, false);
+		}
+
+		auto lowerLimit = upperLimit.begin() + stores.size();
+		for (auto i = 0u; i < stores.size(); i++) {
+			auto *wLab = static_cast<const WriteLabel *>(g.getEventLabel(stores[i]));
+
+			std::vector<Event> es;
+
+			if (prop(wLab->getPos()))
+				es.push_back(wLab->getPos());
+			auto &readers = wLab->getReadersList();
+			std::copy_if(readers.begin(), readers.end(), std::back_inserter(es),
+				     [&](const Event &r){ return prop(r); });
+
+			auto upi = upperLimit[i];
+			for (auto j = 0u; j < stores.size(); j++) {
+				if (// !prop(stores[i]) ||
+				    !prop(stores[j]))
+					continue;
+				if (i == j ||
+				    std::none_of(es.begin(), es.end(), [&](Event e)
+						 { return g.isWriteRfBeforeRel(rel, stores[j], e, prop); }))
+					continue;
+
+				if (!matrix(j, i)) {
+					changed = true;
+					matrix.addEdge(j, i);
+				}
+				if (upi == stores.size() || upi == upperLimit[j])
+					continue;
+
+				if (!matrix(lowerLimit[j], upi)) {
+					matrix.addEdge(lowerLimit[j], upi);
+					changed = true;
+				}
+			}
+
+			if (lowerLimit[stores.size()] == stores.size() || upi == stores.size())
+				continue;
+
+			if (!matrix(lowerLimit[stores.size()], i)) {
+				matrix.addEdge(lowerLimit[stores.size()], i);
+				changed = true;
+			}
+		}
+		matrix.transClosure();
+
+		/* Check for consistency */
+		if (!matrix.isIrreflexive())
+			return Calculator::CalculationResult(changed, false);
+
+	}
+	return CalculationResult(changed, true);
+}
 
 #endif /* __COHERENCE_CALCULATOR_HPP__ */

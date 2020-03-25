@@ -10,6 +10,8 @@ libgenmc_a_HEADERS = $(top_builddir)/include/*.h
 noinst_LIBRARIES = libgenmc.a
 libgenmc_a_SOURCES = \
   $(libgenmc_a_HEADERS) \
+  ARCalculator.cpp ARCalculator.hpp \
+  Calculator.hpp \
   CoherenceCalculator.hpp \
   Config.cpp Config.hpp \
   DeclareAssumePass.cpp DeclareAssumePass.hpp \
@@ -33,6 +35,7 @@ libgenmc_a_SOURCES = \
   IMMDriver.cpp IMMDriver.hpp \
   Interpreter.cpp Interpreter.h \
   IntrinsicLoweringPass.cpp IntrinsicLoweringPass.hpp \
+  LBCalculatorLAPOR.hpp LBCalculatorLAPOR.cpp \
   Library.cpp Library.hpp \
   LLVMModule.cpp LLVMModule.hpp \
   LoopUnrollPass.cpp LoopUnrollPass.hpp \
@@ -40,6 +43,7 @@ libgenmc_a_SOURCES = \
   MDataCollectionPass.hpp MDataCollectionPass.cpp \
   MOCoherenceCalculator.hpp MOCoherenceCalculator.cpp \
   Parser.cpp Parser.hpp \
+  PSCCalculator.cpp PSCCalculator.hpp \
   RC11Driver.cpp RC11Driver.hpp \
   RevisitSet.cpp RevisitSet.hpp \
   SpinAssumePass.cpp SpinAssumePass.hpp \

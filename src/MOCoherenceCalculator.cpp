@@ -360,16 +360,49 @@ MOCoherenceCalculator::saveCoherenceStatus(const std::vector<std::unique_ptr<Eve
 	return pairs;
 }
 
-void MOCoherenceCalculator::restoreCoherenceStatus(std::vector<std::pair<Event, Event> >
-						   &moPlacings)
+void MOCoherenceCalculator::initCalc()
+{
+	auto &gm = getGraph();
+	auto &coRelation = gm.getPerLocRelation(ExecutionGraph::RelationId::co);
+
+	for (auto locIt = mo_.begin(); locIt != mo_.end(); locIt++) {
+		coRelation[locIt->first] = GlobalRelation(getStoresToLoc(locIt->first));
+		if (locIt->second.empty())
+			continue;
+		for (auto sIt = locIt->second.begin(); sIt != locIt->second.end() - 1; sIt++)
+			coRelation[locIt->first].addEdge(*sIt, *(sIt + 1));
+		coRelation[locIt->first].transClosure();
+	}
+	return;
+}
+
+Calculator::CalculationResult MOCoherenceCalculator::doCalc()
+{
+	auto &gm = getGraph();
+	auto &coRelation = gm.getPerLocRelation(ExecutionGraph::RelationId::co);
+
+	for (auto locIt = mo_.begin(); locIt != mo_.end(); locIt++) {
+		if (!coRelation[locIt->first].isIrreflexive())
+			return Calculator::CalculationResult(false, false);
+	}
+	return Calculator::CalculationResult(false, true);
+}
+
+void MOCoherenceCalculator::restorePrefix(const ReadLabel *rLab,
+					  const std::vector<std::unique_ptr<EventLabel> > &storePrefix,
+					  const std::vector<std::pair<Event, Event> > &moPlacings)
 {
 	const auto &g = getGraph();
 
 	auto insertedMO = 0u;
 	while (insertedMO < moPlacings.size()) {
 		for (auto it = moPlacings.begin(); it != moPlacings.end(); ++it) {
-			/* it->fist is a WriteLabel by construction */
-			auto *lab = static_cast<const WriteLabel *>(g.getEventLabel(it->first));
+			/* it->first is a WriteLabel by construction */
+			auto labIt = std::find_if(storePrefix.begin(), storePrefix.end(),
+						  [&](const std::unique_ptr<EventLabel> &lab)
+						  { return lab->getPos() == it->first; });
+			BUG_ON(labIt == storePrefix.end());
+			auto *lab = static_cast<const WriteLabel *>(labIt->get());
 			if (locContains(lab->getAddr(), it->second) &&
 			    !locContains(lab->getAddr(), it->first)) {
 				int offset = getStoreOffset(lab->getAddr(), it->second);
@@ -380,7 +413,7 @@ void MOCoherenceCalculator::restoreCoherenceStatus(std::vector<std::pair<Event, 
 	}
 }
 
-void MOCoherenceCalculator::removeStoresAfter(VectorClock &preds)
+void MOCoherenceCalculator::removeAfter(const VectorClock &preds)
 {
 	for (auto it = mo_.begin(); it != mo_.end(); ++it)
 		it->second.erase(std::remove_if(it->second.begin(), it->second.end(),

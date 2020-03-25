@@ -21,7 +21,8 @@
 #ifndef __COHERENCE_CALCULATOR_HPP__
 #define __COHERENCE_CALCULATOR_HPP__
 
-#include "Event.hpp"
+#include "Calculator.hpp"
+#include "EventLabel.hpp"
 #include "ExecutionGraph.hpp"
 #include <llvm/ExecutionEngine/GenericValue.h>
 #include <llvm/Support/Casting.h>
@@ -37,7 +38,7 @@
  * (e.g, with the usage of modification orders, or by calculating WB, etc).
  * Defines the minimal interface such implementations should offer.
  */
-class CoherenceCalculator {
+class CoherenceCalculator : public Calculator {
 
 public:
 	/* Discriminator for LLVM-style RTTI (dyn_cast<> et al).
@@ -51,16 +52,12 @@ public:
 protected:
 
 	/* Constructor */
-	CoherenceCalculator(CoherenceCalculatorKind k, ExecutionGraph &g, bool ooo)
-		: kind(k), g(g), outOfOrder(ooo) {}
+	CoherenceCalculator(CoherenceCalculatorKind k, ExecutionGraph &m, bool ooo)
+		: Calculator(m), kind(k), outOfOrder(ooo) {}
 
 	/* Returns whether the model we are operating under supports
 	 * out-of-order execution */
 	bool supportsOutOfOrder() const { return outOfOrder; };
-
-	/* Returns a reference to the graph we are operating on */
-	ExecutionGraph &getGraph() const { return g; };
-	ExecutionGraph &getGraph() { return g; };
 
 public:
 	/* Returns the discriminator of this object */
@@ -105,21 +102,10 @@ public:
 	saveCoherenceStatus(const std::vector<std::unique_ptr<EventLabel> > &prefix,
 			    const ReadLabel *rLab) const = 0;
 
-	/* Restores a previously saved coherence status */
-	virtual void
-	restoreCoherenceStatus(std::vector<std::pair<Event, Event> > &status) = 0;
-
-	/* Stops tracking all stores not included in "preds" in the graph */
-	virtual void
-	removeStoresAfter(VectorClock &preds) = 0;
-
 private:
 
 	/* Discriminator enum for LLVM-style RTTI */
 	const CoherenceCalculatorKind kind;
-
-	/* The execution graph to the lifetime of which the calculator is bound */
-	ExecutionGraph &g;
 
 	/* Whether the model which we are operating under supports out-of-order
 	 * execution. This enables some extra optimizations, in certain cases. */

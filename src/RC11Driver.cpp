@@ -19,6 +19,20 @@
  */
 
 #include "RC11Driver.hpp"
+#include "PSCCalculator.hpp"
+
+RC11Driver::RC11Driver(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Module> mod,
+		       std::vector<Library> &granted, std::vector<Library> &toVerify,
+		       clock_t start)
+	: GenMCDriver(std::move(conf), std::move(mod), granted, toVerify, start)
+{
+	auto &g = getGraph();
+
+	/* RC11 requires the calculation of PSC */
+	g.addCalculator(llvm::make_unique<PSCCalculator>(g),
+			ExecutionGraph::RelationId::psc, false);
+	return;
+}
 
 /* Calculates a minimal hb vector clock based on po for a given label */
 View RC11Driver::calcBasicHbView(Event e) const
@@ -381,6 +395,76 @@ RC11Driver::createFinishLabel(int tid, int index)
 	return std::move(lab);
 }
 
+std::unique_ptr<LockLabelLAPOR>
+RC11Driver::createLockLabelLAPOR(int tid, int index, const llvm::GenericValue *addr)
+{
+	const auto &g = getGraph();
+	Event pos(tid, index);
+	auto lab = llvm::make_unique<LockLabelLAPOR>(getGraph().nextStamp(),
+						     llvm::AtomicOrdering::Acquire,
+						     pos, addr);
+
+	View hb = calcBasicHbView(lab->getPos());
+	View porf = calcBasicPorfView(lab->getPos());
+
+	lab->setHbView(std::move(hb));
+	lab->setPorfView(std::move(porf));
+	return std::move(lab);
+}
+
+std::unique_ptr<UnlockLabelLAPOR>
+RC11Driver::createUnlockLabelLAPOR(int tid, int index, const llvm::GenericValue *addr)
+{
+	const auto &g = getGraph();
+	Event pos(tid, index);
+	auto lab = llvm::make_unique<UnlockLabelLAPOR>(getGraph().nextStamp(),
+						       llvm::AtomicOrdering::Release,
+						       pos, addr);
+
+	View hb = calcBasicHbView(lab->getPos());
+	View porf = calcBasicPorfView(lab->getPos());
+
+	lab->setHbView(std::move(hb));
+	lab->setPorfView(std::move(porf));
+	return std::move(lab);
+}
+
+bool RC11Driver::areInDataRace(const MemAccessLabel *aLab, const MemAccessLabel *bLab)
+{
+	/* If there is an HB ordering between the two events, there is no race */
+	if (isHbBefore(aLab->getPos(), bLab->getPos()) ||
+	    isHbBefore(bLab->getPos(), aLab->getPos()) || aLab == bLab)
+		return false;
+
+	/* If both accesses are atomic, there is no race */
+	/* Note: one check suffices because a variable is either
+	 * atomic or not atomic, but we have not checked the address yet */
+	if (!aLab->isNotAtomic() && !bLab->isNotAtomic())
+		return false;
+
+	/* If they access a different address, there is no race */
+	if (aLab->getAddr() != bLab->getAddr())
+		return false;
+
+	/* If LAPOR is disabled, we are done */
+	if (!getConf()->LAPOR)
+		return true;
+
+	/* Otherwise, we have to make sure that the two accesses do _not_
+	 * belong in critical sections of the same lock */
+	const auto &g = getGraph();
+	auto aLock = g.getLastThreadUnmatchedLockLAPOR(aLab->getPos());
+	auto bLock = g.getLastThreadUnmatchedLockLAPOR(bLab->getPos());
+
+	/* If any of the two is _not_ in a CS, it is a race */
+	if (aLock.isInitializer() || bLock.isInitializer())
+		return true;
+
+	/* If both are in a CS, being in CSs of different locks is a race */
+	return llvm::dyn_cast<LockLabelLAPOR>(g.getEventLabel(aLock))->getLockAddr() !=
+	       llvm::dyn_cast<LockLabelLAPOR>(g.getEventLabel(bLock))->getLockAddr();
+}
+
 Event RC11Driver::findRaceForNewLoad(const ReadLabel *rLab)
 {
 	const auto &g = getGraph();
@@ -397,8 +481,7 @@ Event RC11Driver::findRaceForNewLoad(const ReadLabel *rLab)
 			continue;
 
 		auto *sLab = static_cast<const WriteLabel *>(g.getEventLabel(s));
-		if ((rLab->isNotAtomic() || sLab->isNotAtomic()) &&
-		    rLab->getPos() != sLab->getPos())
+		if (areInDataRace(rLab, sLab))
 			return s; /* Race detected! */
 	}
 	return Event::getInitializer(); /* Race not found */
@@ -412,16 +495,11 @@ Event RC11Driver::findRaceForNewStore(const WriteLabel *wLab)
 	for (auto i = 0u; i < g.getNumThreads(); i++) {
 		for (auto j = before[i] + 1u; j < g.getThreadSize(i); j++) {
 			const EventLabel *oLab = g.getEventLabel(Event(i, j));
-
-			/* If they are both atomics, nothing to check */
-			if (!wLab->isNotAtomic() && !oLab->isNotAtomic())
-				continue;
 			if (!llvm::isa<MemAccessLabel>(oLab))
 				continue;
 
 			auto *mLab = static_cast<const MemAccessLabel *>(oLab);
-			if (mLab->getAddr() == wLab->getAddr() &&
-			    mLab->getPos() != wLab->getPos())
+			if (areInDataRace(wLab, mLab))
 				return mLab->getPos(); /* Race detected */
 		}
 	}
@@ -494,7 +572,7 @@ bool RC11Driver::updateJoin(Event join, Event childLast)
 	return true;
 }
 
-bool RC11Driver::isExecutionValid()
+void RC11Driver::initConsCalculation()
 {
-	return getGraph().isPscAcyclic(CheckPSCType::full);
+	return;
 }

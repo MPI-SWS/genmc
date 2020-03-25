@@ -29,8 +29,7 @@ public:
 
 	IMMDriver(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Module> mod,
 		  std::vector<Library> &granted, std::vector<Library> &toVerify,
-		  clock_t start)
-		: GenMCDriver(std::move(conf), std::move(mod), granted, toVerify, start) {};
+		  clock_t start);
 
 	/* Creates a label for a plain read to be added to the graph */
 	std::unique_ptr<ReadLabel>
@@ -116,6 +115,14 @@ public:
 	std::unique_ptr<ThreadFinishLabel>
 	createFinishLabel(int tid, int index) override;
 
+	/* LAPOR: Creates a (dummy) label for a lock() operation */
+	std::unique_ptr<LockLabelLAPOR>
+	createLockLabelLAPOR(int tid, int index, const llvm::GenericValue *addr) override;
+
+	/* LAPOR: Creates a (dummy) label for an unlock() operation */
+	std::unique_ptr<UnlockLabelLAPOR>
+	createUnlockLabelLAPOR(int tid, int index, const llvm::GenericValue *addr) override;
+
 	/* Since there is no concept of race in IMM, always returns INIT */
 	Event findDataRaceForMemAccess(const MemAccessLabel *mLab) override;
 
@@ -127,24 +134,19 @@ public:
 
 	bool updateJoin(Event join, Event childLast) override;
 
-	bool isExecutionValid() override;
+	void initConsCalculation() override;
 
 private:
 
 	View calcBasicHbView(Event e) const;
-	View calcBasicPorfView(Event e) const;
 	DepView calcPPoView(Event e); /* not const */
+	void updateRelView(DepView &pporf, EventLabel *lab);
 	void calcBasicReadViews(ReadLabel *lab);
 	void calcBasicWriteViews(WriteLabel *lab);
 	void calcWriteMsgView(WriteLabel *lab);
 	void calcRMWWriteMsgView(WriteLabel *lab);
 	void calcBasicFenceViews(FenceLabel *lab);
 	void calcFenceRelRfPoBefore(Event last, View &v);
-
-	std::vector<Event> collectAllEvents();
-	void fillMatrixFromView(const Event e, const DepView &v,
-				Matrix2D<Event> &matrix);
-	Matrix2D<Event> getARMatrix();
 };
 
 #endif /* __IMM_WB_DRIVER_HPP__ */

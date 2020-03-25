@@ -51,6 +51,7 @@ private:
 		DE_AccessFreed,
 		DE_InvalidAccessEnd,
 		DE_InvalidJoin,
+		DE_InvalidUnlock,
 	};
 
 	static bool isInvalidAccessError(DriverErrorKind e) {
@@ -158,6 +159,16 @@ public:
 		      llvm::GenericValue &val, std::string functionName,
 		      bool isInit = false);
 
+	/* A lock() call has been interpreted, nothing for the interpeter */
+	void
+	visitLock(const llvm::GenericValue *addr, llvm::Type *typ,
+		  llvm::GenericValue &cmpVal, llvm::GenericValue &newVal);
+
+	/* An unlock() call has been interpreter, nothing for the interpreter */
+	void
+	visitUnlock(const llvm::GenericValue *addr, llvm::Type *typ,
+		    llvm::GenericValue &val);
+
 	/* A fence has been interpreted, nothing for the interpreter */
 	void
 	visitFence(llvm::AtomicOrdering ord);
@@ -219,6 +230,16 @@ protected:
 					 const llvm::GenericValue *a,
 					 const llvm::Type *t);
 
+	/* Returns true if we should check consistency at p */
+	bool shouldCheckCons(ProgramPoint p);
+
+	/* Returns true if full consistency needs to be checked at p.
+	 * Assumes that consistency needs to be checked anyway. */
+	bool shouldCheckFullCons(ProgramPoint p);
+
+	/* Returns true if a is hb-before b */
+	bool isHbBefore(Event a, Event b, ProgramPoint p = ProgramPoint::step);
+
 private:
 	/*** Worklist-related ***/
 
@@ -245,6 +266,18 @@ private:
 	/* Resets some options before the beginning of a new execution */
 	void resetExplorationOptions();
 
+	/* Sets up a prioritization scheme among threads */
+	void prioritizeThreads();
+
+	/* Deprioritizes the current thread */
+	void deprioritizeThread();
+
+	/* Tries to schedule according to the current prioritization scheme */
+	bool schedulePrioritized();
+
+	/* Resets the prioritization scheme */
+	void resetThreadPrioritization();
+
 	/* Checks whether the last memory access recorded accesses
 	 * a valid address. Appropriately calls visitError() and terminates */
 	void checkAccessValidity();
@@ -252,6 +285,10 @@ private:
 	/* Checks for data races when a read/write is added.
 	 * Appropriately calls visitError() and terminates */
 	void checkForDataRaces();
+
+	/* Performs POSIX checks whenever an unlock event is added.
+	 * Appropriately calls visitError() and terminates */
+	void checkUnlockValidity();
 
 	/* Checks whether there is some race when allocating/deallocating
 	 * memory and reports an error as necessary.
@@ -270,6 +307,9 @@ private:
 	/* If the execution is guided, returns the corresponding label for
 	 * this instruction. Reports an error if the execution is not guided */
 	const EventLabel *getCurrentLabel() const;
+
+	/* Returns true if the current graph is consistent */
+	bool isConsistent(ProgramPoint p);
 
 	/* Calculates revisit options and pushes them to the worklist.
 	 * Returns true if the current exploration should continue */
@@ -303,6 +343,15 @@ private:
 					       llvm::GenericValue &expVal,
 					       std::vector<Event> &stores);
 
+	/* Removes rfs from "rfs" until a consistent option for rLab is found,
+	 * if that is dictated by the CLI options */
+	bool ensureConsistentRf(const ReadLabel *rLab, std::vector<Event> &rfs);
+
+	/* Makes sure that the current graph is consistent, if that is dictated
+	 * by the CLI options. Since that is not always the case for stores
+	 * (e.g., w/ LAPOR), it returns whether it is the case or not */
+	bool ensureConsistentStore(const WriteLabel *wLab);
+
 	std::vector<Event>
 	getLibConsRfsInView(const Library &lib, Event read,
 			    const std::vector<Event> &stores,
@@ -319,6 +368,17 @@ private:
 	bool tryToRevisitLock(const CasReadLabel *rLab, const WriteLabel *sLab,
 			      const std::vector<Event> &writePrefixPos,
 			      const std::vector<std::pair<Event, Event> > &moPlacings);
+
+	/* Opt: Repairs the reads-from edge of a dangling lock */
+	void repairLock(Event lock);
+
+	/* Opt: Repairs some locks that may be "dangling", as part of the
+	 * in-place revisiting of locks */
+	bool repairDanglingLocks();
+
+	/* LAPOR: Helper for visiting a lock()/unlock() event */
+	void visitLockLAPOR(const llvm::GenericValue *addr);
+	void visitUnlockLAPOR(const llvm::GenericValue *addr);
 
 
 	/*** Output-related ***/
@@ -429,6 +489,14 @@ private:
 	virtual std::unique_ptr<ThreadFinishLabel>
 	createFinishLabel(int tid, int index) = 0;
 
+	/* LAPOR: Creates a (dummy) label for a lock() operation */
+	virtual std::unique_ptr<LockLabelLAPOR>
+	createLockLabelLAPOR(int tid, int index, const llvm::GenericValue *addr) = 0;
+
+	/* LAPOR: Creates a (dummy) label for an unlock() operation */
+	virtual std::unique_ptr<UnlockLabelLAPOR>
+	createUnlockLabelLAPOR(int tid, int index, const llvm::GenericValue *addr) = 0;
+
 	/* Checks for races after a load/store is added to the graph.
 	 * Should return the racy event, or INIT if no such event exists */
 	virtual Event findDataRaceForMemAccess(const MemAccessLabel *mLab) = 0;
@@ -451,8 +519,13 @@ private:
 	 * views of the join, or false otherwise */
 	virtual bool updateJoin(Event join, Event childLast) = 0;
 
-	/* Should return true if the current graph is consistent */
-	virtual bool isExecutionValid() = 0;
+	/* Performs the necessary initializations for the
+	 * consistency calculation */
+	virtual void initConsCalculation() = 0;
+
+	/* Does some final consistency checks after the fixpoint is over,
+	 * and returns the final decision re. consistency */
+	virtual bool doFinalConsChecks(bool checkFull = false);
 
 	/* Random generator facilities used */
 	using MyRNG  = std::mt19937;
@@ -476,7 +549,7 @@ private:
 	/* The interpreter used by the driver */
 	llvm::Interpreter *EE;
 
-	/* The execution graph */
+	/* The graph managing object */
 	std::unique_ptr<ExecutionGraph> execGraph;
 
 	/* The worklist for backtracking. map[stamp->stack item list] */
@@ -485,9 +558,9 @@ private:
 	/* Opt: Whether this execution is moot (locking) */
 	bool isMootExecution;
 
-	/* Opt: Which thread the scheduler should prioritize
-	 * (negative if none) */
-	int prioritizeThread;
+	/* Opt: Which thread(s) the scheduler should prioritize
+	 * (empty if none) */
+	std::vector<Event> threadPrios;
 
 	/* Number of complete executions explored */
 	int explored;

@@ -19,20 +19,28 @@
  */
 
 #include "IMMDriver.hpp"
+#include "ARCalculator.hpp"
+#include "PSCCalculator.hpp"
+
+IMMDriver::IMMDriver(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Module> mod,
+		     std::vector<Library> &granted, std::vector<Library> &toVerify,
+		     clock_t start)
+	: GenMCDriver(std::move(conf), std::move(mod), granted, toVerify, start)
+{
+	auto &g = getGraph();
+
+	/* IMM requires acyclicity checks for both PSC and AR */
+	g.addCalculator(llvm::make_unique<PSCCalculator>(g),
+			ExecutionGraph::RelationId::psc, false);
+	g.addCalculator(llvm::make_unique<ARCalculator>(g),
+			ExecutionGraph::RelationId::ar, false);
+	return;
+}
 
 /* Calculates a minimal hb vector clock based on po for a given label */
 View IMMDriver::calcBasicHbView(Event e) const
 {
 	View v(getGraph().getPreviousLabel(e)->getHbView());
-
-	++v[e.thread];
-	return v;
-}
-
-/* Calculates a minimal (po U rf) vector clock based on po for a given label */
-View IMMDriver::calcBasicPorfView(Event e) const
-{
-	View v(getGraph().getPreviousLabel(e)->getPorfView());
 
 	++v[e.thread];
 	return v;
@@ -84,6 +92,27 @@ DepView IMMDriver::calcPPoView(Event e) /* not const */
 	return v;
 }
 
+void IMMDriver::updateRelView(DepView &pporf, EventLabel *lab)
+{
+	if (!lab->isAtLeastRelease())
+		return;
+
+	const auto &g = getGraph();
+
+	pporf.removeAllHoles(lab->getThread());
+	Event rel = g.getLastThreadRelease(lab->getPos());
+	if (llvm::isa<FaiWriteLabel>(g.getEventLabel(rel)) ||
+	    llvm::isa<CasWriteLabel>(g.getEventLabel(rel)))
+		--rel.index;
+	for (auto i = rel.index; i < lab->getIndex(); i++) {
+		if (auto *rLab = llvm::dyn_cast<ReadLabel>(
+			    g.getEventLabel(Event(lab->getThread(), i)))) {
+			pporf.update(rLab->getPPoRfView());
+		}
+	}
+	return;
+}
+
 void IMMDriver::calcBasicReadViews(ReadLabel *lab)
 {
 	const auto &g = getGraph();
@@ -124,20 +153,8 @@ void IMMDriver::calcBasicWriteViews(WriteLabel *lab)
 
 	if (llvm::isa<CasWriteLabel>(lab) || llvm::isa<FaiWriteLabel>(lab))
 		pporf.update(g.getPPoRfBefore(g.getPreviousLabel(lab)->getPos()));
-
-	if (lab->isAtLeastRelease()) {
-		pporf.removeAllHoles(lab->getThread());
-		Event rel = g.getLastThreadRelease(lab->getPos());
-		if (llvm::isa<FaiWriteLabel>(g.getEventLabel(rel)) ||
-		    llvm::isa<CasWriteLabel>(g.getEventLabel(rel)))
-			--rel.index;
-		for (auto i = rel.index; i < lab->getIndex(); i++) {
-			if (auto *rLab = llvm::dyn_cast<ReadLabel>(
-				    g.getEventLabel(Event(lab->getThread(), i)))) {
-				pporf.update(rLab->getPPoRfView());
-			}
-		}
-	}
+	if (lab->isAtLeastRelease())
+		updateRelView(pporf, lab);
 	pporf.update(g.getPPoRfBefore(g.getLastThreadReleaseAtLoc(lab->getPos(),
 								  lab->getAddr())));
 	lab->setPPoRfView(std::move(pporf));
@@ -214,16 +231,8 @@ void IMMDriver::calcBasicFenceViews(FenceLabel *lab)
 
 	if (lab->isAtLeastAcquire())
 		calcFenceRelRfPoBefore(lab->getPos().prev(), hb);
-	if (lab->isAtLeastRelease()) {
-		pporf.removeAllHoles(lab->getThread());
-		Event rel = g.getLastThreadRelease(lab->getPos());
-		for (auto i = rel.index; i < lab->getIndex(); i++) {
-			if (auto *rLab = llvm::dyn_cast<ReadLabel>(
-				    g.getEventLabel(Event(lab->getThread(), i)))) {
-				pporf.update(rLab->getPPoRfView());
-			}
-		}
-	}
+	if (lab->isAtLeastRelease())
+		updateRelView(pporf, lab);
 
 	lab->setHbView(std::move(hb));
 	lab->setPPoRfView(std::move(pporf));
@@ -485,6 +494,47 @@ IMMDriver::createFinishLabel(int tid, int index)
 	return std::move(lab);
 }
 
+std::unique_ptr<LockLabelLAPOR>
+IMMDriver::createLockLabelLAPOR(int tid, int index, const llvm::GenericValue *addr)
+{
+	const auto &g = getGraph();
+	Event pos(tid, index);
+	auto lab = llvm::make_unique<LockLabelLAPOR>(getGraph().nextStamp(),
+						     llvm::AtomicOrdering::Acquire,
+						     pos, addr);
+
+	View hb = calcBasicHbView(lab->getPos());
+	DepView pporf = calcPPoView(lab->getPos());
+
+	auto prevUnlock = g.getLastThreadUnlockAtLocLAPOR(lab->getPos().prev(),
+							  addr);
+	if (!prevUnlock.isInitializer())
+		pporf.update(g.getPPoRfBefore(prevUnlock));
+
+	lab->setHbView(std::move(hb));
+	lab->setPPoRfView(std::move(pporf));
+	return std::move(lab);
+}
+
+std::unique_ptr<UnlockLabelLAPOR>
+IMMDriver::createUnlockLabelLAPOR(int tid, int index, const llvm::GenericValue *addr)
+{
+	const auto &g = getGraph();
+	Event pos(tid, index);
+	auto lab = llvm::make_unique<UnlockLabelLAPOR>(getGraph().nextStamp(),
+						       llvm::AtomicOrdering::Release,
+						       pos, addr);
+
+	View hb = calcBasicHbView(lab->getPos());
+	DepView pporf = calcPPoView(lab->getPos());
+
+	updateRelView(pporf, lab.get());
+
+	lab->setHbView(std::move(hb));
+	lab->setPPoRfView(std::move(pporf));
+	return std::move(lab);
+}
+
 Event IMMDriver::findDataRaceForMemAccess(const MemAccessLabel *mLab)
 {
 	return Event::getInitializer(); /* Race detection disabled for IMM */
@@ -557,95 +607,7 @@ bool IMMDriver::updateJoin(Event join, Event childLast)
 	return true;
 }
 
-std::vector<Event> IMMDriver::collectAllEvents()
+void IMMDriver::initConsCalculation()
 {
-	const auto &g = getGraph();
-	std::vector<Event> result;
-
-	for (auto i = 0u; i < g.getNumThreads(); i++) {
-		for (auto j = 1u; j < g.getThreadSize(i); j++) {
-			auto *lab = g.getEventLabel(Event(i, j));
-			if (llvm::isa<MemAccessLabel>(lab) ||
-			    llvm::isa<FenceLabel>(lab))
-				result.push_back(lab->getPos());
-		}
-	}
-	return result;
-}
-
-/* TODO: Add function in VC interface that transforms VC to Matrix? */
-void IMMDriver::fillMatrixFromView(const Event e, const DepView &v,
-				     Matrix2D<Event> &matrix)
-{
-	const auto &g = getGraph();
- 	auto eI = matrix.getIndex(e);
-
-	for (auto i = 0u; i < v.size(); i++) {
-                if ((int) i == e.thread)
-			continue;
-		for (auto j = v[i]; j > 0; j--) {
-			auto curr = Event(i, j);
-			if (!v.contains(curr))
-				continue;
-
-			auto *lab = g.getEventLabel(curr);
-                        if (!llvm::isa<MemAccessLabel>(lab) &&
-			    !llvm::isa<FenceLabel>(lab))
-                                continue;
-
-			matrix(lab->getPos(), eI) = true;
-                        break;
-                }
- 	}
-}
-
-Matrix2D<Event> IMMDriver::getARMatrix()
-{
-	Matrix2D<Event> ar(collectAllEvents());
-	const std::vector<Event> &es = ar.getElems();
-        auto len = ar.size();
-	const auto &g = getGraph();
-
-        /* First, add ppo edges */
-        for (auto i = 0u; i < len; i++) {
-                for (auto j = 0u; j < len; j++) {
-			if (es[i].thread == es[j].thread &&
-			    es[i].index < es[j].index &&
-			    g.getPPoRfBefore(es[j]).contains(es[i]))
-				ar(i, j) = true;
-                }
-        }
-
-        /* Then, add the remaining ar edges */
-        for (const auto &e : es) {
-                auto *lab = g.getEventLabel(e);
-                BUG_ON(!llvm::isa<MemAccessLabel>(lab) && !llvm::isa<FenceLabel>(lab));
-                fillMatrixFromView(e, g.getPPoRfBefore(e), ar);
-        }
-	ar.transClosure();
-	return ar;
-}
-
-bool IMMDriver::isExecutionValid()
-{
-	const auto &g = getGraph();
-	Matrix2D<Event> ar = getARMatrix();
-	auto scs = g.getSCs();
-	auto &fcs = scs.second;
-
-	std::function<bool(const Matrix2D<Event>&)> check =
-		[&](const Matrix2D<Event> &psc) -> bool {
-		auto basicAr = ar;
-		if (psc.isReflexive())
-			return false;
-		for (auto &f1 : fcs) {
-			for (auto &f2 : fcs)
-				if (psc(f1, f2))
-					basicAr(f1, f2) = true;
-		}
-		basicAr.transClosure();
-		return !basicAr.isReflexive();
-	};
-
-	return g.checkPscCondition(CheckPSCType::full, check);
+	return;
 }

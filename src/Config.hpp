@@ -39,7 +39,9 @@ public:
 	ModelType model;
 	bool isDepTrackingModel;
 	CoherenceType coherence;
-	CheckPSCType checkPscAcyclicity;
+	bool LAPOR;
+	CheckConsType checkConsType;
+	ProgramPoint checkConsPoint;
 	int unroll;
 	bool spinAssume;
 	std::string programEntryFun;

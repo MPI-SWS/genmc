@@ -18,11 +18,11 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
+#include "ExecutionGraph.hpp"
 #include "Library.hpp"
 #include "MOCoherenceCalculator.hpp"
-#include "WBCoherenceCalculator.hpp"
 #include "Parser.hpp"
-#include "ExecutionGraph.hpp"
+#include "WBCoherenceCalculator.hpp"
 #include <llvm/IR/DebugInfo.h>
 
 /************************************************************
@@ -39,6 +39,12 @@ ExecutionGraph::ExecutionGraph() : timestamp(1)
 					     Event(0, 0),
 					     Event::getInitializer() )
 				     ) );
+
+	globalRelations.push_back(Calculator::GlobalRelation());
+	globalRelationsCache.push_back(Calculator::GlobalRelation());
+	relationIndex[RelationId::hb] = 0;
+	calculatorIndex[RelationId::hb] = -42; /* no calculator for hb */
+	return;
 }
 
 
@@ -81,6 +87,15 @@ const EventLabel *ExecutionGraph::getPreviousNonEmptyLabel(const EventLabel *lab
 	return getPreviousNonEmptyLabel(lab->getPos());
 }
 
+Event ExecutionGraph::getPreviousNonTrivial(const Event e) const
+{
+	for (auto i = e.index - 1; i >= 0; i--) {
+		if (isNonTrivial(Event(e.thread, i)))
+			return Event(e.thread, i);
+	}
+	return Event::getInitializer();
+}
+
 const EventLabel *ExecutionGraph::getLastThreadLabel(int thread) const
 {
 	return events[thread][events[thread].size() - 1].get();
@@ -96,7 +111,8 @@ Event ExecutionGraph::getLastThreadReleaseAtLoc(Event upperLimit,
 {
 	for (int i = upperLimit.index - 1; i > 0; i--) {
 		const EventLabel *lab = getEventLabel(Event(upperLimit.thread, i));
-		if (llvm::isa<ThreadCreateLabel>(lab) || llvm::isa<ThreadFinishLabel>(lab)) {
+		if (llvm::isa<ThreadCreateLabel>(lab) || llvm::isa<ThreadFinishLabel>(lab) ||
+		    llvm::isa<UnlockLabelLAPOR>(lab)) {
 			return Event(upperLimit.thread, i);
 		}
 		if (auto *fLab = llvm::dyn_cast<FenceLabel>(lab)) {
@@ -115,7 +131,8 @@ Event ExecutionGraph::getLastThreadRelease(Event upperLimit) const
 {
 	for (int i = upperLimit.index - 1; i > 0; i--) {
 		const EventLabel *lab = getEventLabel(Event(upperLimit.thread, i));
-		if (llvm::isa<ThreadCreateLabel>(lab) || llvm::isa<ThreadFinishLabel>(lab)) {
+		if (llvm::isa<ThreadCreateLabel>(lab) || llvm::isa<ThreadFinishLabel>(lab) ||
+		    llvm::isa<UnlockLabelLAPOR>(lab)) {
 			return Event(upperLimit.thread, i);
 		}
 		if (auto *fLab = llvm::dyn_cast<FenceLabel>(lab)) {
@@ -138,7 +155,7 @@ std::vector<Event> ExecutionGraph::getThreadAcquiresAndFences(Event upperLimit) 
 	result.push_back(Event(upperLimit.thread, 0));
 	for (int i = 1u; i < upperLimit.index; i++) {
 		const EventLabel *lab = getEventLabel(Event(upperLimit.thread, i));
-		if (llvm::isa<ThreadJoinLabel>(lab))
+		if (llvm::isa<ThreadJoinLabel>(lab) || llvm::isa<LockLabelLAPOR>(lab))
 			result.push_back(lab->getPos());
 		if (auto *fLab = llvm::dyn_cast<FenceLabel>(lab))
 			result.push_back(lab->getPos());
@@ -148,6 +165,142 @@ std::vector<Event> ExecutionGraph::getThreadAcquiresAndFences(Event upperLimit) 
 		}
 	}
 	return result;
+}
+
+Event ExecutionGraph::getMatchingLock(const Event unlock) const
+{
+	std::vector<Event> locUnlocks;
+
+	const EventLabel *unlockL = getEventLabel(unlock);
+	BUG_ON(!llvm::isa<WriteLabel>(unlockL));
+	auto *uLab = static_cast<const WriteLabel *>(unlockL);
+	BUG_ON(!uLab->isUnlock());
+
+	for (auto j = unlock.index - 1; j > 0; j--) {
+		const EventLabel *lab = getEventLabel(Event(unlock.thread, j));
+
+		/* In case support for reentrant locks is added... */
+		if (auto *suLab = llvm::dyn_cast<WriteLabel>(lab)) {
+			if (suLab->isUnlock() && suLab->getAddr() == uLab->getAddr())
+				locUnlocks.push_back(suLab->getPos());
+		}
+		if (auto *lLab = llvm::dyn_cast<CasReadLabel>(lab)) {
+			if (lLab->isLock() && lLab->getAddr() == uLab->getAddr()) {
+				if (locUnlocks.empty())
+					return lLab->getPos();
+				else
+					locUnlocks.pop_back();
+			}
+		}
+	}
+	return Event::getInitializer();
+}
+
+Event ExecutionGraph::getMatchingUnlock(const Event lock) const
+{
+	std::vector<Event> locLocks;
+
+	const EventLabel *lockL = getEventLabel(lock);
+	BUG_ON(!llvm::isa<CasReadLabel>(lockL));
+	auto *lLab = static_cast<const CasReadLabel *>(lockL);
+	BUG_ON(!lLab->isLock());
+
+	for (auto j = lock.index + 1; j < getThreadSize(lock.thread); j++) {
+		const EventLabel *lab = getEventLabel(Event(lock.thread, j));
+
+		/* In case support for reentrant locks is added... */
+		if (auto *slLab = llvm::dyn_cast<CasReadLabel>(lab)) {
+			if (slLab->isLock() && slLab->getAddr() == lLab->getAddr())
+				locLocks.push_back(slLab->getPos());
+		}
+		if (auto *uLab = llvm::dyn_cast<WriteLabel>(lab)) {
+			if (uLab->isUnlock() && uLab->getAddr() == lLab->getAddr()) {
+				if (locLocks.empty())
+					return uLab->getPos();
+				else
+					locLocks.pop_back();
+			}
+		}
+	}
+	return Event::getInitializer();
+}
+
+Event ExecutionGraph::getLastThreadUnmatchedLockLAPOR(const Event upperLimit) const
+{
+	std::vector<const llvm::GenericValue *> unlocks;
+
+	for (auto j = upperLimit.index; j >= 0; j--) {
+		const EventLabel *lab = getEventLabel(Event(upperLimit.thread, j));
+
+		if (auto *lLab = llvm::dyn_cast<LockLabelLAPOR>(lab)) {
+			if (std::find_if(unlocks.rbegin(), unlocks.rend(),
+					 [&](const llvm::GenericValue *addr)
+					 { return lLab->getLockAddr() == addr; })
+			    ==  unlocks.rend())
+				return lLab->getPos();
+		}
+
+		if (auto *uLab = llvm::dyn_cast<UnlockLabelLAPOR>(lab))
+			unlocks.push_back(uLab->getLockAddr());
+	}
+	return Event::getInitializer();
+}
+
+Event ExecutionGraph::getMatchingUnlockLAPOR(const Event lock) const
+{
+	std::vector<Event> locLocks;
+
+	const EventLabel *lockL = getEventLabel(lock);
+	BUG_ON(!llvm::isa<LockLabelLAPOR>(lockL));
+	auto *lLab = static_cast<const LockLabelLAPOR *>(lockL);
+
+	for (auto j = lock.index + 1; j < getThreadSize(lock.thread); j++) {
+		const EventLabel *lab = getEventLabel(Event(lock.thread, j));
+
+		if (auto *slLab = llvm::dyn_cast<LockLabelLAPOR>(lab)) {
+			if (slLab->getLockAddr() == lLab->getLockAddr())
+				locLocks.push_back(slLab->getPos());
+		}
+		if (auto *uLab = llvm::dyn_cast<UnlockLabelLAPOR>(lab)) {
+			if (uLab->getLockAddr() == lLab->getLockAddr()) {
+				if (locLocks.empty())
+					return uLab->getPos();
+				else
+					locLocks.pop_back();
+			}
+		}
+	}
+	return Event::getInitializer();
+}
+
+Event ExecutionGraph::getLastThreadLockAtLocLAPOR(const Event upperLimit,
+						  const llvm::GenericValue *loc) const
+{
+	for (auto j = upperLimit.index; j >= 0; j--) {
+		const EventLabel *lab = getEventLabel(Event(upperLimit.thread, j));
+
+		if (auto *lLab = llvm::dyn_cast<LockLabelLAPOR>(lab)) {
+			if (lLab->getLockAddr() == loc)
+				return lLab->getPos();
+		}
+
+	}
+	return Event::getInitializer();
+}
+
+Event ExecutionGraph::getLastThreadUnlockAtLocLAPOR(const Event upperLimit,
+						    const llvm::GenericValue *loc) const
+{
+	for (auto j = upperLimit.index; j >= 0; j--) {
+		const EventLabel *lab = getEventLabel(Event(upperLimit.thread, j));
+
+		if (auto *lLab = llvm::dyn_cast<UnlockLabelLAPOR>(lab)) {
+			if (lLab->getLockAddr() == loc)
+				return lLab->getPos();
+		}
+
+	}
+	return Event::getInitializer();
 }
 
 std::vector<Event> ExecutionGraph::getPendingRMWs(const WriteLabel *sLab) const
@@ -225,6 +378,231 @@ std::vector<Event> ExecutionGraph::getInitRfsAtLoc(const llvm::GenericValue *add
 	return result;
 }
 
+
+/*******************************************************************************
+ **                       Label addition methods
+ ******************************************************************************/
+
+const ReadLabel *ExecutionGraph::addReadLabelToGraph(std::unique_ptr<ReadLabel> lab,
+						     Event rf)
+{
+	EventLabel *rfLab = getEventLabel(rf);
+	if (auto *wLab = llvm::dyn_cast<WriteLabel>(rfLab)) {
+		wLab->addReader(lab->getPos());
+	}
+
+	return static_cast<const ReadLabel *>(addOtherLabelToGraph(std::move(lab)));
+}
+
+const WriteLabel *ExecutionGraph::addWriteLabelToGraph(std::unique_ptr<WriteLabel> lab,
+						     unsigned int offsetMO)
+{
+	getCoherenceCalculator()->addStoreToLoc(lab->getAddr(), lab->getPos(), offsetMO);
+	return static_cast<const WriteLabel *>(addOtherLabelToGraph(std::move(lab)));
+}
+
+const WriteLabel *ExecutionGraph::addWriteLabelToGraph(std::unique_ptr<WriteLabel> lab,
+						     Event pred)
+{
+	getCoherenceCalculator()->addStoreToLocAfter(lab->getAddr(), lab->getPos(), pred);
+	return static_cast<const WriteLabel *>(addOtherLabelToGraph(std::move(lab)));
+}
+
+const LockLabelLAPOR *ExecutionGraph::addLockLabelToGraphLAPOR(std::unique_ptr<LockLabelLAPOR> lab)
+{
+	getLbCalculatorLAPOR()->addLockToList(lab->getLockAddr(), lab->getPos());
+	return static_cast<const LockLabelLAPOR *>(addOtherLabelToGraph(std::move(lab)));
+}
+
+const EventLabel *ExecutionGraph::addOtherLabelToGraph(std::unique_ptr<EventLabel> lab)
+{
+	auto pos = lab->getPos();
+
+	if (pos.index < events[pos.thread].size()) {
+		events[pos.thread][pos.index] = std::move(lab);
+	} else {
+		events[pos.thread].push_back(std::move(lab));
+	}
+	BUG_ON(pos.index > events[pos.thread].size());
+	return getEventLabel(pos);
+}
+
+
+/************************************************************
+ ** Calculation of [(po U rf)*] predecessors and successors
+ ***********************************************************/
+
+void ExecutionGraph::addCalculator(std::unique_ptr<Calculator> cc, RelationId r,
+				 bool perLoc, bool partial /* = false */)
+{
+	/* Add a calculator for this relation */
+	auto calcSize = getCalcs().size();
+	consistencyCalculators.push_back(std::move(cc));
+	if (partial)
+		partialConsCalculators.push_back(calcSize);
+
+	/* Add a matrix for this relation */
+	auto relSize = 0u;
+	if (perLoc) {
+		relSize = perLocRelations.size();
+		perLocRelations.push_back(Calculator::PerLocRelation());
+		perLocRelationsCache.push_back(Calculator::PerLocRelation());
+	} else {
+		relSize = globalRelations.size();
+		globalRelations.push_back(Calculator::GlobalRelation());
+		globalRelationsCache.push_back(Calculator::GlobalRelation());
+	}
+
+	/* Update indices trackers */
+	calculatorIndex[r] = calcSize;
+	relationIndex[r] = relSize;
+}
+
+Calculator::GlobalRelation& ExecutionGraph::getGlobalRelation(RelationId id)
+{
+	BUG_ON(relationIndex.count(id) == 0);
+	return globalRelations[relationIndex[id]];
+}
+
+Calculator::PerLocRelation& ExecutionGraph::getPerLocRelation(RelationId id)
+{
+	BUG_ON(relationIndex.count(id) == 0);
+	return perLocRelations[relationIndex[id]];
+}
+
+Calculator::GlobalRelation& ExecutionGraph::getCachedGlobalRelation(RelationId id)
+{
+	BUG_ON(relationIndex.count(id) == 0);
+	return globalRelationsCache[relationIndex[id]];
+}
+
+Calculator::PerLocRelation& ExecutionGraph::getCachedPerLocRelation(RelationId id)
+{
+	BUG_ON(relationIndex.count(id) == 0);
+	return perLocRelationsCache[relationIndex[id]];
+}
+
+void ExecutionGraph::cacheRelations(bool copy /* = true */)
+{
+	if (copy) {
+		for (auto i = 0u; i < globalRelations.size(); i++)
+			globalRelationsCache[i] = globalRelations[i];
+		for (auto i = 0u; i < perLocRelations.size(); i++)
+			perLocRelationsCache[i] = perLocRelations[i];
+	} else {
+		for (auto i = 0u; i < globalRelations.size(); i++)
+			globalRelationsCache[i] = std::move(globalRelations[i]);
+		for (auto i = 0u; i < perLocRelations.size(); i++)
+			perLocRelationsCache[i] = std::move(perLocRelations[i]);
+	}
+	return;
+}
+
+void ExecutionGraph::restoreCached(bool move /* = false */)
+{
+	if (!move) {
+		for (auto i = 0u; i < globalRelations.size(); i++)
+			globalRelations[i] = globalRelationsCache[i];
+		for (auto i = 0u; i < perLocRelations.size(); i++)
+			perLocRelations[i] = perLocRelationsCache[i];
+	} else {
+		for (auto i = 0u; i < globalRelations.size(); i++)
+			globalRelations[i] = std::move(globalRelationsCache[i]);
+		for (auto i = 0u; i < perLocRelations.size(); i++)
+			perLocRelations[i] = std::move(perLocRelationsCache[i]);
+	}
+	return;
+}
+
+Calculator *ExecutionGraph::getCalculator(RelationId id)
+{
+	return consistencyCalculators[calculatorIndex[id]].get();
+}
+
+CoherenceCalculator *ExecutionGraph::getCoherenceCalculator()
+{
+	return static_cast<CoherenceCalculator *>(
+		consistencyCalculators[relationIndex[RelationId::co]].get());
+}
+
+CoherenceCalculator *ExecutionGraph::getCoherenceCalculator() const
+{
+	return static_cast<CoherenceCalculator *>(
+		consistencyCalculators.at(relationIndex.at(RelationId::co)).get());
+}
+
+LBCalculatorLAPOR *ExecutionGraph::getLbCalculatorLAPOR()
+{
+	return static_cast<LBCalculatorLAPOR *>(
+		consistencyCalculators[relationIndex[RelationId::lb]].get());
+}
+
+LBCalculatorLAPOR *ExecutionGraph::getLbCalculatorLAPOR() const
+{
+	return static_cast<LBCalculatorLAPOR *>(
+		consistencyCalculators.at(relationIndex.at(RelationId::lb)).get());
+}
+
+std::vector<Event> ExecutionGraph::getLbOrderingLAPOR() const
+{
+	return getLbCalculatorLAPOR()->getLbOrdering();
+}
+
+const std::vector<Calculator *> ExecutionGraph::getCalcs() const
+{
+	std::vector<Calculator *> result;
+
+	for (auto i = 0u; i < consistencyCalculators.size(); i++)
+		result.push_back(consistencyCalculators[i].get());
+	return result;
+}
+
+const std::vector<Calculator *> ExecutionGraph::getPartialCalcs() const
+{
+	std::vector<Calculator *> result;
+
+	for (auto i = 0u; i < partialConsCalculators.size(); i++)
+		result.push_back(consistencyCalculators[partialConsCalculators[i]].get());
+	return result;
+}
+
+void ExecutionGraph::doInits(bool full /* = false */)
+{
+	auto &hb = globalRelations[relationIndex[RelationId::hb]];
+	populateHbEntries(hb);
+	hb.transClosure();
+
+	auto &calcs = consistencyCalculators;
+	auto &partial = partialConsCalculators;
+	for (auto i = 0u; i < calcs.size(); i++) {
+		if (!full && std::find(partial.begin(), partial.end(), i) == partial.end())
+			continue;
+
+		calcs[i]->initCalc();
+	}
+	return;
+}
+
+Calculator::CalculationResult ExecutionGraph::doCalcs(bool full /* = false */)
+{
+	Calculator::CalculationResult result;
+
+	auto &calcs = consistencyCalculators;
+	auto &partial = partialConsCalculators;
+	for (auto i = 0u; i < calcs.size(); i++) {
+		if (!full && std::find(partial.begin(), partial.end(), i) == partial.end())
+			continue;
+
+		result |= calcs[i]->doCalc();
+
+		/* If an inconsistency was spotted, no reason to call
+		 * the other calculators */
+		if (!result.cons)
+			return result;
+	}
+	return result;
+}
+
 void ExecutionGraph::trackCoherenceAtLoc(const llvm::GenericValue *addr)
 {
 	return getCoherenceCalculator()->trackCoherenceAtLoc(addr);
@@ -258,73 +636,6 @@ std::vector<Event>
 ExecutionGraph::getCoherentRevisits(const WriteLabel *wLab)
 {
 	return getCoherenceCalculator()->getCoherentRevisits(wLab);
-}
-
-
-/*******************************************************************************
- **                       Label addition methods
- ******************************************************************************/
-
-const ReadLabel *ExecutionGraph::addReadLabelToGraph(std::unique_ptr<ReadLabel> lab,
-						     Event rf)
-{
-	EventLabel *rfLab = getEventLabel(rf);
-	if (auto *wLab = llvm::dyn_cast<WriteLabel>(rfLab)) {
-		wLab->addReader(lab->getPos());
-	}
-
-	return static_cast<const ReadLabel *>(addOtherLabelToGraph(std::move(lab)));
-}
-
-const WriteLabel *ExecutionGraph::addWriteLabelToGraph(std::unique_ptr<WriteLabel> lab,
-						       unsigned int offsetMO)
-{
-
-	getCoherenceCalculator()->addStoreToLoc(lab->getAddr(), lab->getPos(), offsetMO);
-	return static_cast<const WriteLabel *>(addOtherLabelToGraph(std::move(lab)));
-}
-
-const WriteLabel *ExecutionGraph::addWriteLabelToGraph(std::unique_ptr<WriteLabel> lab,
-						       Event pred)
-{
-
-	getCoherenceCalculator()->addStoreToLocAfter(lab->getAddr(), lab->getPos(), pred);
-	return static_cast<const WriteLabel *>(addOtherLabelToGraph(std::move(lab)));
-}
-
-const EventLabel *ExecutionGraph::addOtherLabelToGraph(std::unique_ptr<EventLabel> lab)
-{
-	auto pos = lab->getPos();
-
-	if (pos.index < events[pos.thread].size()) {
-		events[pos.thread][pos.index] = std::move(lab);
-	} else {
-		events[pos.thread].push_back(std::move(lab));
-	}
-	BUG_ON(pos.index > events[pos.thread].size());
-	return getEventLabel(pos);
-}
-
-
-/************************************************************
- ** Calculation of [(po U rf)*] predecessors and successors
- ***********************************************************/
-
-std::vector<Event> ExecutionGraph::getStoresHbAfterStores(const llvm::GenericValue *loc,
-							  const std::vector<Event> &chain) const
-{
-	auto &stores = getStoresToLoc(loc);
-	std::vector<Event> result;
-
-	for (auto &s : stores) {
-		if (std::find(chain.begin(), chain.end(), s) != chain.end())
-			continue;
-		auto &before = getHbBefore(s);
-		if (std::any_of(chain.begin(), chain.end(), [&before](Event e)
-				{ return e.index < before[e.thread]; }))
-			result.push_back(s);
-	}
-	return result;
 }
 
 std::unique_ptr<VectorClock>
@@ -365,59 +676,81 @@ const View &ExecutionGraph::getHbPoBefore(Event e) const
 	return getPreviousNonEmptyLabel(e)->getHbView();
 }
 
-void ExecutionGraph::calcHbRfBefore(Event e, const llvm::GenericValue *addr,
-				    View &a) const
+#define IMPLEMENT_POPULATE_ENTRIES(MATRIX, GET_VIEW)			\
+do {								        \
+									\
+        const std::vector<Event> &es = MATRIX.getElems();		\
+        auto len = es.size();						\
+									\
+        for (auto i = 0u; i < len; i++) {				\
+		for (auto j = 0u; j < len; j++) {			\
+			if (es[i] != es[j] &&				\
+			    GET_VIEW(es[j]).contains(es[i]))		\
+				MATRIX.addEdge(i, j);			\
+		}							\
+        }								\
+} while (0)
+
+void ExecutionGraph::populatePorfEntries(AdjList<Event, EventHasher> &relation) const
 {
-	if (a.contains(e))
-		return;
-	int ai = a[e.thread];
-	a[e.thread] = e.index;
-	for (int i = ai + 1; i <= e.index; i++) {
-		const EventLabel *lab = getEventLabel(Event(e.thread, i));
-		if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab)) {
-			if (rLab->getAddr() == addr ||
-			    rLab->getHbView().contains(rLab->getRf()))
-				calcHbRfBefore(rLab->getRf(), addr, a);
-		} else if (auto *bLab = llvm::dyn_cast<ThreadStartLabel>(lab)) {
-			calcHbRfBefore(bLab->getParentCreate(), addr, a);
-		} else if (auto *jLab = llvm::dyn_cast<ThreadJoinLabel>(lab)) {
-			calcHbRfBefore(jLab->getChildLast(), addr, a);
+	IMPLEMENT_POPULATE_ENTRIES(relation, getPorfBefore);
+}
+
+void ExecutionGraph::populatePPoRfEntries(AdjList<Event, EventHasher> &relation) const
+{
+	IMPLEMENT_POPULATE_ENTRIES(relation, getPPoRfBefore);
+}
+
+void ExecutionGraph::populateHbEntries(AdjList<Event, EventHasher> &relation) const
+{
+	std::vector<Event> elems;
+	std::vector<std::pair<Event, Event> > edges;
+
+	for (auto i = 0u; i < getNumThreads(); i++) {
+		auto thrIdx = elems.size();
+		for (auto j = 0u; j < getThreadSize(i); j++) {
+			auto *lab = getEventLabel(Event(i, j));
+			if (!isNonTrivial(lab))
+				continue;
+
+			auto labIdx = elems.size();
+			elems.push_back(Event(i, j));
+
+			if (labIdx == thrIdx) {
+				auto *bLab = getEventLabel(Event(i, 0));
+				BUG_ON(!llvm::isa<ThreadStartLabel>(bLab));
+
+				auto parentLast = getPreviousNonTrivial(
+					llvm::dyn_cast<ThreadStartLabel>(bLab)->getParentCreate());
+				if (!parentLast.isInitializer())
+					edges.push_back(std::make_pair(parentLast, elems[labIdx]));
+			}
+			if (labIdx > thrIdx)
+				edges.push_back(std::make_pair(elems[labIdx - 1], elems[labIdx]));
+			if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab)) {
+				if (!rLab->getRf().isInitializer()) {
+					auto pred = (labIdx > thrIdx) ?
+						elems[labIdx - 1] : Event::getInitializer();
+					auto &v = rLab->getHbView();
+					auto &predV = getHbBefore(pred);
+					for (auto k = 0u; k < v.size(); k++) {
+						if (k != rLab->getThread() &&
+						    v[k] > 0 &&
+						    !predV.contains(Event(k, v[k]))) {
+							auto cndt = getPreviousNonTrivial(Event(k, v[k]).next());
+							if (cndt.isInitializer())
+								continue;
+							edges.push_back(std::make_pair(cndt, rLab->getPos()));
+						}
+					}
+				}
+			}
 		}
 	}
+	relation = std::move(AdjList<Event, EventHasher>(std::move(elems)));
+	for (auto &e : edges)
+		relation.addEdge(e.first, e.second);
 	return;
-}
-
-View ExecutionGraph::getHbRfBefore(const std::vector<Event> &es) const
-{
-	View a;
-
-	for (auto &e : es) {
-		const EventLabel *lab = getEventLabel(e);
-		if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab)) {
-			calcHbRfBefore(e, rLab->getAddr(), a);
-		} else {
-			a.update(lab->getHbView());
-		}
-	}
-	return a;
-}
-
-void ExecutionGraph::calcRelRfPoBefore(Event last, View &v) const
-{
-	for (auto i = last.index; i > 0; i--) {
-		const EventLabel *lab = getEventLabel(Event(last.thread, i));
-		if (llvm::isa<FenceLabel>(lab) && lab->isAtLeastAcquire())
-			return;
-		if (!llvm::isa<ReadLabel>(lab))
-			continue;
-		auto *rLab = static_cast<const ReadLabel *>(lab);
-		if (rLab->getOrdering() == llvm::AtomicOrdering::Monotonic ||
-		    rLab->getOrdering() == llvm::AtomicOrdering::Release) {
-			const EventLabel *rfLab = getEventLabel(rLab->getRf());
-			if (auto *wLab = llvm::dyn_cast<WriteLabel>(rfLab))
-				v.update(wLab->getMsgView());
-		}
-	}
 }
 
 
@@ -486,6 +819,30 @@ ExecutionGraph::extractRfs(const std::vector<std::unique_ptr<EventLabel> > &labs
  ** Calculation of writes a read can read from
  ***********************************************************/
 
+bool ExecutionGraph::isNonTrivial(const Event e) const
+{
+	return isNonTrivial(getEventLabel(e));
+}
+
+bool ExecutionGraph::isNonTrivial(const EventLabel *lab) const
+{
+	if (auto *lLab = llvm::dyn_cast<LockLabelLAPOR>(lab))
+		return isCSEmptyLAPOR(lLab);
+	return llvm::isa<MemAccessLabel>(lab) ||
+	       llvm::isa<FenceLabel>(lab);
+}
+
+bool ExecutionGraph::isCSEmptyLAPOR(const LockLabelLAPOR *lLab) const
+{
+	if (lLab->getIndex() == getThreadSize(lLab->getThread()) - 1)
+		return true;
+
+	auto *nLab = getEventLabel(lLab->getPos().next());
+	if (auto *uLab = llvm::dyn_cast<UnlockLabelLAPOR>(nLab))
+		return lLab->getLockAddr() == uLab->getLockAddr();
+	return false;
+}
+
 bool ExecutionGraph::isHbOptRfBefore(const Event e, const Event write) const
 {
 	const EventLabel *lab = getEventLabel(write);
@@ -553,7 +910,7 @@ bool ExecutionGraph::isStoreReadByExclusiveRead(Event store,
 }
 
 bool ExecutionGraph::isStoreReadBySettledRMW(Event store, const llvm::GenericValue *ptr,
-					     const VectorClock &porfBefore) const
+					     const VectorClock &prefix) const
 {
 	for (auto i = 0u; i < getNumThreads(); i++) {
 		for (auto j = 0u; j < getThreadSize(i); j++) {
@@ -567,7 +924,7 @@ bool ExecutionGraph::isStoreReadBySettledRMW(Event store, const llvm::GenericVal
 
 			if (!rLab->isRevisitable())
 				return true;
-			if (porfBefore.contains(rLab->getPos()))
+			if (prefix.contains(rLab->getPos()))
 				return true;
 		}
 	}
@@ -592,16 +949,6 @@ bool ExecutionGraph::revisitModifiesGraph(const ReadLabel *rLab,
 /************************************************************
  ** Graph modification methods
  ***********************************************************/
-
-void ExecutionGraph::changeStoreOffset(const llvm::GenericValue *addr,
-				       Event s, int newOffset)
-{
-	BUG_ON(!llvm::isa<MOCoherenceCalculator>(getCoherenceCalculator()));
-	auto *cohTracker = static_cast<MOCoherenceCalculator *>(
-		getCoherenceCalculator());
-
-	cohTracker->changeStoreOffset(addr, s, newOffset);
-}
 
 void ExecutionGraph::changeRf(Event read, Event store)
 {
@@ -709,9 +1056,31 @@ DepView ExecutionGraph::getDepViewFromStamp(unsigned int stamp) const
 	return preds;
 }
 
+void ExecutionGraph::changeStoreOffset(const llvm::GenericValue *addr,
+				     Event s, int newOffset)
+{
+	BUG_ON(!llvm::isa<MOCoherenceCalculator>(getCoherenceCalculator()));
+	auto *cohTracker = static_cast<MOCoherenceCalculator *>(
+		getCoherenceCalculator());
+
+	cohTracker->changeStoreOffset(addr, s, newOffset);
+}
+
+std::vector<std::pair<Event, Event> >
+ExecutionGraph::saveCoherenceStatus(const std::vector<std::unique_ptr<EventLabel> > &prefix,
+				    const ReadLabel *rLab) const
+{
+	return getCoherenceCalculator()->saveCoherenceStatus(prefix, rLab);
+}
+
 void ExecutionGraph::cutToStamp(unsigned int stamp)
 {
 	auto preds = getViewFromStamp(stamp);
+
+	/* Inform all calculators about the events cutted */
+	auto &calcs = consistencyCalculators;
+	for (auto i = 0u; i < calcs.size(); i++)
+		calcs[i]->removeAfter(preds);
 
 	/* Restrict the graph according to the view (keep begins around) */
 	for (auto i = 0u; i < getNumThreads(); i++) {
@@ -741,23 +1110,17 @@ void ExecutionGraph::cutToStamp(unsigned int stamp)
 			 * it will not be deleted */
 		}
 	}
-
-	/* Remove cutted events from the coherence order as well */
-	getCoherenceCalculator()->removeStoresAfter(preds);
 	return;
-}
-
-std::vector<std::pair<Event, Event> >
-ExecutionGraph::saveCoherenceStatus(const std::vector<std::unique_ptr<EventLabel> > &prefix,
-				    const ReadLabel *rLab) const
-{
-	return getCoherenceCalculator()->saveCoherenceStatus(prefix, rLab);
 }
 
 void ExecutionGraph::restoreStorePrefix(const ReadLabel *rLab,
 					std::vector<std::unique_ptr<EventLabel> > &storePrefix,
 					std::vector<std::pair<Event, Event> > &moPlacings)
 {
+	auto &calcs = consistencyCalculators;
+	for (auto i = 0u; i < calcs.size() ; i++)
+		calcs[i]->restorePrefix(rLab, storePrefix, moPlacings);
+
 	std::vector<Event> inserted;
 
 	for (auto &lab : storePrefix) {
@@ -793,9 +1156,6 @@ void ExecutionGraph::restoreStorePrefix(const ReadLabel *rLab,
 				new EmptyLabel(nextStamp(), Event(i, j)));
 		}
 	}
-
-	/* Insert the writes of storePrefix into the appropriate places */
-	getCoherenceCalculator()->restoreCoherenceStatus(moPlacings);
 }
 
 bool ExecutionGraph::revisitSetContains(const ReadLabel *r, const std::vector<Event> &writePrefix,
@@ -818,15 +1178,6 @@ void ExecutionGraph::addToRevisitSet(const ReadLabel *r, const std::vector<Event
 	return rLab->revs.add(writePrefix, moPlacings);
 }
 
-
-/************************************************************
- ** Consistency checks
- ***********************************************************/
-
-bool ExecutionGraph::isConsistent(void) const
-{
-	return true;
-}
 
 /************************************************************
  ** PSC calculation
@@ -873,489 +1224,6 @@ ExecutionGraph::getSCs() const
 		}
 	}
 	return std::make_pair(scs,fcs);
-}
-
-std::vector<const llvm::GenericValue *> ExecutionGraph::getDoubleLocs() const
-{
-	std::vector<const llvm::GenericValue *> singles, doubles;
-
-	for (auto i = 0u; i < getNumThreads(); i++) {
-		for (auto j = 1u; j < getThreadSize(i); j++) { /* Do not consider thread inits */
-			const EventLabel *lab = getEventLabel(Event(i, j));
-			if (!llvm::isa<MemAccessLabel>(lab))
-				continue;
-
-			auto *mLab = static_cast<const MemAccessLabel *>(lab);
-			if (std::find(doubles.begin(), doubles.end(),
-				      mLab->getAddr()) != doubles.end())
-				continue;
-			if (std::find(singles.begin(), singles.end(),
-				      mLab->getAddr()) != singles.end()) {
-				singles.erase(std::remove(singles.begin(),
-							  singles.end(),
-							  mLab->getAddr()),
-					      singles.end());
-				doubles.push_back(mLab->getAddr());
-			} else {
-				singles.push_back(mLab->getAddr());
-			}
-		}
-	}
-	return doubles;
-}
-
-std::vector<Event> ExecutionGraph::calcSCFencesSuccs(const std::vector<Event> &fcs,
-						     const Event e) const
-{
-	std::vector<Event> succs;
-
-	if (isRMWLoad(e))
-		return succs;
-	for (auto &f : fcs) {
-		if (getHbBefore(f).contains(e))
-			succs.push_back(f);
-	}
-	return succs;
-}
-
-std::vector<Event> ExecutionGraph::calcSCFencesPreds(const std::vector<Event> &fcs,
-						     const Event e) const
-{
-	std::vector<Event> preds;
-	auto &before = getHbBefore(e);
-
-	if (isRMWLoad(e))
-		return preds;
-	for (auto &f : fcs) {
-		if (before.contains(f))
-			preds.push_back(f);
-	}
-	return preds;
-}
-
-std::vector<Event> ExecutionGraph::calcSCSuccs(const std::vector<Event> &fcs,
-					       const Event e) const
-{
-	const EventLabel *lab = getEventLabel(e);
-
-	if (isRMWLoad(lab))
-		return {};
-	if (lab->isSC())
-		return {e};
-	else
-		return calcSCFencesSuccs(fcs, e);
-}
-
-std::vector<Event> ExecutionGraph::calcSCPreds(const std::vector<Event> &fcs,
-					       const Event e) const
-{
-	const EventLabel *lab = getEventLabel(e);
-
-	if (isRMWLoad(lab))
-		return {};
-	if (lab->isSC())
-		return {e};
-	else
-		return calcSCFencesPreds(fcs, e);
-}
-
-std::vector<Event> ExecutionGraph::calcRfSCSuccs(const std::vector<Event> &fcs,
-						 const Event ev) const
-{
-	const EventLabel *lab = getEventLabel(ev);
-	std::vector<Event> rfs;
-
-	BUG_ON(!llvm::isa<WriteLabel>(lab));
-	auto *wLab = static_cast<const WriteLabel *>(lab);
-	for (const auto &e : wLab->getReadersList()) {
-		auto succs = calcSCSuccs(fcs, e);
-		rfs.insert(rfs.end(), succs.begin(), succs.end());
-	}
-	return rfs;
-}
-
-std::vector<Event> ExecutionGraph::calcRfSCFencesSuccs(const std::vector<Event> &fcs,
-						       const Event ev) const
-{
-	const EventLabel *lab = getEventLabel(ev);
-	std::vector<Event> fenceRfs;
-
-	BUG_ON(!llvm::isa<WriteLabel>(lab));
-	auto *wLab = static_cast<const WriteLabel *>(lab);
-	for (const auto &e : wLab->getReadersList()) {
-		auto fenceSuccs = calcSCFencesSuccs(fcs, e);
-		fenceRfs.insert(fenceRfs.end(), fenceSuccs.begin(), fenceSuccs.end());
-	}
-	return fenceRfs;
-}
-
-void ExecutionGraph::addRbEdges(const std::vector<Event> &fcs,
-				const std::vector<Event> &moAfter,
-				const std::vector<Event> &moRfAfter,
-				Matrix2D<Event> &matrix,
-				const Event &ev) const
-{
-	const EventLabel *lab = getEventLabel(ev);
-
-	BUG_ON(!llvm::isa<WriteLabel>(lab));
-	auto *wLab = static_cast<const WriteLabel *>(lab);
-	for (const auto &e : wLab->getReadersList()) {
-		auto preds = calcSCPreds(fcs, e);
-		auto fencePreds = calcSCFencesPreds(fcs, e);
-
-		matrix.addEdgesFromTo(preds, moAfter);        /* Base/fence: Adds rb-edges */
-		matrix.addEdgesFromTo(fencePreds, moRfAfter); /* Fence: Adds (rb;rf)-edges */
-	}
-	return;
-}
-
-void ExecutionGraph::addMoRfEdges(const std::vector<Event> &fcs,
-				  const std::vector<Event> &moAfter,
-				  const std::vector<Event> &moRfAfter,
-				  Matrix2D<Event> &matrix,
-				  const Event &ev) const
-{
-	auto preds = calcSCPreds(fcs, ev);
-	auto fencePreds = calcSCFencesPreds(fcs, ev);
-	auto rfs = calcRfSCSuccs(fcs, ev);
-
-	matrix.addEdgesFromTo(preds, moAfter);        /* Base/fence:  Adds mo-edges */
-	matrix.addEdgesFromTo(preds, rfs);            /* Base/fence:  Adds rf-edges (hb_loc) */
-	matrix.addEdgesFromTo(fencePreds, moRfAfter); /* Fence:       Adds (mo;rf)-edges */
-	return;
-}
-
-/*
- * addSCEcos - Helper function that calculates a part of PSC_base and PSC_fence
- *
- * For PSC_base and PSC_fence, it adds mo, rb, and hb_loc edges. The
- * procedure for mo and rb is straightforward: at each point, we only
- * need to keep a list of all the mo-after writes that are either SC,
- * or can reach an SC fence. For hb_loc, however, we only consider
- * rf-edges because the other cases are implicitly covered (sb, mo, etc).
- *
- * For PSC_fence only, it adds (mo;rf)- and (rb;rf)-edges. Simple cases like
- * mo, rf, and rb are covered by PSC_base, and all other combinations with
- * more than one step either do not compose, or lead to an already added
- * single-step relation (e.g, (rf;rb) => mo, (rb;mo) => rb)
- */
-void ExecutionGraph::addSCEcos(const std::vector<Event> &fcs,
-			       const std::vector<Event> &mo,
-			       Matrix2D<Event> &matrix) const
-{
-	std::vector<Event> moAfter;   /* mo-after SC writes or SC fences reached by an mo-after write */
-	std::vector<Event> moRfAfter; /* SC fences that can be reached by (mo;rf)-after reads */
-
-	for (auto rit = mo.rbegin(); rit != mo.rend(); rit++) {
-
-		/* First, add edges to SC events that are (mo U rb);rf?-after this write */
-		addRbEdges(fcs, moAfter, moRfAfter, matrix, *rit);
-		addMoRfEdges(fcs, moAfter, moRfAfter, matrix, *rit);
-
-		/* Then, update the lists of mo and mo;rf SC successors */
-		auto succs = calcSCSuccs(fcs, *rit);
-		auto fenceRfs = calcRfSCFencesSuccs(fcs, *rit);
-		moAfter.insert(moAfter.end(), succs.begin(), succs.end());
-		moRfAfter.insert(moRfAfter.end(), fenceRfs.begin(), fenceRfs.end());
-	}
-}
-
-/*
- * Similar to addSCEcos but uses a partial order among stores (WB) to
- * add coherence (mo/wb) and rb edges.
- */
-void ExecutionGraph::addSCEcos(const std::vector<Event> &fcs,
-			       Matrix2D<Event> &wbMatrix,
-			       Matrix2D<Event> &pscMatrix) const
-{
-	auto &stores = wbMatrix.getElems();
-	for (auto i = 0u; i < stores.size(); i++) {
-
-		/*
-		 * Calculate which of the stores are wb-after the current
-		 * write, and then collect wb-after and (wb;rf)-after SC successors
-		 */
-		std::vector<Event> wbAfter, wbRfAfter;
-		for (auto j = 0u; j < stores.size(); j++) {
-			if (wbMatrix(i, j)) {
-				auto succs = calcSCSuccs(fcs, stores[j]);
-				auto fenceRfs = calcRfSCFencesSuccs(fcs, stores[j]);
-				wbAfter.insert(wbAfter.end(), succs.begin(), succs.end());
-				wbRfAfter.insert(wbRfAfter.end(), fenceRfs.begin(), fenceRfs.end());
-			}
-		}
-
-		/* Then, add the proper edges to PSC using wb-after and (wb;rf)-after successors */
-		addRbEdges(fcs, wbAfter, wbRfAfter, pscMatrix, stores[i]);
-		addMoRfEdges(fcs, wbAfter, wbRfAfter, pscMatrix, stores[i]);
-	}
-}
-
-/*
- * Adds sb as well as [Esc];sb_(<>loc);hb;sb_(<>loc);[Esc] edges. The first
- * part of this function is common for PSC_base and PSC_fence, while the second
- * part of this function is not triggered for fences (these edges are covered in
- * addSCEcos()).
- */
-void ExecutionGraph::addSbHbEdges(Matrix2D<Event> &matrix) const
-{
-	auto &scs = matrix.getElems();
-	for (auto i = 0u; i < scs.size(); i++) {
-		for (auto j = 0u; j < scs.size(); j++) {
-			if (i == j)
-				continue;
-			const EventLabel *eiLab = getEventLabel(scs[i]);
-			const EventLabel *ejLab = getEventLabel(scs[j]);
-
-			/* PSC_base/PSC_fence: Adds sb-edges*/
-			if (eiLab->getThread() == ejLab->getThread()) {
-				if (eiLab->getIndex() < ejLab->getIndex())
-					matrix(i, j) = true;
-				continue;
-			}
-
-			/* PSC_base: Adds [Esc];sb_(<>loc);hb;sb_(<>loc);[Esc] edges.
-			 * We do need to consider the [Fsc];hb? cases, since these
-			 * will be covered by addSCEcos(). (More speficically, from
-			 * the rf/hb_loc case in addMoRfEdges().)  */
-			const EventLabel *ejPrevLab = getPreviousNonEmptyLabel(ejLab);
-			if (!llvm::isa<MemAccessLabel>(ejPrevLab) ||
-			    !llvm::isa<MemAccessLabel>(ejLab) ||
-			    !llvm::isa<MemAccessLabel>(eiLab))
-				continue;
-
-			if (eiLab->getPos() == getLastThreadEvent(eiLab->getThread()))
-				continue;
-
-			auto *ejPrevMLab = static_cast<const MemAccessLabel *>(ejPrevLab);
-			auto *ejMLab = static_cast<const MemAccessLabel *>(ejLab);
-			auto *eiMLab = static_cast<const MemAccessLabel *>(eiLab);
-
-			if (ejPrevMLab->getAddr() != ejMLab->getAddr()) {
-				Event next = eiMLab->getPos().next();
-				const EventLabel *eiNextLab = getEventLabel(next);
-				if (auto *eiNextMLab =
-				    llvm::dyn_cast<MemAccessLabel>(eiNextLab)) {
-					if (eiMLab->getAddr() != eiNextMLab->getAddr() &&
-					    ejPrevMLab->getHbView().contains(eiNextMLab->getPos()))
-						matrix(i, j) = true;
-				}
-			}
-		}
-	}
-	return;
-}
-
-void ExecutionGraph::addInitEdges(const std::vector<Event> &fcs,
-				  Matrix2D<Event> &matrix) const
-{
-	for (auto i = 0u; i < getNumThreads(); i++) {
-		for (auto j = 0u; j < getThreadSize(i); j++) {
-			const EventLabel *lab = getEventLabel(Event(i, j));
-			/* Consider only reads that read from the initializer write */
-			if (!llvm::isa<ReadLabel>(lab) || isRMWLoad(lab))
-				continue;
-			auto *rLab = static_cast<const ReadLabel *>(lab);
-			if (!rLab->getRf().isInitializer())
-				continue;
-
-			auto preds = calcSCPreds(fcs, rLab->getPos());
-			auto fencePreds = calcSCFencesPreds(fcs, rLab->getPos());
-			for (auto &w : getStoresToLoc(rLab->getAddr())) {
-				/* Can be casted to WriteLabel by construction */
-				auto *wLab = static_cast<const WriteLabel *>(
-					getEventLabel(w));
-				auto wSuccs = calcSCSuccs(fcs, w);
-				matrix.addEdgesFromTo(preds, wSuccs); /* Adds rb-edges */
-				for (auto &r : wLab->getReadersList()) {
-					auto fenceSuccs = calcSCFencesSuccs(fcs, r);
-					matrix.addEdgesFromTo(fencePreds, fenceSuccs); /*Adds (rb;rf)-edges */
-				}
-			}
-		}
-	}
-	return;
-}
-
-template <typename F>
-bool ExecutionGraph::addSCEcosMO(const std::vector<Event> &fcs,
-				 const std::vector<const llvm::GenericValue *> &scLocs,
-				 Matrix2D<Event> &matrix, F cond) const
-{
-	BUG_ON(!llvm::isa<MOCoherenceCalculator>(getCoherenceCalculator()));
-	for (auto loc : scLocs) {
-		auto &stores = getStoresToLoc(loc); /* Will already be ordered... */
-		addSCEcos(fcs, stores, matrix);
-	}
-	matrix.transClosure();
-	return cond(matrix);
-}
-
-template <typename F>
-bool ExecutionGraph::addSCEcosWBWeak(const std::vector<Event> &fcs,
-				     const std::vector<const llvm::GenericValue *> &scLocs,
-				     Matrix2D<Event> &matrix, F cond) const
-{
-	const auto *cc = getCoherenceCalculator();
-
-	BUG_ON(!llvm::isa<WBCoherenceCalculator>(cc));
-	auto *cohTracker = static_cast<const WBCoherenceCalculator *>(cc);
-	for (auto loc : scLocs) {
-		auto wb = cohTracker->calcWb(loc);
-		auto sortedStores = wb.topoSort();
-		addSCEcos(fcs, sortedStores, matrix);
-	}
-	matrix.transClosure();
-	return cond(matrix);
-}
-
-template <typename F>
-bool ExecutionGraph::addSCEcosWB(const std::vector<Event> &fcs,
-				 const std::vector<const llvm::GenericValue *> &scLocs,
-				 Matrix2D<Event> &matrix, F cond) const
-{
-	const auto *cc = getCoherenceCalculator();
-
-	BUG_ON(!llvm::isa<WBCoherenceCalculator>(cc));
-	auto *cohTracker = static_cast<const WBCoherenceCalculator *>(cc);
-	for (auto loc : scLocs) {
-		auto wb = cohTracker->calcWb(loc);
-		addSCEcos(fcs, wb, matrix);
-	}
-	matrix.transClosure();
-	return cond(matrix);
-}
-
-template <typename F>
-bool ExecutionGraph::addSCEcosWBFull(const std::vector<Event> &fcs,
-				     const std::vector<const llvm::GenericValue *> &scLocs,
-				     Matrix2D<Event> &matrix, F cond) const
-{
-	const auto *cc = getCoherenceCalculator();
-
-	BUG_ON(!llvm::isa<WBCoherenceCalculator>(cc));
-	auto *cohTracker = static_cast<const WBCoherenceCalculator *>(cc);
-
-	std::vector<std::vector<std::vector<Event> > > topoSorts(scLocs.size());
-	for (auto i = 0u; i < scLocs.size(); i++) {
-		auto wb = cohTracker->calcWb(scLocs[i]);
-		topoSorts[i] = wb.allTopoSort();
-	}
-
-	unsigned int K = topoSorts.size();
-	std::vector<unsigned int> count(K, 0);
-
-	/*
-	 * It suffices to find one combination for the WB extensions of all
-	 * locations, for which PSC is acyclic. This loop is like an odometer:
-	 * given an array that contains K vectors, we keep a counter for each
-	 * vector, and proceed by incrementing the rightmost counter. Like in
-	 * addition, if a carry is created, this is propagated to the left.
-	 */
-	while (count[0] < topoSorts[0].size()) {
-		/* Process current combination */
-		auto tentativePSC(matrix);
-		for (auto i = 0u; i < K; i++)
-			addSCEcos(fcs, topoSorts[i][count[i]], tentativePSC);
-
-		tentativePSC.transClosure();
-		if (cond(tentativePSC))
-			return true;
-
-		/* Find next combination */
-		++count[K - 1];
-		for (auto i = K - 1; (i > 0) && (count[i] == topoSorts[i].size()); --i) {
-			count[i] = 0;
-			++count[i - 1];
-		}
-	}
-
-	/* No valid MO combination found */
-	return false;
-}
-
-template <typename F>
-bool ExecutionGraph::addEcoEdgesAndCheckCond(CheckPSCType t,
-					     const std::vector<Event> &fcs,
-					     Matrix2D<Event> &matrix, F cond) const
-{
-	const auto *cohTracker = getCoherenceCalculator();
-
-	std::vector<const llvm::GenericValue *> scLocs = getDoubleLocs();
-	if (auto *moTracker = llvm::dyn_cast<MOCoherenceCalculator>(cohTracker)) {
-		switch (t) {
-		case CheckPSCType::nocheck:
-			return true;
-		case CheckPSCType::weak:
-		case CheckPSCType::wb:
-			WARN_ONCE("check-mo-psc", "The full PSC condition is going "
-				  "to be checked for the MO-tracking exploration...\n");
-		case CheckPSCType::full:
-			return addSCEcosMO(fcs, scLocs, matrix, cond);
-		default:
-			WARN("Unimplemented model!\n");
-			BUG();
-		}
-	} else if (auto *wbTacker = llvm::dyn_cast<WBCoherenceCalculator>(cohTracker)) {
-		switch (t) {
-		case CheckPSCType::nocheck:
-			return true;
-		case CheckPSCType::weak:
-			return addSCEcosWBWeak(fcs, scLocs, matrix, cond);
-		case CheckPSCType::wb:
-			return addSCEcosWB(fcs, scLocs, matrix, cond);
-		case CheckPSCType::full:
-			return addSCEcosWBFull(fcs, scLocs, matrix, cond);
-		default:
-			WARN("Unimplemented model!\n");
-			BUG();
-		}
-	}
-	BUG();
-	return false;
-}
-
-
-template <typename F>
-bool ExecutionGraph::checkPscCondition(CheckPSCType t, F cond) const
-{
-	/* Collect all SC events (except for RMW loads) */
-	auto accesses = getSCs();
-	auto &scs = accesses.first;
-	auto &fcs = accesses.second;
-
-	/* If there are no SC events, it is a valid execution */
-	if (scs.empty())
-		return true;
-
-	/* Depending on the part of PSC calculated, instantiate the matrix */
-	Matrix2D<Event> matrix(scs);
-
-	/* Add edges from the initializer write (special case) */
-	addInitEdges(fcs, matrix);
-	/* Add sb and sb_(<>loc);hb;sb_(<>loc) edges (+ Fsc;hb;Fsc) */
-	addSbHbEdges(matrix);
-
-	/*
-	 * Collect memory locations with more than one SC accesses
-	 * and add the rest of PSC_base and PSC_fence
-	 */
-	return addEcoEdgesAndCheckCond(t, fcs, matrix, cond);
-}
-
-template bool ExecutionGraph::checkPscCondition<bool (*)(const Matrix2D<Event>&)>
-(CheckPSCType, bool (*)(const Matrix2D<Event>&)) const;
-template bool ExecutionGraph::checkPscCondition<std::function<bool(const Matrix2D<Event>&)>>
-(CheckPSCType, std::function<bool(const Matrix2D<Event>&)>) const;
-
-bool __isPscAcyclic(const Matrix2D<Event> &psc)
-{
-	return !psc.isReflexive();
-}
-
-bool ExecutionGraph::isPscAcyclic(CheckPSCType t) const
-{
-	return checkPscCondition(t, __isPscAcyclic);
 }
 
 
@@ -1545,17 +1413,17 @@ void ExecutionGraph::calcSingleStepPairs(std::vector<std::pair<Event, std::vecto
 }
 
 void addEdgePairsToMatrix(std::vector<std::pair<Event, std::vector<Event> > > &pairs,
-			  Matrix2D<Event> &matrix)
+			  AdjList<Event, EventHasher> &matrix)
 {
 	for (auto &p : pairs) {
 		for (auto k = 0u; k < p.second.size(); k++) {
-			matrix(p.first, p.second[k]) = true;
+			matrix.addEdge(p.first, p.second[k]);
 		}
 	}
 }
 
 void ExecutionGraph::addStepEdgeToMatrix(std::vector<Event> &es,
-					 Matrix2D<Event> &relMatrix,
+					 AdjList<Event, EventHasher> &relMatrix,
 					 const std::vector<std::string> &substeps)
 {
 	std::vector<std::pair<Event, std::vector<Event> > > edges;
@@ -1569,13 +1437,13 @@ void ExecutionGraph::addStepEdgeToMatrix(std::vector<Event> &es,
 	addEdgePairsToMatrix(edges, relMatrix);
 }
 
-llvm::StringMap<Matrix2D<Event> >
+llvm::StringMap<AdjList<Event, EventHasher> >
 ExecutionGraph::calculateAllRelations(const Library &lib, std::vector<Event> &es)
 {
-	llvm::StringMap<Matrix2D<Event> > relMap;
+	llvm::StringMap<AdjList<Event, EventHasher> > relMap;
 
 	for (auto &r : lib.getRelations()) {
-		Matrix2D<Event> relMatrix(es);
+		AdjList<Event, EventHasher> relMatrix(es);
 		auto &steps = r.getSteps();
 		for (auto &s : steps)
 			addStepEdgeToMatrix(es, relMatrix, s);
@@ -1594,7 +1462,7 @@ bool ExecutionGraph::isLibConsistentInView(const Library &lib, const View &v)
 	auto &constraints = lib.getConstraints();
 	if (std::all_of(constraints.begin(), constraints.end(),
 			[&](const Constraint &c)
-			{ return !relations[c.getName()].isReflexive(); }))
+			{ return relations[c.getName()].isIrreflexive(); }))
 		return true;
 	return false;
 }

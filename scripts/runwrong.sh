@@ -25,10 +25,13 @@ source "${DIR}/terminal.sh"
 
 ERROR_STATUS=42
 
-runtime=0
 model="${model:-rc11}"
 coherence="${coherence:-wb}"
 suppress_diff="${suppress_diff:-}"
+
+runtime=0
+tests_success=0
+tests_fail=0
 
 print_debug_header() {
     # Print status

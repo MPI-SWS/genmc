@@ -68,7 +68,9 @@ public:
 		EL_MemAccessEnd,
 		EL_Fence,
 		EL_Malloc,
-		EL_Free
+		EL_Free,
+		EL_LockLabelLAPOR,
+		EL_UnlockLabelLAPOR
 	};
 
 protected:
@@ -865,6 +867,69 @@ public:
 private:
 	/* The address of the memory freed */
 	const void *freeAddr;
+};
+
+
+/*******************************************************************************
+ **                         LockLabelLAPOR Class
+ ******************************************************************************/
+
+/* Corresponds to a label modeling a lock operation --under LAPOR only-- */
+class LockLabelLAPOR : public EventLabel {
+
+protected:
+	friend class ExecutionGraph;
+	friend class DepExecutionGraph;
+
+public:
+	LockLabelLAPOR(unsigned int st, llvm::AtomicOrdering ord, Event pos,
+		       const llvm::GenericValue *addr)
+		: EventLabel(EL_LockLabelLAPOR, st, ord, pos),
+		  lockAddr(addr) {}
+
+	/* Returns the address of the acquired lock */
+	const llvm::GenericValue *getLockAddr() const { return lockAddr; }
+
+	LockLabelLAPOR *clone() const override {
+		return new LockLabelLAPOR(*this);
+	}
+
+	static bool classof(const EventLabel *lab) {
+		return lab->getKind() == EL_LockLabelLAPOR;
+	}
+
+private:
+	/* The address of the acquired lock */
+	const llvm::GenericValue *lockAddr;
+};
+
+/* Corresponds to a label modeling an unlock operation --under LAPOR only-- */
+class UnlockLabelLAPOR : public EventLabel {
+
+protected:
+	friend class ExecutionGraph;
+	friend class DepExecutionGraph;
+
+public:
+	UnlockLabelLAPOR(unsigned int st, llvm::AtomicOrdering ord, Event pos,
+			 const llvm::GenericValue *addr)
+		: EventLabel(EL_UnlockLabelLAPOR, st, ord, pos),
+		  lockAddr(addr) {}
+
+	/* Returns the address of the released lock */
+	const llvm::GenericValue *getLockAddr() const { return lockAddr; }
+
+	UnlockLabelLAPOR *clone() const override {
+		return new UnlockLabelLAPOR(*this);
+	}
+
+	static bool classof(const EventLabel *lab) {
+		return lab->getKind() == EL_UnlockLabelLAPOR;
+	}
+
+private:
+	/* The address of the released lock */
+	const llvm::GenericValue *lockAddr;
 };
 
 #endif /* #define __EVENTLABEL_HPP__ */

@@ -38,11 +38,10 @@ protected:
 	int splitLocMOBefore(const llvm::GenericValue *addr, const View &before);
 
 public:
-
+	/* Constructor */
 	RC11Driver(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Module> mod,
 		   std::vector<Library> &granted, std::vector<Library> &toVerify,
-		   clock_t start)
-		: GenMCDriver(std::move(conf), std::move(mod), granted, toVerify, start) {};
+		   clock_t start);
 
 	/* Creates a label for a plain read to be added to the graph */
 	std::unique_ptr<ReadLabel>
@@ -128,6 +127,14 @@ public:
 	std::unique_ptr<ThreadFinishLabel>
 	createFinishLabel(int tid, int index) override;
 
+	/* LAPOR: Creates a (dummy) label for a lock() operation */
+	std::unique_ptr<LockLabelLAPOR>
+	createLockLabelLAPOR(int tid, int index, const llvm::GenericValue *addr) override;
+
+	/* LAPOR: Creates a (dummy) label for an unlock() operation */
+	std::unique_ptr<UnlockLabelLAPOR>
+	createUnlockLabelLAPOR(int tid, int index, const llvm::GenericValue *addr) override;
+
 	/* Checks for races after a load/store is added to the graph.
 	 * Return the racy event, or INIT if no such event exists */
 	Event findDataRaceForMemAccess(const MemAccessLabel *mLab) override;
@@ -140,11 +147,16 @@ public:
 
 	bool updateJoin(Event join, Event childLast) override;
 
-	bool isExecutionValid() override;
+	void initConsCalculation() override;
 
 private:
-	/* Helpers for findDataRaceForMemAccess() */
+	/* Returns true if aLab and bLab are in an RC11 data race*/
+	bool areInDataRace(const MemAccessLabel *aLab, const MemAccessLabel *bLab);
+
+	/* Returns an event that is racy with rLab, or INIT if none is found */
 	Event findRaceForNewLoad(const ReadLabel *rLab);
+
+	/* Returns an event that is racy with wLab, or INIT if none is found */
 	Event findRaceForNewStore(const WriteLabel *wLab);
 };
 

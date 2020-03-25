@@ -1085,11 +1085,11 @@ GenericValue Interpreter::executeGEPOperation(Value *Ptr, gep_type_iterator I,
          "Cannot getElementOffset of a nonpointer type!");
 
   Thread &thr = getCurThr();
-  uint64_t Total = 0;
+  updateDataDeps(thr.id, SF.CurInst->getPrevNode(), Ptr);
 
+  uint64_t Total = 0;
   for (; I != E; ++I) {
     updateDataDeps(thr.id, SF.CurInst->getPrevNode(), I.getOperand());
-      // thr.dataDeps[SF.CurInst->getPrevNode()].update(thr.dataDeps[I.getOperand()]);
 #ifdef LLVM_NEW_GEP_TYPE_ITERATOR_API
     if (StructType *STy = I.getStructTypeOrNull()) {
 #else
@@ -1147,7 +1147,6 @@ void Interpreter::visitLoadInst(LoadInst &I)
 	if (thr.tls.count(ptr)) {
 		SetValue(&I, thr.tls[ptr], SF);
 		return;
-
 	}
 
 	/* Otherwise, set the dependencies for this instruction.. */
@@ -1418,12 +1417,29 @@ void Interpreter::visitCallSite(CallSite CS) {
     ArgVals.push_back(getOperandValue(V, SF));
   }
 
-  if (CS.getCalledFunction()->getName() == "__VERIFIER_assume") {
-	  Thread &thr = getCurThr();
+  Thread &thr = getCurThr();
+  StringRef name = CS.getCalledFunction()->getName();
+  if (name == "__VERIFIER_assume") {
+	  /* We have ctrl dependency on the argument of an assume() */
 	  for (CallSite::arg_iterator i = SF.Caller.arg_begin(),
 		       e = SF.Caller.arg_end(); i != e; ++i, ++pNum) {
 		  updateCtrlDeps(thr.id, *i);
-		  // thr.ctrlDeps.update(thr.dataDeps[*i]);
+	  }
+  } else if (name == "pthread_mutex_lock" ||
+	     name == "pthread_mutex_unlock" ||
+	     name == "pthread_mutex_trylock") {
+	  /* We have addr dependency on the argument of mutex calls */
+	  setCurrentDeps(getDataDeps(thr.id, *SF.Caller.arg_begin()),
+			 nullptr, getCtrlDeps(thr.id),
+			 getAddrPoDeps(thr.id), nullptr);
+  } else {
+	  Function *F = SF.Caller.getCalledFunction();
+	  auto ai = F->arg_begin();
+	  /* The parameters of the function called get the data
+	   * dependencies of the actual arguments */
+	  for (CallSite::arg_iterator ci = SF.Caller.arg_begin(),
+		       ce = SF.Caller.arg_end(); ci != ce; ++ci, ++ai) {
+		  updateDataDeps(getCurThr().id, &*ai, &*ci->get());
 	  }
   }
 
@@ -1967,7 +1983,6 @@ void Interpreter::visitTruncInst(TruncInst &I) {
   ExecutionContext &SF = ECStack().back();
   Thread &thr = getCurThr();
   updateDataDeps(thr.id, &I, I.getOperand(0)),
-  // thr.dataDeps[&I] = thr.dataDeps[&I].depUnion(thr.dataDeps[I.getOperand(0)]);
   SetValue(&I, executeTruncInst(I.getOperand(0), I.getType(), SF), SF);
 }
 
@@ -1975,7 +1990,6 @@ void Interpreter::visitSExtInst(SExtInst &I) {
   ExecutionContext &SF = ECStack().back();
   Thread &thr = getCurThr();
   updateDataDeps(thr.id, &I, I.getOperand(0)),
-  // thr.dataDeps[&I] = thr.dataDeps[&I].depUnion(thr.dataDeps[I.getOperand(0)]);
   SetValue(&I, executeSExtInst(I.getOperand(0), I.getType(), SF), SF);
 }
 
@@ -1983,7 +1997,6 @@ void Interpreter::visitZExtInst(ZExtInst &I) {
   ExecutionContext &SF = ECStack().back();
   Thread &thr = getCurThr();
   updateDataDeps(thr.id, &I, I.getOperand(0)),
-  // thr.dataDeps[&I] = thr.dataDeps[&I].depUnion(thr.dataDeps[I.getOperand(0)]);
   SetValue(&I, executeZExtInst(I.getOperand(0), I.getType(), SF), SF);
 }
 
@@ -2019,19 +2032,22 @@ void Interpreter::visitFPToSIInst(FPToSIInst &I) {
 
 void Interpreter::visitPtrToIntInst(PtrToIntInst &I) {
   ExecutionContext &SF = ECStack().back();
+  Thread &thr = getCurThr();
+  updateDataDeps(thr.id, &I, I.getOperand(0));
   SetValue(&I, executePtrToIntInst(I.getOperand(0), I.getType(), SF), SF);
 }
 
 void Interpreter::visitIntToPtrInst(IntToPtrInst &I) {
   ExecutionContext &SF = ECStack().back();
+  Thread &thr = getCurThr();
+  updateDataDeps(thr.id, &I, I.getOperand(0));
   SetValue(&I, executeIntToPtrInst(I.getOperand(0), I.getType(), SF), SF);
 }
 
 void Interpreter::visitBitCastInst(BitCastInst &I) {
   ExecutionContext &SF = ECStack().back();
   Thread &thr = getCurThr();
-  updateDataDeps(thr.id, &I, I.getOperand(0)),
-  // thr.dataDeps[&I] = thr.dataDeps[&I].depUnion(thr.dataDeps[I.getOperand(0)]);
+  updateDataDeps(thr.id, &I, I.getOperand(0));
   SetValue(&I, executeBitCastInst(I.getOperand(0), I.getType(), SF), SF);
 }
 
@@ -2615,22 +2631,7 @@ void Interpreter::callPthreadMutexLock(Function *F,
 	cmpVal.IntVal = APInt(typ->getIntegerBitWidth(), 0);
 	newVal.IntVal = APInt(typ->getIntegerBitWidth(), 1);
 
-	setCurrentDeps(nullptr, nullptr, getCtrlDeps(thr.id),
-		       getAddrPoDeps(thr.id), nullptr);
-
-	auto ret = driver->visitLoad(IA_Lock, AtomicOrdering::Acquire,
-				     ptr, typ, cmpVal, newVal);
-
-	auto cmpRes = executeICMP_EQ(ret, cmpVal, typ);
-	if (cmpRes.IntVal.getBoolValue() == 0) {
-		thr.block();
-	} else {
-		setCurrentDeps(nullptr, nullptr, getCtrlDeps(thr.id),
-			       getAddrPoDeps(thr.id), nullptr);
-
-		driver->visitStore(IA_Lock, AtomicOrdering::Acquire,
-				   ptr, typ, newVal);
-	}
+	driver->visitLock(ptr, typ, cmpVal, newVal);
 
 	/*
 	 * We need to return a result anyway, because even if the current thread
@@ -2660,7 +2661,7 @@ void Interpreter::callPthreadMutexUnlock(Function *F,
 	setCurrentDeps(nullptr, nullptr, getCtrlDeps(thr.id),
 		       getAddrPoDeps(thr.id), nullptr);
 
-	driver->visitStore(IA_Unlock, AtomicOrdering::Release, ptr, typ, val);
+	driver->visitUnlock(ptr, typ, val);
 
 	result.IntVal = APInt(typ->getIntegerBitWidth(), 0); /* Success */
 	returnValueToCaller(F->getReturnType(), result);
@@ -2811,7 +2812,6 @@ void Interpreter::callFunction(Function *F,
 	  callPthreadMutexTrylock(F, ArgVals);
 	  return;
   }
-
 
   assert((ECStack().empty() || !ECStack().back().Caller.getInstruction() ||
 	  ECStack().back().Caller.arg_size() == ArgVals.size()) &&

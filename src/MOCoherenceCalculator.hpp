@@ -83,13 +83,6 @@ public:
 	saveCoherenceStatus(const std::vector<std::unique_ptr<EventLabel> > &prefix,
 			    const ReadLabel *rLab) const override;
 
-	/* Restores a previously saved coherence status */
-	void
-	restoreCoherenceStatus(std::vector<std::pair<Event, Event> > &status) override;
-
-	/* Stops tracking all stores not included in "preds" in the graph */
-	void removeStoresAfter(VectorClock &preds) override;
-
 	/* Changes the offset of "store" to "newOffset" */
 	void changeStoreOffset(const llvm::GenericValue *addr,
 			       Event store, int newOffset);
@@ -103,6 +96,21 @@ public:
 	getMOAfter(const llvm::GenericValue *addr, Event e) const;
 
 	const std::vector<Event> &getModOrderAtLoc(const llvm::GenericValue *addr) const;
+
+	/* Overrided Calculator methods */
+
+	void initCalc() override;
+
+	Calculator::CalculationResult doCalc() override;
+
+	/* Restores a previously saved coherence status */
+	void
+	restorePrefix(const ReadLabel *rLab,
+		      const std::vector<std::unique_ptr<EventLabel> > &storePrefix,
+		      const std::vector<std::pair<Event, Event> > &status) override;
+
+	/* Stops tracking all stores not included in "preds" in the graph */
+	void removeAfter(const VectorClock &preds) override;
 
 	static bool classof(const CoherenceCalculator *cohTracker) {
 		return cohTracker->getKind() == CC_ModificationOrder;
