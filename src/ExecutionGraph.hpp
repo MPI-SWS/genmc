@@ -68,6 +68,8 @@ protected:
 	ExecutionGraph();
 
 public:
+	virtual ~ExecutionGraph() {};
+
 	/* Iterators */
 	using iterator = Graph::iterator;
 	using const_iterator = Graph::const_iterator;

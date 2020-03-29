@@ -42,7 +42,8 @@ private:
 
 public:
 	/* Constructors */
-	View();
+	View() : VectorClock(VectorClock::VectorClockKind::VC_View),
+		 view_(EventView(0)) {}
 
 	/* Iterators */
 	typedef int *iterator;

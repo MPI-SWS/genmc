@@ -48,6 +48,10 @@ public:
 		VC_DepView,
 	};
 
+protected:
+	VectorClock(VectorClockKind k) : kind(k) {}
+
+public:
 	/* Returns the kind of this vector clock */
 	VectorClockKind getKind() const { return kind; }
 

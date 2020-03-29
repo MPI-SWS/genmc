@@ -92,10 +92,11 @@ void MDataCollectionPass::collectVarName(Module &M, unsigned int ptr, Type *typ,
 			}
 		}
 
-		auto eb = ST->element_begin();
-		for (auto it = ST->element_begin(); it != ST->element_end(); ++it) {
+		/* It can be dictElems.size() < ST->getNumElements(), e.g., for va_arg */
+		auto i = 0u;
+		for (auto it = ST->element_begin(); i < dictElems.size(); ++it, ++i) {
 			unsigned int elemSize = GET_TYPE_ALLOC_SIZE(M, *it);
-			auto didt = dictElems[it - eb];
+			auto didt = dictElems[i];
 			if (auto *dit = dyn_cast<DIDerivedType>(didt)) {
 				if (auto ditb = dyn_cast<DIType>(dit->getBaseType()))
 					collectVarName(M, ptr + offset, *it, ditb,

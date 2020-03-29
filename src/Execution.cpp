@@ -870,6 +870,9 @@ void Interpreter::visitSelectInst(SelectInst &I) {
   GenericValue Src2 = getOperandValue(I.getOperand(1), SF);
   GenericValue Src3 = getOperandValue(I.getOperand(2), SF);
   GenericValue R = executeSelectInst(Src1, Src2, Src3, Ty);
+  updateDataDeps(getCurThr().id, &I, I.getOperand(0));
+  updateDataDeps(getCurThr().id, &I, I.getOperand(1));
+  updateDataDeps(getCurThr().id, &I, I.getOperand(2));
   SetValue(&I, R, SF);
 }
 
@@ -896,6 +899,9 @@ void Interpreter::exitCalled(GenericValue GV) {
 ///
 void Interpreter::popStackAndReturnValueToCaller(Type *RetTy,
                                                  GenericValue Result) {
+  // Keep track of the ret inst to update deps if necessary...
+  auto *retI = dyn_cast<ReturnInst>(ECStack().back().CurInst->getPrevNode());
+
   // Pop the current stack frame.
   ECStack().pop_back();
 
@@ -914,8 +920,11 @@ void Interpreter::popStackAndReturnValueToCaller(Type *RetTy,
     ExecutionContext &CallingSF = ECStack().back();
     if (Instruction *I = CallingSF.Caller.getInstruction()) {
       // Save result...
-      if (!CallingSF.Caller.getType()->isVoidTy())
+      if (!CallingSF.Caller.getType()->isVoidTy()) {
+	if (retI) // if we are coming from a ret inst, update deps
+	  updateDataDeps(getCurThr().id, I, retI->getReturnValue());
         SetValue(I, Result, CallingSF);
+      }
       if (InvokeInst *II = dyn_cast<InvokeInst> (I))
         SwitchToNewBasicBlock (II->getNormalDest (), CallingSF);
       CallingSF.Caller = CallSite();          // We returned from the call...
@@ -992,12 +1001,14 @@ void Interpreter::visitSwitchInst(SwitchInst &I) {
     }
   }
   if (!Dest) Dest = I.getDefaultDest();   // No cases matched: use default
+  updateCtrlDeps(getCurThr().id, Cond);
   SwitchToNewBasicBlock(Dest, SF);
 }
 
 void Interpreter::visitIndirectBrInst(IndirectBrInst &I) {
   ExecutionContext &SF = ECStack().back();
   void *Dest = GVTOP(getOperandValue(I.getAddress(), SF));
+  updateCtrlDeps(getCurThr().id, I.getAddress());
   SwitchToNewBasicBlock((BasicBlock*)Dest, SF);
 }
 
@@ -1485,6 +1496,8 @@ void Interpreter::visitShl(BinaryOperator &I) {
     Dest.IntVal = valueToShift.shl(getShiftAmount(shiftAmount, valueToShift));
   }
 
+  updateDataDeps(getCurThr().id, &I, I.getOperand(0));
+  updateDataDeps(getCurThr().id, &I, I.getOperand(1));
   SetValue(&I, Dest, SF);
 }
 
@@ -1512,6 +1525,8 @@ void Interpreter::visitLShr(BinaryOperator &I) {
     Dest.IntVal = valueToShift.lshr(getShiftAmount(shiftAmount, valueToShift));
   }
 
+  updateDataDeps(getCurThr().id, &I, I.getOperand(0));
+  updateDataDeps(getCurThr().id, &I, I.getOperand(1));
   SetValue(&I, Dest, SF);
 }
 
@@ -1539,6 +1554,8 @@ void Interpreter::visitAShr(BinaryOperator &I) {
     Dest.IntVal = valueToShift.ashr(getShiftAmount(shiftAmount, valueToShift));
   }
 
+  updateDataDeps(getCurThr().id, &I, I.getOperand(0));
+  updateDataDeps(getCurThr().id, &I, I.getOperand(1));
   SetValue(&I, Dest, SF);
 }
 
@@ -2077,6 +2094,7 @@ void Interpreter::visitVAArgInst(VAArgInst &I) {
   }
 
   // Set the Value of this Instruction.
+  updateDataDeps(getCurThr().id, &I, I.getOperand(0));
   SetValue(&I, Dest, SF);
 
   // Move the pointer to the next vararg.
@@ -2285,6 +2303,9 @@ void Interpreter::visitInsertValueInst(InsertValueInst &I) {
     ++IdxBegin;
   }
   // pDest points to the target value in the Dest now
+
+  Thread &thr = getCurThr();
+  updateDataDeps(thr.id, &I, getDataDeps(thr.id, Agg));
 
   Type *IndexedType = ExtractValueInst::getIndexedType(Agg->getType(), I.getIndices());
 

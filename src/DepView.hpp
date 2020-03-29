@@ -63,7 +63,8 @@ private:
 
 public:
 	/* Constructors */
-	DepView() : view_(), holes_() {}
+	DepView() : VectorClock(VectorClock::VectorClockKind::VC_DepView),
+		    view_(), holes_() {}
 
 	/* Returns the size of the depview (i.e., number of threads seen) */
 	unsigned int size() const { return view_.size(); }
