@@ -29,6 +29,7 @@
 #include "LoopUnrollPass.hpp"
 #include "MDataCollectionPass.hpp"
 #include "SpinAssumePass.hpp"
+#include <llvm/InitializePasses.h>
 #if defined(HAVE_LLVM_PASSMANAGER_H)
 # include <llvm/PassManager.h>
 #elif defined(HAVE_LLVM_IR_PASSMANAGER_H)

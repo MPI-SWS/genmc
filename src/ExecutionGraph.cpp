@@ -18,6 +18,7 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
+#include "config.h"
 #include "ExecutionGraph.hpp"
 #include "Library.hpp"
 #include "MOCoherenceCalculator.hpp"
@@ -642,7 +643,7 @@ std::unique_ptr<VectorClock>
 ExecutionGraph::getRevisitView(const ReadLabel *rLab,
 			       const WriteLabel *wLab) const
 {
-	auto preds = llvm::make_unique<View>(getViewFromStamp(rLab->getStamp()));
+	auto preds = LLVM_MAKE_UNIQUE<View>(getViewFromStamp(rLab->getStamp()));
 	preds->update(wLab->getPorfView());
 	return std::move(preds);
 }
@@ -766,7 +767,7 @@ const VectorClock& ExecutionGraph::getPrefixView(Event e) const
 std::unique_ptr<VectorClock> ExecutionGraph::getPredsView(Event e) const
 {
 	auto stamp = getEventLabel(e)->getStamp();
-	return llvm::make_unique<View>(getViewFromStamp(stamp));
+	return LLVM_MAKE_UNIQUE<View>(getViewFromStamp(stamp));
 }
 
 std::vector<std::unique_ptr<EventLabel> >

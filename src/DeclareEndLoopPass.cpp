@@ -51,9 +51,7 @@ bool DeclareEndLoopPass::runOnModule(Module &M)
 
 		AttributeList::get(M.getContext(), AttributeList::FunctionIndex,
 				  std::vector<Attribute::AttrKind>({Attribute::NoUnwind}));
-		endLoopFun = dyn_cast<Function>(M.getOrInsertFunction("__end_loop",
-								     endLoopTyp, endLoopAtt));
-		BUG_ON(!endLoopFun);
+		M.getOrInsertFunction("__end_loop", endLoopTyp, endLoopAtt);
 		modified = true;
 	}
 	return modified;

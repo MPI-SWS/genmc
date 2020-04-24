@@ -76,8 +76,8 @@ public:
 	virtual ~VectorClock() {};
 
 	/* Returns the ID of the maximum event in thread with ID=idx */
-	virtual inline int operator[](int idx) const = 0;
-	virtual inline int &operator[](int idx) = 0;
+	virtual int operator[](int idx) const = 0;
+	virtual int &operator[](int idx) = 0;
 
 	/* Printing facilities */
 	virtual void printData(llvm::raw_ostream &s) const = 0;

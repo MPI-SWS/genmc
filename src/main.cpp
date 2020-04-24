@@ -153,11 +153,15 @@ int main(int argc, char **argv)
 	std::shared_ptr<CompilerInvocation> CI
 #endif
 		(new CompilerInvocation);
+
+#ifdef CLANG_CREATE_FROM_ARGS_ARRAY_REF
+	CompilerInvocation::CreateFromArgs(*CI, FCCArgs, Diags);
+#else
 	CompilerInvocation::CreateFromArgs(*CI,
 					   const_cast<const char **>(FCCArgs.data()),
 					   const_cast<const char **>(FCCArgs.data()) +
-					   FCCArgs.size(),
-					   Diags);
+					   FCCArgs.size(), Diags);
+#endif
 
 	// Show the invocation, with -v.
 	if (CI->getHeaderSearchOpts().Verbose) {

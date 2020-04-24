@@ -899,8 +899,12 @@ void Interpreter::exitCalled(GenericValue GV) {
 ///
 void Interpreter::popStackAndReturnValueToCaller(Type *RetTy,
                                                  GenericValue Result) {
-  // Keep track of the ret inst to update deps if necessary...
-  auto *retI = dyn_cast<ReturnInst>(ECStack().back().CurInst->getPrevNode());
+  // Keep track of the ret inst to update deps if necessary:
+  // We check whether there _was_ an instruction which caused the
+  // stack frame to be popped, and that the instruction was a ret inst
+  ReturnInst *retI = nullptr;
+  if (!ECStack().back().CurFunction->isDeclaration())
+    retI = dyn_cast<ReturnInst>(ECStack().back().CurInst->getPrevNode());
 
   // Pop the current stack frame.
   ECStack().pop_back();

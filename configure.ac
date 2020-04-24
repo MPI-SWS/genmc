@@ -21,6 +21,21 @@ AX_CLANG(,[
 AC_CHECK_LIB([dl], [dlopen],[],[AC_MSG_FAILURE([Could not find library libdl.])])
 AC_CHECK_LIB([ffi], [ffi_call],[],[AC_MSG_FAILURE([Could not find library libffi.])])
 
+## Check for (proper) C++11 stdlibc++ support
+AC_MSG_CHECKING([whether enum class can be used as unordered_map<> key])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <unordered_map>
+]],[[
+	enum class Foo {};
+
+	std::unordered_map<Foo, int> bar;
+ ]])],
+        [AC_DEFINE([STDLIBCPP_SUPPORTS_ENUM_MAP_KEYS],[1],
+         [Define if stdlibc++ supports enum class as keys to unordered_map<>.])
+         AC_MSG_RESULT([yes])],
+        [AC_MSG_RESULT([no])])
+
+
 ## XXX: List below is currently INCOMPLETE
 AC_CHECK_HEADERS([\
   stdlib.h \
@@ -59,7 +74,70 @@ AC_CHECK_HEADERS([ffi/ffi.h],[],[
   AC_CHECK_HEADERS([ffi.h],[],[AC_MSG_FAILURE([Could not find header ffi.h.])],[AC_INCLUDES_DEFAULT])
 ],[AC_INCLUDES_DEFAULT])
 
+# Check various clang functions
+
+## Check the type of list_type items
+AC_MSG_CHECKING([for the type of list_type items])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <clang/Driver/Job.h>
+]],[[
+	class Cmd : public clang::driver::Job {
+	      void Print(llvm::raw_ostream &OS, const char *Terminator,
+                         bool Quote, bool CrashReport = false) { };
+	};
+ ]])],
+        [AC_DEFINE([CLANG_LIST_TYPE_JOB_PTR],[1],
+         [Define if list_type is a SmallVector of Job*.])
+         AC_MSG_RESULT([Job*])],
+        [AC_MSG_RESULT([std::unique_ptr<Command>])])
+
+## Check how to create a compiler invocation object
+AC_MSG_CHECKING([how create a CompilerInvocation object])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <clang/Frontend/CompilerInvocation.h>
+#include <clang/Frontend/CompilerInstance.h>
+]],[[
+	clang::CompilerInvocation *inv = nullptr;
+	clang::CompilerInstance Clang;
+	Clang.setInvocation(inv);
+ ]])],
+        [AC_DEFINE([CLANG_COMPILER_INVOCATION_PTR],[1],
+         [Define if setInvocation takes a simple CompilerInvocation*.])
+         AC_MSG_RESULT([CompilerInvocation*])],
+        [AC_MSG_RESULT([std::shared_ptr<CompilerInvocation>])])
+
+## Check how to set a compiler invocation
+AC_MSG_CHECKING([how to set a CompilerInvocation])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <clang/Basic/Diagnostic.h>
+#include <clang/Frontend/CompilerInvocation.h>
+#include <clang/Frontend/CompilerInstance.h>
+]],[[
+	clang::CompilerInvocation *inv = nullptr;
+	clang::DiagnosticsEngine *diag = nullptr;
+	clang::CompilerInvocation::CreateFromArgs(*inv, {}, *diag);
+ ]])],
+        [AC_DEFINE([CLANG_CREATE_FROM_ARGS_ARRAY_REF],[1],
+         [Define if CreateFromArgs takes an ArrayRef to CommandLineArgs.])
+         AC_MSG_RESULT([ArrayRef])],
+        [AC_MSG_RESULT([pointers to arguments])])
+
 # Check various functions in LLVM
+
+## Check how to create unique_ptrs<>
+AC_MSG_CHECKING([how to create unique_ptrs<>])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/ADT/STLExtras.h>
+]],[[
+	auto up = llvm::make_unique<int>(42);
+ ]])],
+        [AC_DEFINE([LLVM_MAKE_UNIQUE],[llvm::make_unique],
+         [How to create unique_ptrs<>.])
+         AC_MSG_RESULT([llvm::make_unique<>])],
+        [AC_DEFINE([LLVM_MAKE_UNIQUE],[std::make_unique],
+         [How to create unique_ptrs<>.])
+	AC_MSG_RESULT([std::make_unique<>])
+	])
 
 ## Check whether llvm::cl has HideUnrelatedOptions
 AC_MSG_CHECKING([whether llvm::cl has HideUnrelatedOptions()])
@@ -103,25 +181,6 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
          AC_MSG_RESULT([yes])],
         [AC_MSG_RESULT([no])])
 
-## Check if AttributeSet is renamed to AttributeList
-AC_MSG_CHECKING([whether llvm::AttributeSet is renamed to llvm::AttributeList])
-AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
-#if defined(HAVE_LLVM_IR_MODULE_H)
-#include <llvm/IR/Module.h>
-#elif defined(HAVE_LLVM_MODULE_H)
-#include <llvm/Module.h>
-#endif
-]],[[
-  llvm::Module *M = nullptr;
-  llvm::AttributeList assumeAttrs =
-    llvm::AttributeList::get(M->getContext(),llvm::AttributeList::FunctionIndex,
-                             std::vector<llvm::Attribute::AttrKind>({llvm::Attribute::NoUnwind}));
-]])],
-        [AC_DEFINE([LLVM_HAS_ATTRIBUTELIST],[1],
-         [Define if llvm::AttributeList exists (and not AttributeSet).])
-         AC_MSG_RESULT([yes])],
-        [AC_MSG_RESULT([no])])
-
 ## Check whether llvm::SwitchInst::CaseIt needs dereference (>= 4.0)
 AC_MSG_CHECKING([whether llvm::SwitchInst::CaseIt needs dereference])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
@@ -145,6 +204,42 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 ]])],
         [AC_DEFINE([LLVM_HAS_TERMINATORINST],[1],
          [Define if the class llvm::TerminatorInst exists.])
+         AC_MSG_RESULT([yes])],
+        [AC_MSG_RESULT([no])])
+
+## Check if AttributeSet is renamed to AttributeList
+AC_MSG_CHECKING([whether llvm::AttributeSet is renamed to llvm::AttributeList])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#if defined(HAVE_LLVM_IR_MODULE_H)
+#include <llvm/IR/Module.h>
+#elif defined(HAVE_LLVM_MODULE_H)
+#include <llvm/Module.h>
+#endif
+]],[[
+  llvm::Module *M = nullptr;
+  llvm::AttributeList assumeAttrs =
+    llvm::AttributeList::get(M->getContext(),llvm::AttributeList::FunctionIndex,
+                             std::vector<llvm::Attribute::AttrKind>({llvm::Attribute::NoUnwind}));
+]])],
+        [AC_DEFINE([LLVM_HAS_ATTRIBUTELIST],[1],
+         [Define if llvm::AttributeList exists (and not AttributeSet).])
+         AC_MSG_RESULT([yes])],
+        [AC_MSG_RESULT([no])])
+
+## Check if llvm::Module::getOrInsertFunction returns a Constant (LLVM >= 9)
+AC_MSG_CHECKING([whether llvm::Module::getOrInsertFunction returns a Constant])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#if defined(HAVE_LLVM_IR_MODULE_H)
+#include <llvm/IR/Module.h>
+#elif defined(HAVE_LLVM_MODULE_H)
+#include <llvm/Module.h>
+#endif
+]],[[
+  llvm::Module *M = nullptr;
+  llvm::Constant *F = M->getOrInsertFunction("foo", nullptr, {});
+]])],
+        [AC_DEFINE([LLVM_GETORINSERTFUNCTION_RET_FUNCTION],[1],
+         [Define if llvm::Module::getOrInsertFunction returns a Constant *.])
          AC_MSG_RESULT([yes])],
         [AC_MSG_RESULT([no])])
 
@@ -343,36 +438,6 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
          [Define if llvm:gep_type_iterator uses the new API.])
          AC_MSG_RESULT([yes])],
         [AC_MSG_RESULT([no])])
-
-## Check the type of list_type items
-AC_MSG_CHECKING([for the type of list_type items])
-AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
-#include <clang/Driver/Job.h>
-]],[[
-	class Cmd : public clang::driver::Job {
-	      void Print(llvm::raw_ostream &OS, const char *Terminator,
-                         bool Quote, bool CrashReport = false) { };
-	};
- ]])],
-        [AC_DEFINE([CLANG_LIST_TYPE_JOB_PTR],[1],
-         [Define if list_type is a SmallVector of Job*.])
-         AC_MSG_RESULT([Job*])],
-        [AC_MSG_RESULT([std::unique_ptr<Command>])])
-
-## Check how to set a compiler invocation
-AC_MSG_CHECKING([how to set a CompilerInvocation])
-AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
-#include <clang/Frontend/CompilerInvocation.h>
-#include <clang/Frontend/CompilerInstance.h>
-]],[[
-	clang::CompilerInvocation *inv = nullptr;
-	clang::CompilerInstance Clang;
-	Clang.setInvocation(inv);
- ]])],
-        [AC_DEFINE([CLANG_COMPILER_INVOCATION_PTR],[1],
-         [Define if setInvocation takes a simple CompilerInvocation*.])
-         AC_MSG_RESULT([CompilerInvocation*])],
-        [AC_MSG_RESULT([std::shared_ptr<CompilerInvocation>])])
 
 ## Check whether getPassName() should return a StringRef
 AC_MSG_CHECKING([whether Pass::getPassName() returns a StringRef])

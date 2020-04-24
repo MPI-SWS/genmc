@@ -443,7 +443,7 @@ Interpreter::Interpreter(Module *M, VariableInfo &&VI, GenMCDriver *driver,
   collectGlobalAddresses(M);
 
   if (shouldTrackDeps)
-	  depTracker = make_unique<IMMDepTracker>();
+	  depTracker = LLVM_MAKE_UNIQUE<IMMDepTracker>();
 
   IL = new IntrinsicLowering(TD);
 }

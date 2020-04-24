@@ -30,7 +30,7 @@ These parts are licensed under the University of Illinois/NCSA
 Open Source License as well as under GPLv3. Please see the LLVMLICENSE
 file for details on the University of Illinois/NCSA Open Source License.
 
-        src/Interpreter.h
+		src/Interpreter.h
 		src/Interpreter.cpp
 		src/Execution.cpp
 		src/ExternalFunctions.cpp
@@ -42,8 +42,8 @@ information.
 <a name="dependencies">Dependencies</a>
 ---------------------------------------
 
-The LLVM versions currently supported are: 3.5.0, 3.8.1, 4.0.1,
-6.0.1, 7.0.1, 8.0.1.
+The LLVM versions currently supported are: 3.8.1, 4.0.1,
+6.0.1, 7.0.1, 8.0.1, 9.0.1, 10.0.0.
 
 ### GNU/Linux
 
@@ -99,6 +99,8 @@ For a default build issue:
 * To run a particular testcase run:
 
 		./src/genmc [options] <file>
+
+* For more detailed usage examples please refer to the [manual](doc/manual.pdf).
 
 <a name="troubleshooting">Troubleshooting</a>
 ---------------------------------------------

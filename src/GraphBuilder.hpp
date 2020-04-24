@@ -21,6 +21,7 @@
 #ifndef __GRAPH_BUILDER_HPP__
 #define __GRAPH_BUILDER_HPP__
 
+#include "config.h"
 #include "DepExecutionGraph.hpp"
 #include "LBCalculatorLAPOR.hpp"
 #include "MOCoherenceCalculator.hpp"
@@ -53,12 +54,12 @@ public:
 		switch (co) {
 		case CoherenceType::mo:
 			graph->addCalculator(
-				llvm::make_unique<MOCoherenceCalculator>(*graph, tracksDeps),
+				LLVM_MAKE_UNIQUE<MOCoherenceCalculator>(*graph, tracksDeps),
 				ExecutionGraph::RelationId::co, true, true);
 			break;
 		case CoherenceType::wb:
 			graph->addCalculator(
-				llvm::make_unique<WBCoherenceCalculator>(*graph, tracksDeps),
+				LLVM_MAKE_UNIQUE<WBCoherenceCalculator>(*graph, tracksDeps),
 				ExecutionGraph::RelationId::co, true, true);
 			break;
 		default:
@@ -71,7 +72,7 @@ public:
 	GraphBuilder &withEnabledLAPOR(bool lapor) {
 		if (lapor) {
 			graph->addCalculator(
-				llvm::make_unique<LBCalculatorLAPOR>(*graph),
+				LLVM_MAKE_UNIQUE<LBCalculatorLAPOR>(*graph),
 				ExecutionGraph::RelationId::lb, true, true);
 		}
 		return *this;

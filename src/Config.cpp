@@ -146,11 +146,8 @@ void Config::getConfigOptions(int argc, char **argv)
 #ifdef LLVM_HAS_HIDE_UNRELATED_OPTS
 	llvm::cl::HideUnrelatedOptions(cats);
 #endif
-	llvm::cl::ParseCommandLineOptions(argc, argv,
-					  "GenMC -- Model Checking for C programs");
-#ifdef LLVM_HAS_RESET_COMMANDLINE_PARSER
-	llvm::cl::ResetCommandLineParser();
-#endif
+	llvm::cl::ParseCommandLineOptions(argc, argv, "GenMC -- "
+					  "Model Checking for C programs");
 
 	/* Save general options */
 	cflags.insert(cflags.end(), clCFLAGS.begin(), clCFLAGS.end());
@@ -181,4 +178,8 @@ void Config::getConfigOptions(int argc, char **argv)
 	countDuplicateExecs = clCountDuplicateExecs;
 	inputFromBitcodeFile = clInputFromBitcodeFile;
 	transformFile = clTransformFile;
+
+#ifdef LLVM_HAS_RESET_COMMANDLINE_PARSER
+	llvm::cl::ResetCommandLineParser();
+#endif
 }

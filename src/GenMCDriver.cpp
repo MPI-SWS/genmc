@@ -685,6 +685,33 @@ void GenMCDriver::checkUnlockValidity()
 	}
 }
 
+void addPerLocRelationToExtend(Calculator::PerLocRelation &rel,
+			       std::vector<Calculator::GlobalRelation *> &toExtend,
+			       std::vector<const llvm::GenericValue *> &extOrder)
+
+{
+	for (auto &loc : rel) {
+		toExtend.push_back(&loc.second);
+		extOrder.push_back(loc.first);
+	}
+}
+
+void extendPerLocRelation(Calculator::PerLocRelation &rel,
+			  std::vector<std::vector<Event> >::iterator extsBegin,
+			  std::vector<std::vector<Event> >::iterator extsEnd,
+			  std::vector<const llvm::GenericValue *>::iterator locsBegin,
+			  std::vector<const llvm::GenericValue *>::iterator locsEnd)
+
+{
+	BUG_ON(std::distance(extsBegin, extsEnd) != std::distance(locsBegin, locsEnd));
+	auto locIt = locsBegin;
+	for (auto extIt = extsBegin; extIt != extsEnd; ++extIt, ++locIt) {
+		rel[*locIt] = Calculator::GlobalRelation(*extIt);
+		for (auto j = 1; j < extIt->size(); j++)
+			rel[*locIt].addEdge((*extIt)[j - 1], (*extIt)[j]);
+	}
+}
+
 bool GenMCDriver::doFinalConsChecks(bool checkFull /* = false */)
 {
 	if (!checkFull)
@@ -696,54 +723,57 @@ bool GenMCDriver::doFinalConsChecks(bool checkFull /* = false */)
 		return true;
 
 	auto &g = getGraph();
-	std::vector<Calculator::GlobalRelation *> matrices;
 
-	/* Cache all relations because we will need to restore them after possible
-	 * extensions were tried*/
+	/* Cache all relations because we will need to restore them
+	 * after possible extensions were tried*/
 	g.cacheRelations();
 
-	/* If wb is used, try to extend it */
+	/* We flatten all per-location relations that need to be
+	 * extended.  However, we need to ensure that, for each
+	 * per-location relation, the order in which the locations of
+	 * the relation are added to the extension list is the same as
+	 * the order in which the extensions of said locations are
+	 * restored.
+	 *
+	 * This is not the case in all platforms if we are simply
+	 * iterating over unordered_maps<> (e.g. macΟS). The iteration
+	 * order may differ if, e.g., when saving an extension we
+	 * iterate over a relation's cache, while when restoring we
+	 * iterate over the relation itself, even though the relation
+	 * is the same as its cache just before restoring. */
 	auto coSize = 0u;
 	auto lbSize = 0u;
+	std::vector<Calculator::GlobalRelation *> toExtend;
+	std::vector<const llvm::GenericValue *> extOrder;
 	if (hasWB) {
-		for (auto &coLoc : g.getCachedPerLocRelation(ExecutionGraph::RelationId::co))
-			matrices.push_back(&coLoc.second);
+		addPerLocRelationToExtend(g.getCachedPerLocRelation(ExecutionGraph::RelationId::co),
+					  toExtend, extOrder);
 		coSize = g.getCachedPerLocRelation(ExecutionGraph::RelationId::co).size();
 	}
-	/* If lb is used, try to extend it */
 	if (hasLB) {
-		for (auto &lbLoc : g.getCachedPerLocRelation(ExecutionGraph::RelationId::lb))
-			matrices.push_back(&lbLoc.second);
+		addPerLocRelationToExtend(g.getCachedPerLocRelation(ExecutionGraph::RelationId::lb),
+					  toExtend, extOrder);
 		lbSize = g.getCachedPerLocRelation(ExecutionGraph::RelationId::lb).size();
 	}
 
 	auto res = Calculator::GlobalRelation::
-		combineAllTopoSort(matrices, [&](std::vector<std::vector<Event>> &sortings){
+		combineAllTopoSort(toExtend, [&](std::vector<std::vector<Event>> &sortings){
 			g.restoreCached();
 			auto count = 0u;
-			if (hasWB && count < coSize) {
-				auto &coRelation = g.getPerLocRelation(ExecutionGraph::RelationId::co);
-				for (auto &coLoc : coRelation) {
-					coRelation[coLoc.first] = Calculator::GlobalRelation(sortings[count]);
-					for (auto i = 1; i < sortings[count].size(); i++) {
-						coRelation[coLoc.first].addEdge(sortings[count][i - 1],
-										sortings[count][i]);
-					}
-					++count;
-				}
+			if (hasWB) {
+				extendPerLocRelation(g.getPerLocRelation(ExecutionGraph::RelationId::co),
+						     sortings.begin(), sortings.begin() + coSize,
+						     extOrder.begin(), extOrder.begin() + coSize);
 			}
+			count += coSize;
 			if (hasLB && count >= coSize) {
-				auto &lbRelation = g.getPerLocRelation(ExecutionGraph::RelationId::lb);
-				for (auto &lbLoc : lbRelation) {
-					lbRelation[lbLoc.first] = Calculator::GlobalRelation(sortings[count]);
-					for (auto i = 1; i < sortings[count].size(); i++) {
-						lbRelation[lbLoc.first].addEdge(sortings[count][i - 1],
-										sortings[count][i]);
-
-					}
-					++count;
-				}
+				extendPerLocRelation(g.getPerLocRelation(ExecutionGraph::RelationId::lb),
+						     sortings.begin() + count,
+						     sortings.begin() + count + lbSize,
+						     extOrder.begin() + count,
+						     extOrder.begin() + count + lbSize);
 			}
+			count += lbSize;
 			return g.doCalcs(true).cons;
 		});
 	return res;

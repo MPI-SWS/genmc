@@ -57,9 +57,7 @@ bool DeclareAssumePass::runOnModule(Module &M)
 		AttributeList::get(M.getContext(),
 				  AttributeList::FunctionIndex,
 				  std::vector<Attribute::AttrKind>({Attribute::NoUnwind}));
-		assumeFun = dyn_cast<Function>(M.getOrInsertFunction("__VERIFIER_assume",
-								     assumeTyp, assumeAtt));
-		BUG_ON(!assumeFun);
+		M.getOrInsertFunction("__VERIFIER_assume", assumeTyp, assumeAtt);
 		modified = true;
 	}
 	return modified;

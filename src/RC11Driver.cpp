@@ -18,6 +18,7 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
+#include "config.h"
 #include "RC11Driver.hpp"
 #include "PSCCalculator.hpp"
 
@@ -29,7 +30,7 @@ RC11Driver::RC11Driver(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Modul
 	auto &g = getGraph();
 
 	/* RC11 requires the calculation of PSC */
-	g.addCalculator(llvm::make_unique<PSCCalculator>(g),
+	g.addCalculator(LLVM_MAKE_UNIQUE<PSCCalculator>(g),
 			ExecutionGraph::RelationId::psc, false);
 	return;
 }
@@ -163,7 +164,7 @@ RC11Driver::createReadLabel(int tid, int index, llvm::AtomicOrdering ord,
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<ReadLabel>(g.nextStamp(), ord, pos, ptr, typ, rf);
+	auto lab = LLVM_MAKE_UNIQUE<ReadLabel>(g.nextStamp(), ord, pos, ptr, typ, rf);
 
 	calcBasicReadViews(lab.get());
 	return std::move(lab);
@@ -177,7 +178,7 @@ RC11Driver::createFaiReadLabel(int tid, int index, llvm::AtomicOrdering ord,
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<FaiReadLabel>(g.nextStamp(), ord, pos, ptr, typ,
+	auto lab = LLVM_MAKE_UNIQUE<FaiReadLabel>(g.nextStamp(), ord, pos, ptr, typ,
 						   rf, op, opValue);
 
 	calcBasicReadViews(lab.get());
@@ -193,7 +194,7 @@ RC11Driver::createCasReadLabel(int tid, int index, llvm::AtomicOrdering ord,
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<CasReadLabel>(g.nextStamp(), ord, pos, ptr, typ,
+	auto lab = LLVM_MAKE_UNIQUE<CasReadLabel>(g.nextStamp(), ord, pos, ptr, typ,
 						   rf, expected, swap, isLock);
 
 	calcBasicReadViews(lab.get());
@@ -207,7 +208,7 @@ RC11Driver::createLibReadLabel(int tid, int index, llvm::AtomicOrdering ord,
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<LibReadLabel>(g.nextStamp(), ord, pos, ptr,
+	auto lab = LLVM_MAKE_UNIQUE<LibReadLabel>(g.nextStamp(), ord, pos, ptr,
 						   typ, rf, functionName);
 	calcBasicReadViews(lab.get());
 	return std::move(lab);
@@ -220,7 +221,7 @@ RC11Driver::createStoreLabel(int tid, int index, llvm::AtomicOrdering ord,
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<WriteLabel>(g.nextStamp(), ord, pos, ptr,
+	auto lab = LLVM_MAKE_UNIQUE<WriteLabel>(g.nextStamp(), ord, pos, ptr,
 						 typ, val, isUnlock);
 	calcBasicWriteViews(lab.get());
 	calcWriteMsgView(lab.get());
@@ -234,7 +235,7 @@ RC11Driver::createFaiStoreLabel(int tid, int index, llvm::AtomicOrdering ord,
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<FaiWriteLabel>(g.nextStamp(), ord, pos,
+	auto lab = LLVM_MAKE_UNIQUE<FaiWriteLabel>(g.nextStamp(), ord, pos,
 						    ptr, typ, val);
 	calcBasicWriteViews(lab.get());
 	calcRMWWriteMsgView(lab.get());
@@ -248,7 +249,7 @@ RC11Driver::createCasStoreLabel(int tid, int index, llvm::AtomicOrdering ord,
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<CasWriteLabel>(g.nextStamp(), ord, pos, ptr,
+	auto lab = LLVM_MAKE_UNIQUE<CasWriteLabel>(g.nextStamp(), ord, pos, ptr,
 						    typ, val, isLock);
 
 	calcBasicWriteViews(lab.get());
@@ -264,7 +265,7 @@ RC11Driver::createLibStoreLabel(int tid, int index, llvm::AtomicOrdering ord,
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<LibWriteLabel>(g.nextStamp(), ord, pos, ptr,
+	auto lab = LLVM_MAKE_UNIQUE<LibWriteLabel>(g.nextStamp(), ord, pos, ptr,
 						    typ, val, functionName, isInit);
 
 	calcBasicWriteViews(lab.get());
@@ -277,7 +278,7 @@ RC11Driver::createFenceLabel(int tid, int index, llvm::AtomicOrdering ord)
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<FenceLabel>(g.nextStamp(), ord, pos);
+	auto lab = LLVM_MAKE_UNIQUE<FenceLabel>(g.nextStamp(), ord, pos);
 
 	calcBasicFenceViews(lab.get());
 	return std::move(lab);
@@ -290,7 +291,7 @@ RC11Driver::createMallocLabel(int tid, int index, const void *addr,
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<MallocLabel>(g.nextStamp(),
+	auto lab = LLVM_MAKE_UNIQUE<MallocLabel>(g.nextStamp(),
 						  llvm::AtomicOrdering::NotAtomic,
 						  pos, addr, size, isLocal);
 
@@ -325,7 +326,7 @@ RC11Driver::createTCreateLabel(int tid, int index, int cid)
 {
 	const auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<ThreadCreateLabel>(getGraph().nextStamp(),
+	auto lab = LLVM_MAKE_UNIQUE<ThreadCreateLabel>(getGraph().nextStamp(),
 							llvm::AtomicOrdering::Release, pos, cid);
 
 	View hb = calcBasicHbView(lab->getPos());
@@ -342,7 +343,7 @@ RC11Driver::createTJoinLabel(int tid, int index, int cid)
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<ThreadJoinLabel>(g.nextStamp(),
+	auto lab = LLVM_MAKE_UNIQUE<ThreadJoinLabel>(g.nextStamp(),
 						      llvm::AtomicOrdering::Acquire,
 						      pos, cid);
 
@@ -362,7 +363,7 @@ RC11Driver::createStartLabel(int tid, int index, Event tc)
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<ThreadStartLabel>(g.nextStamp(),
+	auto lab = LLVM_MAKE_UNIQUE<ThreadStartLabel>(g.nextStamp(),
 						       llvm::AtomicOrdering::Acquire,
 						       pos, tc);
 
@@ -383,7 +384,7 @@ RC11Driver::createFinishLabel(int tid, int index)
 {
 	const auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<ThreadFinishLabel>(getGraph().nextStamp(),
+	auto lab = LLVM_MAKE_UNIQUE<ThreadFinishLabel>(getGraph().nextStamp(),
 							llvm::AtomicOrdering::Release,
 							pos);
 
@@ -400,7 +401,7 @@ RC11Driver::createLockLabelLAPOR(int tid, int index, const llvm::GenericValue *a
 {
 	const auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<LockLabelLAPOR>(getGraph().nextStamp(),
+	auto lab = LLVM_MAKE_UNIQUE<LockLabelLAPOR>(getGraph().nextStamp(),
 						     llvm::AtomicOrdering::Acquire,
 						     pos, addr);
 
@@ -417,7 +418,7 @@ RC11Driver::createUnlockLabelLAPOR(int tid, int index, const llvm::GenericValue 
 {
 	const auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<UnlockLabelLAPOR>(getGraph().nextStamp(),
+	auto lab = LLVM_MAKE_UNIQUE<UnlockLabelLAPOR>(getGraph().nextStamp(),
 						       llvm::AtomicOrdering::Release,
 						       pos, addr);
 

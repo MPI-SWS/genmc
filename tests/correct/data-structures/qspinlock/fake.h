@@ -108,9 +108,33 @@ int __thread __running_cpu;
 #define smp_read_barrier_depends()    do {} while (0)
 #define smp_acquire__after_ctrl_dep() barrier() /* no load speculation */
 
+
+/* It seems that from clang-9 onwards(?), typeof(atomic_X) does _not_
+ * drop the 'atomic' qualifier, making the original
+ * smp_cond_load_acquire() below not work (see commented-out part; it
+ * would return atomic_int instead of int.
+ *
+ * The __get_unqualified_atomic() macro gets the unqualified type
+ * of X using the '_Generic' construct (which, surprisingly, does
+ * seem to drop the 'atomic' qualifier...
+ *
+ * Relevant GCC issue: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65455
+ * Older clang discussion (w/ -std=c11): http://clang-developers.42468.n3.nabble.com/Qualifiers-not-being-discarded-for-atomic-types-while-compiling-with-clang-td4056873.html
+ *
+ * (Non-exhaustive list below) */
+#define __get_unqualified_atomic(X)			\
+_Generic((X),					        \
+	 atomic_bool: false,				\
+	 atomic_char: 'a',				\
+	 atomic_int: 42,                                \
+	 atomic_uint: 42u,				\
+	 atomic_long: 42ul,				\
+	 int: 42)
+
 #define smp_cond_load_acquire(ptr, cond_expr) ({		\
 	typeof(ptr) __PTR = (ptr);				\
-	typeof(*ptr) VAL;					\
+	/* typeof(*ptr) VAL;					\ */ \
+	typeof(__get_unqualified_atomic(*ptr))	VAL;		\
 	for (;;) {						\
 		VAL = READ_ONCE(*__PTR);			\
 		if (cond_expr)					\

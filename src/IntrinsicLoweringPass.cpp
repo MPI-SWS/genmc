@@ -18,6 +18,7 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
+#include "config.h"
 #include "IntrinsicLoweringPass.hpp"
 #include <llvm/ADT/Twine.h>
 #include <llvm/IR/BasicBlock.h>
@@ -53,11 +54,16 @@ bool IntrinsicLoweringPass::runOnBasicBlock(llvm::BasicBlock &BB, llvm::Module &
 			break;
 		case llvm::Intrinsic::trap: {
 			/* Lower calls to @llvm.trap to abort() calls */
-			llvm::Function *F = llvm::cast<llvm::Function>(
-				M.getOrInsertFunction("abort", llvm::Type::getVoidTy(M.getContext())));
-			F->setDoesNotReturn();
-			F->setDoesNotThrow();
-			llvm::CallInst::Create(F, llvm::Twine(), I);
+			auto FC = M.getOrInsertFunction("abort", llvm::Type::getVoidTy(M.getContext()));
+#ifdef LLVM_GETORINSERTFUNCTION_RET_FUNCTION
+			if (auto *F = llvm::dyn_cast<llvm::Function>(FC)) {
+#else
+			if (auto *F = llvm::dyn_cast<llvm::Function>(FC.getCallee())) {
+#endif
+				F->setDoesNotReturn();
+				F->setDoesNotThrow();
+				llvm::CallInst::Create(F, llvm::Twine(), I);
+			}
 			new llvm::UnreachableInst(M.getContext(), I);
 			I->eraseFromParent();
 			modified = true;

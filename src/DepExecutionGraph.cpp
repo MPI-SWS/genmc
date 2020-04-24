@@ -18,6 +18,7 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
+#include "config.h"
 #include "DepExecutionGraph.hpp"
 
 std::vector<Event> DepExecutionGraph::getRevisitable(const WriteLabel *sLab) const
@@ -44,7 +45,7 @@ std::unique_ptr<VectorClock>
 DepExecutionGraph::getRevisitView(const ReadLabel *rLab,
 				  const WriteLabel *wLab) const
 {
-	auto preds = llvm::make_unique<DepView>(getDepViewFromStamp(rLab->getStamp()));
+	auto preds = LLVM_MAKE_UNIQUE<DepView>(getDepViewFromStamp(rLab->getStamp()));
 	preds->update(wLab->getPPoRfView());
 	return std::move(preds);
 }
@@ -57,7 +58,7 @@ const VectorClock& DepExecutionGraph::getPrefixView(Event e) const
 std::unique_ptr<VectorClock> DepExecutionGraph::getPredsView(Event e) const
 {
 	auto stamp = getEventLabel(e)->getStamp();
-	return llvm::make_unique<DepView>(getDepViewFromStamp(stamp));
+	return LLVM_MAKE_UNIQUE<DepView>(getDepViewFromStamp(stamp));
 }
 
 bool DepExecutionGraph::revisitModifiesGraph(const ReadLabel *rLab,
