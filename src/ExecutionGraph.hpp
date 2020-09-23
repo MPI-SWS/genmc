@@ -39,16 +39,7 @@
 class CoherenceCalculator;
 class LBCalculatorLAPOR;
 class PSCCalculator;
-
-/* For compilers that do not have a recent enough lib{std}c++ */
-#ifndef STDLIBCPP_SUPPORTS_ENUM_MAP_KEYS
-struct EnumClassHash {
-	template <typename T>
-	std::size_t operator()(T t) const {
-		return static_cast<std::size_t>(t);
-	}
-};
-#endif
+class PersistencyChecker;
 
 /*******************************************************************************
  **                           ExecutionGraph Class
@@ -103,6 +94,20 @@ public:
 
 	/* Creates a new thread in the execution graph */
 	inline void addNewThread() { events.push_back({}); };
+
+	/* Pers: Add/remove a thread for the recovery procedure */
+	inline void addRecoveryThread() {
+		recoveryTID = events.size();
+		events.push_back({});
+	};
+	inline void delRecoveryThread() {
+		events.pop_back();
+		recoveryTID = -1;
+	};
+
+	/* Returns the tid of the recovery routine.
+	 * If not in recovery mode, returns -1 */
+	inline int getRecoveryRoutineId() const { return recoveryTID; };
 
 	/* Returns the number of threads currently in the graph */
 	inline unsigned int getNumThreads() const { return events.size(); };
@@ -159,6 +164,12 @@ public:
 	/* Returns the last event in the thread tid */
 	Event getLastThreadEvent(int tid) const;
 
+	/* Returns the last store at ADDR that is before UPPERLIMIT in
+	 * UPPERLIMIT's thread. If such a store does not exist, it
+	 * returns INIT */
+	Event getLastThreadStoreAtLoc(Event upperLimit,
+				      const llvm::GenericValue *addr) const;
+
 	/* Returns the last release before upperLimit in the latter's thread.
 	 * If it's not a fence, then it has to be at location addr */
 	Event getLastThreadReleaseAtLoc(Event upperLimit,
@@ -214,6 +225,9 @@ public:
 	virtual std::unique_ptr<VectorClock> getRevisitView(const ReadLabel *rLab,
 							    const WriteLabel *wLab) const;
 
+	/* Returns a list of loads that can be revisited */
+	virtual std::vector<Event> getRevisitable(const WriteLabel *sLab) const;
+
 	/* Returns a list of all events satisfying property F */
 	template <typename F>
 	std::vector<Event> collectAllEvents(F cond) const {
@@ -265,6 +279,19 @@ public:
 	LBCalculatorLAPOR *getLbCalculatorLAPOR();
 	LBCalculatorLAPOR *getLbCalculatorLAPOR() const;
 
+	/* Pers: Adds a persistency checker to the graph */
+	void addPersistencyChecker(std::unique_ptr<PersistencyChecker> pc) {
+		persChecker = std::move(pc);
+	}
+
+	/* Pers: Returns the persistency checker */
+	PersistencyChecker *getPersChecker() const {
+		return persChecker.get();
+	}
+	PersistencyChecker *getPersChecker() {
+		return persChecker.get();
+	}
+
 	const DepView &getPPoRfBefore(Event e) const;
 	const View &getPorfBefore(Event e) const;
 	const View &getHbBefore(Event e) const;
@@ -305,7 +332,7 @@ public:
 	bool isHbOptRfBeforeInView(const Event e, const Event write,
 				   const VectorClock &v) const;
 
-	/* Returns true if e is hb-before w, or any of the reads that read from w
+	/* Returns true if e is rel-before w, or any of the reads that read from w
 	 * in the relation "rel".
 	 * Pre: all examined events need to be a part of rel */
 	template <typename F = bool (*)(Event)>
@@ -329,6 +356,9 @@ public:
 	 * revisitable, or in the view porfBefore */
 	bool isStoreReadBySettledRMW(Event store, const llvm::GenericValue *ptr,
 				     const VectorClock &porfBefore) const;
+
+	/* Pers: Returns true if the recovery routine is valid */
+	bool isRecoveryValid() const;
 
 	/* Returns true if the graph that will be created when sLab revisits rLab
 	 * will be the same as the current one */
@@ -371,21 +401,6 @@ public:
 			       int newOffset);
 	void resetJoin(Event join);
 	bool updateJoin(Event join, Event childLast);
-
-
-	/* Revisit set methods */
-
-	/* Returns true if the revisit set for rLab contains the pair
-	 * <writePrefix, moPlacings>*/
-	bool revisitSetContains(const ReadLabel *rLab, const std::vector<Event> &writePrefix,
-				const std::vector<std::pair<Event, Event> > &moPlacings) const;
-
-	/* Adds to the revisit set of rLab the pair <writePrefix, moPlacings> */
-	void addToRevisitSet(const ReadLabel *rLab, const std::vector<Event> &writePrefix,
-			     const std::vector<std::pair<Event, Event> > &moPlacings);
-
-	/* Returns a list of loads that can be revisited */
-	virtual std::vector<Event> getRevisitable(const WriteLabel *sLab) const;
 
 
 	/* Prefix saving and restoring */
@@ -484,18 +499,20 @@ private:
 	std::vector<Calculator::PerLocRelation> perLocRelations;
 	std::vector<Calculator::PerLocRelation> perLocRelationsCache;
 
-	template <typename Key>
-#ifdef STDLIBCPP_SUPPORTS_ENUM_MAP_KEYS
-	using HashType = typename std::hash<Key>;
-#else
-	using HashType = EnumClassHash;
-#endif
 	/* Keeps track of calculator indices */
-	std::unordered_map<RelationId, unsigned int, HashType<RelationId> > calculatorIndex;
+	std::unordered_map<RelationId, unsigned int, ENUM_HASH(RelationId) > calculatorIndex;
 
 	/* Keeps track of relation indices. Note that an index might
 	 * refer to either globalRelations or perLocRelations */
-	std::unordered_map<RelationId, unsigned int, HashType<RelationId> > relationIndex;
+	std::unordered_map<RelationId, unsigned int, ENUM_HASH(RelationId) > relationIndex;
+
+	/* Pers: An object calculating persistency relations */
+	std::unique_ptr<PersistencyChecker> persChecker = nullptr;
+
+	/* Pers: The ID of the recovery routine.
+	 * It should be -1 if not in recovery mode, or have the
+	 * value of the recovery routine otherwise. */
+	int recoveryTID = -1;
 };
 
 template <typename F>
@@ -536,5 +553,6 @@ bool ExecutionGraph::isWriteRfBeforeRel(const AdjList<Event, EventHasher> &rel, 
 #include "CoherenceCalculator.hpp"
 #include "LBCalculatorLAPOR.hpp"
 #include "PSCCalculator.hpp"
+#include "PersistencyChecker.hpp"
 
 #endif /* __EXECUTION_GRAPH_HPP__ */

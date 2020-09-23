@@ -321,7 +321,6 @@ void PSCCalculator::addSCEcos(const std::vector<Event> &fcs,
 
 	for (auto loc : scLocs)
 		addSCEcosLoc(fcs, coRelation[loc], matrix);
-	matrix.transClosure();
 	return;
 }
 
@@ -349,6 +348,7 @@ void PSCCalculator::calcPscRelation()
 	 * and add the rest of PSC_base and PSC_fence
 	 */
 	addSCEcos(fcs, getDoubleLocs(), pscRelation);
+	pscRelation.transClosure();
 	return;
 }
 

@@ -43,11 +43,14 @@ libgenmc_a_SOURCES = \
   MDataCollectionPass.hpp MDataCollectionPass.cpp \
   MOCoherenceCalculator.hpp MOCoherenceCalculator.cpp \
   Parser.cpp Parser.hpp \
+  PersistencyChecker.cpp PersistencyChecker.hpp \
+  PromoteMemIntrinsicPass.cpp PromoteMemIntrinsicPass.hpp \
   PSCCalculator.cpp PSCCalculator.hpp \
   RC11Driver.cpp RC11Driver.hpp \
   RevisitSet.cpp RevisitSet.hpp \
   SpinAssumePass.cpp SpinAssumePass.hpp \
   WBCoherenceCalculator.cpp WBCoherenceCalculator.hpp \
+  WorkSet.hpp WorkSet.cpp \
   VectorClock.hpp VectorClock.cpp \
   View.hpp View.cpp \
   VSet.hpp VSet.tcc

@@ -31,6 +31,8 @@ runtime=0
 tests_success=0
 tests_fail=0
 
+shopt -s nullglob
+
 print_debug_header() {
     # Print status
     echo ''; printline
@@ -157,12 +159,12 @@ runvariants() {
     outcome_failure=""
     failure_output=""
     unroll="" && [[ -f "${dir}/unroll.in" ]] && unroll="-unroll="`head -1 "${dir}/unroll.in"`
-    checker_args="" && [[ -f "${dir}/genmc.${model}.${coherence}.in" ]] &&
-	checker_args=`head -1 "${dir}/genmc.${model}.${coherence}.in"`
-    for t in $dir/variants/*.c
+    checker_args=() && [[ -f "${dir}/genmc.${model}.${coherence}.in" ]] &&
+	checker_args=(`cat "${dir}/genmc.${model}.${coherence}.in"`)
+    for t in $dir/variants/*.c $dir/variants/*.cpp
     do
 	vars=$((vars+1))
-	output=`"${GenMC}" ${GENMCFLAGS} "-${model}" "-${coherence}" "${unroll}" ${checker_args} -- ${CFLAGS} ${test_args} "${t}" 2>&1`
+	output=`"${GenMC}" ${GENMCFLAGS} "-${model}" "-${coherence}" "${unroll}" $(echo ${checker_args[@]}) -- ${CFLAGS} ${test_args} "${t}" 2>&1`
 	if test "$?" -ne 0
 	then
 	    failure_output="${output}"

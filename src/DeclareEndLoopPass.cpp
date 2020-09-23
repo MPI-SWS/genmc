@@ -44,14 +44,14 @@ bool DeclareEndLoopPass::runOnModule(Module &M)
 	AttributeList endLoopAtt;
 	bool modified = false;
 
-	endLoopFun = M.getFunction("__end_loop");
+	endLoopFun = M.getFunction("__VERIFIER_end_loop");
 	if (!endLoopFun) {
 		Type *retTyp = Type::getVoidTy(M.getContext());
 		endLoopTyp = FunctionType::get(retTyp, {}, false);
 
 		AttributeList::get(M.getContext(), AttributeList::FunctionIndex,
 				  std::vector<Attribute::AttrKind>({Attribute::NoUnwind}));
-		M.getOrInsertFunction("__end_loop", endLoopTyp, endLoopAtt);
+		M.getOrInsertFunction("__VERIFIER_end_loop", endLoopTyp, endLoopAtt);
 		modified = true;
 	}
 	return modified;
@@ -59,4 +59,4 @@ bool DeclareEndLoopPass::runOnModule(Module &M)
 
 char DeclareEndLoopPass::ID = 42;
 static llvm::RegisterPass<DeclareEndLoopPass> P("declare-end-loop",
-						"Declares the __end_loop function.");
+						"Declares the __VERIFIER_end_loop function.");

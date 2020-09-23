@@ -20,6 +20,56 @@
 
 #include "EventLabel.hpp"
 
+EventLabel *EventLabel::castFromDskAccessLabel (const DskAccessLabel *D)
+{
+	EventLabel::EventLabelKind DK = D->getEventLabelKind();
+	switch (DK) {
+	case EventLabel::EventLabelKind::EL_DskRead:
+		return static_cast<DskReadLabel *>(const_cast<DskAccessLabel *>(D));
+	case EventLabel::EventLabelKind::EL_DskWrite:
+		return static_cast<DskWriteLabel *>(const_cast<DskAccessLabel *>(D));
+	case EventLabel::EventLabelKind::EL_DskMdWrite:
+		return static_cast<DskMdWriteLabel *>(const_cast<DskAccessLabel *>(D));
+	case EventLabel::EventLabelKind::EL_DskJnlWrite:
+		return static_cast<DskJnlWriteLabel *>(const_cast<DskAccessLabel *>(D));
+	case EventLabel::EventLabelKind::EL_DskDirWrite:
+		return static_cast<DskDirWriteLabel *>(const_cast<DskAccessLabel *>(D));
+	case EventLabel::EventLabelKind::EL_DskSync:
+		return static_cast<DskSyncLabel *>(const_cast<DskAccessLabel *>(D));
+	case EventLabel::EventLabelKind::EL_DskFsync:
+		return static_cast<DskFsyncLabel *>(const_cast<DskAccessLabel *>(D));
+	case EventLabel::EventLabelKind::EL_DskPbarrier:
+		return static_cast<DskPbarrierLabel *>(const_cast<DskAccessLabel *>(D));
+	default:
+		BUG();
+	}
+}
+
+DskAccessLabel *EventLabel::castToDskAccessLabel(const EventLabel *E)
+{
+	EventLabel::EventLabelKind EK = E->getKind();
+	switch (EK) {
+	case EventLabel::EventLabelKind::EL_DskRead:
+		return static_cast<DskReadLabel *>(const_cast<EventLabel *>(E));
+	case EventLabel::EventLabelKind::EL_DskWrite:
+		return static_cast<DskWriteLabel *>(const_cast<EventLabel *>(E));
+	case EventLabel::EventLabelKind::EL_DskMdWrite:
+		return static_cast<DskMdWriteLabel *>(const_cast<EventLabel *>(E));
+	case EventLabel::EventLabelKind::EL_DskJnlWrite:
+		return static_cast<DskJnlWriteLabel *>(const_cast<EventLabel *>(E));
+	case EventLabel::EventLabelKind::EL_DskDirWrite:
+		return static_cast<DskDirWriteLabel *>(const_cast<EventLabel *>(E));
+	case EventLabel::EventLabelKind::EL_DskSync:
+		return static_cast<DskSyncLabel *>(const_cast<EventLabel *>(E));
+	case EventLabel::EventLabelKind::EL_DskFsync:
+		return static_cast<DskFsyncLabel *>(const_cast<EventLabel *>(E));
+	case EventLabel::EventLabelKind::EL_DskPbarrier:
+		return static_cast<DskPbarrierLabel *>(const_cast<EventLabel *>(E));
+	default:
+		BUG();
+	}
+}
+
 llvm::raw_ostream& operator<<(llvm::raw_ostream& s,
 			      const EventLabel::EventLabelKind k)
 {
@@ -66,6 +116,26 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s,
 		break;
 	case EventLabel::EL_UnlockLabelLAPOR:
 		s << "LU";
+	case EventLabel::EL_DskOpen:
+		s << "FO";
+		break;
+	case EventLabel::EL_DskRead:
+		s << "DR";
+		break;
+	case EventLabel::EL_DskWrite:
+	case EventLabel::EL_DskMdWrite:
+	case EventLabel::EL_DskDirWrite:
+	case EventLabel::EL_DskJnlWrite:
+		s << "DW";
+		break;
+	case EventLabel::EL_DskFsync:
+		s << "DF";
+		break;
+	case EventLabel::EL_DskSync:
+		s << "DS";
+		break;
+	case EventLabel::EL_DskPbarrier:
+		s << "PB";
 		break;
 	default:
 		s << "UNKNOWN";
@@ -163,6 +233,16 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const EventLabel &lab)
 		s << fLab.getKind() << fLab.getOrdering();
 		break;
 	}
+	case EventLabel::EL_DskFsync: {
+		auto &fLab = static_cast<const DskSyncLabel&>(lab);
+		s << fLab.getKind();
+		break;
+	}
+	case EventLabel::EL_DskSync: {
+		auto &fLab = static_cast<const DskSyncLabel&>(lab);
+		s << fLab.getKind();
+		break;
+	}
 	case EventLabel::EL_ThreadCreate: {
 		auto &cLab = static_cast<const ThreadCreateLabel&>(lab);
 		s << cLab.getKind() << " [forks " << cLab.getChildId() << "]";
@@ -201,6 +281,30 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const EventLabel &lab)
 	case EventLabel::EL_UnlockLabelLAPOR: {
 		auto &uLab = static_cast<const UnlockLabelLAPOR&>(lab);
 		s << uLab.getKind();
+		break;
+	}
+	case EventLabel::EL_DskOpen: {
+		auto &bLab = static_cast<const DskOpenLabel&>(lab);
+		s << bLab.getKind() << " (";
+		s << bLab.getFileName() << ", ";
+		s << bLab.getFd().IntVal.getLimitedValue() << ")";
+		break;
+	}
+	case EventLabel::EL_DskRead: {
+		auto &rLab = static_cast<const DskReadLabel&>(lab);
+		s << rLab.getKind() << " [";
+		PRINT_RF(s, rLab.getRf());
+		s << "]";
+		break;
+	}
+	case EventLabel::EL_DskWrite: {
+		auto &wLab = static_cast<const DskWriteLabel&>(lab);
+		s << wLab.getKind() << " " << wLab.getVal().IntVal;
+		break;
+	}
+	case EventLabel::EL_DskPbarrier: {
+		auto &pLab = static_cast<const DskPbarrierLabel&>(lab);
+		s << pLab.getKind();
 		break;
 	}
 	default:

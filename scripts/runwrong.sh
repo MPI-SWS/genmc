@@ -23,8 +23,6 @@ GenMC="${GenMC:-$DIR/../src/genmc}"
 
 source "${DIR}/terminal.sh"
 
-ERROR_STATUS=42
-
 model="${model:-rc11}"
 coherence="${coherence:-wb}"
 suppress_diff="${suppress_diff:-}"
@@ -32,6 +30,8 @@ suppress_diff="${suppress_diff:-}"
 runtime=0
 tests_success=0
 tests_fail=0
+
+shopt -s nullglob
 
 print_debug_header() {
     # Print status
@@ -154,13 +154,14 @@ runvariants() {
     failure=""
     diff=""
     outcome_failure=""
-    checker_args="" && [[ -f "${dir}/genmc.${model}.${coherence}.in" ]] &&
-	checker_args=`head -1 "${dir}/genmc.${model}.${coherence}.in"`
-    for t in $dir/variants/*.c
+    unroll="" && [[ -f "${dir}/unroll.in" ]] && unroll="-unroll="`head -1 "${dir}/unroll.in"`
+    checker_args=() && [[ -f "${dir}/genmc.${model}.${coherence}.in" ]] &&
+	checker_args=(`cat "${dir}/genmc.${model}.${coherence}.in"`)
+    for t in $dir/variants/*.c $dir/variants/*.cpp
     do
 	vars=$((vars+1))
-	output=`"${GenMC}" "-${model}" "-${coherence}" -print-error-trace "${checker_args}" -- "${CFLAGS}" "${t}" 2>&1`
-	if test "$?" -ne "${ERROR_STATUS}"
+	output=`"${GenMC}" "-${model}" "-${coherence}" "${unroll}" -print-error-trace $(echo ${checker_args[@]}) -- ${CFLAGS} ${test_args} ${t} 2>&1`
+	if test "$?" -eq 0
 	then
 	    failure_status="$?"
 	    outcome_failure=1
@@ -172,10 +173,11 @@ runvariants() {
 	diff=`diff tmp.trace "${diff_file}"`
 	if test -n "${diff}" -a -z "${suppress_diff}"
 	then
+	    echo "${diff}"
 	    failure=1
 	fi
 	explored=`echo "${output}" | awk '/explored/ { print $6 }'`
-	time=`echo "${output}" | awk '/time/ { print substr($4, 1, length($4)-1) }'`
+	time=`echo "${output}" | awk '/wall-clock/ { print substr($4, 1, length($4)-1) }'`
 	time="${time}" && [[ -z "${time}" ]] && time=0 # if pattern was NOT found
 	test_time=`echo "${test_time}+${time}" | bc -l`
 	runtime=`echo "scale=2; ${runtime}+${time}" | bc -l`
@@ -187,19 +189,11 @@ runvariants() {
 
 runtest() {
     dir=$1
-    if test -f "${dir}/args.in"
-    then
-	while read test_args <&3 && read expected <&4; do
-	    n="/`echo ${test_args} |
-                 awk ' { if (match($0, /-DN=[0-9]+/)) print substr($0, RSTART+4, RLENGTH-4) } '`"
-	    runvariants
-	done 3<"${dir}/args.in" 4<"${dir}/expected.in"
-    else
-	test_args=""
-	n=""
-	#expected=`head -n 1 "${dir}/expected.in"`
-	runvariants
-    fi
+    n=""
+    test_args="" && [[ -f "${dir}/args.${model}.${coherence}.in" ]] &&
+	test_args=`head -n 1 "${dir}/args.${model}.${coherence}.in"`
+    #expected=`head -n 1 "${dir}/expected.in"`
+    runvariants
 }
 
 [ -z "${TESTFILTER}" ] && TESTFILTER=*

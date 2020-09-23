@@ -42,7 +42,7 @@ public:
 	createFaiReadLabel(int tid, int index, llvm::AtomicOrdering ord,
 			   const llvm::GenericValue *ptr, const llvm::Type *typ,
 			   Event rf, llvm::AtomicRMWInst::BinOp op,
-			   llvm::GenericValue &&opValue) override;
+			   const llvm::GenericValue &opValue) override;
 
 	/* Creates a label for a CAS read to be added to the graph */
 	std::unique_ptr<CasReadLabel>
@@ -56,7 +56,12 @@ public:
 	std::unique_ptr<LibReadLabel>
 	createLibReadLabel(int tid, int index, llvm::AtomicOrdering ord,
 			   const llvm::GenericValue *ptr, const llvm::Type *typ,
-			   Event rf, std::string functionName)  override;
+			   Event rf, std::string functionName) override;
+
+	std::unique_ptr<DskReadLabel>
+	createDskReadLabel(int tid, int index, llvm::AtomicOrdering ord,
+			   const llvm::GenericValue *ptr, const llvm::Type *typ,
+			   Event rf) override;
 
 	/* Creates a label for a plain write to be added to the graph */
 	std::unique_ptr<WriteLabel>
@@ -85,6 +90,28 @@ public:
 			    llvm::GenericValue &val, std::string functionName,
 			    bool isInit) override;
 
+	/* Creates a label for a disk write to be added to the graph */
+	std::unique_ptr<DskWriteLabel>
+	createDskWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
+			    const llvm::GenericValue *ptr, const llvm::Type *typ,
+			    const llvm::GenericValue &val, void *mapping) override;
+
+	std::unique_ptr<DskMdWriteLabel>
+	createDskMdWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
+			      const llvm::GenericValue *ptr, const llvm::Type *typ,
+			      const llvm::GenericValue &val, void *mapping,
+			      std::pair<void *, void *> ordDataRange) override;
+
+	std::unique_ptr<DskDirWriteLabel>
+	createDskDirWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
+			       const llvm::GenericValue *ptr, const llvm::Type *typ,
+			       const llvm::GenericValue &val, void *mapping) override;
+
+	std::unique_ptr<DskJnlWriteLabel>
+	createDskJnlWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
+			       const llvm::GenericValue *ptr, const llvm::Type *typ,
+			       const llvm::GenericValue &val, void *mapping, void *transInode) override;
+
 	/* Creates a label for a fence to be added to the graph */
 	std::unique_ptr<FenceLabel>
 	createFenceLabel(int tid, int index, llvm::AtomicOrdering ord) override;
@@ -93,7 +120,21 @@ public:
 	/* Creates a label for a malloc event to be added to the graph */
 	std::unique_ptr<MallocLabel>
 	createMallocLabel(int tid, int index, const void *addr,
-			  unsigned int size, bool isLocal = false) override;
+			  unsigned int size, Storage s, AddressSpace spc) override;
+
+	std::unique_ptr<DskOpenLabel>
+	createDskOpenLabel(int tid, int index, const char *fileName,
+			   const llvm::GenericValue &fd) override;
+
+	std::unique_ptr<DskFsyncLabel>
+	createDskFsyncLabel(int tid, int index, const void *inode,
+			    unsigned int size) override;
+
+	std::unique_ptr<DskSyncLabel>
+	createDskSyncLabel(int tid, int index) override;
+
+	std::unique_ptr<DskPbarrierLabel>
+	createDskPbarrierLabel(int tid, int index) override;
 
 	/* Creates a label for a free event to be added to the graph */
 	std::unique_ptr<FreeLabel>
@@ -109,7 +150,7 @@ public:
 
 	/* Creates a label for the start of a thread to be added to the graph */
 	std::unique_ptr<ThreadStartLabel>
-	createStartLabel(int tid, int index, Event tc) override;
+	createStartLabel(int tid, int index, Event tc, int symm = -1) override;
 
 	/* Creates a label for the end of a thread to be added to the graph */
 	std::unique_ptr<ThreadFinishLabel>

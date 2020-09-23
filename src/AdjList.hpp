@@ -96,6 +96,12 @@ public:
 
 	unsigned int getIndex(T a) const { return ids.at(a); }
 
+	/* Returns the number of elements in the graph */
+	unsigned int size() const { return elems.size(); }
+
+	/* Returns true when the graph has no elements */
+	bool empty() const { return size() == 0; }
+
 	/* Adds a node to the graph */
 	void addNode(T a);
 

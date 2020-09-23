@@ -1,6 +1,7 @@
 #ifndef __STDIO_H__
 #define __STDIO_H__
 
+#include <errno.h>
 #include <stddef.h>
 
 struct _IO_FILE;

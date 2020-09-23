@@ -1,0 +1,3 @@
+WARNING: Memory intrinsic found! Attempting to promote it...
+WARNING: File does not exist in open()
+FIXME: RECOVERY ERROR

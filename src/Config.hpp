@@ -27,36 +27,59 @@
 #include <vector>
 
 enum class ModelType { rc11, imm };
+enum class SchedulePolicy { ltr, wf, random };
 
 struct Config {
 
 public:
+	/* General syntax */
 	std::vector<std::string> cflags;
 	std::string inputFile;
-	std::string transformFile;
-	std::string dotFile;
-	std::string specsFile;
+
+	/* Exploration options */
 	ModelType model;
 	bool isDepTrackingModel;
 	CoherenceType coherence;
 	bool LAPOR;
+	bool symmetryReduction;
 	CheckConsType checkConsType;
 	ProgramPoint checkConsPoint;
+	bool checkLiveness;
+	bool printErrorTrace;
+	std::string dotFile;
+	bool disableRaceDetection;
+	bool disableStopOnSystemError;
+	std::string specsFile;
+
+	/* Persistency options */
+	bool persevere;
+	ProgramPoint checkPersPoint;
+	unsigned int blockSize;
+	unsigned int maxFileSize;
+	JournalDataFS journalData;
+	bool disableDelalloc;
+
+	/* Transformation options */
 	int unroll;
 	bool spinAssume;
-	std::string programEntryFun;
+
+	/* Debugging options */
+	bool countDuplicateExecs;
 	bool inputFromBitcodeFile;
-	bool validateExecGraphs;
-	bool disableRaceDetection;
-	bool randomizeSchedule;
-	bool printRandomizeScheduleSeed;
-	std::string randomizeScheduleSeed;
 	bool printExecGraphs;
 	bool prettyPrintExecGraphs;
-	bool countDuplicateExecs;
-	bool printErrorTrace;
+	SchedulePolicy schedulePolicy;
+	std::string randomScheduleSeed;
+	bool printRandomScheduleSeed;
+	std::string transformFile;
+	std::string programEntryFun;
+	bool validateExecGraphs;
 
 	void getConfigOptions(int argc, char **argv);
+
+private:
+	void checkConfigOptions() const;
+	void saveConfigOptions();
 };
 
 #endif /* __CONFIG_HPP__ */

@@ -8,8 +8,11 @@ void exit(int);
 void abort(void);
 int abs(int);
 int atoi(const char *);
-void free(void *);
 char *getenv(const char *);
-void *malloc(size_t);
+
+void __VERIFIER_free(void *);
+#define free __VERIFIER_free
+void *__VERIFIER_malloc(size_t);
+#define malloc __VERIFIER_malloc
 
 #endif /* __STDLIB_H__ */

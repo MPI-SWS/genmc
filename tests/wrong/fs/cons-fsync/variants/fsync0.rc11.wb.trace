@@ -1,0 +1,8 @@
+Error detected: Bad file descriptor!
+Event (0, 0) in graph:
+<-1, 0> main:
+	(0, 0): B
+
+Trace to (0, 0):
+File is not open in fsync()
+Number of complete executions explored: 0

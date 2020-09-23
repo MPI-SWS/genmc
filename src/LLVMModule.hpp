@@ -33,6 +33,6 @@ namespace LLVMModule {
 	void destroyLLVMContext(void);
 	std::unique_ptr<llvm::Module> getLLVMModule(std::string &filename, std::string &source);
 	bool transformLLVMModule(llvm::Module &mod, llvm::VariableInfo &VI,
-				 bool spinAssume, int unroll);
+				 llvm::FsInfo &FI, bool spinAssume, int unroll);
 	void printLLVMModule(llvm::Module &mod, std::string &out);
 }

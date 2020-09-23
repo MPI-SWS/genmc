@@ -2,13 +2,9 @@ Error detected: Non-Atomic race!
 Event (2, 2) conflicts with event (1, 1) in graph:
 <-1, 0> main:
 	(0, 0): B
-	(0, 1): M
-	(0, 2): M
-	(0, 3): TC [forks 1] L.11
-	(0, 4): Wna (t1, 1) L.11
-	(0, 5): TC [forks 2] L.13
-	(0, 6): Wna (t2, 2) L.13
-	(0, 7): E
+	(0, 1): TC [forks 1] L.11
+	(0, 2): TC [forks 2] L.13
+	(0, 3): E
 <0, 1> thread_1:
 	(1, 0): B
 	(1, 1): Wna (x, 1) L.6: mp+rel+rlx.c
@@ -21,7 +17,6 @@ Event (2, 2) conflicts with event (1, 1) in graph:
 
 Trace to (2, 2):
 [main] mp+rel+rlx0.c: 11: if (pthread_create(&t1, NULL, thread_1, NULL))
-[main] mp+rel+rlx0.c: 13: if (pthread_create(&t2, NULL, thread_2, NULL))
 [thread_1] mp+rel+rlx.c: 6: x = 1;
 [thread_1] mp+rel+rlx.c: 7: atomic_store_explicit(&y, 1, memory_order_release);
 [thread_2] mp+rel+rlx.c: 15: if (atomic_load_explicit(&y, memory_order_relaxed))

@@ -37,7 +37,6 @@ DriverFactory::create(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Module
 			new IMMDriver(std::move(conf), std::move(mod),
 				      granted, toVerify, start));
 	default:
-		WARN("Unsupported model type! Exiting...\n");
-		abort();
+		BUG();
 	}
 }

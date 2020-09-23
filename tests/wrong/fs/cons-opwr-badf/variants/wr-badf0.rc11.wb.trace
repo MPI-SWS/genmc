@@ -1,0 +1,28 @@
+Error detected: Bad file descriptor!
+Event (0, 20) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): M
+	(0, 2): Wna (buf[0], 42) L.21
+	(0, 3): Cacq (__dir_inode.lock, 0) [INIT] L.23
+	(0, 4): Cacq (__dir_inode.lock, 1) L.0:
+	(0, 5): FRacq (__dir_inode.addr[foo], 0x0) [INIT] L.0:
+	(0, 6): M
+	(0, 7): Wna (__inode_foo.lock, 0) L.0:
+	(0, 8): FWrel (__inode_foo.isize, 0) L.0:
+	(0, 9): FWrel (__dir_inode.addr[foo], 0x287c50c) L.0:
+	(0, 10): Wrel (__dir_inode.lock, 0) L.0:
+	(0, 11): FO (foo, 0) L.0:
+	(0, 12): M
+	(0, 13): Wrel (__file_foo_0_12.inode, 0x287c50c) L.0:
+	(0, 14): Wrel (__file_foo_0_12.lock, 0) L.0:
+	(0, 15): Wrel (__file_foo_0_12.flags, 64) L.0:
+	(0, 16): Wrel (__file_foo_0_12.offset, 0) L.0:
+	(0, 17): Cacq (__file_foo_0_12.lock, 0) [(0, 14)] L.26
+	(0, 18): Cacq (__file_foo_0_12.lock, 1) L.0:
+	(0, 19): Rna (__file_foo_0_12.offset, 0) [(0, 16)] L.0:
+	(0, 20): Rna (__file_foo_0_12.flags, 64) [(0, 15)] L.0:
+	(0, 21): Wrel (__file_foo_0_12.lock, 0) L.0:
+
+File not open for writing in write()
+Number of complete executions explored: 0

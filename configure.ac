@@ -1,7 +1,8 @@
-AC_INIT([genmc], [0.4], [michalis@mpi-sws.org])
+AC_INIT([GenMC], [0.5], [michalis@mpi-sws.org], [genmc], [https://plv.mpi-sws.org/genmc])
 
 m4_include([m4/ax_llvm.m4])
 m4_include([m4/ax_clang.m4])
+m4_include([m4/ax_git_commit.m4])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 
 AC_PROG_CXX
@@ -16,6 +17,7 @@ AX_CLANG(,[
   AC_MSG_WARN([Consider indicating the binaries clang/clang++ with switches --with-clang/--with-clangxx,])
   AC_MSG_FAILURE([Failed to detect clang/clang++.])
 ])
+AX_GIT_COMMIT
 
 ## Checks for libraries
 AC_CHECK_LIB([dl], [dlopen],[],[AC_MSG_FAILURE([Could not find library libdl.])])
@@ -139,6 +141,18 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 	AC_MSG_RESULT([std::make_unique<>])
 	])
 
+## Check whether llvm::cl::SetVersionPrinter takes arguments
+AC_MSG_CHECKING([whether llvm::cl::SetVersionPrinter needs an argument])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/Support/CommandLine.h>
+]],[[
+	llvm::cl::SetVersionPrinter([&](llvm::raw_ostream &s){ return; });
+]])],
+        [AC_DEFINE([LLVM_SETVERSIONPRINTER_NEEDS_ARG],[1],
+         [Define if llvm::cl::SetVersionPrinter needs an argument.])
+         AC_MSG_RESULT([yes])],
+        [AC_MSG_RESULT([no])])
+
 ## Check whether llvm::cl has HideUnrelatedOptions
 AC_MSG_CHECKING([whether llvm::cl has HideUnrelatedOptions()])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
@@ -178,6 +192,19 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 ]])],
         [AC_DEFINE([LLVM_CL_VALUES_NEED_SENTINEL],[1],
          [Define if llvm::cl::values need a sentinel.])
+         AC_MSG_RESULT([yes])],
+        [AC_MSG_RESULT([no])])
+
+## Check whether llvm::BitVector has find_first_unset()
+AC_MSG_CHECKING([whether llvm::BitVector has find_first_unset()])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/ADT/BitVector.h>
+]],[[
+	llvm::BitVector bv;
+	bv.find_first_unset();
+]])],
+        [AC_DEFINE([LLVM_BITVECTOR_HAS_FIND_FIRST_UNSET],[1],
+         [Define if llvm::BitVector has the find_first_unset() method.])
          AC_MSG_RESULT([yes])],
         [AC_MSG_RESULT([no])])
 
@@ -552,6 +579,19 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
         ]])],
         [AC_DEFINE([LLVM_HAS_GLOBALOBJECT_GET_METADATA],[1],
             [Define if we can get metadata from a GlobalObject.])
+         AC_MSG_RESULT([yes])],
+        [AC_MSG_RESULT([no])])
+
+## Check if we can get the address space of a global value (LLVM >= 8)
+AC_MSG_CHECKING([if GlobalValue has getAddressSpace()])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/IR/GlobalValue.h>
+]],[[
+          llvm::GlobalValue *gv = nullptr;
+          unsigned int spc = gv->getAddressSpace();
+        ]])],
+        [AC_DEFINE([LLVM_GLOBALVALUE_HAS_GET_ADDRESS_SPACE],[1],
+            [Define if we can get the address space from a GlobalValue.])
          AC_MSG_RESULT([yes])],
         [AC_MSG_RESULT([no])])
 

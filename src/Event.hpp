@@ -21,6 +21,7 @@
 #ifndef __EVENT_HPP__
 #define __EVENT_HPP__
 
+#include <llvm/ADT/Hashing.h>
 #include <llvm/Support/raw_ostream.h>
 
 struct Event {
@@ -51,6 +52,10 @@ struct Event {
 	inline bool operator>(const Event &e) const {
 		return (index > e.index) || (index == e.index && thread > e.thread);
 	}
+
+	friend llvm::hash_code hash_value(const Event &e) {
+		return llvm::hash_combine(e.thread, e.index);
+	};
 };
 
 llvm::raw_ostream& operator<<(llvm::raw_ostream &s, Event e);

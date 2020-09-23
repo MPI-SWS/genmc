@@ -1,0 +1,14 @@
+Error detected: No such file or directory!
+Event (0, 5) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): Cacq (__dir_inode.lock, 0) [INIT] L.23
+	(0, 2): Cacq (__dir_inode.lock, 1)
+	(0, 3): FRacq (__dir_inode.i_transaction, 0) [INIT]
+	(0, 4): FRacq (__dir_inode.addr[foo], 0x0) [INIT]
+	(0, 5): Wrel (__dir_inode.lock, 0)
+
+Trace to (0, 5):
+[main] op0.c: 23: int fd = open("foo", O_TRUNC, S_IRWXU);
+File does not exist in open()
+Number of complete executions explored: 0

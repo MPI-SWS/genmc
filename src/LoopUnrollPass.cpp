@@ -51,13 +51,13 @@ void LoopUnrollPass::getAnalysisUsage(llvm::AnalysisUsage &au) const
 }
 
 /*
-   This function creates a block that only calls the special __end_loop() function.
+   This function creates a block that only calls the special __VERIFIER_end_loop() function.
    The Interpreter should drop the execution when such a call is encountered.
 */
 llvm::BasicBlock *LoopUnrollPass::createLoopDivergeBlock(llvm::Loop *l)
 {
 	llvm::Function *parentFun = (*l->block_begin())->getParent();
-	llvm::Function *endLoopFun = parentFun->getParent()->getFunction("__end_loop");
+	llvm::Function *endLoopFun = parentFun->getParent()->getFunction("__VERIFIER_end_loop");
 
 	BUG_ON(!endLoopFun);
 

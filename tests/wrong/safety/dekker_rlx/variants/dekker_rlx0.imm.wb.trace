@@ -2,13 +2,9 @@ Error detected: Safety violation!
 Event (2, 4) in graph:
 <-1, 0> main:
 	(0, 0): B
-	(0, 1): M
-	(0, 2): M
-	(0, 3): TC [forks 1] L.12
-	(0, 4): Wna (t1, 1) L.12
-	(0, 5): TC [forks 2] L.14
-	(0, 6): Wna (t2, 2) L.14
-	(0, 7): E
+	(0, 1): TC [forks 1] L.12
+	(0, 2): TC [forks 2] L.14
+	(0, 3): E
 <0, 1> thread_one:
 	(1, 0): B
 	(1, 1): Wrlx (y, 1) L.7: dekker_rlx.c
@@ -25,7 +21,6 @@ Event (2, 4) in graph:
 
 Trace to (2, 4):
 [main] dekker_rlx0.c: 12: if (pthread_create(&t1, NULL, thread_one, NULL))
-[main] dekker_rlx0.c: 14: if (pthread_create(&t2, NULL, thread_two, NULL))
 [thread_two] dekker_rlx.c: 17: atomic_store_explicit(&x, 1, memory_order_relaxed);
 [thread_two] dekker_rlx.c: 18: if (!atomic_load_explicit(&y, memory_order_relaxed)) {
 [thread_two] dekker_rlx.c: 19: atomic_store_explicit(&c, 0, memory_order_relaxed);
@@ -34,4 +29,4 @@ Trace to (2, 4):
 [thread_one] dekker_rlx.c: 9: atomic_store_explicit(&c, 1, memory_order_relaxed);
 [thread_two] dekker_rlx.c: 20: assert(atomic_load_explicit(&c, memory_order_relaxed) == 0);
 Assertion violation: atomic_load_explicit(&c, memory_order_relaxed) == 0
-Number of complete executions explored: 1
+Number of complete executions explored: 3

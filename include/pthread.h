@@ -18,6 +18,11 @@
 #ifndef _PTHREAD_H
 #define _PTHREAD_H	1
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 //#include <features.h>
 //#include <endian.h>
 #include <sched.h>
@@ -123,18 +128,31 @@ enum
 /* Create a new thread, starting with execution of START-ROUTINE
    getting passed ARG.  Creation attributed come from ATTR.  The new
    handle is stored in *NEWTHREAD.  */
-extern int pthread_create (pthread_t *__restrict __newthread,
-			   const pthread_attr_t *__restrict __attr,
-			   void *(*__start_routine) (void *),
-			   void *__restrict __arg);
+/* extern int pthread_create (pthread_t *__restrict __newthread, */
+/* 			   const pthread_attr_t *__restrict __attr, */
+/* 			   void *(*__start_routine) (void *), */
+/* 			   void *__restrict __arg); */
+extern int __VERIFIER_thread_create (const pthread_attr_t *__restrict __attr,
+				     void *(*__start_routine) (void *),
+				     void *__restrict __arg);
+#define pthread_create(newthread, attr, start_routine, arg) \
+({									\
+	*(newthread) = __VERIFIER_thread_create(attr, start_routine, arg); \
+	0;								\
+})
 
 /* Terminate calling thread.  */
-extern void pthread_exit (void *__retval) __attribute__ ((__noreturn__));
+/* extern void pthread_exit (void *__retval) __attribute__ ((__noreturn__)); */
+extern void __VERIFIER_thread_exit (void *__retval) __attribute__ ((__noreturn__));
+#define pthread_exit __VERIFIER_thread_exit
 
 /* Make calling thread wait for termination of the thread TH.  The
    exit status of the thread is stored in *THREAD_RETURN, if THREAD_RETURN
    is not NULL. */
-extern int pthread_join (pthread_t __th, void **__thread_return);
+/* extern int pthread_join (pthread_t __th, void **__thread_return); */
+extern int __VERIFIER_thread_join (pthread_t __th, void **__thread_return);
+#define pthread_join __VERIFIER_thread_join
+
 
 #ifdef __USE_GNU
 /* Check whether thread TH has terminated.  If yes return the status of
@@ -156,7 +174,9 @@ extern int pthread_detach (pthread_t __th);
 
 
 /* Obtain the identifier of the current thread.  */
-extern pthread_t pthread_self (void);
+/* extern pthread_t pthread_self (void); */
+extern pthread_t __VERIFIER_thread_self (void);
+#define pthread_self __VERIFIER_thread_self
 
 /* Compare two thread identifiers.  */
 extern int pthread_equal (pthread_t __thread1, pthread_t __thread2);
@@ -309,20 +329,29 @@ extern void pthread_testcancel (void);
 /* Mutex handling.  */
 
 /* Initialize a mutex.  */
-extern int pthread_mutex_init (pthread_mutex_t *__mutex,
-			       const pthread_mutexattr_t *__mutexattr);
+/* extern int pthread_mutex_init (pthread_mutex_t *__mutex, */
+/* 			       const pthread_mutexattr_t *__mutexattr); */
+extern int __VERIFIER_mutex_init (pthread_mutex_t *__mutex,
+				  const pthread_mutexattr_t *__mutexattr);
+#define pthread_mutex_init __VERIFIER_mutex_init
 
 /* Destroy a mutex.  */
 extern int pthread_mutex_destroy (pthread_mutex_t *__mutex);
 
 /* Try locking a mutex.  */
-extern int pthread_mutex_trylock (pthread_mutex_t *__mutex);
+/* extern int pthread_mutex_trylock (pthread_mutex_t *__mutex); */
+extern int __VERIFIER_mutex_trylock (pthread_mutex_t *__mutex);
+#define pthread_mutex_trylock __VERIFIER_mutex_trylock
 
 /* Lock a mutex.  */
-extern int pthread_mutex_lock (pthread_mutex_t *__mutex);
+/* extern int pthread_mutex_lock (pthread_mutex_t *__mutex); */
+extern int __VERIFIER_mutex_lock (pthread_mutex_t *__mutex);
+#define pthread_mutex_lock __VERIFIER_mutex_lock
 
 /* Unlock a mutex.  */
-extern int pthread_mutex_unlock (pthread_mutex_t *__mutex);
+/* extern int pthread_mutex_unlock (pthread_mutex_t *__mutex); */
+extern int __VERIFIER_mutex_unlock (pthread_mutex_t *__mutex);
+#define pthread_mutex_unlock __VERIFIER_mutex_unlock
 
 /* Get the priority ceiling of MUTEX.  */
 extern int pthread_mutex_getprioceiling (const pthread_mutex_t *
@@ -537,5 +566,8 @@ extern int pthread_atfork (void (*__prepare) (void),
 			   void (*__parent) (void),
 			   void (*__child) (void)) ;
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif	/* pthread.h */

@@ -174,12 +174,12 @@ std::unique_ptr<FaiReadLabel>
 RC11Driver::createFaiReadLabel(int tid, int index, llvm::AtomicOrdering ord,
 			       const llvm::GenericValue *ptr, const llvm::Type *typ,
 			       Event rf, llvm::AtomicRMWInst::BinOp op,
-			       llvm::GenericValue &&opValue)
+			       const llvm::GenericValue &opValue)
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
 	auto lab = LLVM_MAKE_UNIQUE<FaiReadLabel>(g.nextStamp(), ord, pos, ptr, typ,
-						   rf, op, opValue);
+						  rf, op, opValue);
 
 	calcBasicReadViews(lab.get());
 	return std::move(lab);
@@ -211,6 +211,21 @@ RC11Driver::createLibReadLabel(int tid, int index, llvm::AtomicOrdering ord,
 	auto lab = LLVM_MAKE_UNIQUE<LibReadLabel>(g.nextStamp(), ord, pos, ptr,
 						   typ, rf, functionName);
 	calcBasicReadViews(lab.get());
+	return std::move(lab);
+}
+
+std::unique_ptr<DskReadLabel>
+RC11Driver::createDskReadLabel(int tid, int index, llvm::AtomicOrdering ord,
+			       const llvm::GenericValue *ptr, const llvm::Type *typ,
+			       Event rf)
+{
+	auto &g = getGraph();
+	Event pos(tid, index);
+	auto lab = llvm::make_unique<DskReadLabel>(g.nextStamp(), ord, pos, ptr,
+						   typ, rf);
+	calcBasicReadViews(lab.get());
+	if (getConf()->persevere)
+		g.getPersChecker()->calcMemAccessPbView(lab.get());
 	return std::move(lab);
 }
 
@@ -273,6 +288,75 @@ RC11Driver::createLibStoreLabel(int tid, int index, llvm::AtomicOrdering ord,
 	return std::move(lab);
 }
 
+std::unique_ptr<DskWriteLabel>
+RC11Driver::createDskWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
+				const llvm::GenericValue *ptr, const llvm::Type *typ,
+				const llvm::GenericValue &val, void *mapping)
+{
+	auto &g = getGraph();
+	Event pos(tid, index);
+	auto lab = llvm::make_unique<DskWriteLabel>(
+		g.nextStamp(), ord, pos, ptr, typ, val, mapping);
+
+	calcBasicWriteViews(lab.get());
+	calcWriteMsgView(lab.get());
+	if (getConf()->persevere)
+		g.getPersChecker()->calcMemAccessPbView(lab.get());
+	return std::move(lab);
+}
+
+std::unique_ptr<DskMdWriteLabel>
+RC11Driver::createDskMdWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
+				  const llvm::GenericValue *ptr, const llvm::Type *typ,
+				  const llvm::GenericValue &val, void *mapping,
+				  std::pair<void *, void *> ordDataRange)
+{
+	auto &g = getGraph();
+	Event pos(tid, index);
+	auto lab = llvm::make_unique<DskMdWriteLabel>(
+		g.nextStamp(), ord, pos, ptr, typ, val, mapping, ordDataRange);
+
+	calcBasicWriteViews(lab.get());
+	calcWriteMsgView(lab.get());
+	if (getConf()->persevere)
+		g.getPersChecker()->calcMemAccessPbView(lab.get());
+	return std::move(lab);
+}
+
+std::unique_ptr<DskDirWriteLabel>
+RC11Driver::createDskDirWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
+				   const llvm::GenericValue *ptr, const llvm::Type *typ,
+				   const llvm::GenericValue &val, void *mapping)
+{
+	auto &g = getGraph();
+	Event pos(tid, index);
+	auto lab = llvm::make_unique<DskDirWriteLabel>(
+		g.nextStamp(), ord, pos, ptr, typ, val, mapping);
+
+	calcBasicWriteViews(lab.get());
+	calcWriteMsgView(lab.get());
+	if (getConf()->persevere)
+		g.getPersChecker()->calcMemAccessPbView(lab.get());
+	return std::move(lab);
+}
+
+std::unique_ptr<DskJnlWriteLabel>
+RC11Driver::createDskJnlWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
+				   const llvm::GenericValue *ptr, const llvm::Type *typ,
+				   const llvm::GenericValue &val, void *mapping, void *transInode)
+{
+	auto &g = getGraph();
+	Event pos(tid, index);
+	auto lab = llvm::make_unique<DskJnlWriteLabel>(
+		g.nextStamp(), ord, pos, ptr, typ, val, mapping, transInode);
+
+	calcBasicWriteViews(lab.get());
+	calcWriteMsgView(lab.get());
+	if (getConf()->persevere)
+		g.getPersChecker()->calcMemAccessPbView(lab.get());
+	return std::move(lab);
+}
+
 std::unique_ptr<FenceLabel>
 RC11Driver::createFenceLabel(int tid, int index, llvm::AtomicOrdering ord)
 {
@@ -284,16 +368,15 @@ RC11Driver::createFenceLabel(int tid, int index, llvm::AtomicOrdering ord)
 	return std::move(lab);
 }
 
-
 std::unique_ptr<MallocLabel>
 RC11Driver::createMallocLabel(int tid, int index, const void *addr,
-			      unsigned int size, bool isLocal)
+			      unsigned int size, Storage s, AddressSpace spc)
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
 	auto lab = LLVM_MAKE_UNIQUE<MallocLabel>(g.nextStamp(),
 						  llvm::AtomicOrdering::NotAtomic,
-						  pos, addr, size, isLocal);
+						  pos, addr, size, s, spc);
 
 	View hb = calcBasicHbView(lab->getPos());
 	View porf = calcBasicPorfView(lab->getPos());
@@ -318,6 +401,82 @@ RC11Driver::createFreeLabel(int tid, int index, const void *addr)
 
 	lab->setHbView(std::move(hb));
 	lab->setPorfView(std::move(porf));
+	return std::move(lab);
+}
+
+std::unique_ptr<DskOpenLabel>
+RC11Driver::createDskOpenLabel(int tid, int index, const char *fileName,
+			       const llvm::GenericValue &fd)
+{
+	auto &g = getGraph();
+	Event pos(tid, index);
+	auto lab = llvm::make_unique<DskOpenLabel>(g.nextStamp(),
+						   llvm::AtomicOrdering::NotAtomic,
+						   pos, fileName, fd);
+
+	View hb = calcBasicHbView(lab->getPos());
+	View porf = calcBasicPorfView(lab->getPos());
+
+	lab->setHbView(std::move(hb));
+	lab->setPorfView(std::move(porf));
+	return std::move(lab);
+}
+
+std::unique_ptr<DskFsyncLabel>
+RC11Driver::createDskFsyncLabel(int tid, int index, const void *inode,
+				unsigned int size)
+{
+	auto &g = getGraph();
+	Event pos(tid, index);
+	auto lab = llvm::make_unique<DskFsyncLabel>(g.nextStamp(),
+						    llvm::AtomicOrdering::Release,
+						    pos, inode, size);
+
+	View hb = calcBasicHbView(lab->getPos());
+	View porf = calcBasicPorfView(lab->getPos());
+	lab->setHbView(std::move(hb));
+	lab->setPorfView(std::move(porf));
+
+	if (getConf()->persevere)
+		g.getPersChecker()->calcFsyncPbView(lab.get());
+	return std::move(lab);
+}
+
+std::unique_ptr<DskSyncLabel>
+RC11Driver::createDskSyncLabel(int tid, int index)
+{
+	auto &g = getGraph();
+	Event pos(tid, index);
+	auto lab = llvm::make_unique<DskSyncLabel>(g.nextStamp(),
+						   llvm::AtomicOrdering::Release,
+						   pos);
+
+	View hb = calcBasicHbView(lab->getPos());
+	View porf = calcBasicPorfView(lab->getPos());
+	lab->setHbView(std::move(hb));
+	lab->setPorfView(std::move(porf));
+
+	if (getConf()->persevere)
+		g.getPersChecker()->calcSyncPbView(lab.get());
+	return std::move(lab);
+}
+
+std::unique_ptr<DskPbarrierLabel>
+RC11Driver::createDskPbarrierLabel(int tid, int index)
+{
+	auto &g = getGraph();
+	Event pos(tid, index);
+	auto lab = llvm::make_unique<DskPbarrierLabel>(g.nextStamp(),
+						       llvm::AtomicOrdering::Release,
+						       pos);
+
+	View hb = calcBasicHbView(lab->getPos());
+	View porf = calcBasicPorfView(lab->getPos());
+	lab->setHbView(std::move(hb));
+	lab->setPorfView(std::move(porf));
+
+	if (getConf()->persevere)
+		g.getPersChecker()->calcPbarrierPbView(lab.get());
 	return std::move(lab);
 }
 
@@ -359,13 +518,13 @@ RC11Driver::createTJoinLabel(int tid, int index, int cid)
 }
 
 std::unique_ptr<ThreadStartLabel>
-RC11Driver::createStartLabel(int tid, int index, Event tc)
+RC11Driver::createStartLabel(int tid, int index, Event tc, int symm /* = -1 */)
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
 	auto lab = LLVM_MAKE_UNIQUE<ThreadStartLabel>(g.nextStamp(),
-						       llvm::AtomicOrdering::Acquire,
-						       pos, tc);
+						      llvm::AtomicOrdering::Acquire,
+						      pos, tc, symm);
 
 	/* Thread start has Acquire semantics */
 	View hb(g.getHbBefore(tc));
@@ -535,19 +694,11 @@ void RC11Driver::changeRf(Event read, Event store)
 	g.changeRf(read, store);
 
 	/* And update the views of the load */
-	EventLabel *lab = g.getEventLabel(read);
-	ReadLabel *rLab = static_cast<ReadLabel *>(lab);
-	EventLabel *rfLab = g.getEventLabel(store);
-	View hb = calcBasicHbView(rLab->getPos());
-	View porf = calcBasicPorfView(rLab->getPos());
-
-	porf.update(rfLab->getPorfView());
-	if (rLab->isAtLeastAcquire()) {
-		if (auto *wLab = llvm::dyn_cast<WriteLabel>(rfLab))
-			hb.update(wLab->getMsgView());
-	}
-	rLab->setHbView(std::move(hb));
-	rLab->setPorfView(std::move(porf));
+	auto *rLab = static_cast<ReadLabel *>(g.getEventLabel(read));
+	calcBasicReadViews(rLab);
+	if (getConf()->persevere && llvm::isa<DskReadLabel>(rLab))
+		g.getPersChecker()->calcMemAccessPbView(rLab);
+	return;
 }
 
 bool RC11Driver::updateJoin(Event join, Event childLast)

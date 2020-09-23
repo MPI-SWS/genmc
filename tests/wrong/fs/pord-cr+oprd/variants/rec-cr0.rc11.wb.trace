@@ -1,0 +1,26 @@
+Error detected: No such file or directory!
+Event (1, 2) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): Cacq (__dir_inode.lock, 0) [INIT] L.27
+	(0, 2): Cacq (__dir_inode.lock, 1) L.0:
+	(0, 3): FRacq (__dir_inode.addr[foo], 0x0) [INIT] L.0:
+	(0, 4): M
+	(0, 5): Wna (__inode_foo.lock, 0) L.0:
+	(0, 6): FWrel (__inode_foo.isize, 0) L.0:
+	(0, 7): FWrel (__dir_inode.addr[foo], 0x1d0f614) L.0:
+	(0, 8): Wrel (__dir_inode.lock, 0) L.0:
+	(0, 9): FO (foo, 0) L.0:
+	(0, 10): M
+	(0, 11): Wrel (__file_foo_0_10.inode, 0x1d0f614) L.0:
+	(0, 12): Wrel (__file_foo_0_10.lock, 0) L.0:
+	(0, 13): Wrel (__file_foo_0_10.flags, 65) L.0:
+	(0, 14): Wrel (__file_foo_0_10.offset, 0) L.0:
+	(0, 15): E
+<-1, 1> __VERIFIER_recovery_routine:
+	(1, 0): B
+	(1, 1): M
+	(1, 2): FRrlx (__dir_inode.addr[foo], 0x0) [INIT] L.14
+
+File does not exist in open()
+Number of complete executions explored: 1

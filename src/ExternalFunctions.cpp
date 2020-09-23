@@ -44,6 +44,7 @@
 
 #include "config.h"
 
+#include "Error.hpp"
 #include "Interpreter.h"
 #if defined(HAVE_LLVM_IR_DATALAYOUT_H)
 #include <llvm/IR/DataLayout.h>
@@ -520,9 +521,18 @@ GenericValue lle_X_fprintf(FunctionType *FT,
 
 static GenericValue lle_X_memset(FunctionType *FT,
                                  const std::vector<GenericValue> &Args) {
-  int val = (int)Args[1].IntVal.getSExtValue();
-  size_t len = (size_t)Args[2].IntVal.getZExtValue();
-  memset((void *)GVTOP(Args[0]), val, len);
+  /*
+   * Memory intrinsics should _not_ be executed here, as:
+   *   1) We do not know the size of subsequent loads in these addresses,
+   *      which will most likely lead to mixed-size memory accesses
+   *   2) They would need to be intercepted by the interpreter anyway
+   */
+  ERROR("Invalid call to memset()!\n");
+
+  // int val = (int)Args[1].IntVal.getSExtValue();
+  // size_t len = (size_t)Args[2].IntVal.getZExtValue();
+  // memset((void *)GVTOP(Args[0]), val, len);
+
   // llvm.memset.* returns void, lle_X_* returns GenericValue,
   // so here we return GenericValue with IntVal set to zero
   GenericValue GV;
@@ -532,8 +542,10 @@ static GenericValue lle_X_memset(FunctionType *FT,
 
 static GenericValue lle_X_memcpy(FunctionType *FT,
                                  const std::vector<GenericValue> &Args) {
-  memcpy(GVTOP(Args[0]), GVTOP(Args[1]),
-         (size_t)(Args[2].IntVal.getLimitedValue()));
+  ERROR("Invalid call to memset()!\n");
+
+  // memcpy(GVTOP(Args[0]), GVTOP(Args[1]),
+  //        (size_t)(Args[2].IntVal.getLimitedValue()));
 
   // llvm.memcpy* returns void, lle_X_* returns GenericValue,
   // so here we return GenericValue with IntVal set to zero

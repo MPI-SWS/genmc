@@ -21,14 +21,6 @@
 #include "RevisitSet.hpp"
 #include <algorithm>
 
-
-/************************************************************
- ** Class Constructors
- ***********************************************************/
-
-RevisitSet::RevisitSet() : rev_({}) {}
-
-
 /************************************************************
  ** Iterators
  ***********************************************************/
@@ -46,15 +38,20 @@ RevisitSet::const_iterator RevisitSet::cend()   { return rev_.cend(); }
 
 void RevisitSet::add(const std::vector<Event> &es, const std::vector<std::pair<Event, Event> > &mos)
 {
-	rev_.push_back(std::make_pair(es, mos));
+	auto hash = size_t(llvm::hash_combine_range(es.begin(), es.end()));
+	rev_[hash].emplace_back(RevisitItem(es, mos));
 }
 
 bool RevisitSet::contains(const std::vector<Event> &es,
-			  const std::vector<std::pair<Event, Event> > &mos)
+			  const std::vector<std::pair<Event, Event> > &mos) const
 {
-	for (auto &p : rev_)
-		if (p.first == es && p.second == mos)
+	auto hash = size_t(llvm::hash_combine_range(es.begin(), es.end()));
+	if (rev_.count(hash) == 0)
+		return false;
+	for (auto &p : rev_.at(hash)) {
+		if (p.prefix == es && p.mos == mos)
 			return true;
+	}
 	return false;
 }
 
@@ -65,9 +62,10 @@ bool RevisitSet::contains(const std::vector<Event> &es,
 llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const RevisitSet &rev)
 {
 	s << "Revisit Set:\n";
-	for (auto &r : rev.rev_) {
-		for (auto &e : r.first)
-			s << e << " ";
+	for (auto &kv : rev.rev_) {
+		for (auto &ri : kv.second)
+			for (auto &e : ri.prefix)
+				s << e << " ";
 		s << "\n";
 	}
 	return s;

@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Fix for CI/CD
+export TERM="${TERM:-rxvt-256color}"
+
 # Color codes -- require ncurses package
 BLACK=$(tput setaf 0)
 RED=$(tput setaf 1)

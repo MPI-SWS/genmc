@@ -22,23 +22,33 @@
 #define __REVISIT_SET_HPP__
 
 #include "Event.hpp"
+#include <llvm/ADT/Hashing.h>
 #include <llvm/Support/raw_ostream.h>
 #include <vector>
+#include <unordered_map>
 
 /*
- * RevisitSet class - This class represents the revisit set of an ExecutionGraph
+ * RevisitSet class - This class represents the revisit set of a particular
+ * read in the execution graph
  */
 class RevisitSet {
 
 protected:
-	typedef std::vector<std::pair<std::vector<Event>,
-				      std::vector<std::pair<Event, Event> > >
-			    > RevSet;
+	struct RevisitItem {
+		RevisitItem(const std::vector<Event> &es,
+			    const std::vector<std::pair<Event, Event> > &mos)
+			: prefix(es), mos(mos) {}
+
+		std::vector<Event> prefix;
+		std::vector<std::pair<Event, Event> > mos;
+	};
+
+	typedef std::unordered_map<size_t, std::vector<RevisitItem> > RevSet;
 	RevSet rev_;
 
 public:
 	/* Constructors */
-	RevisitSet();
+	RevisitSet() : rev_() {}
 
 	/* Iterators */
 	typedef RevSet::iterator iterator;
@@ -51,7 +61,7 @@ public:
 	/* Basic getter/setters and existential checks */
 	void add(const std::vector<Event> &es, const std::vector<std::pair<Event, Event> > &mos);
 	bool contains(const std::vector<Event> &es,
-		      const std::vector<std::pair<Event, Event> > &mos);
+		      const std::vector<std::pair<Event, Event> > &mos) const;
 
 	/* Overloaded operators */
 	friend llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const RevisitSet &rev);

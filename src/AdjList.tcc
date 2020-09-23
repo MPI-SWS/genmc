@@ -274,9 +274,6 @@ void AdjList<T, H>::transClosure()
 template<typename T, typename H>
 bool AdjList<T, H>::isIrreflexive()
 {
-	if (!calculatedTransC)
-		transClosure();
-
 	for (auto i = 0u; i < getElems().size(); i++)
 		if (transC[i][i])
 			return false;
