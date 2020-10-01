@@ -1,4 +1,4 @@
-AC_INIT([GenMC], [0.5], [michalis@mpi-sws.org], [genmc], [https://plv.mpi-sws.org/genmc])
+AC_INIT([GenMC], [0.5.1], [michalis@mpi-sws.org], [genmc], [https://plv.mpi-sws.org/genmc])
 
 m4_include([m4/ax_llvm.m4])
 m4_include([m4/ax_clang.m4])
@@ -208,6 +208,20 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
          AC_MSG_RESULT([yes])],
         [AC_MSG_RESULT([no])])
 
+## Check whether llvm::LoadInst constructor needs a type argument (>= 11)
+AC_MSG_CHECKING([whether llvm::LoadInst constructor needs a type argument])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/IR/Instructions.h>
+]],[[
+  llvm::Value *val = nullptr;
+  llvm::BasicBlock *bb = nullptr;
+  llvm::LoadInst i(val, "value", bb);
+]])],
+        [AC_DEFINE([LLVM_LOADINST_VALUE_ONLY],[1],
+         [Define if llvm::LoadInst constructor does not need a type argument.])
+         AC_MSG_RESULT([no])],
+        [AC_MSG_RESULT([yes])])
+
 ## Check whether llvm::SwitchInst::CaseIt needs dereference (>= 4.0)
 AC_MSG_CHECKING([whether llvm::SwitchInst::CaseIt needs dereference])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
@@ -221,6 +235,20 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
          AC_MSG_RESULT([yes])],
         [AC_MSG_RESULT([no])])
 
+## Check whether VectorTyID exists (< 11)
+AC_MSG_CHECKING([for llvm::Type::VectorTyID])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/IR/Type.h>
+]],[[
+  bool exists = (llvm::Type::VectorTyID == 42);
+]])],
+        [AC_DEFINE([LLVM_VECTOR_TYPEID_CASES],[case llvm::Type::VectorTyID:],
+         [Case labels depending on whether VectorTyID exists.])
+         AC_MSG_RESULT([llvm::Type::VectorTyId])],
+        [AC_DEFINE([LLVM_VECTOR_TYPEID_CASES],
+         [case llvm::Type::FixedVectorTyID: case llvm::Type::ScalableVectorTyID:],
+         [Case labels depending on whether VectorTyID exists.])
+         AC_MSG_RESULT([{llvm::Type::FixedVectorTyID, llvm::Type::ScalableVectorTyID}])])
 
 ## Check whether the class llvm::TerminatorInst exists (LLVM < 8)
 AC_MSG_CHECKING([for llvm::TerminatorInst])
@@ -231,6 +259,18 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 ]])],
         [AC_DEFINE([LLVM_HAS_TERMINATORINST],[1],
          [Define if the class llvm::TerminatorInst exists.])
+         AC_MSG_RESULT([yes])],
+        [AC_MSG_RESULT([no])])
+
+## Check whether CallSite exists (< 11)
+AC_MSG_CHECKING([for llvm::CallSite])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/IR/CallSite.h>
+]],[[
+  llvm::CallSite *CS = nullptr;
+]])],
+        [AC_DEFINE([LLVM_HAS_CALLSITE],[1],
+         [Define if llvm::CallSite exists.])
          AC_MSG_RESULT([yes])],
         [AC_MSG_RESULT([no])])
 

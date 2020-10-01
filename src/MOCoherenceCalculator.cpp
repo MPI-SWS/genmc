@@ -125,13 +125,6 @@ void MOCoherenceCalculator::addStoreToLocAfter(const llvm::GenericValue *addr,
 	addStoreToLoc(addr, store, offset + 1);
 }
 
-bool MOCoherenceCalculator::isCoMaximal(const llvm::GenericValue *addr, Event store)
-{
-	auto &locMO = mo_[addr];
-	return (store.isInitializer() && locMO.empty()) ||
-	       (!store.isInitializer() && !locMO.empty() && store == locMO.back());
-}
-
 void MOCoherenceCalculator::changeStoreOffset(const llvm::GenericValue *addr,
 					      Event store, int newOffset)
 {

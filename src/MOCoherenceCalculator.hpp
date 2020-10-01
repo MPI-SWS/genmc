@@ -62,9 +62,6 @@ public:
 	void
 	addStoreToLocAfter(const llvm::GenericValue *addr, Event store, Event pred) override;
 
-	/* Returns whether STORE is maximal in LOC */
-	bool isCoMaximal(const llvm::GenericValue *addr, Event store) override;
-
 	/* Returns a list of stores to a particular memory location */
 	const std::vector<Event>&
 	getStoresToLoc(const llvm::GenericValue *addr) const override;

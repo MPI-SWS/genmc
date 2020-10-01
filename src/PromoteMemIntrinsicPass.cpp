@@ -66,12 +66,12 @@ void promoteMemIntrinsic(Type *typ, std::vector<Value *> &args, F&& promoteFun)
 {
 	auto *i32Ty = IntegerType::getInt32Ty(typ->getContext());
 
-	if(!isa<CompositeType>(typ)) {
+	if(!isa<StructType>(typ) && !isa<ArrayType>(typ) && !isa<VectorType>(typ)) {
 		promoteFun(typ, args);
 		return;
 	}
 
-	if (SequentialType *AT = dyn_cast<SequentialType>(typ)) {
+	if (ArrayType *AT = dyn_cast<ArrayType>(typ)) {
 #ifdef LLVM_HAS_GLOBALOBJECT_GET_METADATA
 		auto n = AT->getNumElements();
 #else
@@ -89,6 +89,8 @@ void promoteMemIntrinsic(Type *typ, std::vector<Value *> &args, F&& promoteFun)
 			promoteMemIntrinsic(*it, args, promoteFun);
 			args.pop_back();
 		}
+	} else {
+		BUG();
 	}
 	return;
 }

@@ -29,9 +29,9 @@
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
-#include <llvm/IR/CallSite.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instruction.h>
+#include <llvm/IR/Instructions.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
 #ifdef LLVM_HAS_TERMINATORINST
@@ -53,8 +53,7 @@ bool SpinAssumePass::isAssumeStatement(llvm::Instruction &i) const
 	if (!ci)
 		return false;
 
-	llvm::CallSite cs(ci);
-	llvm::Function *fun = cs.getCalledFunction();
+	llvm::Function *fun = ci->getCalledFunction();
 	return fun && fun->getName().str() == "__VERIFIER_assume";
 }
 
@@ -78,7 +77,7 @@ void SpinAssumePass::addAssumeCallToBlock(llvm::BasicBlock *eb, llvm::BasicBlock
 					  llvm::BranchInst *bi, bool exitOn)
 {
 	llvm::Value *cond;
-	llvm::MDNode *mdata, *extraMdata;
+	llvm::MDNode *mdata;
 	llvm::BinaryOperator *bop;
 	llvm::Function *assumeFun;
 	llvm::Type *assumeArgTyp;
@@ -87,7 +86,6 @@ void SpinAssumePass::addAssumeCallToBlock(llvm::BasicBlock *eb, llvm::BasicBlock
 
 	cond = bi->getCondition();
 	mdata = bi->getMetadata("dbg");
-	extraMdata = llvm::MDNode::get(bi->getContext(), llvm::MDString::get(bi->getContext(), "spinloop"));
 	eb->getInstList().pop_back();
 	if (!exitOn) {
 		bop = llvm::BinaryOperator::CreateNot(cond, "notcond", eb);
@@ -105,7 +103,6 @@ void SpinAssumePass::addAssumeCallToBlock(llvm::BasicBlock *eb, llvm::BasicBlock
 	}
 	ci = llvm::CallInst::Create(assumeFun, {cond}, "", eb);
 	ci->setMetadata("dbg", mdata);
-	ci->setMetadata("assume.kind", extraMdata);
 	newBI = llvm::BranchInst::Create(nb, eb);
 	newBI->setMetadata("dbg", mdata);
 	return;

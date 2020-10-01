@@ -256,17 +256,6 @@ void WBCoherenceCalculator::addStoreToLocAfter(const llvm::GenericValue *addr,
 	addStoreToLoc(addr, store, 0);
 }
 
-bool WBCoherenceCalculator::isCoMaximal(const llvm::GenericValue *addr, Event store)
-{
-	auto &stores = getStoresToLoc(addr);
-	if (stores.empty() && store.isInitializer())
-		return true;
-
-	auto wb = calcWb(addr);
-	return !store.isInitializer() &&
-	       std::none_of(stores.begin(), stores.end(), [&](Event s){ return wb(store, s); });
-}
-
 
 const std::vector<Event>&
 WBCoherenceCalculator::getStoresToLoc(const llvm::GenericValue *addr) const

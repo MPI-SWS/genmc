@@ -23,6 +23,7 @@
 #include "MDataCollectionPass.hpp"
 #include <llvm/ADT/Twine.h>
 #include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instruction.h>
@@ -47,13 +48,13 @@ void MDataCollectionPass::collectVarName(Module &M, unsigned int ptr, Type *typ,
 					 DIType *dit, std::string nameBuilder,
 					 std::vector<std::pair<unsigned int, std::string > > &names)
 {
-	if(!isa<CompositeType>(typ)) {
+	if(!isa<StructType>(typ) && !isa<ArrayType>(typ) && !isa<VectorType>(typ)) {
 		names.push_back(std::make_pair(ptr, nameBuilder));
 		return;
 	}
 
 	unsigned int offset = 0;
-	if (SequentialType *AT = dyn_cast<SequentialType>(typ)) {
+	if (ArrayType *AT = dyn_cast<ArrayType>(typ)) {
 		auto *newDit = dit;
 		if (auto *dict = dyn_cast<DICompositeType>(dit)) {
 			newDit = (!dict->getBaseType()) ? dict :
@@ -106,6 +107,8 @@ void MDataCollectionPass::collectVarName(Module &M, unsigned int ptr, Type *typ,
 			}
 			offset += elemSize;
 		}
+	} else {
+		BUG();
 	}
 	return;
 }
@@ -274,7 +277,7 @@ void MDataCollectionPass::collectInternalInfo(Module &M)
 bool isSyscallWPathname(CallInst *CI)
 {
 	/* Use getCalledValue() to deal with indirect invocations too */
-	auto name = CI->getCalledValue()->getName();
+	auto name = CallInstWrapper(CI).getCalledOperand()->getName().str();
 	if (!IS_INTERNAL_FUNCTION(name))
 		return false;
 
@@ -287,7 +290,7 @@ void initializeFilenameEntry(FsInfo &FI, Value *v)
 	if (auto *CE = dyn_cast<ConstantExpr>(v)) {
 		auto filename = dyn_cast<ConstantDataArray>(
 			dyn_cast<GlobalVariable>(CE->getOperand(0))->
-			getInitializer())->getAsCString();
+			getInitializer())->getAsCString().str();
 		FI.nameToInodeAddr[filename] = (char *) 0xdeadbeef;
 	} else
 		ERROR("Non-constant expression in filename\n");
@@ -305,7 +308,7 @@ void MDataCollectionPass::collectFilenameInfo(CallInst *CI, Module &M)
 	initializeFilenameEntry(FI, CI->getArgOperand(0));
 
 	/* For some syscalls we capture the second argument as well */
-	auto fCode = internalFunNames.at(F->getName());
+	auto fCode = internalFunNames.at(F->getName().str());
 	if (fCode == InternalFunctions::FN_RenameFS ||
 	    fCode == InternalFunctions::FN_LinkFS) {
 		initializeFilenameEntry(FI, CI->getArgOperand(1));

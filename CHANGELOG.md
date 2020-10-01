@@ -6,6 +6,19 @@ is released.
 
 ## [Unreleased]
 
+## [0.5.1] - 2020.10.01
+### Added
+
+- Support for LLVM 11
+
+### Removed
+
+- Temporarily removed liveness support for fixing
+
+### Fixes
+
+- Build fixes for LLVM 10
+
 ## [0.5] - 2020.09.23
 ### Added
 

@@ -82,7 +82,7 @@ public:
 	GraphBuilder &withEnabledPersevere(bool pers, unsigned int blockSize) {
 		if (pers) {
 			graph->addPersistencyChecker(
-				llvm::make_unique<PersistencyChecker>(*graph, blockSize));
+				LLVM_MAKE_UNIQUE<PersistencyChecker>(*graph, blockSize));
 		}
 		return *this;
 	}

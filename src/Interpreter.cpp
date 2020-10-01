@@ -120,7 +120,7 @@ void Interpreter::reset()
 	for (auto i = 0u; i < threads.size(); i++) {
 		threads[i].ECStack = {};
 		threads[i].tls = threadLocalVars;
-		threads[i].blocked = Thread::BlockageType::BT_NotBlocked;
+		threads[i].isBlocked = false;
 		threads[i].globalInstructions = 0;
 		threads[i].rng.seed(Thread::seed);
 		clearDeps(i);
@@ -295,7 +295,7 @@ void collectUnnamedGlobalAddress(Value *v, char *ptr, unsigned int typeSize,
 				v->getName() + ".\nPlease submit a bug report to "
 				PACKAGE_BUGREPORT "\n"));
 	for (auto i = 0u; i < typeSize; i++) {
-		vars[ptr + i] = v->getName();
+		vars[ptr + i] = v->getName().str();
 	}
 	return;
 }
@@ -345,7 +345,7 @@ void Interpreter::updateUserTypedVarName(char *ptr, unsigned int typeSize, Stora
 			collectUnnamedGlobalAddress(v, ptr, typeSize, vars);
 		return;
 	}
-	updateVarInfoHelper(ptr, typeSize, vars, vi, v->getName());
+	updateVarInfoHelper(ptr, typeSize, vars, vi, v->getName().str());
 	return;
 }
 
@@ -612,7 +612,7 @@ void Interpreter::updateFunArgDeps(unsigned int tid, Function *fun)
 		return;
 
 	ExecutionContext &SF = ECStack().back();
-	StringRef name = fun->getName();
+	auto name = fun->getName().str();
 
 	/* First handle special cases and then normal function calls */
 	bool isInternal = internalFunNames.count(name);
@@ -620,7 +620,7 @@ void Interpreter::updateFunArgDeps(unsigned int tid, Function *fun)
 		auto iFunCode = internalFunNames.at(name);
 		if (iFunCode == InternalFunctions::FN_Assume) {
 			/* We have ctrl dependency on the argument of an assume() */
-			for (CallSite::arg_iterator i = SF.Caller.arg_begin(),
+			for (auto i = SF.Caller.arg_begin(),
 				     e = SF.Caller.arg_end(); i != e; ++i) {
 				updateCtrlDeps(tid, *i);
 			}
@@ -636,7 +636,7 @@ void Interpreter::updateFunArgDeps(unsigned int tid, Function *fun)
 		/* The parameters of the function called get the data
 		 * dependencies of the actual arguments */
 		auto ai = fun->arg_begin();
-		for (CallSite::arg_iterator ci = SF.Caller.arg_begin(),
+		for (auto ci = SF.Caller.arg_begin(),
 			     ce = SF.Caller.arg_end(); ci != ce; ++ci, ++ai) {
 			updateDataDeps(tid, &*ai, &*ci->get());
 		}

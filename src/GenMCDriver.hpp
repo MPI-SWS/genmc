@@ -44,7 +44,6 @@ public:
 	enum DriverErrorKind {
 		DE_Safety,
 		DE_Recovery,
-		DE_Liveness,
 		DE_RaceNotAtomic,
 		DE_RaceFreeMalloc,
 		DE_FreeNonMalloc,
@@ -288,9 +287,6 @@ protected:
 	/* Returns true if a is hb-before b */
 	bool isHbBefore(Event a, Event b, ProgramPoint p = ProgramPoint::step);
 
-	/* Returns true if e is maximal in addr */
-	bool isCoMaximal(const llvm::GenericValue *addr, Event e, ProgramPoint p = ProgramPoint::step);
-
 private:
 	/*** Worklist-related ***/
 
@@ -395,9 +391,6 @@ private:
 
 	/* Pers: Returns true if current recovery routine is valid */
 	bool isRecoveryValid(ProgramPoint p);
-
-	/* Liveness: Calls visitError() if there is a liveness violation */
-	void checkLiveness();
 
 	/* Calculates revisit options and pushes them to the worklist.
 	 * Returns true if the current exploration should continue */

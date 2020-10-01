@@ -302,8 +302,8 @@ IMMDriver::createDskReadLabel(int tid, int index, llvm::AtomicOrdering ord,
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<DskReadLabel>(g.nextStamp(), ord, pos, ptr,
-						   typ, rf);
+	auto lab = LLVM_MAKE_UNIQUE<DskReadLabel>(g.nextStamp(), ord, pos, ptr,
+						  typ, rf);
 	calcBasicReadViews(lab.get());
 	if (getConf()->persevere)
 		g.getPersChecker()->calcMemAccessPbView(lab.get());
@@ -376,7 +376,7 @@ IMMDriver::createDskWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<DskWriteLabel>(
+	auto lab = LLVM_MAKE_UNIQUE<DskWriteLabel>(
 		g.nextStamp(), ord, pos, ptr, typ, val, mapping);
 
 	calcBasicWriteViews(lab.get());
@@ -394,7 +394,7 @@ IMMDriver::createDskMdWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<DskMdWriteLabel>(
+	auto lab = LLVM_MAKE_UNIQUE<DskMdWriteLabel>(
 		g.nextStamp(), ord, pos, ptr, typ, val, mapping, ordDataRange);
 
 	calcBasicWriteViews(lab.get());
@@ -411,7 +411,7 @@ IMMDriver::createDskDirWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<DskDirWriteLabel>(
+	auto lab = LLVM_MAKE_UNIQUE<DskDirWriteLabel>(
 		g.nextStamp(), ord, pos, ptr, typ, val, mapping);
 
 	calcBasicWriteViews(lab.get());
@@ -428,7 +428,7 @@ IMMDriver::createDskJnlWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<DskJnlWriteLabel>(
+	auto lab = LLVM_MAKE_UNIQUE<DskJnlWriteLabel>(
 		g.nextStamp(), ord, pos, ptr, typ, val, mapping, transInode);
 
 	calcBasicWriteViews(lab.get());
@@ -474,7 +474,7 @@ IMMDriver::createDskOpenLabel(int tid, int index, const char *fileName,
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<DskOpenLabel>(g.nextStamp(),
+	auto lab = LLVM_MAKE_UNIQUE<DskOpenLabel>(g.nextStamp(),
 						   llvm::AtomicOrdering::Release,
 						   pos, fileName, fd);
 
@@ -494,7 +494,7 @@ IMMDriver::createDskFsyncLabel(int tid, int index, const void *inode,
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<DskFsyncLabel>(g.nextStamp(),
+	auto lab = LLVM_MAKE_UNIQUE<DskFsyncLabel>(g.nextStamp(),
 						    llvm::AtomicOrdering::Release,
 						    pos, inode, size);
 
@@ -516,7 +516,7 @@ IMMDriver::createDskSyncLabel(int tid, int index)
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<DskSyncLabel>(g.nextStamp(),
+	auto lab = LLVM_MAKE_UNIQUE<DskSyncLabel>(g.nextStamp(),
 						   llvm::AtomicOrdering::Release,
 						   pos);
 
@@ -538,7 +538,7 @@ IMMDriver::createDskPbarrierLabel(int tid, int index)
 {
 	auto &g = getGraph();
 	Event pos(tid, index);
-	auto lab = llvm::make_unique<DskPbarrierLabel>(g.nextStamp(),
+	auto lab = LLVM_MAKE_UNIQUE<DskPbarrierLabel>(g.nextStamp(),
 						       llvm::AtomicOrdering::Release,
 						       pos);
 

@@ -22,7 +22,6 @@
 #include "DeclareEndLoopPass.hpp"
 #include "Error.hpp"
 #include <llvm/Pass.h>
-#include <llvm/PassSupport.h>
 #include <llvm/Analysis/LoopPass.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>

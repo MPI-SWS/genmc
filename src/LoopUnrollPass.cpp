@@ -43,6 +43,12 @@
 # define LOOP_NAME(l) ((*l->block_begin())->getName())
 #endif
 
+#ifdef LLVM_LOADINST_VALUE_ONLY
+# define GET_LOADINST_ARG(val)
+#else
+# define GET_LOADINST_ARG(val) (val)->getType()->getPointerElementType(),
+#endif
+
 void LoopUnrollPass::getAnalysisUsage(llvm::AnalysisUsage &au) const
 {
 	llvm::LoopPass::getAnalysisUsage(au);
@@ -145,7 +151,7 @@ llvm::BasicBlock *LoopUnrollPass::createBoundDecrBlock(llvm::Loop *l, llvm::Valu
 	llvm::Value *zero = llvm::ConstantInt::get(int32Typ, 0);
 	llvm::Value *minusOne = llvm::ConstantInt::get(int32Typ, -1, true);
 
-	llvm::Value *val = new llvm::LoadInst(boundAlloca, "bound.val", boundBlock);
+	llvm::Value *val = new llvm::LoadInst(GET_LOADINST_ARG(boundAlloca) boundAlloca, "bound.val", boundBlock);
 	llvm::Value *newVal = llvm::BinaryOperator::CreateNSW(llvm::Instruction::Add, val, minusOne,
 							      LOOP_NAME(l) + ".bound.dec", boundBlock);
 	llvm::StoreInst *ptr = new llvm::StoreInst(newVal, boundAlloca, boundBlock);

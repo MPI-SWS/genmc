@@ -100,7 +100,7 @@ void GenMCDriver::resetThreadPrioritization()
 	for (auto i = 0u; i < g.getNumThreads(); i++) {
 		Event last = g.getLastThreadEvent(i);
 		if (!g.getLastThreadUnmatchedLockLAPOR(last).isInitializer())
-			EE->getThrById(i).block(llvm::Thread::BlockageType::BT_LockRel);
+			EE->getThrById(i).block();
 	}
 
 	/* Clear all prioritization */
@@ -127,7 +127,7 @@ void GenMCDriver::prioritizeThreads()
 bool GenMCDriver::isSchedulable(int thread) const
 {
 	auto &thr = getEE()->getThrById(thread);
-	return !thr.ECStack.empty() && !thr.isBlocked() &&
+	return !thr.ECStack.empty() && !thr.isBlocked &&
 		!llvm::isa<ThreadFinishLabel>(getGraph().getLastThreadLabel(thread));
 }
 
@@ -311,13 +311,13 @@ void GenMCDriver::handleExecutionBeginning()
 
 		/* Otherwise, initialize ECStacks in interpreter */
 		auto &thr = getEE()->getThrById(i);
-		BUG_ON(!thr.ECStack.empty() || thr.isBlocked());
+		BUG_ON(!thr.ECStack.empty() || thr.isBlocked);
 		thr.ECStack.push_back(thr.initSF);
 
 		/* Mark threads that are blocked appropriately */
 		if (auto *lLab = llvm::dyn_cast<CasReadLabel>(labLast)) {
 			if (lLab->isLock())
-				thr.block(llvm::Thread::BlockageType::BT_LockAcq);
+				thr.block();
 		}
 	}
 
@@ -341,10 +341,8 @@ void GenMCDriver::handleFinishedExecution()
 
 	/* Ignore the execution if some assume has failed */
 	if (std::any_of(getEE()->threads.begin(), getEE()->threads.end(),
-			[](llvm::Thread &thr){ return thr.isBlocked(); })) {
+			[](llvm::Thread &thr){ return thr.isBlocked; })) {
 		++exploredBlocked;
-		if (userConf->checkLiveness)
-			checkLiveness();
 		return;
 	}
 
@@ -741,18 +739,6 @@ bool GenMCDriver::isHbBefore(Event a, Event b, ProgramPoint p /* = step */)
 	return getGraph().getGlobalRelation(ExecutionGraph::RelationId::hb)(a, b);
 }
 
-bool GenMCDriver::isCoMaximal(const llvm::GenericValue *addr, Event e, ProgramPoint p /* = step */)
-{
-	auto &g = getGraph();
-
-	if (!shouldCheckCons(p))
-		return g.getCoherenceCalculator()->isCoMaximal(addr, e);
-
-	auto &coLoc = g.getPerLocRelation(ExecutionGraph::RelationId::co)[addr];
-	return (e.isInitializer() && coLoc.empty()) ||
-	       (!e.isInitializer() && coLoc.adj_begin(e) == coLoc.adj_end(e));
-}
-
 void GenMCDriver::findMemoryRaceForMemAccess(const MemAccessLabel *mLab)
 {
 	const auto &g = getGraph();
@@ -1022,36 +1008,6 @@ bool GenMCDriver::isRecoveryValid(ProgramPoint p)
 	return getGraph().isRecoveryValid();
 }
 
-void GenMCDriver::checkLiveness()
-{
-	auto &g = getGraph();
-	auto *EE = getEE();
-	std::vector<int> spinBlocked;
-
-	if (shouldCheckCons(ProgramPoint::exec) && !isConsistent(ProgramPoint::exec))
-		return;
-
-	/* Collect all threads blocked at spinloops */
-	for (auto &thr : EE->threads) {
-		if (thr.getBlockageType() == llvm::Thread::BT_Spinloop)
-			spinBlocked.push_back(thr.id);
-	}
-
-	/* And check whether all of them are live or not */
-	const ReadLabel *rLab = nullptr;
-	if (!spinBlocked.empty() &&
-	    std::all_of(spinBlocked.begin(), spinBlocked.end(),
-			[&](int tid){
-				rLab = llvm::dyn_cast<ReadLabel>(g.getLastThreadLabel(tid));
-				BUG_ON(!rLab); /* Due to thread being blocked on a spinloop */
-				return isCoMaximal(rLab->getAddr(), rLab->getRf());
-			})) {
-		/* Print the name of one of the spinloop variables that are not live */
-		visitError(DE_Liveness, "Spinloop variable " + EE->getVarName(rLab->getAddr()) + " is not live");
-	}
-	return;
-}
-
 std::vector<Event>
 GenMCDriver::getLibConsRfsInView(const Library &lib, Event read,
 				 const std::vector<Event> &stores,
@@ -1215,7 +1171,7 @@ bool GenMCDriver::ensureConsistentRf(const ReadLabel *rLab, std::vector<Event> &
 
 	if (!found) {
 		for (auto i = 0u; i < getGraph().getNumThreads(); i++)
-			getEE()->getThrById(i).block(llvm::Thread::BlockageType::BT_Cons);
+			getEE()->getThrById(i).block();
 		return false;
 	}
 	return true;
@@ -1225,7 +1181,7 @@ bool GenMCDriver::ensureConsistentStore(const WriteLabel *wLab)
 {
 	if (shouldCheckCons(ProgramPoint::step) && !isConsistent(ProgramPoint::step)) {
 		for (auto i = 0u; i < getGraph().getNumThreads(); i++)
-			getEE()->getThrById(i).block(llvm::Thread::BlockageType::BT_Cons);
+			getEE()->getThrById(i).block();
 		return false;
 	}
 	return true;
@@ -1355,7 +1311,7 @@ llvm::GenericValue GenMCDriver::visitThreadJoin(llvm::Function *F, const llvm::G
 
 	/* If the update failed (child has not terminated yet) block this thread */
 	if (!updateJoin(getEE()->getCurrentPosition(), g.getLastThreadEvent(cid)))
-		thr.block(llvm::Thread::BlockageType::BT_ThreadJoin);
+		thr.block();
 
 	/*
 	 * We always return a success value, so as not to have to update it
@@ -1373,7 +1329,7 @@ void GenMCDriver::visitThreadFinish()
 	auto &thr = EE->getCurThr();
 
 	if (!isExecutionDrivenByGraph() && /* Make sure that there is not a failed assume... */
-	    !thr.isBlocked()) {
+	    !thr.isBlocked) {
 		auto eLab = createFinishLabel(thr.id, thr.globalInstructions);
 		getGraph().addOtherLabelToGraph(std::move(eLab));
 
@@ -1463,7 +1419,7 @@ GenMCDriver::visitLoad(llvm::Interpreter::InstAttr attr,
 		auto *rLab = llvm::dyn_cast<ReadLabel>(getCurrentLabel());
 		BUG_ON(!rLab);
 		if (rLab->getRf().isBottom())
-			thr.block(llvm::Thread::BlockageType::BT_Error); /* This should only happen @ replay */
+			thr.block(); /* This should only happen @ replay */
 		return getWriteValue(rLab->getRf(), addr, typ);
 	}
 
@@ -1630,7 +1586,7 @@ void GenMCDriver::visitLock(const llvm::GenericValue *addr, llvm::Type *typ)
 		visitStore(llvm::Interpreter::IA_Lock, llvm::AtomicOrdering::Acquire,
 			   addr, typ, INT_TO_GV(typ, 1));
 	} else {
-		EE->getCurThr().block(llvm::Thread::BlockageType::BT_LockAcq);
+		EE->getCurThr().block();
 	}
 }
 
@@ -1736,11 +1692,11 @@ void GenMCDriver::visitError(DriverErrorKind t, const std::string &err /* = "" *
 
 	/* If the execution that led to the error is not consistent, block */
 	if (!isConsistent(ProgramPoint::error)) {
-		thr.block(llvm::Thread::BlockageType::BT_Error);
+		thr.block();
 		return;
 	}
 	if (inRecoveryMode() && !isRecoveryValid(ProgramPoint::error)) {
-		thr.block(llvm::Thread::BlockageType::BT_Error);
+		thr.block();
 		return;
 	}
 
@@ -1840,7 +1796,7 @@ bool GenMCDriver::calcRevisits(const WriteLabel *sLab)
 
 		/* Optimize handling of lock operations */
 		if (auto *lLab = llvm::dyn_cast<CasReadLabel>(rLab)) {
-			if (lLab->isLock() && getEE()->getThrById(lLab->getThread()).isBlocked() &&
+			if (lLab->isLock() && getEE()->getThrById(lLab->getThread()).isBlocked &&
 			    (int) g.getThreadSize(lLab->getThread()) == lLab->getIndex() + 1) {
 				if (tryToRevisitLock(lLab, sLab, writePrefixPos, moPlacings))
 					continue;
@@ -1986,7 +1942,7 @@ bool GenMCDriver::revisitReads(std::unique_ptr<WorkItem> item)
 	if (auto *lLab = llvm::dyn_cast<CasReadLabel>(lab)) {
 		if (lLab->isLock()) {
 			threadPrios = {lLab->getRf()};
-			EE->getThrById(lab->getThread()).block(llvm::Thread::BlockageType::BT_LockAcq);
+			EE->getThrById(lab->getThread()).block();
 		}
 	}
 
@@ -2415,8 +2371,6 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream &s,
 		return s << "Safety violation";
 	case GenMCDriver::DE_Recovery:
 		return s << "Recovery error";
-	case GenMCDriver::DE_Liveness:
-		return s << "Liveness violation";
 	case GenMCDriver::DE_RaceNotAtomic:
 		return s << "Non-Atomic race";
 	case GenMCDriver::DE_RaceFreeMalloc:
@@ -2462,7 +2416,7 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream &s,
 		break;
 
 #define IMPLEMENT_VECTOR_INTEGER_PRINT(OS, TY)				\
-	case llvm::Type::VectorTyID: {					\
+	LLVM_VECTOR_TYPEID_CASES {					\
 		OS << "[";						\
 		for (uint32_t _i=0;_i<val.AggregateVal.size();_i++) {	\
 			OS << val.AggregateVal[_i].IntVal << " ";	\

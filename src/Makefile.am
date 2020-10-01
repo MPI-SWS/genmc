@@ -12,6 +12,7 @@ libgenmc_a_SOURCES = \
   $(libgenmc_a_HEADERS) \
   ARCalculator.cpp ARCalculator.hpp \
   Calculator.hpp \
+  CallInstWrapper.hpp \
   CoherenceCalculator.hpp \
   Config.cpp Config.hpp \
   DeclareAssumePass.cpp DeclareAssumePass.hpp \

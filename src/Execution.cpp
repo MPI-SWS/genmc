@@ -328,7 +328,7 @@ static void executeFRemInst(GenericValue &Dest, GenericValue Src1,
       break;
 
 #define IMPLEMENT_VECTOR_INTEGER_ICMP(OP, TY)                        \
-  case Type::VectorTyID: {                                           \
+  LLVM_VECTOR_TYPEID_CASES {					     \
     assert(Src1.AggregateVal.size() == Src2.AggregateVal.size());    \
     Dest.AggregateVal.resize( Src1.AggregateVal.size() );            \
     for( uint32_t _i=0;_i<Src1.AggregateVal.size();_i++)             \
@@ -532,7 +532,7 @@ void Interpreter::visitICmpInst(ICmpInst &I) {
   break;
 
 #define IMPLEMENT_VECTOR_FCMP(OP)                                   \
-  case Type::VectorTyID:                                            \
+  LLVM_VECTOR_TYPEID_CASES					    \
     if(dyn_cast<VectorType>(Ty)->getElementType()->isFloatTy()) {   \
       IMPLEMENT_VECTOR_FCMP_T(OP, Float);                           \
     } else {                                                        \
@@ -1091,16 +1091,16 @@ void Interpreter::popStackAndReturnValueToCaller(Type *RetTy,
     // If we have a previous stack frame, and we have a previous call,
     // fill in the return value...
     ExecutionContext &CallingSF = ECStack().back();
-    if (Instruction *I = CallingSF.Caller.getInstruction()) {
+    if (Instruction *I = &CallingSF.Caller) {
       // Save result...
-      if (!CallingSF.Caller.getType()->isVoidTy()) {
+      if (!(&CallingSF.Caller)->getType()->isVoidTy()) {
 	if (retI) // if we are coming from a ret inst, update deps
 	  updateDataDeps(getCurThr().id, I, retI->getReturnValue());
         SetValue(I, Result, CallingSF);
       }
       if (InvokeInst *II = dyn_cast<InvokeInst> (I))
         SwitchToNewBasicBlock (II->getNormalDest (), CallingSF);
-      CallingSF.Caller = CallSite();          // We returned from the call...
+      CallingSF.Caller = CallInstWrapper();          // We returned from the call...
     }
   }
 }
@@ -1110,13 +1110,13 @@ void Interpreter::returnValueToCaller(Type *RetTy, GenericValue Result)
 	assert(!ECStack().empty());
 	// fill in the return value...
 	ExecutionContext &CallingSF = ECStack().back();
-	if (Instruction *I = CallingSF.Caller.getInstruction()) {
+	if (Instruction *I = &CallingSF.Caller) {
 		// Save result...
-		if (!CallingSF.Caller.getType()->isVoidTy())
+		if (!(&CallingSF.Caller)->getType()->isVoidTy())
 			SetValue(I, Result, CallingSF);
 		if (InvokeInst *II = dyn_cast<InvokeInst> (I))
 			SwitchToNewBasicBlock (II->getNormalDest (), CallingSF);
-		CallingSF.Caller = CallSite();          // We returned from the call...
+		CallingSF.Caller = CallInstWrapper();          // We returned from the call...
 	}
 }
 
@@ -1416,7 +1416,7 @@ void Interpreter::visitAtomicCmpXchgInst(AtomicCmpXchgInst &I)
 				     cmpVal, newVal);
 
 	auto cmpRes = executeICMP_EQ(ret, cmpVal, typ);
-	if (!thr.isBlocked() && cmpRes.IntVal.getBoolValue()) {
+	if (!thr.isBlocked && cmpRes.IntVal.getBoolValue()) {
 		setCurrentDeps(getDataDeps(thr.id, I.getPointerOperand()),
 			       getDataDeps(thr.id, I.getNewValOperand()),
 			       getCtrlDeps(thr.id), getAddrPoDeps(thr.id), nullptr);
@@ -1495,7 +1495,7 @@ void Interpreter::visitAtomicRMWInst(AtomicRMWInst &I)
 		       getDataDeps(thr.id, I.getValOperand()),
 		       getCtrlDeps(thr.id), getAddrPoDeps(thr.id), nullptr);
 
-	if (!thr.isBlocked())
+	if (!thr.isBlocked)
 		driver->visitStore(IA_Fai, I.getOrdering(), ptr, typ, newVal);
 
 	/* After the RMW operation is done, update dependencies */
@@ -1506,16 +1506,13 @@ void Interpreter::visitAtomicRMWInst(AtomicRMWInst &I)
 	return;
 }
 
-bool Interpreter::isInlineAsm(CallSite &CS, std::string *asmStr)
+bool Interpreter::isInlineAsm(CallInstWrapper CIW, std::string *asmStr)
 {
-	if (!CS.isCall())
-		return false;
-
-	llvm::CallInst *CI = cast<llvm::CallInst>(CS.getInstruction());
+	llvm::CallInst *CI = dyn_cast<CallInst>(&CIW);
 	if (!CI || !CI->isInlineAsm())
 		return false;
 
-	llvm::InlineAsm *IA = llvm::dyn_cast<llvm::InlineAsm>(CI->getCalledValue());
+	llvm::InlineAsm *IA = llvm::dyn_cast<llvm::InlineAsm>(CIW.getCalledOperand());
 	*asmStr = IA->getAsmString();
 	asmStr->erase(asmStr->begin(), std::find_if(asmStr->begin(), asmStr->end(),
 	        std::not1(std::ptr_fun<int, int>(std::isspace))));
@@ -1524,7 +1521,7 @@ bool Interpreter::isInlineAsm(CallSite &CS, std::string *asmStr)
 	return true;
 }
 
-void Interpreter::visitInlineAsm(CallSite &CS, const std::string &asmStr)
+void Interpreter::visitInlineAsm(CallInstWrapper CIW, const std::string &asmStr)
 {
 	if (asmStr == "")
 		; /* Plain compiler fence */
@@ -1539,7 +1536,7 @@ void Interpreter::visitInlineAsm(CallSite &CS, const std::string &asmStr)
 //                 Miscellaneous Instruction Implementations
 //===----------------------------------------------------------------------===//
 
-void Interpreter::visitCallSite(CallSite CS) {
+void Interpreter::visitCallInstWrapper(CallInstWrapper CS) {
 
   std::string asmStr;
   if (isInlineAsm(CS, &asmStr)) {
@@ -1559,13 +1556,13 @@ void Interpreter::visitCallSite(CallSite CS) {
       GenericValue ArgIndex;
       ArgIndex.UIntPairVal.first = ECStack().size() - 1;
       ArgIndex.UIntPairVal.second = 0;
-      SetValue(CS.getInstruction(), ArgIndex, SF);
+      SetValue(&CS, ArgIndex, SF);
       return;
     }
     case Intrinsic::vaend:    // va_end is a noop for the interpreter
       return;
     case Intrinsic::vacopy:   // va_copy: dest = src
-      SetValue(CS.getInstruction(), getOperandValue(*CS.arg_begin(), SF), SF);
+      SetValue(&CS, getOperandValue(*CS.arg_begin(), SF), SF);
       return;
     default:
 	    WARN_ONCE("unknown-intrinsic", "Unknown intrinstic function" \
@@ -1573,12 +1570,12 @@ void Interpreter::visitCallSite(CallSite CS) {
       // If it is an unknown intrinsic function, use the intrinsic lowering
       // class to transform it into hopefully tasty LLVM code.
       //
-      BasicBlock::iterator me(CS.getInstruction());
-      BasicBlock *Parent = CS.getInstruction()->getParent();
+      BasicBlock::iterator me(&CS);
+      BasicBlock *Parent = (&CS)->getParent();
       bool atBegin(Parent->begin() == me);
       if (!atBegin)
         --me;
-      IL->LowerIntrinsicCall(cast<CallInst>(CS.getInstruction()));
+      IL->LowerIntrinsicCall(cast<CallInst>(&CS));
 
       // Restore the CurInst pointer to the first instruction newly inserted, if
       // any.
@@ -1597,15 +1594,15 @@ void Interpreter::visitCallSite(CallSite CS) {
   const unsigned NumArgs = SF.Caller.arg_size();
   ArgVals.reserve(NumArgs);
   uint16_t pNum = 1;
-  for (CallSite::arg_iterator i = SF.Caller.arg_begin(),
-         e = SF.Caller.arg_end(); i != e; ++i, ++pNum) {
+  for (auto i = SF.Caller.arg_begin(),
+       e = SF.Caller.arg_end(); i != e; ++i, ++pNum) {
     Value *V = *i;
     ArgVals.push_back(getOperandValue(V, SF));
   }
 
   // To handle indirect calls, we must get the pointer value from the argument
   // and treat it as a function pointer.
-  GenericValue SRC = getOperandValue(SF.Caller.getCalledValue(), SF);
+  GenericValue SRC = getOperandValue(SF.Caller.getCalledOperand(), SF);
   updateFunArgDeps(getCurThr().id, (Function *) GVTOP(SRC));
   callFunction((Function*)GVTOP(SRC), ArgVals);
 }
@@ -1774,7 +1771,7 @@ GenericValue Interpreter::executeFPTruncInst(Value *SrcVal, Type *DstTy,
                                              ExecutionContext &SF) {
   GenericValue Dest, Src = getOperandValue(SrcVal, SF);
 
-  if (SrcVal->getType()->getTypeID() == Type::VectorTyID) {
+  if (isa<VectorType>(SrcVal->getType())) {
     assert(SrcVal->getType()->getScalarType()->isDoubleTy() &&
            DstTy->getScalarType()->isFloatTy() &&
            "Invalid FPTrunc instruction");
@@ -1797,7 +1794,7 @@ GenericValue Interpreter::executeFPExtInst(Value *SrcVal, Type *DstTy,
                                            ExecutionContext &SF) {
   GenericValue Dest, Src = getOperandValue(SrcVal, SF);
 
-  if (SrcVal->getType()->getTypeID() == Type::VectorTyID) {
+  if (isa<VectorType>(SrcVal->getType())) {
     assert(SrcVal->getType()->getScalarType()->isFloatTy() &&
            DstTy->getScalarType()->isDoubleTy() && "Invalid FPExt instruction");
 
@@ -1820,7 +1817,7 @@ GenericValue Interpreter::executeFPToUIInst(Value *SrcVal, Type *DstTy,
   Type *SrcTy = SrcVal->getType();
   GenericValue Dest, Src = getOperandValue(SrcVal, SF);
 
-  if (SrcTy->getTypeID() == Type::VectorTyID) {
+  if (isa<VectorType>(SrcTy)) {
     const Type *DstVecTy = DstTy->getScalarType();
     const Type *SrcVecTy = SrcTy->getScalarType();
     uint32_t DBitWidth = cast<IntegerType>(DstVecTy)->getBitWidth();
@@ -1858,7 +1855,7 @@ GenericValue Interpreter::executeFPToSIInst(Value *SrcVal, Type *DstTy,
   Type *SrcTy = SrcVal->getType();
   GenericValue Dest, Src = getOperandValue(SrcVal, SF);
 
-  if (SrcTy->getTypeID() == Type::VectorTyID) {
+  if (isa<VectorType>(SrcTy)) {
     const Type *DstVecTy = DstTy->getScalarType();
     const Type *SrcVecTy = SrcTy->getScalarType();
     uint32_t DBitWidth = cast<IntegerType>(DstVecTy)->getBitWidth();
@@ -1894,7 +1891,7 @@ GenericValue Interpreter::executeUIToFPInst(Value *SrcVal, Type *DstTy,
                                             ExecutionContext &SF) {
   GenericValue Dest, Src = getOperandValue(SrcVal, SF);
 
-  if (SrcVal->getType()->getTypeID() == Type::VectorTyID) {
+  if (isa<VectorType>(SrcVal->getType())) {
     const Type *DstVecTy = DstTy->getScalarType();
     unsigned size = Src.AggregateVal.size();
     // the sizes of src and dst vectors must be equal
@@ -1926,7 +1923,7 @@ GenericValue Interpreter::executeSIToFPInst(Value *SrcVal, Type *DstTy,
                                             ExecutionContext &SF) {
   GenericValue Dest, Src = getOperandValue(SrcVal, SF);
 
-  if (SrcVal->getType()->getTypeID() == Type::VectorTyID) {
+  if (isa<VectorType>(SrcVal->getType())) {
     const Type *DstVecTy = DstTy->getScalarType();
     unsigned size = Src.AggregateVal.size();
     // the sizes of src and dst vectors must be equal
@@ -1987,8 +1984,7 @@ GenericValue Interpreter::executeBitCastInst(Value *SrcVal, Type *DstTy,
   Type *SrcTy = SrcVal->getType();
   GenericValue Dest, Src = getOperandValue(SrcVal, SF);
 
-  if ((SrcTy->getTypeID() == Type::VectorTyID) ||
-      (DstTy->getTypeID() == Type::VectorTyID)) {
+  if (isa<VectorType>(SrcTy) || isa<VectorType>(DstTy)) {
     // vector src bitcast to vector dst or vector src bitcast to scalar dst or
     // scalar src bitcast to vector dst
     bool isLittleEndian = TD.isLittleEndian();
@@ -2000,7 +1996,7 @@ GenericValue Interpreter::executeBitCastInst(Value *SrcVal, Type *DstTy,
     unsigned SrcNum;
     unsigned DstNum;
 
-    if (SrcTy->getTypeID() == Type::VectorTyID) {
+    if (isa<VectorType>(SrcTy)) {
       SrcElemTy = SrcTy->getScalarType();
       SrcBitSize = SrcTy->getScalarSizeInBits();
       SrcNum = Src.AggregateVal.size();
@@ -2013,7 +2009,7 @@ GenericValue Interpreter::executeBitCastInst(Value *SrcVal, Type *DstTy,
       SrcVec.AggregateVal.push_back(Src);
     }
 
-    if (DstTy->getTypeID() == Type::VectorTyID) {
+    if (isa<VectorType>(DstTy)) {
       DstElemTy = DstTy->getScalarType();
       DstBitSize = DstTy->getScalarSizeInBits();
       DstNum = (SrcNum * SrcBitSize) / DstBitSize;
@@ -2086,7 +2082,7 @@ GenericValue Interpreter::executeBitCastInst(Value *SrcVal, Type *DstTy,
     }
 
     // convert result from integer to specified type
-    if (DstTy->getTypeID() == Type::VectorTyID) {
+    if (isa<VectorType>(DstTy)) {
       if (DstElemTy->isDoubleTy()) {
         Dest.AggregateVal.resize(DstNum);
         for (unsigned i = 0; i < DstNum; i++)
@@ -2424,7 +2420,7 @@ void Interpreter::visitExtractValueInst(ExtractValueInst &I) {
     break;
     case Type::ArrayTyID:
     case Type::StructTyID:
-    case Type::VectorTyID:
+    LLVM_VECTOR_TYPEID_CASES
       Dest.AggregateVal = pSrc->AggregateVal;
     break;
     case Type::PointerTyID:
@@ -2474,7 +2470,7 @@ void Interpreter::visitInsertValueInst(InsertValueInst &I) {
     break;
     case Type::ArrayTyID:
     case Type::StructTyID:
-    case Type::VectorTyID:
+    LLVM_VECTOR_TYPEID_CASES
       pDest->AggregateVal = Src2.AggregateVal;
     break;
     case Type::PointerTyID:
@@ -2615,12 +2611,11 @@ void Interpreter::callEndLoop(Function *F, const std::vector<GenericValue> &ArgV
 
 void Interpreter::callAssume(Function *F, const std::vector<GenericValue> &ArgVals)
 {
-	Instruction *I = ECStack().back().CurInst->getPrevNode();
-	auto t = (I->getMetadata("assume.kind")) ? Thread::BlockageType::BT_Spinloop :
-		Thread::BlockageType::BT_User;
+	bool cond = ArgVals[0].IntVal.getBoolValue();
 
-	if (!ArgVals[0].IntVal.getBoolValue())
-		getCurThr().block(t);
+	/* TODO: When support for nested functions is added, rewrite this */
+	if (!cond)
+		getCurThr().block();
 }
 
 void Interpreter::callNondetInt(Function *F, const std::vector<GenericValue> &ArgVals)
@@ -2800,7 +2795,7 @@ void Interpreter::callReadFunction(const Library &lib, const LibMem &mem, Functi
 	auto shouldBlock = res.second;
 
 	if (shouldBlock) {
-		getCurThr().block(llvm::Thread::BlockageType::BT_User);
+		getCurThr().block();
 		return;
 	}
 	returnValueToCaller(F->getReturnType(), val);
@@ -2944,7 +2939,7 @@ GenericValue Interpreter::executeInodeLookupFS(const char *filename, Type *intTy
 	auto inTrans = getInodeTransStatus(getDirInode(), intTyp);
 	if (compareValues(intTyp, INT_TO_GV(intTyp, 1), inTrans)) {
 		thr.rollToSnapshot();
-		thr.block(llvm::Thread::BlockageType::BT_Cons);
+		thr.block();
 		return INT_TO_GV(intTyp, 42); /* propagate block */
 	}
 
@@ -2992,14 +2987,14 @@ GenericValue Interpreter::executeLookupOpenFS(const char *file, GenericValue &fl
 	/* Otherwise, we need to take the dir inode's lock */
 	auto *dirLock = (const llvm::GenericValue *) GET_INODE_LOCK_ADDR(getDirInode());
 	driver->visitLock(dirLock, intTyp);
-	if (thr.isBlocked()) {
+	if (thr.isBlocked) {
 		thr.rollToSnapshot();
 		return INT_TO_GV(intTyp, 42);
 	}
 
 	/* Check if the corresponding inode already exists */
 	auto inode = executeInodeLookupFS(file, intTyp);
-	if (thr.isBlocked())
+	if (thr.isBlocked)
 		return inode; /* propagate the block */
 
 	/* Return the inode, if it already exists */
@@ -3074,7 +3069,7 @@ GenericValue Interpreter::executeTruncateFS(const GenericValue &inode,
 	/* Get inode's lock (as in do_truncate()) */
 	auto *inodeLock = (const GenericValue *) (GET_INODE_LOCK_ADDR(inode.PointerVal));
 	driver->visitLock(inodeLock, intTyp);
-	if (thr.isBlocked()) {
+	if (thr.isBlocked) {
 		thr.rollToSnapshot();
 		return INT_TO_GV(intTyp, 42);
 	}
@@ -3129,7 +3124,7 @@ void Interpreter::callOpenFS(Function *F, const std::vector<GenericValue> &ArgVa
 
 	/* Try and find the requested inode */
 	auto inode = executeLookupOpenFS(filename, flags, intTyp);
-	if (thr.isBlocked())
+	if (thr.isBlocked)
 		return;
 
 	/* Inode not found -- cannot open file */
@@ -3251,13 +3246,13 @@ void Interpreter::callLinkFS(Function *F, const std::vector<GenericValue> &ArgVa
 
 	/* Since we have a single-directory structure, link boils down to a simple cs */
 	driver->visitLock(dirLock, intTyp);
-	if (thr.isBlocked()) {
+	if (thr.isBlocked) {
 		thr.rollToSnapshot();
 		return;
 	}
 
 	source = executeInodeLookupFS(oldpath, intTyp);
-	if (thr.isBlocked())
+	if (thr.isBlocked)
 		return;
 
 	/* If no such entry found, exit */
@@ -3304,13 +3299,13 @@ void Interpreter::callUnlinkFS(Function *F, const std::vector<GenericValue> &Arg
 
 	auto *dirLock = (const llvm::GenericValue *) GET_INODE_LOCK_ADDR(getDirInode());
 	driver->visitLock(dirLock, intTyp);
-	if (thr.isBlocked()) {
+	if (thr.isBlocked) {
 		thr.rollToSnapshot();
 		return;
 	}
 
 	auto inode = executeInodeLookupFS(pathname, intTyp);
-	if (thr.isBlocked())
+	if (thr.isBlocked)
 		return;
 
 	/* Check if component exists */
@@ -3371,7 +3366,7 @@ void Interpreter::callRenameFS(Function *F, const std::vector<GenericValue> &Arg
 
 	auto *dirLock = (const llvm::GenericValue *) GET_INODE_LOCK_ADDR(getDirInode());
 	driver->visitLock(dirLock, intTyp);
-	if (thr.isBlocked()) {
+	if (thr.isBlocked) {
 		thr.rollToSnapshot();
 		return;
 	}
@@ -3379,7 +3374,7 @@ void Interpreter::callRenameFS(Function *F, const std::vector<GenericValue> &Arg
 	/* Try to find source inode */
 	GenericValue source, target;
 	source = executeInodeLookupFS(oldpath, intTyp);
-	if (thr.isBlocked())
+	if (thr.isBlocked)
 		return;
 	if (!source.PointerVal) {
 		handleSystemError(SystemError::SE_ENOENT, "Oldpath does not exist for rename()");
@@ -3389,7 +3384,7 @@ void Interpreter::callRenameFS(Function *F, const std::vector<GenericValue> &Arg
 
 	/* Try to find target inode */
 	target = executeInodeLookupFS(newpath, intTyp);
-	if (thr.isBlocked())
+	if (thr.isBlocked)
 		return;
 
 	result = executeRenameFS(oldpath, source, newpath, target, intTyp);
@@ -3415,14 +3410,14 @@ void Interpreter::callTruncateFS(Function *F, const std::vector<GenericValue> &A
 
 	auto *dirLock = (const llvm::GenericValue *) GET_INODE_LOCK_ADDR(getDirInode());
 	driver->visitLock(dirLock, intTyp);
-	if (thr.isBlocked()) {
+	if (thr.isBlocked) {
 		thr.rollToSnapshot();
 		return;
 	}
 
 	/* Try and find the requested inode */
 	auto inode = executeInodeLookupFS(filename, intTyp);
-	if (thr.isBlocked())
+	if (thr.isBlocked)
 		return;
 
 	driver->visitUnlock(dirLock, intTyp);
@@ -3507,7 +3502,7 @@ GenericValue Interpreter::executeReadFS(void *file, Type *intTyp, GenericValue *
 		auto inTrans = getInodeTransStatus(inode, intTyp);
 		if (compareValues(intTyp, INT_TO_GV(intTyp, 1), inTrans)) {
 			thr.rollToSnapshot();
-			thr.block(llvm::Thread::BlockageType::BT_Cons);
+			thr.block();
 			return INT_TO_GV(intTyp, 42); /* propagate block */
 		}
 	}
@@ -3543,7 +3538,7 @@ void Interpreter::callReadFS(Function *F, const std::vector<GenericValue> &ArgVa
 	 * we reset the EE to this instruction */
 	auto *fileLock = (const GenericValue *) GET_FILE_POS_LOCK_ADDR(file);
 	driver->visitLock(fileLock, intTyp);
-	if (thr.isBlocked()) {
+	if (thr.isBlocked) {
 		thr.rollToSnapshot();
 		return;
 	}
@@ -3554,7 +3549,7 @@ void Interpreter::callReadFS(Function *F, const std::vector<GenericValue> &ArgVa
 					fileOffset, intTyp);
 
 	nr = executeReadFS(file, intTyp, buf, bufElemTyp, offset, count);
-	if (thr.isBlocked())
+	if (thr.isBlocked)
 		return;
 
 	/* If the read succeeded, update the offset in the file description... */
@@ -3685,7 +3680,7 @@ GenericValue Interpreter::executeWriteFS(void *file, Type *intTyp, GenericValue 
 	/* Since we are writing, we need to lock of the inode */
 	auto *inodeLock = (const GenericValue *) (GET_INODE_LOCK_ADDR(inode));
 	driver->visitLock(inodeLock, intTyp);
-	if (thr.isBlocked()) {
+	if (thr.isBlocked) {
 		thr.rollToSnapshot();
 		return INT_TO_GV(intTyp, 42); // lock acquisition failed
 	}
@@ -3740,7 +3735,7 @@ void Interpreter::callWriteFS(Function *F, const std::vector<GenericValue> &ArgV
 	 * we reset the EE to this instruction */
 	auto *fileLock = GET_FILE_POS_LOCK_ADDR(file);
 	driver->visitLock((const GenericValue *) fileLock, intTyp);
-	if (thr.isBlocked()) {
+	if (thr.isBlocked) {
 		thr.rollToSnapshot();
 		return;
 	}
@@ -3842,7 +3837,7 @@ void Interpreter::callPreadFS(Function *F, const std::vector<GenericValue> &ArgV
 
 	/* Execute the read in the specified offset */
 	nr = executeReadFS(file, intTyp, buf, bufElemTyp, offset, count);
-	if (thr.isBlocked())
+	if (thr.isBlocked)
 		return;
 
 	/* Return the number of bytes read (similar to read()) */
@@ -3975,7 +3970,7 @@ void Interpreter::callLseekFS(Function *F, const std::vector<GenericValue> &ArgV
 	 * we reset the EE to this instruction */
 	auto *fileLock = GET_FILE_POS_LOCK_ADDR(file);
 	driver->visitLock((const GenericValue *) fileLock, intTyp);
-	if (thr.isBlocked()) {
+	if (thr.isBlocked) {
 		thr.rollToSnapshot();
 		return;
 	}
@@ -4094,7 +4089,7 @@ void Interpreter::callFunction(Function *F,
     return;
   }
 
-  assert((ECStack().empty() || !ECStack().back().Caller.getInstruction() ||
+  assert((ECStack().empty() || !&ECStack().back().Caller ||
 	  ECStack().back().Caller.arg_size() == ArgVals.size()) &&
 	 "Incorrect number of arguments passed into function call!");
   // Make a new stack frame... and fill it in.
@@ -4137,16 +4132,16 @@ std::string getFilenameFromMData(MDNode *node)
 #else
 	llvm::DILocation loc(node);
 #endif
-	std::string file = loc.getFilename();
-	std::string dir = loc.getDirectory();
+	llvm::StringRef file = loc.getFilename();
+	llvm::StringRef dir = loc.getDirectory();
 
 	BUG_ON(!file.size() && !dir.size());
 
 	std::string absPath;
 	if (file.front() == '/') {
-		absPath = file;
+		absPath = file.str();
 	} else {
-		absPath = dir;
+		absPath = dir.str();
 		if (absPath.back() != '/')
 			absPath += "/";
 		absPath += file;
