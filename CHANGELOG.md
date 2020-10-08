@@ -6,6 +6,11 @@ is released.
 
 ## [Unreleased]
 
+## [0.5.2] - 2020.10.08
+### Added
+
+- Documentation for Persevere, LAPOR
+
 ## [0.5.1] - 2020.10.01
 ### Added
 

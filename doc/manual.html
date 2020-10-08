@@ -3,7 +3,7 @@
 "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
 <head>
-<!-- 2020-03-11 Wed 20:09 -->
+<!-- 2020-10-04 Sun 21:26 -->
 <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title><font style="font-variant: small-caps">GenMC</font>: A Generic Model Checker for C Programs</title>
@@ -255,32 +255,50 @@ for the JavaScript code in this tag.
 <h2>Table of Contents</h2>
 <div id="text-table-of-contents">
 <ul>
-<li><a href="#org221a4ef">1. Introduction </a></li>
-<li><a href="#org1a11228">2. Basic Usage</a>
+<li><a href="#org89242d6">1. Introduction </a></li>
+<li><a href="#orgff5bc97">2. Basic Usage</a>
 <ul>
-<li><a href="#orgc7f2504">2.1. A First Example</a></li>
-<li><a href="#orga8a03e5">2.2. Reducing the state space of a program with <code>assume()</code> statements </a></li>
-<li><a href="#org773da6a">2.3. Handling Infinite Loops </a></li>
-<li><a href="#org962dddc">2.4. Error Reporting </a></li>
+<li><a href="#org740f387">2.1. A First Example</a></li>
+<li><a href="#org8aa9d4f">2.2. Reducing the State Space of a Program With <code>assume()</code> Statements </a></li>
+<li><a href="#orgc417d71">2.3. Handling Infinite Loops </a></li>
+<li><a href="#org6a6fe48">2.4. Error Reporting </a></li>
 </ul>
 </li>
-<li><a href="#org6810481">3. Command-line Options </a></li>
-<li><a href="#org088a67e">4. Supported APIs </a>
+<li><a href="#orgcd53cf8">3. Tool Features </a>
 <ul>
-<li><a href="#org9073936">4.1. Supported <code>stdio</code> API</a></li>
-<li><a href="#org97dd3b3">4.2. Supported <code>stdlib</code> API</a></li>
-<li><a href="#orgd693de8">4.3. Supported <code>pthread</code> API</a></li>
-<li><a href="#org4045707">4.4. Supported SV-COMP<sup>4</sup> API</a></li>
+<li><a href="#org7029d1b">3.1. Available Memory Models</a>
+<ul>
+<li><a href="#org410f674">3.1.1. A Note on Language Memory Models vs Hardware Memory Models</a></li>
 </ul>
 </li>
-<li><a href="#org37ae943">5. Contact </a></li>
-<li><a href="#org9714e51">6. Bibliography </a></li>
+<li><a href="#orgfaf5ee0">3.2. Race Detection and Memory Errors</a></li>
+<li><a href="#orga97846f">3.3. Lock-Aware Partial Order Reduction (<font style="font-variant: small-caps">LAPOR</font>)</a></li>
+<li><a href="#orgd773676">3.4. System Calls and Persistency Checks (<font style="font-variant: small-caps">Persevere</font>) </a>
+<ul>
+<li><a href="#org84397b1">3.4.1. Consistency of File-Manipulating Programs</a></li>
+<li><a href="#org7ad0163">3.4.2. Persistency of File-Manipulating Programs</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#org726e4a2">4. Command-line Options </a></li>
+<li><a href="#orgb63955c">5. Supported APIs </a>
+<ul>
+<li><a href="#orga061d09">5.1. Supported <code>stdio</code>, <code>unistd</code> and <code>fcntl</code> API</a></li>
+<li><a href="#org69393ed">5.2. Supported <code>stdlib</code> API</a></li>
+<li><a href="#org10e1d41">5.3. Supported <code>pthread</code> API</a></li>
+<li><a href="#org87a8bc4">5.4. Supported SV-COMP<sup>4</sup> API</a></li>
+</ul>
+</li>
+<li><a href="#org33c0a75">6. Contact </a></li>
+<li><a href="#orgd68d79c">7. Bibliography </a></li>
 </ul>
 </div>
 </div>
 
-<div id="outline-container-org221a4ef" class="outline-2">
-<h2 id="org221a4ef"><span class="section-number-2">1</span> Introduction <a id="org49b0b07"></a></h2>
+
+<div id="outline-container-org89242d6" class="outline-2">
+<h2 id="org89242d6"><span class="section-number-2">1</span> Introduction <a id="orga2be02d"></a></h2>
 <div class="outline-text-2" id="text-1">
 <p>
 <font style="font-variant: small-caps">GenMC</font> is a model checker that is an instantiation of the
@@ -308,8 +326,9 @@ dependencies are installed.
 </div>
 </div>
 
-<div id="outline-container-org1a11228" class="outline-2">
-<h2 id="org1a11228"><span class="section-number-2">2</span> Basic Usage</h2>
+
+<div id="outline-container-orgff5bc97" class="outline-2">
+<h2 id="orgff5bc97"><span class="section-number-2">2</span> Basic Usage</h2>
 <div class="outline-text-2" id="text-2">
 <p>
 A generic invocation of <font style="font-variant: small-caps">GenMC</font> looks like the following:
@@ -322,7 +341,7 @@ A generic invocation of <font style="font-variant: small-caps">GenMC</font> look
 
 <p>
 In the above command, <code>OPTIONS</code> include several options that can be
-passed to <font style="font-variant: small-caps">GenMC</font> (see Section <a href="#org0825bcf">3</a> for more details), and
+passed to <font style="font-variant: small-caps">GenMC</font> (see Section <a href="#org40dab25">4</a> for more details), and
 <code>CFLAGS</code> are the options that one would normally pass to the C
 compiler. If no such flags exist, the <code>--</code> can be omitted.
 Lastly, <code>file</code> should be a C file that uses the <code>stdatomic.h</code>
@@ -334,7 +353,7 @@ Note that, in order for <font style="font-variant: small-caps">GenMC</font> to b
 needs to meet two requirements: finiteness and data-determinism.
 Finiteness means that all tests need to have finite traces,
 i.e., no infinite loops (these need to be bounded; see
-Section <a href="#org80ef5bd">2.3</a>). Data-determinism means that
+Section <a href="#org1ef9864">2.3</a>). Data-determinism means that
 the code under test should be data-deterministic, i.e.,
 not perform actions like calling <code>rand()</code>, performing
 actions based on user input or the clock, etc. In other words,
@@ -350,8 +369,8 @@ their programs by using <code>assert()</code> statements.
 </p>
 </div>
 
-<div id="outline-container-orgc7f2504" class="outline-3">
-<h3 id="orgc7f2504"><span class="section-number-3">2.1</span> A First Example</h3>
+<div id="outline-container-org740f387" class="outline-3">
+<h3 id="org740f387"><span class="section-number-3">2.1</span> A First Example</h3>
 <div class="outline-text-3" id="text-2-1">
 <p>
 Consider the following program, demonstrating the Message-Passing (MP)
@@ -424,8 +443,8 @@ As can be seen, <font style="font-variant: small-caps">GenMC</font> will explore
 </div>
 
 
-<div id="outline-container-orga8a03e5" class="outline-3">
-<h3 id="orga8a03e5"><span class="section-number-3">2.2</span> Reducing the state space of a program with <code>assume()</code> statements <a id="org6dfb006"></a></h3>
+<div id="outline-container-org8aa9d4f" class="outline-3">
+<h3 id="org8aa9d4f"><span class="section-number-3">2.2</span> Reducing the State Space of a Program With <code>assume()</code> Statements <a id="org26dff71"></a></h3>
 <div class="outline-text-3" id="text-2-2">
 <p>
 In some programs, we only care about what happens when certain
@@ -497,11 +516,11 @@ use an <code>assume()</code> statement to achieve this, as shown below:
 <p>
 Note that the <code>__VERIFIER_assume()</code> function has to be declared. Alternatively,
 one can include the &lt;genmc.h&gt; header, that contains the declarations for all
-the special function that <font style="font-variant: small-caps">GenMC</font> offers (see Section <a href="#org528145e">4</a>).
+the special function that <font style="font-variant: small-caps">GenMC</font> offers (see Section <a href="#orgec54791">5</a>).
 </p>
 
 <p>
-If we ran <font style="font-variant: small-caps">GenMC</font> on the <code>mp-assume.c</code> program above, we get the following
+If we run <font style="font-variant: small-caps">GenMC</font> on the <code>mp-assume.c</code> program above, we get the following
 output:
 </p>
 <div class="org-src-container">
@@ -526,8 +545,8 @@ programs where there are a lot of (global) accesses after the
 </div>
 
 
-<div id="outline-container-org773da6a" class="outline-3">
-<h3 id="org773da6a"><span class="section-number-3">2.3</span> Handling Infinite Loops <a id="org80ef5bd"></a></h3>
+<div id="outline-container-orgc417d71" class="outline-3">
+<h3 id="orgc417d71"><span class="section-number-3">2.3</span> Handling Infinite Loops <a id="org1ef9864"></a></h3>
 <div class="outline-text-3" id="text-2-3">
 <p>
 As mentioned in the beginning of this section, all programs that
@@ -556,7 +575,7 @@ or has side-effects (e.g., if it is a compare-and-exchange instruction),
 
 <p>
 For infinite loops with side effects, one has to use the <code>-unroll=N</code>
-command-line option (see Section <a href="#org0825bcf">3</a>). This option
+command-line option (see Section <a href="#org40dab25">4</a>). This option
 bounds all loops so that they are executed at most <code>N</code> times.
 Naturally, in this case, any verification guarantees that <font style="font-variant: small-caps">GenMC</font>
 provides hold up to that bound.
@@ -571,8 +590,8 @@ in the C code (depending on the enabled compiled optimizations, etc).
 </div>
 
 
-<div id="outline-container-org962dddc" class="outline-3">
-<h3 id="org962dddc"><span class="section-number-3">2.4</span> Error Reporting <a id="org3929ad5"></a></h3>
+<div id="outline-container-org6a6fe48" class="outline-3">
+<h3 id="org6a6fe48"><span class="section-number-3">2.4</span> Error Reporting <a id="org26fa864"></a></h3>
 <div class="outline-text-3" id="text-2-4">
 <p>
 In the previous sections, saw how <font style="font-variant: small-caps">GenMC</font> verifies the small MP program.
@@ -709,12 +728,486 @@ same memory location in the sequence.
 </div>
 
 
-<div id="outline-container-org6810481" class="outline-2">
-<h2 id="org6810481"><span class="section-number-2">3</span> Command-line Options <a id="org0825bcf"></a></h2>
+<div id="outline-container-orgcd53cf8" class="outline-2">
+<h2 id="orgcd53cf8"><span class="section-number-2">3</span> Tool Features <a id="orgfc249f4"></a></h2>
 <div class="outline-text-2" id="text-3">
+</div>
+
+<div id="outline-container-org7029d1b" class="outline-3">
+<h3 id="org7029d1b"><span class="section-number-3">3.1</span> Available Memory Models</h3>
+<div class="outline-text-3" id="text-3-1">
+<p>
+By default, <font style="font-variant: small-caps">GenMC</font> verifies programs under RC11. However, apart
+from RC11, <font style="font-variant: small-caps">GenMC</font> also supports IMM. The difference between
+these memory models (as far as allowed outcomes are concerned)
+can be seen in the following program:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-C"><span style="color: #586e75; font-style: italic;">/* </span><span style="color: #586e75; font-style: italic;">file: lb.c </span><span style="color: #586e75; font-style: italic;">*/</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdlib.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;pthread.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdatomic.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdbool.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;assert.h&gt;</span>
+
+<span style="color: #268bd2;">atomic_int</span> <span style="color: #6c71c4;">x</span>;
+<span style="color: #268bd2;">atomic_int</span> <span style="color: #6c71c4;">y</span>;
+
+<span style="color: #268bd2;">void</span> *<span style="color: #b58900;">thread_1</span>(<span style="color: #268bd2;">void</span> *<span style="color: #6c71c4;">unused</span>)
+{
+        <span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">a</span> = atomic_load_explicit(&amp;x, memory_order_relaxed);
+        atomic_store_explicit(&amp;y, 1, memory_order_relaxed);
+        <span style="color: #859900;">return</span> <span style="color: #268bd2;">NULL</span>;
+}
+
+<span style="color: #268bd2;">void</span> *<span style="color: #b58900;">thread_2</span>(<span style="color: #268bd2;">void</span> *<span style="color: #6c71c4;">unused</span>)
+{
+        <span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">b</span> = atomic_load_explicit(&amp;y, memory_order_relaxed);
+        atomic_store_explicit(&amp;x, 1, memory_order_relaxed);
+        <span style="color: #859900;">return</span> <span style="color: #268bd2;">NULL</span>;
+}
+
+<span style="color: #268bd2;">int</span> <span style="color: #b58900;">main</span>()
+{
+        <span style="color: #268bd2;">pthread_t</span> <span style="color: #6c71c4;">t1</span>, <span style="color: #6c71c4;">t2</span>;
+
+        <span style="color: #859900;">if</span> (pthread_create(&amp;t1, <span style="color: #268bd2;">NULL</span>, thread_1, <span style="color: #268bd2;">NULL</span>))
+                abort();
+        <span style="color: #859900;">if</span> (pthread_create(&amp;t2, <span style="color: #268bd2;">NULL</span>, thread_2, <span style="color: #268bd2;">NULL</span>))
+                abort();
+
+        <span style="color: #859900;">return</span> 0;
+}
+</pre>
+</div>
+
+<p>
+Under RC11, an execution where both \(a = 1\) and \(b = 1\) is forbidden,
+whereas such an execution is allowed under IMM. To account for such
+behaviors, <font style="font-variant: small-caps">GenMC</font> tracks dependencies between program instructions
+thus leading to a constant overhead when verifying programs under
+models like IMM.
+</p>
+</div>
+
+<div id="outline-container-org410f674" class="outline-4">
+<h4 id="org410f674"><span class="section-number-4">3.1.1</span> A Note on Language Memory Models vs Hardware Memory Models</h4>
+<div class="outline-text-4" id="text-3-1-1">
+<p>
+RC11 is a language-level memory model while IMM is a hardware memory
+model. Subsequently, the verification results produced by <font style="font-variant: small-caps">GenMC</font>
+for the two models should be interpreted somewhat differently.
+</p>
+
+<p>
+What this means in practice is that, when verifying programs under
+RC11, the input file is assumed to be the very source code the user
+wrote. A successful verification result under RC11 holds all the
+way down to the actual executable, due to the guarantees provided
+by RC11.<sup>2</sup>
+</p>
+
+<p>
+On the other hand, when verifying programs under IMM, the input file
+is assumed to be the assembly code run by the processor (or, more
+precisely, a program in IMM's intermediate language).  And while
+<font style="font-variant: small-caps">GenMC</font> allows the input file to be a C file (as in the case of
+RC11), it assumes that this C file corresponds to an assembly file
+that is the result of the compilation of some program in IMM's
+language. In other words, program correctness is not preserved across
+compilation for IMM inputs.
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgfaf5ee0" class="outline-3">
+<h3 id="orgfaf5ee0"><span class="section-number-3">3.2</span> Race Detection and Memory Errors</h3>
+<div class="outline-text-3" id="text-3-2">
+<p>
+For memory models that define the notion of a race, <font style="font-variant: small-caps">GenMC</font> will
+report executions containing races erroneous. For instance, under
+RC11, the following program is racy, as there is no happens-before
+between the write of \(x\) in the first thread and the non-atomic
+read of \(x\) in the second thread (even though the latter causally
+depends on the former).
+</p>
+
+<div class="org-src-container">
+<pre class="src src-C"><span style="color: #586e75; font-style: italic;">/* </span><span style="color: #586e75; font-style: italic;">file: race.c </span><span style="color: #586e75; font-style: italic;">*/</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdlib.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;pthread.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdatomic.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdbool.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;assert.h&gt;</span>
+
+<span style="color: #268bd2;">atomic_int</span> <span style="color: #6c71c4;">x</span>;
+
+<span style="color: #268bd2;">void</span> *<span style="color: #b58900;">thread_1</span>(<span style="color: #268bd2;">void</span> *<span style="color: #6c71c4;">unused</span>)
+{
+        atomic_store_explicit(&amp;x, 1, memory_order_relaxed);
+        <span style="color: #859900;">return</span> <span style="color: #268bd2;">NULL</span>;
+}
+
+<span style="color: #268bd2;">void</span> *<span style="color: #b58900;">thread_2</span>(<span style="color: #268bd2;">void</span> *<span style="color: #6c71c4;">unused</span>)
+{
+        <span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">a</span>, <span style="color: #6c71c4;">b</span>;
+
+        a = atomic_load_explicit(&amp;x, memory_order_relaxed);
+        <span style="color: #859900;">if</span> (a == 1)
+                b = *((<span style="color: #268bd2;">int</span> *) &amp;x);
+        <span style="color: #859900;">return</span> <span style="color: #268bd2;">NULL</span>;
+}
+
+<span style="color: #268bd2;">int</span> <span style="color: #b58900;">main</span>()
+{
+        <span style="color: #268bd2;">pthread_t</span> <span style="color: #6c71c4;">t1</span>, <span style="color: #6c71c4;">t2</span>;
+
+        <span style="color: #859900;">if</span> (pthread_create(&amp;t1, <span style="color: #268bd2;">NULL</span>, thread_1, <span style="color: #268bd2;">NULL</span>))
+                abort();
+        <span style="color: #859900;">if</span> (pthread_create(&amp;t2, <span style="color: #268bd2;">NULL</span>, thread_2, <span style="color: #268bd2;">NULL</span>))
+                abort();
+
+        <span style="color: #859900;">return</span> 0;
+}
+</pre>
+</div>
+
+<p>
+Additionally, for all memory models, <font style="font-variant: small-caps">GenMC</font> detects some memory
+races like accessing memory that has been already freed, accessing
+dynamic memory that has not been allocated, or freeing an already
+freed chunk of memory.
+</p>
+
+<p>
+Race detection can be completely disabled by means of
+<code>-disable-race-detection</code>, which may yield better performance for
+certain programs.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orga97846f" class="outline-3">
+<h3 id="orga97846f"><span class="section-number-3">3.3</span> Lock-Aware Partial Order Reduction (<font style="font-variant: small-caps">LAPOR</font>)</h3>
+<div class="outline-text-3" id="text-3-3">
+<p>
+For programs that employ coarse-grained locking schemes <font style="font-variant: small-caps">LAPOR</font>
+<sup>5</sup> might greatly reduce the state space
+and thus the verification time.  For instance, consider the following
+program where a lock is used (overly conservative) to read a shared
+variable:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-C"><span style="color: #586e75; font-style: italic;">/* </span><span style="color: #586e75; font-style: italic;">file: lapor.c </span><span style="color: #586e75; font-style: italic;">*/</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdlib.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;pthread.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdatomic.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdbool.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;assert.h&gt;</span>
+
+<span style="color: #d33682;">#if</span><span style="color: #d33682;">n</span><span style="color: #d33682;">def</span> N
+<span style="color: #d33682;"># define</span> <span style="color: #6c71c4;">N</span> 2
+<span style="color: #d33682;">#endif</span>
+
+<span style="color: #268bd2;">pthread_mutex_t</span> <span style="color: #6c71c4;">l</span>;
+<span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">x</span>;
+
+<span style="color: #268bd2;">void</span> *<span style="color: #b58900;">thread_n</span>(<span style="color: #268bd2;">void</span> *<span style="color: #6c71c4;">unused</span>)
+{
+        pthread_mutex_lock(&amp;l);
+        <span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">r</span> = x;
+        pthread_mutex_unlock(&amp;l);
+        <span style="color: #859900;">return</span> <span style="color: #268bd2;">NULL</span>;
+}
+
+<span style="color: #268bd2;">int</span> <span style="color: #b58900;">main</span>()
+{
+        <span style="color: #268bd2;">pthread_t</span> <span style="color: #6c71c4;">t</span>[N];
+
+        <span style="color: #859900;">for</span> (<span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">i</span> = 0; i &lt; N; i++) {
+                <span style="color: #859900;">if</span> (pthread_create(&amp;t[i], <span style="color: #268bd2;">NULL</span>, thread_n, <span style="color: #268bd2;">NULL</span>))
+                        abort();
+        }
+
+        <span style="color: #859900;">return</span> 0;
+}
+</pre>
+</div>
+
+<p>
+Running <font style="font-variant: small-caps">GenMC</font> on the program above results in the following outcome:
+</p>
+<div class="org-src-container">
+<pre class="src src-sh">Number of complete executions explored: 2
+Total wall-clock time: 0.02s
+</pre>
+</div>
+<p>
+As expected, as the value of \(N\) increases, the executions of the
+program also increase in an exponential manner.
+</p>
+
+<p>
+However, if we run <font style="font-variant: small-caps">GenMC</font> with <code>-lapor</code> on the same program, we get the
+following output:
+</p>
+<div class="org-src-container">
+<pre class="src src-sh">Number of complete executions explored: 1
+Total wall-clock time: 0.02s
+</pre>
+</div>
+<p>
+<font style="font-variant: small-caps">LAPOR</font> leverages the fact that the contents of the critical
+sections of the threads commute (i.e., the order in which the critical
+sections are executed does not matter), and only explores 1 execution
+for all values of \(N\).
+</p>
+
+<p>
+We note that for programs where no further reduction in the
+state space is possible, <font style="font-variant: small-caps">LAPOR</font> can be cause a polynomial
+slowdown.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgd773676" class="outline-3">
+<h3 id="orgd773676"><span class="section-number-3">3.4</span> System Calls and Persistency Checks (<font style="font-variant: small-caps">Persevere</font>) <a id="org479677d"></a></h3>
+<div class="outline-text-3" id="text-3-4">
+<p>
+Since v0.5, <font style="font-variant: small-caps">GenMC</font> supports the verification programs involving
+system calls for file manipulation like <code>read()</code> and <code>write()</code>.  In
+addition, using <font style="font-variant: small-caps">Persevere</font>,<sup>6</sup>
+<font style="font-variant: small-caps">GenMC</font> can verify persistency properties of such programs. Below
+we discuss some details that are important when it comes to verifying
+programs that involve file manipulation.
+</p>
+</div>
+
+<div id="outline-container-org84397b1" class="outline-4">
+<h4 id="org84397b1"><span class="section-number-4">3.4.1</span> Consistency of File-Manipulating Programs</h4>
+<div class="outline-text-4" id="text-3-4-1">
+<p>
+As a first example consider the program below, where a file
+<code>"foo.txt"</code> is first populated by <code>main</code>, and then concurrently
+read and written by two threads at offset 0:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-C"><span style="color: #586e75; font-style: italic;">/* </span><span style="color: #586e75; font-style: italic;">file: file-rw.c </span><span style="color: #586e75; font-style: italic;">*/</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdio.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdlib.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;unistd.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;fcntl.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdatomic.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;pthread.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;assert.h&gt;</span>
+
+<span style="color: #268bd2;">void</span> *<span style="color: #b58900;">thread_1</span>(<span style="color: #268bd2;">void</span> *<span style="color: #6c71c4;">fdp</span>)
+{
+        <span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">fd</span> = *((<span style="color: #268bd2;">int</span> *) fdp);
+        <span style="color: #268bd2;">char</span> <span style="color: #6c71c4;">buf</span>[8];
+
+        buf[0] = buf[1] = 1;
+        <span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">nw</span> = pwrite(fd, buf, 2, 0);
+        <span style="color: #859900;">return</span> <span style="color: #268bd2;">NULL</span>;
+}
+
+<span style="color: #268bd2;">void</span> *<span style="color: #b58900;">thread_2</span>(<span style="color: #268bd2;">void</span> *<span style="color: #6c71c4;">fdp</span>)
+{
+        <span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">fd</span> = *((<span style="color: #268bd2;">int</span> *) fdp);
+        <span style="color: #268bd2;">char</span> <span style="color: #6c71c4;">buf</span>[8];
+
+        <span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">nr</span> = pread(fd, buf, 2, 0);
+        <span style="color: #859900;">if</span> (nr == 2)
+                assert((buf[0] == 0 &amp;&amp; buf[1] == 0) || (buf[0] == 1 &amp;&amp; buf[1] == 1));
+        <span style="color: #859900;">return</span> <span style="color: #268bd2;">NULL</span>;
+}
+
+<span style="color: #268bd2;">int</span> <span style="color: #b58900;">main</span>()
+{
+        <span style="color: #268bd2;">pthread_t</span> <span style="color: #6c71c4;">t1</span>, <span style="color: #6c71c4;">t2</span>;
+        <span style="color: #268bd2;">char</span> <span style="color: #6c71c4;">buf</span>[8];
+
+        <span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">fd</span> = open(<span style="color: #2aa198;">"foo.txt"</span>, O_CREAT|O_RDWR, 0);
+
+        buf[0] = buf[1] = 0;
+        <span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">nw</span> = write(fd, buf, 2);
+        assert(nw == 2);
+
+        <span style="color: #859900;">if</span> (pthread_create(&amp;t1, <span style="color: #268bd2;">NULL</span>, thread_1, &amp;fd))
+                abort();
+        <span style="color: #859900;">if</span> (pthread_create(&amp;t2, <span style="color: #268bd2;">NULL</span>, thread_2, &amp;fd))
+                abort();
+
+        <span style="color: #859900;">if</span> (pthread_join(t1, <span style="color: #268bd2;">NULL</span>))
+                abort();
+        <span style="color: #859900;">if</span> (pthread_join(t2, <span style="color: #268bd2;">NULL</span>))
+                abort();
+
+        <span style="color: #859900;">return</span> 0;
+}
+</pre>
+</div>
+
+<p>
+One property we might be interested in in the above program is whether
+the reading thread can see any other (intermediate) state for the file
+apart from <code>00</code> and <code>11</code>. Indeed, as can be seen below, running <font style="font-variant: small-caps">GenMC</font>
+on the program above produces an example where the assertion is violated.
+</p>
+<div class="org-src-container">
+<pre class="src src-sh">Error detected: Safety violation!
+[...]
+Assertion violation: (<span style="color: #6c71c4;">buf</span>[0] == 0 &amp;&amp; buf[1] == 0) || (buf[0] == 1 &amp;&amp; buf[1] == 1)
+Number of complete executions explored: 1
+Total wall-clock time: 0.03s
+</pre>
+</div>
+<p>
+Apart from safety violations like in this case, <font style="font-variant: small-caps">GenMC</font> will also
+report system call failures as errors (e.g., trying to write to a file
+that has been opened with <code>O_RDONLY</code>). This behavior can be disabled
+with <code>-disable-stop-on-system-error</code>, which will make <font style="font-variant: small-caps">GenMC</font> report
+such errors through <code>errno</code>.
+</p>
+
+<p>
+When including headers like <code>stdio.h</code> or <code>unistd.h</code>, <font style="font-variant: small-caps">GenMC</font> intercepts
+calls to <code>open()</code>, <code>read()</code>, <code>write()</code>, and other system calls defined
+in these header files, and models their behavior. Note that these header
+files are also part of <font style="font-variant: small-caps">GenMC</font> so, in general, only the functionality
+described in Section <a href="#orgec54791">5</a> from said header files can be used in programs.
+</p>
+
+<p>
+Note that only constant (static) strings can be used as filenames when
+using system calls. The filenames need not exist as regular files in
+the user's system, as the effects of these system calls are modeled,
+and not actually executed. Thus, it is in general preferable if the
+contents of the manipulated files maintain a small size across
+executions.
+</p>
+</div>
+</div>
+
+<div id="outline-container-org7ad0163" class="outline-4">
+<h4 id="org7ad0163"><span class="section-number-4">3.4.2</span> Persistency of File-Manipulating Programs</h4>
+<div class="outline-text-4" id="text-3-4-2">
+<p>
+In addition to checking whether safety properties of file-manipulating
+programs with regards to consistency are satisfied (as described
+above), <font style="font-variant: small-caps">GenMC</font> can also check whether some safety property with
+regards to persistency (under <code>ext4</code>) is satisfied.  This is achieved
+through <font style="font-variant: small-caps">Persevere</font>, which can be enabled with <code>-persevere</code>.
+</p>
+
+<p>
+For example, let us consider the program below and suppose we want to
+check whether, after a crash, it is possible to observe only a part of
+an append to a file:
+</p>
+
+<div class="org-src-container">
+<pre class="src src-C"><span style="color: #586e75; font-style: italic;">/* </span><span style="color: #586e75; font-style: italic;">file: pers.c </span><span style="color: #586e75; font-style: italic;">*/</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdio.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdlib.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;unistd.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;stdatomic.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;pthread.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;assert.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;genmc.h&gt;</span>
+
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;fcntl.h&gt;</span>
+<span style="color: #d33682;">#include</span> <span style="color: #2aa198;">&lt;sys/stat.h&gt;</span>
+
+<span style="color: #268bd2;">void</span> <span style="color: #b58900;">__VERIFIER_recovery_routine</span>(<span style="color: #268bd2;">void</span>)
+{
+        <span style="color: #268bd2;">char</span> <span style="color: #6c71c4;">buf</span>[8];
+        buf[0] = 0;
+        buf[1] = 0;
+
+        <span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">fd</span> = open(<span style="color: #2aa198;">"foo.txt"</span>, O_RDONLY, 0666);
+        assert(fd != -1);
+
+        <span style="color: #586e75; font-style: italic;">/* </span><span style="color: #586e75; font-style: italic;">Is is possible to read something other than {2,2} ? </span><span style="color: #586e75; font-style: italic;">*/</span>
+        <span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">nr</span> = pread(fd, buf, 2, 3);
+        <span style="color: #859900;">if</span> (nr == 2)
+                assert(buf[0] == 2 &amp;&amp; buf[1] == 2);
+        <span style="color: #859900;">return</span>;
+}
+
+<span style="color: #268bd2;">int</span> <span style="color: #b58900;">main</span>()
+{
+        <span style="color: #268bd2;">char</span> <span style="color: #6c71c4;">buf</span>[8];
+
+        buf[0] = 1;
+        buf[1] = 1;
+        buf[2] = 1;
+
+        <span style="color: #268bd2;">int</span> <span style="color: #6c71c4;">fd</span> = open(<span style="color: #2aa198;">"foo.txt"</span>, O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+        write(fd, buf, 3);
+
+        __VERIFIER_pbarrier();
+
+        write(fd, buf + 3, 2);
+
+        close(fd);
+
+        <span style="color: #859900;">return</span> 0;
+}
+</pre>
+</div>
+
+<p>
+In the program above, the <code>__VERIFIER_pbarrier()</code> call ensures that
+all the file operations before it will be considered as "persisted"
+(i.e., having reached disk) in this program. The function
+<code>__VERIFIER_recovery_routine()</code> is automatically called by <font style="font-variant: small-caps">GenMC</font>
+and contains the code to be run by the recovery routine, in order to
+observe the post-crash disk state.
+</p>
+
+<p>
+In this case, by issuing <code>genmc -persevere pers.c</code> we observe that
+partly observing the append is indeed possible under <code>ext4</code>, as can
+be seen below.
+</p>
+<div class="org-src-container">
+<pre class="src src-sh">Error detected: Recovery error!
+[...]
+Assertion violation: <span style="color: #6c71c4;">buf</span>[0] == 2 &amp;&amp; buf[1] == 2
+Number of complete executions explored: 2
+Total wall-clock time: 0.08s
+</pre>
+</div>
+<p>
+For this program in particular, this property is violated due to the
+default block size (which is 2 bytes), and the nature of appends in
+the default data ordering mode of <code>ext4</code> (<code>data=ordered</code>).
+</p>
+
+<p>
+In general, such parameters of <code>ext4</code> can be tuned via the
+<code>--block-size</code> and <code>--journal-data</code> switches (see Section <a href="#org40dab25">4</a> and
+<code>genmc -help</code> for more information).  <font style="font-variant: small-caps">GenMC</font> currently assumes a
+sector size of 1 byte.
+</p>
+</div>
+</div>
+</div>
+</div>
+
+
+<div id="outline-container-org726e4a2" class="outline-2">
+<h2 id="org726e4a2"><span class="section-number-2">4</span> Command-line Options <a id="org40dab25"></a></h2>
+<div class="outline-text-2" id="text-4">
 <p>
 A full list of the available command-line options can by viewed
-by issuing <code>genmc -help</code>. Below we will describe the ones that
+by issuing <code>genmc -help</code>. Below we describe the ones that
 are most useful when verifying user programs.
 </p>
 
@@ -725,7 +1218,8 @@ are most useful when verifying user programs.
 equivalence partitioning (default).</dd>
 <dt><code>-mo</code></dt><dd>Perform the exploration based on the <span style="color: #808080; font-family: monospace">po</span> \(\cup\) <span style="color: #00ff00; font-family: monospace">rf</span> \(\cup\) <span style="color: #ffa500; font-family: monospace">mo</span>
 equivalence partitioning.</dd>
-<dt><code>-lapor</code></dt><dd>Enable Lock-Aware Partial Order Reduction (LAPOR)</dd>
+<dt><code>-lapor</code></dt><dd>Enable Lock-Aware Partial Order Reduction (<font style="font-variant: small-caps">LAPOR</font>)</dd>
+<dt><code>-persevere</code></dt><dd>Enable <code>ext4</code> persistency checks (<font style="font-variant: small-caps">Persevere</font>)</dd>
 <dt><code>-unroll=&lt;N&gt;</code></dt><dd>All loops will be executed at most \(N\) times.</dd>
 <dt><code>-dump-error-graph=&lt;file&gt;</code></dt><dd>Outputs an erroneous graph to file
 <code>&lt;file&gt;</code>.</dd>
@@ -742,9 +1236,9 @@ as the program's entry point, instead of <code>main()</code>.</dd>
 </div>
 
 
-<div id="outline-container-org088a67e" class="outline-2">
-<h2 id="org088a67e"><span class="section-number-2">4</span> Supported APIs <a id="org528145e"></a></h2>
-<div class="outline-text-2" id="text-4">
+<div id="outline-container-orgb63955c" class="outline-2">
+<h2 id="orgb63955c"><span class="section-number-2">5</span> Supported APIs <a id="orgec54791"></a></h2>
+<div class="outline-text-2" id="text-5">
 <p>
 Apart from C11 API (defined in <code>stdatomic.h</code>) and the <code>assert()</code>
 function used to define safety specifications, below we list supported
@@ -752,41 +1246,55 @@ functions from different libraries.
 </p>
 </div>
 
-<div id="outline-container-org9073936" class="outline-3">
-<h3 id="org9073936"><span class="section-number-3">4.1</span> Supported <code>stdio</code> API</h3>
-<div class="outline-text-3" id="text-4-1">
+<div id="outline-container-orga061d09" class="outline-3">
+<h3 id="orga061d09"><span class="section-number-3">5.1</span> Supported <code>stdio</code>, <code>unistd</code> and <code>fcntl</code> API</h3>
+<div class="outline-text-3" id="text-5-1">
 <p>
-The following functions are supported from <code>stdio.h</code>:
+The following functions are supported for I/O:
 </p>
 
 <dl class="org-dl">
-<dt><code>int fclose(FILE *)</code></dt><dd></dd>
-
-<dt><code>int fflush(FILE *)</code></dt><dd></dd>
-
-<dt><code>FILE *fopen(const char *, const char *)</code></dt><dd></dd>
-
 <dt><code>int printf(const char *, ...)</code></dt><dd></dd>
 
-<dt><code>int fprintf(FILE *, const char *, ...)</code></dt><dd></dd>
+<dt><code>int open (const char *, int , mode_t)</code></dt><dd></dd>
 
-<dt><code>size_t fwrite(const void *, size_t, size_t, FILE *)</code></dt><dd></dd>
+<dt><code>int creat (const char *, mode_t)</code></dt><dd></dd>
+
+<dt><code>off_t lseek (int, off_t, int)</code></dt><dd></dd>
+
+<dt><code>int close (int)</code></dt><dd></dd>
+
+<dt><code>ssize_t read (int, void *, size_t)</code></dt><dd></dd>
+
+<dt><code>ssize_t write (int, const void *, size_t)</code></dt><dd></dd>
+
+<dt><code>ssize_t pread (int, void *, size_t, off_t)</code></dt><dd></dd>
+
+<dt><code>ssize_t pwrite (int, const void *, size_t, off_t)</code></dt><dd></dd>
+
+<dt><code>int truncate (const char *, off_t)</code></dt><dd></dd>
+
+<dt><code>int link (const char *, const char *)</code></dt><dd></dd>
+
+<dt><code>int unlink (const char *)</code></dt><dd></dd>
+
+<dt><code>int rename (const char *, const char *)</code></dt><dd></dd>
+
+<dt><code>int fsync (int)</code></dt><dd></dd>
+
+<dt><code>void sync (void)</code></dt><dd></dd>
 </dl>
 
 <p>
-Note that, in this case, said support is provided only for programs to
-compile, and is not meant to provide functional substitutes for the
-actual functions of <code>stdio.h</code>. (In addition, reading from files can
-violate the data non-determinism requirement of stateless model checking.)
-That said, functions like <code>printf()</code> should execute normally on Linux
-machines.
+Note that the functions above are modeled and not actually executed,
+as described in Section <a href="#org479677d">3.4</a>.
 </p>
 </div>
 </div>
 
-<div id="outline-container-org97dd3b3" class="outline-3">
-<h3 id="org97dd3b3"><span class="section-number-3">4.2</span> Supported <code>stdlib</code> API</h3>
-<div class="outline-text-3" id="text-4-2">
+<div id="outline-container-org69393ed" class="outline-3">
+<h3 id="org69393ed"><span class="section-number-3">5.2</span> Supported <code>stdlib</code> API</h3>
+<div class="outline-text-3" id="text-5-2">
 <p>
 The following functions are supported from <code>stdlib.h</code>:
 </p>
@@ -805,9 +1313,9 @@ The following functions are supported from <code>stdlib.h</code>:
 </div>
 </div>
 
-<div id="outline-container-orgd693de8" class="outline-3">
-<h3 id="orgd693de8"><span class="section-number-3">4.3</span> Supported <code>pthread</code> API</h3>
-<div class="outline-text-3" id="text-4-3">
+<div id="outline-container-org10e1d41" class="outline-3">
+<h3 id="org10e1d41"><span class="section-number-3">5.3</span> Supported <code>pthread</code> API</h3>
+<div class="outline-text-3" id="text-5-3">
 <p>
 The following functions are supported from <code>pthread.h</code>:
 </p>
@@ -833,9 +1341,9 @@ The following functions are supported from <code>pthread.h</code>:
 </div>
 
 
-<div id="outline-container-org4045707" class="outline-3">
-<h3 id="org4045707"><span class="section-number-3">4.4</span> Supported SV-COMP<sup>4</sup> API</h3>
-<div class="outline-text-3" id="text-4-4">
+<div id="outline-container-org87a8bc4" class="outline-3">
+<h3 id="org87a8bc4"><span class="section-number-3">5.4</span> Supported SV-COMP<sup>4</sup> API</h3>
+<div class="outline-text-3" id="text-5-4">
 <p>
 The following functions from the ones defined in SV-COMP<sup>4</sup> are supported:
 </p>
@@ -856,9 +1364,9 @@ the same across different executions.
 </div>
 </div>
 
-<div id="outline-container-org37ae943" class="outline-2">
-<h2 id="org37ae943"><span class="section-number-2">5</span> Contact <a id="org690ade4"></a></h2>
-<div class="outline-text-2" id="text-5">
+<div id="outline-container-org33c0a75" class="outline-2">
+<h2 id="org33c0a75"><span class="section-number-2">6</span> Contact <a id="org4f59cf7"></a></h2>
+<div class="outline-text-2" id="text-6">
 <p>
 For feedback, questions, and bug reports please send an e-mail to
 <a href="mailto:michalis@mpi-sws.org">michalis@mpi-sws.org</a>.
@@ -866,20 +1374,22 @@ For feedback, questions, and bug reports please send an e-mail to
 </div>
 </div>
 
-<div id="outline-container-org9714e51" class="outline-2">
-<h2 id="org9714e51"><span class="section-number-2">6</span> Bibliography <a id="org34b0dc1"></a></h2>
-<div class="outline-text-2" id="text-6">
+<div id="outline-container-orgd68d79c" class="outline-2">
+<h2 id="orgd68d79c"><span class="section-number-2">7</span> Bibliography <a id="org884f0a0"></a></h2>
+<div class="outline-text-2" id="text-7">
 <ol class="org-ol">
 <li>Kokologiannakis,  Michalis; Raad,  Azalea and Vafeiadis,  Viktor, <i>Model Checking for Weakly Consistent Libraries</i>, \bibPLDI{2019}(2019). <br></li>
-<li>Kokologiannakis,  Michalis; Lahav,  Ori; Sagonas,  Konstantinos and Vafeiadis,  Viktor, <i>Effective Stateless Model Checking for {C/C++} Concurrency</i>, \bibPACMPL, 2<b>(POPL)</b>, pp. 17:1&#x2013;17:32 (2017). <a href="http://dx.doi.org/10.1145/3158105">http://dx.doi.org/10.1145/3158105</a>. <br></li>
+<li>Lahav,  Ori; Vafeiadis,  Viktor; Kang,  Jeehoon; Hur,  Chung-Kil and Dreyer,  Derek, <i>Repairing Sequential Consistency in {C/C++11}</i>, \bibPLDI{2017}(2017). <br></li>
 <li>Podkopaev,  Anton; Lahav,  Ori and Vafeiadis,  Viktor, <i>Bridging the Gap Between Programming Languages and Hardware Weak Memory Models</i>, \bibPACMPL, 3<b>(POPL)</b>, pp. 69:1&#x2013;69:31 (2019). <a href="http://dx.doi.org/10.1145/3290382">http://dx.doi.org/10.1145/3290382</a>. <br></li>
-<li>SV-COMP, , <i>Competition on Software Verification ({SV-COMP})</i>,  <a href="http://dx.doi.org/https://sv-comp.sosy-lab.org/2019/">http://dx.doi.org/https://sv-comp.sosy-lab.org/2019/</a>. <a href="http://dx.doi.org/nil">http://dx.doi.org/nil</a>.</li>
+<li>SV-COMP, , <i>Competition on Software Verification ({SV-COMP})</i>,  <a href="http://dx.doi.org/https://sv-comp.sosy-lab.org/2019/">http://dx.doi.org/https://sv-comp.sosy-lab.org/2019/</a>. <a href="http://dx.doi.org/nil">http://dx.doi.org/nil</a>. <br></li>
+<li>Kokologiannakis,  Michalis; Raad,  Azalea and Vafeiadis,  Viktor, <i>Effective Lock Handling in Stateless Model Checking</i>, \bibPACMPL, 3<b>(OOPSLA)</b>, pp.  (2019). <a href="http://dx.doi.org/10.1145/3360599">http://dx.doi.org/10.1145/3360599</a>. <br></li>
+<li>Kokologiannakis,  Michalis; Kaysin,  Ilya; Raad,  Azalea and Vafeiadis,  Viktor, <i>{PerSeVerE}: {Persistency} Semantics for Verification under Ext4</i>, \bibPACMPL, <b>(POPL)</b>, pp.  (2021 (to appear)). <a href="http://dx.doi.org/nil">http://dx.doi.org/nil</a>.</li>
 </ol>
 </div>
 </div>
 </div>
 <div id="postamble" class="status">
-<p class="date">Created: 2020-03-11 Wed 20:09</p>
+<p class="date">Created: 2020-10-04 Sun 21:26</p>
 <p class="validation"><a href="http://validator.w3.org/check?uri=referer">Validate</a></p>
 </div>
 </body>
