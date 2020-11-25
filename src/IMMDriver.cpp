@@ -102,6 +102,9 @@ void IMMDriver::updateRelView(DepView &pporf, EventLabel *lab)
 
 	pporf.removeAllHoles(lab->getThread());
 	Event rel = g.getLastThreadRelease(lab->getPos());
+	
+	pporf.update(g.getEventLabel(rel)->getPPoRfView());
+	
 	if (llvm::isa<FaiWriteLabel>(g.getEventLabel(rel)) ||
 	    llvm::isa<CasWriteLabel>(g.getEventLabel(rel)))
 		--rel.index;
