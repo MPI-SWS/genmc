@@ -4135,12 +4135,13 @@ std::string getFilenameFromMData(MDNode *node)
 	llvm::StringRef file = loc.getFilename();
 	llvm::StringRef dir = loc.getDirectory();
 
-	BUG_ON(!file.size() && !dir.size());
-
+	BUG_ON(!file.size());
+	
 	std::string absPath;
 	if (file.front() == '/') {
 		absPath = file.str();
 	} else {
+		BUG_ON(!dir.size());
 		absPath = dir.str();
 		if (absPath.back() != '/')
 			absPath += "/";
