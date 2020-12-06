@@ -6,6 +6,18 @@ is released.
 
 ## [Unreleased]
 
+## [0.5.3] - 2020.12.06
+### Added
+
+- Support for `aligned_alloc()`
+
+### Fixes
+
+- Fixes for ppo calculation in IMM
+- `malloc()` now returns aligned addresses
+- Documentation fix and update
+- Other minor bugs
+
 ## [0.5.2] - 2020.10.08
 ### Added
 

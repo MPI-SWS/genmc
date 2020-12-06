@@ -9,6 +9,7 @@ level of LLVM Intermediate Representation.
 Author: Michalis Kokologiannakis.
 
 * [License](#license)
+* [Getting GenMC](#getting-genmc)
 * [Dependencies](#dependencies)
 * [Installing](#installing)
 * [Troubleshooting](#troubleshooting)
@@ -38,6 +39,15 @@ file for details on the University of Illinois/NCSA Open Source License.
 In addition, the files within the `include` directory are licensed
 under their own licenses; please see the respective headers for more
 information.
+
+<a name="getting-genmc">Getting GenMC</a>
+-----------------------------------------
+
+You can obtain GenMC either by cloning this repository and building
+from source (see below) or pull a container containing GenMC from
+[Docker Hub](https://hub.docker.com) with the following command:
+
+		docker pull genmc/genmc
 
 <a name="dependencies">Dependencies</a>
 ---------------------------------------
@@ -89,6 +99,16 @@ For a default build issue:
 		./configure AR=llvm-ar
 		make
 
+<a name="troubleshooting">Troubleshooting</a>
+---------------------------------------------
+
+* Undefined references to symbols that involve types `std::__cxx11` during linking:
+
+	This probably indicates that you are using an old version of LLVM with a new
+	version of libstdc++. Configuring with the following flags should fix the problem:
+
+			CXXFLAGS="-D_GLIBCXX_USE_CXX11_ABI=0" ./configure --with-llvm=LLVM_PATH
+
 <a name="usage">Usage</a>
 -------------------------
 
@@ -101,16 +121,6 @@ For a default build issue:
 		./src/genmc [options] <file>
 
 * For more detailed usage examples please refer to the [manual](doc/manual.pdf).
-
-<a name="troubleshooting">Troubleshooting</a>
----------------------------------------------
-
-* Undefined references to symbols that involve types `std::__cxx11` during linking:
-
-	This probably indicates that you are using an old version of LLVM with a new
-	version of libstdc++. Configuring with the following flags should fix the problem:
-
-			CXXFLAGS="-D_GLIBCXX_USE_CXX11_ABI=0" ./configure --with-llvm=LLVM_PATH
 
 <a name="notes">Notes</a>
 ------------------------

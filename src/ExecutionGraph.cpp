@@ -648,7 +648,7 @@ ExecutionGraph::getCoherentRevisits(const WriteLabel *wLab)
 
 std::unique_ptr<VectorClock>
 ExecutionGraph::getRevisitView(const ReadLabel *rLab,
-			       const WriteLabel *wLab) const
+			       const EventLabel *wLab) const
 {
 	auto preds = LLVM_MAKE_UNIQUE<View>(getViewFromStamp(rLab->getStamp()));
 	preds->update(wLab->getPorfView());

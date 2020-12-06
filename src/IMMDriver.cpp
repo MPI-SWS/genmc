@@ -101,7 +101,10 @@ void IMMDriver::updateRelView(DepView &pporf, EventLabel *lab)
 	const auto &g = getGraph();
 
 	pporf.removeAllHoles(lab->getThread());
+
 	Event rel = g.getLastThreadRelease(lab->getPos());
+	pporf.update(g.getEventLabel(rel)->getPPoRfView());
+
 	if (llvm::isa<FaiWriteLabel>(g.getEventLabel(rel)) ||
 	    llvm::isa<CasWriteLabel>(g.getEventLabel(rel)))
 		--rel.index;
@@ -114,16 +117,16 @@ void IMMDriver::updateRelView(DepView &pporf, EventLabel *lab)
 	return;
 }
 
-void IMMDriver::calcBasicReadViews(ReadLabel *lab)
+void IMMDriver::updateReadViewsFromRf(DepView &pporf, View &hb, const ReadLabel *lab)
 {
-	const auto &g = getGraph();
+	auto &g = getGraph();
 	const EventLabel *rfLab = g.getEventLabel(lab->getRf());
-	View hb = calcBasicHbView(lab->getPos());
-	DepView ppo = calcPPoView(lab->getPos());
-	DepView pporf(ppo);
 
-	pporf.update(rfLab->getPPoRfView());
-	if (rfLab->getThread() != lab->getThread()) {
+	if (rfLab->getThread() == lab->getThread() || rfLab->getPos().isInitializer()) {
+		pporf.update(rfLab->getPPoView()); /* Account for dep; rfi dependencies */
+		pporf.addHole(rfLab->getPos());    /* Make sure we don't depend on rfi */
+	} else {
+		pporf.update(rfLab->getPPoRfView());
 		for (auto i = 0u; i < lab->getIndex(); i++) {
 			const EventLabel *eLab = g.getEventLabel(Event(lab->getThread(), i));
 			if (auto *wLab = llvm::dyn_cast<WriteLabel>(eLab)) {
@@ -136,6 +139,18 @@ void IMMDriver::calcBasicReadViews(ReadLabel *lab)
 		if (auto *wLab = llvm::dyn_cast<WriteLabel>(rfLab))
 			hb.update(wLab->getMsgView());
 	}
+	return;
+}
+
+void IMMDriver::calcBasicReadViews(ReadLabel *lab)
+{
+	const auto &g = getGraph();
+	View hb = calcBasicHbView(lab->getPos());
+	DepView ppo = calcPPoView(lab->getPos());
+	DepView pporf(ppo);
+
+	updateReadViewsFromRf(pporf, hb, lab);
+
 	lab->setHbView(std::move(hb));
 	lab->setPPoView(std::move(ppo));
 	lab->setPPoRfView(std::move(pporf));
@@ -145,19 +160,25 @@ void IMMDriver::calcBasicWriteViews(WriteLabel *lab)
 {
 	const auto &g = getGraph();
 
-	/* First, we calculate the hb and (po U rf) views */
+	/* First, we calculate the hb view */
 	View hb = calcBasicHbView(lab->getPos());
 	lab->setHbView(std::move(hb));
 
-	/* Then, we calculate the (ppo U rf) view */
-	DepView pporf = calcPPoView(lab->getPos());
+	/* Then, we calculate the ppo and (ppo U rf) views.
+	 * The first is important because we have to take dep;rfi
+	 * dependencies into account for subsequent reads. */
+	DepView ppo = calcPPoView(lab->getPos());
+	DepView pporf(ppo);
 
-	if (llvm::isa<CasWriteLabel>(lab) || llvm::isa<FaiWriteLabel>(lab))
-		pporf.update(g.getPPoRfBefore(g.getPreviousLabel(lab)->getPos()));
+	if (llvm::isa<CasWriteLabel>(lab) || llvm::isa<FaiWriteLabel>(lab)) {
+		ppo.update(g.getPreviousLabel(lab)->getPPoRfView());
+		pporf.update(g.getPreviousLabel(lab)->getPPoRfView());
+	}
 	if (lab->isAtLeastRelease())
 		updateRelView(pporf, lab);
 	pporf.update(g.getPPoRfBefore(g.getLastThreadReleaseAtLoc(lab->getPos(),
 								  lab->getAddr())));
+	lab->setPPoView(std::move(ppo));
 	lab->setPPoRfView(std::move(pporf));
 }
 
@@ -730,27 +751,12 @@ void IMMDriver::changeRf(Event read, Event store)
 	g.changeRf(read, store);
 
 	/* And update the views of the load */
-	EventLabel *lab = g.getEventLabel(read);
-	ReadLabel *rLab = static_cast<ReadLabel *>(lab);
-	EventLabel *rfLab = g.getEventLabel(store);
+	auto *rLab = static_cast<ReadLabel *>(g.getEventLabel(read));
 	View hb = calcBasicHbView(rLab->getPos());
 	DepView pporf(rLab->getPPoView());
 
-	pporf.update(rfLab->getPPoRfView());
-	if (rfLab->getThread() != rLab->getThread()) {
-		for (auto i = 0u; i < rLab->getIndex(); i++) {
-			const EventLabel *eLab = g.getEventLabel(Event(rLab->getThread(), i));
-			if (auto *wLab = llvm::dyn_cast<WriteLabel>(eLab)) {
-				if (wLab->getAddr() == rLab->getAddr())
-					pporf.update(wLab->getPPoRfView());
-			}
-		}
-	}
+	updateReadViewsFromRf(pporf, hb, rLab);
 
-	if (rLab->isAtLeastAcquire()) {
-		if (auto *wLab = llvm::dyn_cast<WriteLabel>(rfLab))
-			hb.update(wLab->getMsgView());
-	}
 	rLab->setHbView(std::move(hb));
 	rLab->setPPoRfView(std::move(pporf));
 

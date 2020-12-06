@@ -12,7 +12,11 @@ char *getenv(const char *);
 
 void __VERIFIER_free(void *);
 #define free __VERIFIER_free
+
 void *__VERIFIER_malloc(size_t);
 #define malloc __VERIFIER_malloc
+
+void *__VERIFIER_malloc_aligned(size_t, size_t);
+#define aligned_alloc __VERIFIER_malloc_aligned
 
 #endif /* __STDLIB_H__ */

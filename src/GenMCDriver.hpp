@@ -48,6 +48,7 @@ public:
 		DE_RaceFreeMalloc,
 		DE_FreeNonMalloc,
 		DE_DoubleFree,
+		DE_Allocation,
 		DE_InvalidAccessBegin,
 		DE_UninitializedMem,
 		DE_AccessNonMalloc,
@@ -230,7 +231,7 @@ public:
 
 	/* Returns an appropriate result for malloc() */
 	llvm::GenericValue
-	visitMalloc(uint64_t allocSize, Storage s, AddressSpace spc);
+	visitMalloc(uint64_t allocSize, unsigned int alignment, Storage s, AddressSpace spc);
 
 	/* A call to free() has been interpreted, nothing for the intepreter */
 	void

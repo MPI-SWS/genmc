@@ -333,7 +333,8 @@ void WBCoherenceCalculator::expandMaximalAndMarkOverwritten(const std::vector<Ev
 				const EventLabel *lab = g.getEventLabel(Event(r.thread, storeView[r.thread]));
 				if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab)) {
 					if (rLab->getRf() != w) {
-						storeView[w.thread]++;
+						storeView[w.thread] = std::min(storeView[w.thread] + 1,
+									       int(g.getThreadSize(w.thread)) - 1);
 						break;
 					}
 				}

@@ -734,7 +734,7 @@ bool GenMCDriver::shouldCheckPers(ProgramPoint p)
 bool GenMCDriver::isHbBefore(Event a, Event b, ProgramPoint p /* = step */)
 {
 	if (shouldCheckCons(p) == false)
-		return getGraph().getEventLabel(a)->getHbView().contains(b);
+		return getGraph().getEventLabel(b)->getHbView().contains(a);
 
 	return getGraph().getGlobalRelation(ExecutionGraph::RelationId::hb)(a, b);
 }
@@ -1621,8 +1621,8 @@ void GenMCDriver::visitUnlock(const llvm::GenericValue *addr, llvm::Type *typ)
 	return;
 }
 
-llvm::GenericValue GenMCDriver::visitMalloc(uint64_t allocSize, Storage s,
-					    AddressSpace spc)
+llvm::GenericValue GenMCDriver::visitMalloc(uint64_t allocSize, unsigned int alignment,
+					    Storage s, AddressSpace spc)
 {
 	const auto &g = getGraph();
 	auto *EE = getEE();
@@ -1639,7 +1639,7 @@ llvm::GenericValue GenMCDriver::visitMalloc(uint64_t allocSize, Storage s,
 	}
 
 	/* Get a fresh address and also track this allocation */
-	allocBegin.PointerVal = EE->getFreshAddr(allocSize, s, spc);
+	allocBegin.PointerVal = EE->getFreshAddr(allocSize, alignment, s, spc);
 
 	/* Add a relevant label to the graph and return the new address */
 	Event pos = EE->getCurrentPosition();
@@ -1863,12 +1863,14 @@ const WriteLabel *GenMCDriver::completeRevisitedRMW(const ReadLabel *rLab)
 {
 	const auto &g = getGraph();
 	auto *EE = getEE();
-	auto rfVal = getWriteValue(rLab->getRf(), rLab->getAddr(), rLab->getType());
 
 	const WriteLabel *sLab = nullptr;
 	std::unique_ptr<WriteLabel> wLab = nullptr;
 	if (auto *faiLab = llvm::dyn_cast<FaiReadLabel>(rLab)) {
 		llvm::GenericValue result;
+		/* Need to get the rf value within the if, as rLab might be a disk op,
+		 * and we cannot get the value in that case (but it will also not be an RMW)  */
+		auto rfVal = getWriteValue(rLab->getRf(), rLab->getAddr(), rLab->getType());
 		EE->executeAtomicRMWOperation(result, rfVal, faiLab->getOpVal(),
 					      faiLab->getOp());
 		EE->setCurrentDeps(nullptr, nullptr, nullptr, nullptr, nullptr);
@@ -1879,6 +1881,7 @@ const WriteLabel *GenMCDriver::completeRevisitedRMW(const ReadLabel *rLab)
 						     faiLab->getType(),
 						     result));
 	} else if (auto *casLab = llvm::dyn_cast<CasReadLabel>(rLab)) {
+		auto rfVal = getWriteValue(rLab->getRf(), rLab->getAddr(), rLab->getType());
 		if (EE->compareValues(casLab->getType(), casLab->getExpected(), rfVal)) {
 			EE->setCurrentDeps(nullptr, nullptr, nullptr, nullptr, nullptr);
 			wLab = std::move(createCasStoreLabel(casLab->getThread(),
@@ -2379,6 +2382,8 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream &s,
 		return s << "Attempt to free non-allocated memory";
 	case GenMCDriver::DE_DoubleFree:
 		return s << "Double-free error";
+	case GenMCDriver::DE_Allocation:
+		return s << "Allocation error";
 	case GenMCDriver::DE_UninitializedMem:
 		return s << "Attempt to read from uninitialized memory";
 	case GenMCDriver::DE_AccessNonMalloc:

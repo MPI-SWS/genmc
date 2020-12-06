@@ -1,0 +1,8 @@
+Error detected: Allocation error!
+Event (0, 0) in graph:
+<-1, 0> main:
+	(0, 0): B
+
+Trace to (0, 0):
+Invalid size in malloc()
+Number of complete executions explored: 0

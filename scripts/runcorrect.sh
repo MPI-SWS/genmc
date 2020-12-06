@@ -218,7 +218,10 @@ do
     if test -n "${fastrun}"
     then
 	case "${dir##*/}" in
-	    "big1"|"big2"|"fib_bench"|"lastzero") continue;;
+	    "big1"|"big2"|"fib_bench"|"lastzero"|\
+		"pord-wr+wr-N-unord"|\
+		"pord-wr+wr-N-join-thr"|\
+		"pord-rd-wr+wr-N-cont")           continue;;
 	    ${TESTFILTER})                                ;;
 	    *)                                    continue;;
 	esac

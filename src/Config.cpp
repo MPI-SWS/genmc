@@ -228,10 +228,10 @@ void Config::checkConfigOptions() const
 	}
 
 	/* Check debugging options */
-	if (schedulePolicy != SchedulePolicy::random && clPrintRandomScheduleSeed) {
+	if (clSchedulePolicy != SchedulePolicy::random && clPrintRandomScheduleSeed) {
 		WARN("--print-random-schedule-seed used without -schedule-policy=random.\n");
 	}
-	if (schedulePolicy != SchedulePolicy::random && clRandomScheduleSeed != "") {
+	if (clSchedulePolicy != SchedulePolicy::random && clRandomScheduleSeed != "") {
 		WARN("--random-schedule-seed used without -schedule-policy=random.\n");
 	}
 }

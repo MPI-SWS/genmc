@@ -217,9 +217,12 @@ bool Interpreter::isShared(const void *addr)
 }
 
 /* Returns a fresh address to be used from the interpreter */
-void *Interpreter::getFreshAddr(unsigned int size, Storage s, AddressSpace spc)
+void *Interpreter::getFreshAddr(unsigned int size, int alignment, Storage s, AddressSpace spc)
 {
-	return alloctor.allocate(size, s, spc);
+	/* The arguments to getFreshAddr() need to be well-formed;
+	 * make sure the alignment is positive and a power of 2 */
+	BUG_ON(alignment <= 0 || (alignment & (alignment - 1)) != 0);
+	return alloctor.allocate(size, alignment, s, spc);
 }
 
 void Interpreter::trackAlloca(const void *addr, unsigned int size,

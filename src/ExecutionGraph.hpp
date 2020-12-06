@@ -223,7 +223,7 @@ public:
 	Event getPendingLibRead(const LibReadLabel *lab) const;
 
 	virtual std::unique_ptr<VectorClock> getRevisitView(const ReadLabel *rLab,
-							    const WriteLabel *wLab) const;
+							    const EventLabel *wLab) const;
 
 	/* Returns a list of loads that can be revisited */
 	virtual std::vector<Event> getRevisitable(const WriteLabel *sLab) const;

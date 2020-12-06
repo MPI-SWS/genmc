@@ -38,6 +38,7 @@ enum class InternalFunctions {
 	FN_Assume,
 	FN_NondetInt,
 	FN_Malloc,
+	FN_MallocAligned,
 	FN_Free,
 	FN_ThreadSelf,
 	FN_ThreadCreate,
