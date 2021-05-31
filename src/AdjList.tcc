@@ -71,32 +71,39 @@ const std::vector<int> &AdjList<T, H>::getInDegrees() const
 }
 
 template<typename T, typename H>
-template<typename FC, typename FN, typename FE>
+template<typename FVB, typename FET, typename FEB,
+	 typename FEF, typename FVE>
 void AdjList<T, H>::dfsUtil(NodeId i, Timestamp &t, std::vector<NodeStatus> &m,
-			 std::vector<NodeId> &p, std::vector<Timestamp> &d,
-			 std::vector<Timestamp> &f,
-			 FC&& onCycle, FN&& onNeighbor, FE&& atExplored)
+			    std::vector<NodeId> &p, std::vector<Timestamp> &d,
+			    std::vector<Timestamp> &f, FVB&& atEntryV, FET&& atTreeE,
+			    FEB&& atBackE, FEF&& atForwE, FVE&& atExitV) const
 {
 	m[i] = NodeStatus::entered;
 	d[i] = ++t;
+	atEntryV(i, t, m, p, d, f);
 	for (auto &j : nodeSucc[i]) {
 		if (m[j] == NodeStatus::unseen) {
 			p[j] = i;
-			dfsUtil(j, t, m, p, d, f, onCycle, onNeighbor, atExplored);
+			dfsUtil(j, t, m, p, d, f, atEntryV, atTreeE,
+				atBackE, atForwE, atExitV);
+			atTreeE(i, j, t, m, p, d, f);
 		} else if (m[j] == NodeStatus::entered) {
-			onCycle(i, t, m, p, d, f);
+			atBackE(i, j, t, m, p, d, f);
+		} else {
+			atForwE(i, j, t, m, p, d, f);
 		}
-		onNeighbor(i, j, t, m, p, d, f);
 	}
 	m[i] = NodeStatus::left;
 	f[i] = ++t;
-	atExplored(i, t, m, p, d, f);
+	atExitV(i, t, m, p, d, f);
 	return;
 }
 
 template<typename T, typename H>
-template<typename FC, typename FN, typename FE, typename FEND>
-void AdjList<T, H>::dfs(FC&& onCycle, FN&& onNeighbor, FE&& atExplored, FEND&& atEnd)
+template<typename FVB, typename FET, typename FEB,
+	 typename FEF, typename FVE, typename FEND>
+void AdjList<T, H>::dfs(FVB&& atEntryV, FET&& atTreeE, FEB&& atBackE,
+			FEF&& atForwE, FVE&& atExitV, FEND&& atEnd) const
 {
 	Timestamp t = 0;
 	std::vector<NodeStatus> m(nodeSucc.size(), NodeStatus::unseen); /* Node status */
@@ -106,9 +113,26 @@ void AdjList<T, H>::dfs(FC&& onCycle, FN&& onNeighbor, FE&& atExplored, FEND&& a
 
 	for (auto i = 0u; i < nodeSucc.size(); i++) {
 		if (m[i] == NodeStatus::unseen)
-			dfsUtil(i, t, m, p, d, f, onCycle,
-				onNeighbor, atExplored);
+			dfsUtil(i, t, m, p, d, f, atEntryV, atTreeE,
+				atBackE, atForwE, atExitV);
 	}
+	atEnd(t, m, p, d, f);
+	return;
+}
+
+template<typename T, typename H>
+template<typename FVB, typename FET, typename FEB,
+	 typename FEF, typename FVE, typename FEND>
+void AdjList<T, H>::visitReachable(T a, FVB&& atEntryV, FET&& atTreeE, FEB&& atBackE,
+				   FEF&& atForwE, FVE&& atExitV, FEND&& atEnd) const
+{
+	Timestamp t = 0;
+	std::vector<NodeStatus> m(nodeSucc.size(), NodeStatus::unseen); /* Node status */
+	std::vector<NodeId> p(nodeSucc.size(), -42);                    /* Node parent */
+	std::vector<Timestamp> d(nodeSucc.size(), 0);                   /* First visit */
+	std::vector<Timestamp> f(nodeSucc.size(), 0);                   /* Last visit */
+
+	dfsUtil(getIndex(a), t, m, p, d, f, atEntryV, atTreeE, atBackE, atForwE, atExitV);
 	atEnd(t, m, p, d, f);
 	return;
 }
@@ -120,18 +144,25 @@ std::vector<T> AdjList<T, H>::topoSort()
 
 	dfs([&](NodeId i, Timestamp &t, std::vector<NodeStatus> &m,
 		std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		std::vector<Timestamp> &f){ BUG(); }, /* onCycle */
+		std::vector<Timestamp> &f){ return; }, /* atEntryV */
 	    [&](NodeId i, NodeId j, Timestamp &t, std::vector<NodeStatus> &m,
 		std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		std::vector<Timestamp> &f){ return; }, /* onNeighbor*/
+		std::vector<Timestamp> &f){ return; }, /* atTreeE */
+	    [&](NodeId i, NodeId j, Timestamp &t, std::vector<NodeStatus> &m,
+		std::vector<NodeId> &p, std::vector<Timestamp> &d,
+		std::vector<Timestamp> &f){ BUG(); }, /* atBackE */
+	    [&](NodeId i, NodeId j, Timestamp &t, std::vector<NodeStatus> &m,
+		std::vector<NodeId> &p, std::vector<Timestamp> &d,
+		std::vector<Timestamp> &f){ return; }, /* atForwE*/
 	    [&](NodeId i, Timestamp &t, std::vector<NodeStatus> &m,
 		std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		std::vector<Timestamp> &f){ /* atExplored */
+		std::vector<Timestamp> &f){ /* atExitV */
 		    sort.push_back(elems[i]);
+		    return;
 	    },
 	    [&](Timestamp &t, std::vector<NodeStatus> &m,
 		std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		std::vector<Timestamp> &f){ return; } /* atEnd*/);
+		std::vector<Timestamp> &f){ return; }); /* atEnd */
 
 	std::reverse(sort.begin(), sort.end());
 	return sort;
@@ -251,10 +282,16 @@ void AdjList<T, H>::transClosure()
 
 	dfs([&](NodeId i, Timestamp &t, std::vector<NodeStatus> &m,
 		std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		std::vector<Timestamp> &f){ return; }, /* onCycle */
+		std::vector<Timestamp> &f){ return; }, /* atEntryV */
 	    [&](NodeId i, NodeId j, Timestamp &t, std::vector<NodeStatus> &m,
 		std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		std::vector<Timestamp> &f){ return; }, /* onNeighbor*/
+		std::vector<Timestamp> &f){ return; }, /* atTreeE */
+	    [&](NodeId i, NodeId j, Timestamp &t, std::vector<NodeStatus> &m,
+		std::vector<NodeId> &p, std::vector<Timestamp> &d,
+		std::vector<Timestamp> &f){ return; }, /* atBackE*/
+	    [&](NodeId i, NodeId j, Timestamp &t, std::vector<NodeStatus> &m,
+		std::vector<NodeId> &p, std::vector<Timestamp> &d,
+		std::vector<Timestamp> &f){ return; }, /* atForwE*/
 	    [&](NodeId i, Timestamp &t, std::vector<NodeStatus> &m,
 		std::vector<NodeId> &p, std::vector<Timestamp> &d,
 		std::vector<Timestamp> &f){
@@ -262,7 +299,7 @@ void AdjList<T, H>::transClosure()
 			    transC[i] |= transC[j];
 			    transC[i].set(j);
 		    }
-	    }, /* atExplored*/
+	    }, /* atExitV*/
 	    [&](Timestamp &t, std::vector<NodeStatus> &m,
 		std::vector<NodeId> &p, std::vector<Timestamp> &d,
 		std::vector<Timestamp> &f){ return; }); /* atEnd */

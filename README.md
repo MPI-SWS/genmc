@@ -6,15 +6,109 @@ Generic Model Checking for C Programs
 GenMC is a stateless model checker for C programs that works on the
 level of LLVM Intermediate Representation.
 
+This repository mirrors an internal repository and is only updated periodically.
+For changes between different versions please refer to the CHANGELOG.
+
 Author: Michalis Kokologiannakis.
 
-* [License](#license)
 * [Getting GenMC](#getting-genmc)
-* [Dependencies](#dependencies)
-* [Installing](#installing)
-* [Troubleshooting](#troubleshooting)
 * [Usage](#usage)
-* [Notes](#notes)
+* [Troubleshooting](#troubleshooting)
+* [License](#license)
+* [Contact](#contact)
+
+<a name="getting-genmc">Getting GenMC</a>
+-----------------------------------------
+
+### Using Docker
+
+To pull a container containing GenMC from [Docker Hub](https://hub.docker.com)
+please issue the following command:
+
+		docker pull genmc/genmc
+
+### Building from source
+
+#### Dependencies
+
+The LLVM versions currently supported are: 3.8.1, 4.0.1,
+6.0.1, 7.0.1, 8.0.1, 9.0.1, 10.0.1, 11.0.0.
+
+##### GNU/Linux
+
+In order to use the tool on a Debian-based installation, you will need the
+following packages:
+
+		autoconf  automake  clang  libclang-dev  llvm  llvm-dev  libffi-dev
+		zlib1g-dev libedit-dev
+
+##### Max OS X
+
+Using `brew`, the following packages are necessary:
+
+		autoconf automake llvm libffi
+
+#### Installing
+
+##### GNU/Linux
+
+For a default build issue:
+
+		autoreconf --install
+		./configure
+		make
+
+This will leave the `genmc` executable in the `src` directory.
+You can either run it from there (as in the examples below), or issue
+`make install`.
+
+Alternatively, the following following command will build the `genmc`
+executable in parallel and will also run a subset of all the tests
+that come with the system to see if the system was built correctly or
+not:
+
+		make -j ctest
+
+##### Mac OS X
+
+For a default build issue:
+
+		autoreconf --install
+		./configure AR=llvm-ar
+		make
+
+<a name="usage">Usage</a>
+-------------------------
+
+* To see a list of available options run:
+
+		./src/genmc --help
+
+* To run a particular testcase run:
+
+		./src/genmc [options] <file>
+
+* For more detailed usage examples please refer to the [manual](doc/manual.pdf).
+
+
+<a name="troubleshooting">Troubleshooting</a>
+---------------------------------------------
+
+* Undefined references to symbols that involve types `std::__cxx11` during linking:
+
+	This probably indicates that you are using an old version of LLVM with a new
+	version of libstdc++. Configuring with the following flags should fix the problem:
+
+			CXXFLAGS="-D_GLIBCXX_USE_CXX11_ABI=0" ./configure --with-llvm=LLVM_PATH
+
+* Linking problems under Arch Linux:
+
+    Arch Linux does not provide the `libclang*.a` files required for linking
+	against `clang` libraries. In order to for linking to succeed, please
+	change the last line in `src/Makefile.am` to the following:
+
+			genmc_LDADD = libgenmc.a -lclang-cpp
+
 
 <a name="license">License</a>
 -----------------------------
@@ -36,93 +130,14 @@ file for details on the University of Illinois/NCSA Open Source License.
 		src/Execution.cpp
 		src/ExternalFunctions.cpp
 
-In addition, the files within the `include` directory are licensed
-under their own licenses; please see the respective headers for more
-information.
+Additionally, the files within the `include` directory are licensed
+under their own licenses.
 
-<a name="getting-genmc">Getting GenMC</a>
------------------------------------------
+Please see the respective header for more information on a specific
+file's license.
 
-You can obtain GenMC either by cloning this repository and building
-from source (see below) or pull a container containing GenMC from
-[Docker Hub](https://hub.docker.com) with the following command:
 
-		docker pull genmc/genmc
-
-<a name="dependencies">Dependencies</a>
----------------------------------------
-
-The LLVM versions currently supported are: 3.8.1, 4.0.1,
-6.0.1, 7.0.1, 8.0.1, 9.0.1, 10.0.1, 11.0.0.
-
-### GNU/Linux
-
-In order to use the tool on a Debian-based installation, you will need the
-following packages:
-
-		autoconf  automake  clang  libclang-dev  llvm  llvm-dev  libffi-dev
-		zlib1g-dev libedit-dev
-
-### Max OS X
-
-Using `brew`, the following packages are necessary:
-
-		autoconf automake llvm libffi
-
-<a name="installing">Installing</a>
-----------------------------------
-
-### GNU/Linux
-
-For a default build issue:
-
-		autoreconf --install
-		./configure
-		make
-
-This will leave the `genmc` executable in the `src` directory.
-You can either run it from there (as in the examples below), or issue
-`make install`.
-
-Alternatively, the following following command will build the `genmc`
-executable in parallel and will also run a subset of all the tests
-that come with the system to see if the system was built correctly or
-not:
-
-		make -j ftest
-
-### Mac OS X
-
-For a default build issue:
-
-		autoreconf --install
-		./configure AR=llvm-ar
-		make
-
-<a name="troubleshooting">Troubleshooting</a>
----------------------------------------------
-
-* Undefined references to symbols that involve types `std::__cxx11` during linking:
-
-	This probably indicates that you are using an old version of LLVM with a new
-	version of libstdc++. Configuring with the following flags should fix the problem:
-
-			CXXFLAGS="-D_GLIBCXX_USE_CXX11_ABI=0" ./configure --with-llvm=LLVM_PATH
-
-<a name="usage">Usage</a>
--------------------------
-
-* To see a list of available options run:
-
-		./src/genmc --help
-
-* To run a particular testcase run:
-
-		./src/genmc [options] <file>
-
-* For more detailed usage examples please refer to the [manual](doc/manual.pdf).
-
-<a name="notes">Notes</a>
+<a name="contact">Contact</a>
 ------------------------
 
 For feedback, questions, and bug reports please send an e-mail to

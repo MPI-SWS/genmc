@@ -21,15 +21,8 @@
 #include "config.h"
 
 #include "LLVMModule.hpp"
-#include "DeclareAssumePass.hpp"
-#include "DeclareEndLoopPass.hpp"
-#include "DefineLibcFunsPass.hpp"
 #include "Error.hpp"
-#include "IntrinsicLoweringPass.hpp"
-#include "LoopUnrollPass.hpp"
-#include "MDataCollectionPass.hpp"
-#include "PromoteMemIntrinsicPass.hpp"
-#include "SpinAssumePass.hpp"
+#include "Passes.hpp"
 #include <llvm/InitializePasses.h>
 #if defined(HAVE_LLVM_PASSMANAGER_H)
 # include <llvm/PassManager.h>
@@ -49,10 +42,9 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/IPO.h>
+#include <llvm/Transforms/Scalar.h>
 #if defined(HAVE_LLVM_TRANSFORMS_UTILS_H)
-# include <llvm/Transforms/Utils.h>
-#else
-# include <llvm/Transforms/Scalar.h>
+#include <llvm/Transforms/Utils.h>
 #endif
 
 #ifdef LLVM_PASSMANAGER_TEMPLATE
@@ -106,8 +98,7 @@ namespace LLVMModule {
 		return std::unique_ptr<llvm::Module>(mod);
 	}
 
-	bool transformLLVMModule(llvm::Module &mod, llvm::VariableInfo &VI,
-				 llvm::FsInfo &FI, bool spinAssume, int unroll)
+	bool transformLLVMModule(llvm::Module &mod, const Config *conf, ModuleInfo &MI)
 	{
 		llvm::PassRegistry &Registry = *llvm::PassRegistry::getPassRegistry();
 		PassManager OptPM, BndPM;
@@ -127,35 +118,39 @@ namespace LLVMModule {
 		llvm::initializeInstrumentation(Registry);
 		llvm::initializeTarget(Registry);
 
-		OptPM.add(new DeclareAssumePass());
-		OptPM.add(new DefineLibcFunsPass());
-		OptPM.add(new MDataCollectionPass(VI, FI));
-		OptPM.add(new PromoteMemIntrinsicPass());
-#ifdef LLVM_EXECUTIONENGINE_DATALAYOUT_PTR
-		OptPM.add(new IntrinsicLoweringPass(*mod.getDataLayout()));
-#else
-		OptPM.add(new IntrinsicLoweringPass(mod.getDataLayout()));
-#endif
-
+		OptPM.add(createDeclareInternalsPass());
+		OptPM.add(createDefineLibcFunsPass());
+		OptPM.add(createMDataCollectionPass(MI.varInfo, MI.fsInfo));
+		OptPM.add(createPromoteMemIntrinsicPass());
+		OptPM.add(createIntrinsicLoweringPass(mod));
 		OptPM.add(llvm::createPromoteMemoryToRegisterPass());
 		OptPM.add(llvm::createDeadArgEliminationPass());
 
 		modified = OptPM.run(mod);
 
-		if (spinAssume)
-			BndPM.add(new SpinAssumePass());
-		BndPM.add(new DeclareEndLoopPass());
-		if (unroll >= 0)
-			BndPM.add(new LoopUnrollPass(unroll));
+		BndPM.add(createBisimilarityCheckerPass());
+		if (conf->codeCondenser && !conf->checkLiveness)
+			BndPM.add(createCodeCondenserPass());
+		if (conf->loopJumpThreading)
+			BndPM.add(createLoopJumpThreadingPass());
+		BndPM.add(createCallInfoCollectionPass());
+		if (conf->spinAssume)
+			BndPM.add(createSpinAssumePass(conf->checkLiveness));
+		if (conf->unroll >= 0)
+			BndPM.add(createLoopUnrollPass(conf->unroll));
 
 		modified |= BndPM.run(mod);
+
+		/* The last pass we run is the load-annotation pass */
+		if (conf->loadAnnot)
+			OptPM.add(createLoadAnnotationPass(MI.annotInfo));
 		modified |= OptPM.run(mod);
 
 		assert(!llvm::verifyModule(mod, &llvm::dbgs()));
 		return modified;
 	}
 
-	void printLLVMModule(llvm::Module &mod, std::string &out)
+	void printLLVMModule(llvm::Module &mod, const std::string &out)
 	{
 		PassManager PM;
 #ifdef LLVM_RAW_FD_OSTREAM_ERR_STR

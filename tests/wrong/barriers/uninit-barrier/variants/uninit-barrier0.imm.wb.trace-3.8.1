@@ -1,0 +1,10 @@
+Error detected: Attempt to read from uninitialized memory!
+Event (0, 1) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): Uar (b, 0) [BOTTOM] L.11
+
+Trace to (0, 1):
+[main] uninit-barrier0.c: 11: pthread_barrier_wait(&b);
+Called barrier_wait() on uninitialized barrier!
+Number of complete executions explored: 0

@@ -25,29 +25,79 @@
 #include <string>
 #include <unordered_map>
 
+/* Used to inform the driver about possible special attributes of the
+ * instruction being interpreted */
+enum class InstAttr {
+	IA_None,
+
+	IA_Fai,
+	IA_NoRetFai,
+	IA_BPost,
+	IA_Cas,
+	IA_Lock,
+	IA_Trylock,
+	IA_RMWEnd,
+
+	IA_Unlock,
+	IA_BInit,
+	IA_BWait,
+	IA_BDestroy,
+
+	IA_DskMdata,
+	IA_DskDirOp,
+	IA_DskJnlOp,
+	IA_DskJnlEnd
+};
+
+inline bool isRMWAttr(InstAttr attr) { return attr >= InstAttr::IA_Fai && attr <= InstAttr::IA_RMWEnd; }
+inline bool isFAIAttr(InstAttr attr) { return attr >= InstAttr::IA_Fai && attr <= InstAttr::IA_BPost; }
+inline bool isLockAttr(InstAttr attr) { return attr == InstAttr::IA_Lock; }
+inline bool isTrylockAttr(InstAttr attr) { return attr == InstAttr::IA_Trylock; }
+inline bool isBPostAttr(InstAttr attr) { return attr == InstAttr::IA_BPost; }
+inline bool isBWaitAttr(InstAttr attr) { return attr == InstAttr::IA_BWait; }
+inline bool isDskAttr(InstAttr attr) { return attr >= InstAttr::IA_DskMdata && attr <= InstAttr::IA_DskJnlEnd; }
+
+/* Pers: Journaling mount options */
+enum class JournalDataFS { writeback, ordered, journal };
+
 /* Types of allocations in the interpreter */
 enum class AddressSpace { AS_User, AS_Internal };
 
 /* Storage types */
 enum class Storage { ST_Static, ST_Automatic, ST_Heap, ST_StorageLast };
 
-/* Modeled functions */
+/* Modeled functions -- (CAUTION: Order matters) */
 enum class InternalFunctions {
 	FN_AssertFail,
-	FN_EndLoop,
+	FN_LoopBegin,
+	FN_SpinStart,
+
+	FN_SpinEnd,
+	FN_FaiZNESpinEnd,
+	FN_LockZNESpinEnd,
 	FN_Assume,
+	/* Assume calls */
+	FN_EndLoop,
 	FN_NondetInt,
-	FN_Malloc,
-	FN_MallocAligned,
-	FN_Free,
 	FN_ThreadSelf,
+	FN_NoSideEffectsLast,
+	/* No side effects */
+	FN_AtomicRmwNoRet,
 	FN_ThreadCreate,
 	FN_ThreadJoin,
 	FN_ThreadExit,
+	FN_Malloc,
+	FN_MallocAligned,
+	FN_Free,
 	FN_MutexInit,
 	FN_MutexLock,
 	FN_MutexUnlock,
 	FN_MutexTrylock,
+	FN_MutexDestroy,
+	FN_BarrierInit,
+	FN_BarrierWait,
+	FN_BarrierDestroy,
+
 	FN_OpenFS,
 	FN_CreatFS,
 	FN_RenameFS,
@@ -55,10 +105,12 @@ enum class InternalFunctions {
 	FN_UnlinkFS,
 	FN_TruncateFS,
 	FN_LastInodeFS,
+	/* Inode ops */
 	FN_WriteFS,
 	FN_PwriteFS,
 	FN_PersBarrierFS,
 	FN_LastInvRecFS,
+	/* Invalid rec ops */
 	FN_ReadFS,
 	FN_PreadFS,
 	FN_FsyncFS,
@@ -66,17 +118,69 @@ enum class InternalFunctions {
 	FN_LseekFS,
 	FN_CloseFS,
 	FN_LastFS,
+	/* FS ops */
+
+	FN_SmpFenceLKMM,
+	FN_RCUReadLockLKMM,
+	FN_RCUReadUnlockLKMM,
+	FN_SynchronizeRCULKMM,
+	/* LKMM ops */
 };
 
-#define IS_INTERNAL_FUNCTION(name) internalFunNames.count(name)
-#define IS_FS_FN_CODE(code)						\
-	(code >= InternalFunctions::FN_OpenFS && code <= InternalFunctions::FN_LastFS)
-#define IS_FS_INODE_FN_CODE(code)					\
-	(code >= InternalFunctions::FN_OpenFS && code <= InternalFunctions::FN_LastInodeFS)
-#define IS_FS_INVALID_REC_CODE(code)					\
-	(code >= InternalFunctions::FN_CreatFS && code <= InternalFunctions::FN_LastInvRecFS)
-
 extern const std::unordered_map<std::string, InternalFunctions> internalFunNames;
+
+inline bool isInternalFunction(const std::string &name)
+{
+	return internalFunNames.count(name);
+}
+
+inline bool isCleanInternalFunction(const std::string &name)
+{
+	if (!isInternalFunction(name))
+		return false;
+
+	auto &code = internalFunNames.at(name);
+	return code >= InternalFunctions::FN_AssertFail && code <= InternalFunctions::FN_NoSideEffectsLast;
+}
+
+inline bool isErrorFunction(const std::string &name)
+{
+	return isInternalFunction(name) && internalFunNames.at(name) == InternalFunctions::FN_AssertFail;
+}
+
+inline bool isAssumeFunction(const std::string &name)
+{
+	if (!isInternalFunction(name))
+		return false;
+
+	auto &code = internalFunNames.at(name);
+	return code >= InternalFunctions::FN_SpinEnd && code <= InternalFunctions::FN_Assume;
+}
+
+inline bool isMutexCode(InternalFunctions code)
+{
+	return (code >= InternalFunctions::FN_MutexInit && code <= InternalFunctions::FN_MutexDestroy);
+}
+
+inline bool isBarrierCode(InternalFunctions code)
+{
+	return (code >= InternalFunctions::FN_BarrierInit && code <= InternalFunctions::FN_BarrierDestroy);
+}
+
+inline bool isFsCode(InternalFunctions code)
+{
+	return (code >= InternalFunctions::FN_OpenFS && code <= InternalFunctions::FN_LastFS);
+}
+
+inline bool isFsInodeCode(InternalFunctions code)
+{
+	return (code >= InternalFunctions::FN_OpenFS && code <= InternalFunctions::FN_LastInodeFS);
+}
+
+inline bool isFsInvalidRecCode(InternalFunctions code)
+{
+	return (code >= InternalFunctions::FN_CreatFS && code <= InternalFunctions::FN_LastInvRecFS);
+}
 
 /* Some basic system error codes for the user -- should match include/errno.h */
 enum class SystemError {

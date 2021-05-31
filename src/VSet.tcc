@@ -71,7 +71,7 @@ int VSet<T>::count(const T &el) const
 }
 
 template<typename T>
-std::pair<typename VSet<T>::iterator, bool> VSet<T>::insert(const T &el)
+std::pair<typename VSet<T>::const_iterator, bool> VSet<T>::insert(const T &el)
 {
 	auto it = std::lower_bound(begin(), end(), el);
 	if (it == end() || *it != el)
@@ -172,7 +172,6 @@ void VSet<T>::insert(ITER begin, ITER end)
 	}
 }
 
-
 template<typename T>
 int VSet<T>::erase(const T &el)
 {
@@ -193,26 +192,26 @@ int VSet<T>::erase(const VSet<T> &s)
 		return 0;
 
 	auto erased = 0;
-	auto a = begin();
-	auto b = s.begin();
-	auto aMov = a.begin(); /* Next position of this set to be filled */
+	auto a = 0; /* index in this */
+	auto b = 0; /* index in other */
+	auto aMov = 0; /* Next position of this set to be filled */
 
 	/* While iterating over the two sets, fill a appropriately */
-	while (a != end() && b != s.end()) {
+	while (a < size() && b < s.size()) {
 		/*
 		 * This element of a should be erased. aMov is left unchanged; *
 		 * it is pointing to the next position that needs to be filled.
 		 * We will iterate over a and b to find the appropriate element
 		 * to fill *aMov (this should be an element of a)
 		 */
-		if (*a == *b) {
+		if (vset_[a] == s.vset_[b]) {
 			++a;
 			++b;
 			++erased;
-		} else if (*a < *b) {
+		} else if (vset_[a] < s.vset_[b]) {
 			/* This element of a should remain in the set */
 			if (aMov != a)
-				*aMov = *a;
+				vset_[aMov] = vset_[a];
 			++a;
 			++aMov;
 		} else {
@@ -224,8 +223,8 @@ int VSet<T>::erase(const VSet<T> &s)
 	/* If we stopped whilst trying to find the next element for aMov... */
 	if (aMov != a) {
 		/* If a is not over copy the remaining elements */
-		while (a != end()) {
-			*aMov = *a;
+		while (a < size()) {
+			vset_[aMov] = vset_[a];
 			++a;
 			++aMov;
 		}

@@ -19,6 +19,8 @@
  */
 
 #include "PersistencyChecker.hpp"
+#include "CoherenceCalculator.hpp"
+#include "ExecutionGraph.hpp"
 
 /************************************************************
  ** Helper functions
@@ -64,7 +66,7 @@ std::vector<Event> getDskWriteOperations(const ExecutionGraph &g)
  ***********************************************************/
 
 /* TODO: Optimize */
-void PersistencyChecker::calcMemAccessPbView(MemAccessLabel *mLab)
+void PersistencyChecker::calcDskMemAccessPbView(MemAccessLabel *mLab)
 {
 	auto &g = getGraph();
 	auto &porf = mLab->getPorfView();
@@ -78,6 +80,7 @@ void PersistencyChecker::calcMemAccessPbView(MemAccessLabel *mLab)
 		ordRange = wLab->getOrdDataRange();
 
 	BUG_ON(prefix.empty()); /* Must run after plain views calc */
+	BUG_ON(!llvm::isa<DskAccessLabel>(mLab));
 	for (auto i = 0u; i < prefix.size(); i++) {
 		auto lim = (i == mLab->getThread()) ? prefix[i] - 1 : prefix[i];
 		for (auto j = 1u; j <= lim; j++) {
@@ -160,6 +163,19 @@ void PersistencyChecker::calcPbarrierPbView(DskPbarrierLabel *fLab)
 		pb[i] = hb[i];
 	fLab->setPbView(std::move(pb));
 	return;
+}
+
+void PersistencyChecker::calcDskFencePbView(FenceLabel *fLab)
+{
+	BUG_ON(!llvm::isa<DskAccessLabel>(fLab));
+	if (auto *fsLab = llvm::dyn_cast<DskFsyncLabel>(fLab))
+		calcFsyncPbView(fsLab);
+	else if (auto *sLab = llvm::dyn_cast<DskSyncLabel>(fLab))
+		calcSyncPbView(sLab);
+	else if (auto *pbLab = llvm::dyn_cast<DskPbarrierLabel>(fLab))
+		calcPbarrierPbView(pbLab);
+	else
+		BUG();
 }
 
 /************************************************************

@@ -21,7 +21,9 @@
 #ifndef __PERSISTENCY_CHECKER_HPP__
 #define __PERSISTENCY_CHECKER_HPP__
 
-#include "ExecutionGraph.hpp"
+#include "Calculator.hpp"
+
+class ExecutionGraph;
 
 /*******************************************************************************
  **                    PersistencyChecker Class
@@ -40,10 +42,8 @@ public:
 		: execGraph(g), blockSize(blockSize) {}
 
 	/* Helpers that calculate pb-before events for disk accesses */
-	void calcMemAccessPbView(MemAccessLabel *mLab);
-	void calcFsyncPbView(DskFsyncLabel *fLab);
-	void calcSyncPbView(DskSyncLabel *fLab);
-	void calcPbarrierPbView(DskPbarrierLabel *fLab);
+	void calcDskMemAccessPbView(MemAccessLabel *mLab);
+	void calcDskFencePbView(FenceLabel *fLab);
 
 	/* Returns whether the recovery relation is acyclic */
 	bool isRecAcyclic();
@@ -58,6 +58,11 @@ private:
 
 	/* Returns a reference to the pb relation */
 	Calculator::GlobalRelation &getPbRelation() { return pbRelation; }
+
+	/* Helpers for view calculation */
+	void calcFsyncPbView(DskFsyncLabel *fLab);
+	void calcSyncPbView(DskSyncLabel *fLab);
+	void calcPbarrierPbView(DskPbarrierLabel *fLab);
 
 	/* Returns true if S is read from a load
 	 * in the recovery routine */

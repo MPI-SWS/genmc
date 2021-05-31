@@ -99,4 +99,13 @@ bool IntrinsicLoweringPass::runOnModule(llvm::Module &M)
 	return modified;
 }
 
+llvm::ModulePass *createIntrinsicLoweringPass(llvm::Module &M)
+{
+#ifdef LLVM_EXECUTIONENGINE_DATALAYOUT_PTR
+	return new IntrinsicLoweringPass(*M.getDataLayout());
+#else
+	return new IntrinsicLoweringPass(M.getDataLayout());
+#endif
+}
+
 char IntrinsicLoweringPass::ID = 42;

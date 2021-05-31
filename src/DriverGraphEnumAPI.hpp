@@ -30,9 +30,6 @@ enum class CheckConsType { approx, full };
 /* Points of the program (at which consistency/persistency can be checked) */
 enum class ProgramPoint { error = 1, exec, step };
 
-/* Pers: Journaling mount options */
-enum class JournalDataFS { writeback, ordered, journal };
-
 #include "InterpreterEnumAPI.hpp"
 
 #endif /* __DRIVER_GRAPH_ENUM_API_HPP__ */

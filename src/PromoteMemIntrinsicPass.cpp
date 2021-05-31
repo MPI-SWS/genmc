@@ -225,4 +225,9 @@ bool PromoteMemIntrinsicPass::runOnModule(Module &M)
 	return modified;
 }
 
+ModulePass *createPromoteMemIntrinsicPass()
+{
+	return new PromoteMemIntrinsicPass();
+}
+
 char PromoteMemIntrinsicPass::ID = 42;

@@ -59,6 +59,11 @@ bool DefineLibcFunsPass::runOnModule(llvm::Module &M)
 	return true;
 }
 
+llvm::ModulePass *createDefineLibcFunsPass()
+{
+	return new DefineLibcFunsPass();
+}
+
 char DefineLibcFunsPass::ID = 42;
 static llvm::RegisterPass<DefineLibcFunsPass> X("define-libc",
 						"Define some standard libc functions.");

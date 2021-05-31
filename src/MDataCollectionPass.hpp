@@ -21,7 +21,8 @@
 #ifndef __MDATA_COLLECTION_PASS_HPP__
 #define __MDATA_COLLECTION_PASS_HPP__
 
-#include "Interpreter.h"
+#include "ModuleInfo.hpp"
+#include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Pass.h>
 #include <llvm/Analysis/LoopPass.h>
@@ -34,10 +35,10 @@ class MDataCollectionPass : public llvm::ModulePass {
 
 public:
 	static char ID;
-	llvm::VariableInfo &VI;
-	llvm::FsInfo &FI;
+	VariableInfo &VI;
+	FsInfo &FI;
 
-	MDataCollectionPass(llvm::VariableInfo &VI, llvm::FsInfo &FI)
+	MDataCollectionPass(VariableInfo &VI, FsInfo &FI)
 		: llvm::ModulePass(ID), VI(VI), FI(FI), collected(false) {}
 
 	virtual bool runOnModule(llvm::Module &M);

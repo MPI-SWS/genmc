@@ -11,7 +11,7 @@ int main()
 {
 	pthread_t t[N];
 
-        pthread_mutex_init(&lock, NULL);
+        /* pthread_mutex_init(&lock, NULL); */
         pthread_mutex_lock(&lock);
         {
 		int i= 0;

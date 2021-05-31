@@ -1,0 +1,35 @@
+Error detected: Attempt to read from uninitialized memory!
+Event (2, 3) conflicts with event (1, 1) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): Wna (l.__private, 0) L.33
+	(0, 2): TC [forks 1] L.35
+	(0, 3): TC [forks 2] L.37
+	(0, 4): E
+<0, 1> thread_1:
+	(1, 0): B
+	(1, 1): Wna (l.__private, -1) L.14
+	(1, 2): Wrlx (x, 1) L.16
+	(1, 3): Wrel (y, 1) L.17
+	(1, 4): E
+<0, 2> thread_2:
+	(2, 0): B
+	(2, 1): Racq (y, 1) [(1, 3)] L.23
+	(2, 2): Rrlx (x, 1) [(1, 2)] L.24
+	(2, 3): Cacq (l.__private, 0) [BOTTOM] L.25
+
+Trace to (2, 3):
+[main] destroyed-mutex0.c: 33: pthread_mutex_init(&l, NULL);
+[main] destroyed-mutex0.c: 35: if (pthread_create(&t1, NULL, thread_1, NULL))
+[thread_1] destroyed-mutex0.c: 14: pthread_mutex_destroy(&l);
+[thread_1] destroyed-mutex0.c: 16: atomic_store_explicit(&x, 1, memory_order_relaxed);
+[thread_1] destroyed-mutex0.c: 17: atomic_store_explicit(&y, 1, memory_order_release);
+[thread_2] destroyed-mutex0.c: 23: if (atomic_load_explicit(&y, memory_order_acquire))
+[thread_2] destroyed-mutex0.c: 24: if (atomic_load_explicit(&x, memory_order_relaxed))
+[thread_2] destroyed-mutex0.c: 25: pthread_mutex_lock(&l);
+Trace to (1, 1):
+[main] destroyed-mutex0.c: 33: pthread_mutex_init(&l, NULL);
+[main] destroyed-mutex0.c: 35: if (pthread_create(&t1, NULL, thread_1, NULL))
+[thread_1] destroyed-mutex0.c: 14: pthread_mutex_destroy(&l);
+Called lock() on destroyed mutex!
+Number of complete executions explored: 1

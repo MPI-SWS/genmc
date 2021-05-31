@@ -20,22 +20,22 @@
 
 #include "DriverFactory.hpp"
 #include "IMMDriver.hpp"
+#include "LKMMDriver.hpp"
 #include "RC11Driver.hpp"
 
 std::unique_ptr<GenMCDriver>
-DriverFactory::create(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Module> mod,
-		      std::vector<Library> &granted, std::vector<Library> &toVerify,
-		      clock_t start)
+DriverFactory::create(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Module> mod, clock_t start)
 {
 	switch (conf->model) {
 	case ModelType::rc11:
 		return std::unique_ptr<RC11Driver>(
-			new RC11Driver(std::move(conf), std::move(mod),
-				       granted, toVerify, start));
+			new RC11Driver(std::move(conf), std::move(mod), start));
 	case ModelType::imm:
 		return std::unique_ptr<IMMDriver>(
-			new IMMDriver(std::move(conf), std::move(mod),
-				      granted, toVerify, start));
+			new IMMDriver(std::move(conf), std::move(mod), start));
+	case ModelType::lkmm:
+		return std::unique_ptr<LKMMDriver>(
+			new LKMMDriver(std::move(conf), std::move(mod), start));
 	default:
 		BUG();
 	}

@@ -40,6 +40,14 @@ struct Event {
 	Event prev() const { return Event(thread, index-1); };
 	Event next() const { return Event(thread, index+1); };
 
+	bool isBetween(Event a, Event b) const {
+		if (a.thread != b.thread)
+			return false;
+		if (this->thread != a.thread)
+			return false;
+		return this->index >= a.index && this->index <= b.index;
+	}
+
 	inline bool operator==(const Event &e) const {
 		return e.index == index && e.thread == thread;
 	}

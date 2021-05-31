@@ -30,6 +30,7 @@ template<class T>
 class VSet {
 
 protected:
+	/* Pre: Set needs to support random_access iterators */
 	using Set = std::vector<T>;
 	Set vset_;
 
@@ -58,18 +59,15 @@ public:
 
 	virtual ~VSet() {};
 
-	using iterator = typename Set::iterator;
 	using const_iterator = typename Set::const_iterator;
-	using reverse_iterator = typename Set::reverse_iterator;
 	using const_reverse_iterator = typename Set::const_reverse_iterator;
 
-	iterator begin() { return vset_.begin(); };
-	iterator end() { return vset_.end(); };
-	const_iterator begin() const { return vset_.begin(); };
-	const_iterator end() const { return vset_.end(); };
+	const_iterator begin() const { return vset_.cbegin(); };
+	const_iterator end() const { return vset_.cend(); };
+	const_reverse_iterator rbegin() const { return vset_.crbegin(); };
+	const_reverse_iterator rend() const { return vset_.crend(); };
 
-
-	std::pair<iterator, bool> insert(const T &t);
+	std::pair<const_iterator, bool> insert(const T &t);
 	int insert(const VSet<T> &s);
 	template<typename ITER>
 	void insert(ITER begin, ITER end);

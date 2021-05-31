@@ -1,0 +1,77 @@
+Error detected: Liveness violation!
+Event (2, 18) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): TC [forks 1] L.45
+	(0, 2): TC [forks 2] L.47
+	(0, 3): E
+<0, 1> thread_1:
+	(1, 0): B
+	(1, 1): Wsc (p1, 0) L.13
+	(1, 2): LOOP_BEGIN L.14
+	(1, 3): SPIN_START
+	(1, 4): Wsc (p1, 1) L.15
+	(1, 5): SPIN_START
+	(1, 6): Rsc (p2, 0) [(2, 1)] L.16
+	(1, 7): Wsc (x, 1) L.19
+	(1, 8): Wsc (p1, 0) L.21
+	(1, 9): SPIN_START
+	(1, 10): Wsc (p1, 1) L.15
+	(1, 11): SPIN_START
+	(1, 12): Rsc (p2, 0) [(2, 1)] L.16
+	(1, 13): Wsc (x, 1) L.19
+	(1, 14): Wsc (p1, 0) L.21
+	(1, 15): SPIN_START
+	(1, 16): Wsc (p1, 1) L.15
+	(1, 17): SPIN_START
+	(1, 18): Rsc (p2, 1) [(2, 16)] L.16
+<0, 2> thread_2:
+	(2, 0): B
+	(2, 1): Wsc (p2, 0) L.28
+	(2, 2): LOOP_BEGIN L.29
+	(2, 3): SPIN_START
+	(2, 4): Wsc (p2, 1) L.30
+	(2, 5): SPIN_START
+	(2, 6): Rsc (p1, 0) [(1, 14)] L.31
+	(2, 7): Wsc (x, 2) L.34
+	(2, 8): Wsc (p2, 0) L.36
+	(2, 9): SPIN_START
+	(2, 10): Wsc (p2, 1) L.30
+	(2, 11): SPIN_START
+	(2, 12): Rsc (p1, 0) [(1, 14)] L.31
+	(2, 13): Wsc (x, 2) L.34
+	(2, 14): Wsc (p2, 0) L.36
+	(2, 15): SPIN_START
+	(2, 16): Wsc (p2, 1) L.30
+	(2, 17): SPIN_START
+	(2, 18): Rsc (p1, 1) [(1, 16)] L.31
+
+Trace to (2, 18):
+[main] lamport-deadlock0.c: 45: if (pthread_create(&t1, NULL, thread_1, NULL))
+[thread_2] lamport-deadlock0.c: 28: p2 = false;
+[thread_2] lamport-deadlock0.c: 29: while (true) {
+[thread_2] lamport-deadlock0.c: 30: p2 = true;
+[thread_1] lamport-deadlock0.c: 13: p1 = false;
+[thread_1] lamport-deadlock0.c: 14: while (true) {
+[thread_1] lamport-deadlock0.c: 15: p1 = true;
+[thread_1] lamport-deadlock0.c: 16: while (p2)
+[thread_1] lamport-deadlock0.c: 19: x = 1;
+[thread_1] lamport-deadlock0.c: 21: p1 = false;
+[thread_1] lamport-deadlock0.c: 15: p1 = true;
+[thread_1] lamport-deadlock0.c: 16: while (p2)
+[thread_1] lamport-deadlock0.c: 19: x = 1;
+[thread_1] lamport-deadlock0.c: 21: p1 = false;
+[thread_2] lamport-deadlock0.c: 31: while (p1)
+[thread_2] lamport-deadlock0.c: 34: x = 2;
+[thread_2] lamport-deadlock0.c: 36: p2 = false;
+[thread_2] lamport-deadlock0.c: 30: p2 = true;
+[thread_2] lamport-deadlock0.c: 31: while (p1)
+[thread_2] lamport-deadlock0.c: 34: x = 2;
+[thread_2] lamport-deadlock0.c: 36: p2 = false;
+[thread_2] lamport-deadlock0.c: 30: p2 = true;
+[thread_1] lamport-deadlock0.c: 21: p1 = false;
+[thread_1] lamport-deadlock0.c: 15: p1 = true;
+[thread_2] lamport-deadlock0.c: 31: while (p1)
+Non-terminating spinloop
+Number of complete executions explored: 50
+Number of blocked executions seen: 55

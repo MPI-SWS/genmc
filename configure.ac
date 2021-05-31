@@ -1,4 +1,4 @@
-AC_INIT([GenMC], [0.5.3], [michalis@mpi-sws.org], [genmc], [https://plv.mpi-sws.org/genmc])
+AC_INIT([GenMC], [0.6], [michalis@mpi-sws.org], [genmc], [https://plv.mpi-sws.org/genmc])
 
 m4_include([m4/ax_llvm.m4])
 m4_include([m4/ax_clang.m4])
@@ -423,21 +423,6 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
          AC_MSG_RESULT([string])],
         [AC_MSG_RESULT([error_code])])
 
-## Check whether an ExecutionEngine takes a Module pointer or a Module unique_ptr
-AC_MSG_CHECKING([for unique_ptr<Module> in ExecutionEngine])
-AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
-#include <llvm/ExecutionEngine/ExecutionEngine.h>
-]],[[
-  class EE : public llvm::ExecutionEngine {
-  public:
-    EE(llvm::Module *M) : llvm::ExecutionEngine(std::unique_ptr<llvm::Module>(M)) {};
-  };
-]])],
-        [AC_DEFINE([LLVM_EXECUTIONENGINE_MODULE_UNIQUE_PTR],[1],
-         [Define if llvm::ExecutionEngine takes a unique_ptr to its Module.])
-         AC_MSG_RESULT([yes])],
-       	[AC_MSG_RESULT([no])])
-
 ## Check if Mutexes use the method "lock" or "acquire"
 AC_MSG_CHECKING([for llvm::sys::Mutex::lock])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
@@ -560,6 +545,30 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
          [Define if LPPassManager::getAnalysis<LoopInfo> can be called.])],
         [AC_MSG_RESULT([llvm::LoopInfoWrapperPass])])
 
+## Check if llvm::InsertPreheadersForLoop() takes MemorySSAUpdater
+AC_MSG_CHECKING([if llvm::InsertPreheaderForLoop takes MemorySSAUpdater])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/Transforms/Utils/LoopUtils.h>
+]],[[
+  llvm::InsertPreheaderForLoop(nullptr, nullptr, nullptr, nullptr, false);
+]])],
+        [AC_MSG_RESULT([yes])
+         AC_DEFINE([LLVM_INSERT_PREHEADER_FOR_LOOP_NEEDS_UPDATER],[1],
+         [Define if llvm::InsertPreheaderForLoop needs MemorySSAUpdater.])],
+        [AC_MSG_RESULT([no])])
+
+## Check how to get post-dominators (> llvm 3.8)
+AC_MSG_CHECKING([how to get PostDominator analysis])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/Analysis/PostDominators.h>
+]],[[
+  llvm::PostDominatorTreeWrapperPass *PDP = 0;
+]])],
+  [AC_MSG_RESULT([llvm::PostDominatorTreeWrapperPass])
+   AC_DEFINE([LLVM_HAVE_POST_DOMINATOR_TREE_WRAPPER_PASS],[1],
+   [Define if llvm::PostDominatorTreeWrapperPass exists.])],
+   [AC_MSG_RESULT([llvm::PostDominatorTree])])
+
 ## Check if llvm::cl::getRegisteredOptions takes an argument
 AC_MSG_CHECKING([if llvm::cl::getRegisteredOptions takes an argument.])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
@@ -654,19 +663,6 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
          [Define if an llvm::DILocation is an MDNode.])],
         [AC_MSG_RESULT([no])])
 
-## Check if the datalayout of an execution engine is a pointer
-AC_MSG_CHECKING([whether DataLayout of ExecutionEngine is a pointer])
-AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
-#include <llvm/ExecutionEngine/ExecutionEngine.h>
-]],[[
-  llvm::ExecutionEngine *E = 0;
-  const llvm::DataLayout *DL = E->getDataLayout();
-]])],
-  [AC_MSG_RESULT([yes])
-   AC_DEFINE([LLVM_EXECUTIONENGINE_DATALAYOUT_PTR],[1],
-   [Define if the DataLayout field of ExecutionEngine is a pointer.])],
-  [AC_MSG_RESULT([no])])
-
 ## Check if llvm::LoopInfo::markAsRemoved exists
 AC_MSG_CHECKING([for llvm::LoopInfo::markAsRemoved])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
@@ -680,6 +676,32 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
    AC_DEFINE([LLVM_HAVE_LOOPINFO_MARK_AS_REMOVED],[1],
    [Define if llvm::LoopInfo::markAsRemoved exists])],
   [AC_MSG_RESULT([no])])
+
+## Check whether llvm::df_iterator_default_set exists
+AC_MSG_CHECKING([for llvm::df_iterator_default_set])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/ADT/DepthFirstIterator.h>
+]],[[
+  llvm::df_iterator_default_set<int *> Reachable;
+]])],
+  [AC_MSG_RESULT([yes])
+   AC_DEFINE([LLVM_HAVE_DF_ITERATOR_DEFAULT_SET],[1],
+   [Define if llvm::df_iterator_default_set exists])],
+  [AC_MSG_RESULT([no])])
+
+## Check whether llvm::EliminateUnreachableBlocks exists
+AC_MSG_CHECKING([for llvm::EliminateUnreachableBlocks])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
+]],[[
+  llvm::Function *F = nullptr;
+  llvm::EliminateUnreachableBlocks(*F);
+]])],
+  [AC_MSG_RESULT([yes])
+   AC_DEFINE([LLVM_HAVE_ELIMINATE_UNREACHABLE_BLOCKS],[1],
+   [Define if llvm::EliminateUnreachableBlocks exists])],
+  [AC_MSG_RESULT([no])])
+
 
 ## Check if initializeIPA exists
 AC_MSG_CHECKING([for llvm::initializeIPA])

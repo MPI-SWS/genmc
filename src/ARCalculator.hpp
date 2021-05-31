@@ -22,10 +22,6 @@
 #define __AR_CALCULATOR_HPP__
 
 #include "Calculator.hpp"
-#include "DriverGraphEnumAPI.hpp"
-#include "EventLabel.hpp"
-#include "Error.hpp"
-#include "ExecutionGraph.hpp"
 
 class ARCalculator : public Calculator {
 
@@ -52,4 +48,4 @@ private:
 	bool addArConstraints();
 };
 
-#endif /* __PSC_CALCULATOR_HPP__ */
+#endif /* __AR_CALCULATOR_HPP__ */

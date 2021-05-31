@@ -65,7 +65,7 @@ void Parser::stripSlashes(std::string &absPath)
 
 void Parser::parseInstFromMData(std::pair<int, std::string> &locAndFile,
 				std::string functionName,
-				llvm::raw_ostream &os /* llvm::dbgs() */)
+				llvm::raw_ostream &os /* llvm::outs() */)
 {
 	int line = locAndFile.first;
 	std::string absPath = locAndFile.second;

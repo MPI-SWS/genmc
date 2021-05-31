@@ -21,6 +21,7 @@
 #ifndef __LOOP_UNROLL_PASS_HPP__
 #define __LOOP_UNROLL_PASS_HPP__
 
+#include "config.h"
 #include <llvm/Pass.h>
 #ifdef LLVM_PASS_GETPASSNAME_IS_STRINGREF
 #include <llvm/ADT/StringRef.h>
@@ -44,10 +45,8 @@ protected:
 public:
 	static char ID;
 
-	LoopUnrollPass(int depth) : llvm::LoopPass(ID), unrollDepth(depth) {
-		if (unrollDepth < 0)
-			unrollDepth = 0;
-	};
+	LoopUnrollPass(int depth)
+		: llvm::LoopPass(ID), unrollDepth(depth < 0 ? 0 : depth) {};
 
 #ifdef LLVM_PASS_GETPASSNAME_IS_STRINGREF
 	virtual llvm::StringRef getPassName() const { return "LoopUnrollPass"; } ;

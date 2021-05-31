@@ -25,8 +25,6 @@
 #include "Event.hpp"
 #include "EventLabel.hpp"
 #include "RevisitSet.hpp"
-#include "ExecutionGraph.hpp"
-#include "Interpreter.h"
 #include "WorkSet.hpp"
 #include "Library.hpp"
 #include <llvm/IR/Module.h>
@@ -36,6 +34,12 @@
 #include <random>
 #include <unordered_set>
 
+namespace llvm {
+	struct ExecutionContext;
+	class Interpreter;
+}
+class ExecutionGraph;
+
 class GenMCDriver {
 
 public:
@@ -44,6 +48,7 @@ public:
 	enum DriverErrorKind {
 		DE_Safety,
 		DE_Recovery,
+		DE_Liveness,
 		DE_RaceNotAtomic,
 		DE_RaceFreeMalloc,
 		DE_FreeNonMalloc,
@@ -56,6 +61,7 @@ public:
 		DE_InvalidAccessEnd,
 		DE_InvalidJoin,
 		DE_InvalidUnlock,
+		DE_InvalidBInit,
 		DE_InvalidRecoveryCall,
 		DE_InvalidTruncate,
 		DE_SystemError,
@@ -65,50 +71,6 @@ private:
 	static bool isInvalidAccessError(DriverErrorKind e) {
 		return DE_InvalidAccessBegin <= e &&
 			e <= DE_InvalidAccessEnd;
-	};
-
-	/* Enumeration for different types of revisits */
-	enum StackItemType {
-		SRead,        /* Forward revisit */
-		SReadLibFunc, /* Forward revisit (functional lib) */
-		SRevisit,     /* Backward revisit */
-		MOWrite,      /* Alternative MO position */
-		MOWriteLib,   /* Alternative MO position (lib) */
-		None /* For default constructor */
-	};
-
-	/* Types of worklist items */
-	struct StackItem {
-		StackItem() : type(None) {};
-		StackItem(StackItemType t, Event e, Event shouldRf,
-			  std::vector<std::unique_ptr<EventLabel> > &&writePrefix,
-			  std::vector<std::pair<Event, Event> > &&moPlacings,
-			  int newMoPos)
-			: type(t), toRevisit(e), shouldRf(shouldRf),
-			  writePrefix(std::move(writePrefix)),
-			  moPlacings(std::move(moPlacings)),
-			  moPos(newMoPos) {};
-
-		/* Type of the revisit taking place */
-		StackItemType type;
-
-		/* Position in the graph of the event to be revisited */
-		Event toRevisit;
-
-		/* Where the event revisited should read from.
-		 * It is INIT if not applicable for this revisit type */
-		Event shouldRf;
-
-		/* The prefix to be restored in the graph */
-		std::vector<std::unique_ptr<EventLabel> > writePrefix;
-
-		/* Appropriate positionings for the writes in the prefix
-		 * to be restored */
-		std::vector<std::pair<Event, Event> > moPlacings;
-
-		/* New position in MO for the event to be revisited
-		 * (only if the driver tracks MO) */
-		int moPos;
 	};
 
 public:
@@ -143,8 +105,10 @@ public:
 
 	/* Returns the value this load reads */
 	llvm::GenericValue
-	visitLoad(llvm::Interpreter::InstAttr attr, llvm::AtomicOrdering ord,
-		  const llvm::GenericValue *addr, llvm::Type *typ,
+	visitLoad(InstAttr attr,
+		  llvm::AtomicOrdering ord,
+		  const llvm::GenericValue *addr,
+		  llvm::Type *typ,
 		  llvm::GenericValue cmpVal = llvm::GenericValue(),
 		  llvm::GenericValue rmwVal = llvm::GenericValue(),
 		  llvm::AtomicRMWInst::BinOp op =
@@ -153,8 +117,10 @@ public:
 	/* Returns the value this load reads, as well as whether
 	 * the interpreter should block due to a blocking library read */
 	std::pair<llvm::GenericValue, bool>
-	visitLibLoad(llvm::Interpreter::InstAttr attr, llvm::AtomicOrdering ord,
-		     const llvm::GenericValue *addr, llvm::Type *typ,
+	visitLibLoad(InstAttr attr,
+		     llvm::AtomicOrdering ord,
+		     const llvm::GenericValue *addr,
+		     llvm::Type *typ,
 		     std::string functionName);
 
 	/* A function modeling a write to disk has been interpreted.
@@ -164,26 +130,31 @@ public:
 
 	/* A store has been interpreted, nothing for the interpreter */
 	void
-	visitStore(llvm::Interpreter::InstAttr attr, llvm::AtomicOrdering ord,
-		   const llvm::GenericValue *addr, llvm::Type *typ,
+	visitStore(InstAttr attr,
+		   llvm::AtomicOrdering ord,
+		   const llvm::GenericValue *addr,
+		   llvm::Type *typ,
 		   const llvm::GenericValue &val);
 
 	/* A lib store has been interpreted, nothing for the interpreter */
 	void
-	visitLibStore(llvm::Interpreter::InstAttr attr,
+	visitLibStore(InstAttr attr,
 		      llvm::AtomicOrdering ord,
-		      const llvm::GenericValue *addr, llvm::Type *typ,
-		      llvm::GenericValue &val, std::string functionName,
+		      const llvm::GenericValue *addr,
+		      llvm::Type *typ,
+		      llvm::GenericValue &val,
+		      std::string functionName,
 		      bool isInit = false);
 
 	/* A function modeling a write to disk has been interpreted */
 	void
-	visitDskWrite(const llvm::GenericValue *addr, llvm::Type *typ,
-		      const llvm::GenericValue &val, void *mapping,
-		      llvm::Interpreter::InstAttr attr =
-		      llvm::Interpreter::InstAttr::IA_None,
+	visitDskWrite(const llvm::GenericValue *addr,
+		      llvm::Type *typ,
+		      const llvm::GenericValue &val,
+		      void *mapping,
+		      InstAttr attr = InstAttr::IA_None,
 		      std::pair<void *, void *> ordDataRange =
-		      std::pair<void *, void *>{(void *) nullptr, (void *) nullptr},
+		        std::pair<void *, void *>{(void *) nullptr, (void *) nullptr},
 		      void *transInode = nullptr);
 
 	/* A lock() operation has been interpreted, nothing for the interpreter */
@@ -209,9 +180,27 @@ public:
 	void
 	visitDskPbarrier();
 
-	/* A fence has been interpreted, nothing for the interpreter */
+	/* A fence has been interpreted, nothing for the interpreter.
+	 * For LKMM fences, the argument lkmmType points to a description
+	 * of the fence's actual type */
 	void
-	visitFence(llvm::AtomicOrdering ord);
+	visitFence(llvm::AtomicOrdering ord, const char *lkmmType = nullptr);
+
+	/* A call to __VERIFIER_loop_begin() has been interpreted */
+	void
+	visitLoopBegin();
+
+	/* A call to __VERIFIER_spin_start() has been interpreted */
+	void
+	visitSpinStart();
+
+	/* A call to __VERIFIER_faiZNE_spin_end() has been interpreted */
+	void
+	visitFaiZNESpinEnd();
+
+	/* A call to __VERIFIER_lockZNE_spin_end() has been interpreted */
+	void
+	visitLockZNESpinEnd();
 
 	/* Returns an appropriate result for pthread_self() */
 	llvm::GenericValue
@@ -236,8 +225,20 @@ public:
 	/* A call to free() has been interpreted, nothing for the intepreter */
 	void
 	visitFree(void *ptr);
+	/* Helper for bulk-deallocs */
+	template<typename ITER>
+	void visitFree(ITER begin, ITER end) {
+		for (auto it = begin; it != end; ++it)
+			visitFree(*it);
+	}
+
+	/* LKMM: Visit RCU functions */
 	void
-	visitFree(const llvm::AllocaHolder::Allocas &ptrs); /* Helper for bulk-deallocs */
+	visitRCULockLKMM();
+	void
+	visitRCUUnlockLKMM();
+	void
+	visitRCUSyncLKMM();
 
 	/* This method either blocks the offending thread (e.g., if the
 	 * execution is invalid), or aborts the exploration */
@@ -245,13 +246,11 @@ public:
 	visitError(DriverErrorKind t, const std::string &err = std::string(),
 		   Event confEvent = Event::getInitializer());
 
-	virtual ~GenMCDriver() {};
+	virtual ~GenMCDriver();
 
 protected:
 
-	GenMCDriver(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Module> mod,
-		    std::vector<Library> &granted, std::vector<Library> &toVerify,
-		    clock_t start);
+	GenMCDriver(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Module> mod, clock_t start);
 
 	/* No copying or copy-assignment of this class is allowed */
 	GenMCDriver(GenMCDriver const&) = delete;
@@ -261,7 +260,7 @@ protected:
 	const Config *getConf() const { return userConf.get(); }
 
 	/* Returns a pointer to the interpreter */
-	llvm::Interpreter *getEE() const { return EE; }
+	llvm::Interpreter *getEE() const { return EE.get(); }
 
 	/* Returns a reference to the current graph */
 	ExecutionGraph &getGraph() { return *execGraph; };
@@ -275,6 +274,20 @@ protected:
 					    const llvm::GenericValue *a,
 					    const llvm::Type *t);
 
+	/* Returns the value that a read is reading. This function should be
+	 * used when calculating the value that we should return to the
+	 * interpreter; if the read is reading from an invalid place
+	 * (e.g., bottom) also blocks the currently running thread. */
+	llvm::GenericValue getReadRetValueAndMaybeBlock(Event r,
+							const llvm::GenericValue *addr,
+							const llvm::Type *t);
+	llvm::GenericValue getRecReadRetValue(const llvm::GenericValue *addr,
+					      const llvm::Type *typ);
+
+	/* Returns the value with which a barrier at PTR has been initialized */
+	llvm::GenericValue getBarrierInitValue(const llvm::GenericValue *ptr,
+					       const llvm::Type *typ);
+
 	/* Returns true if we should check consistency at p */
 	bool shouldCheckCons(ProgramPoint p);
 
@@ -285,8 +298,24 @@ protected:
 	/* Returns true if we should check persistency at p */
 	bool shouldCheckPers(ProgramPoint p);
 
+	/* Returns true if the current graph is consistent */
+	bool isConsistent(ProgramPoint p);
+
+	/* Pers: Returns true if current recovery routine is valid */
+	bool isRecoveryValid(ProgramPoint p);
+
+	/* Liveness: Checks whether a spin-blocked thread reads co-maximal values */
+	bool threadReadsMaximal(int tid);
+
+	/* Liveness: Calls visitError() if there is a liveness violation */
+	void checkLiveness();
+
 	/* Returns true if a is hb-before b */
 	bool isHbBefore(Event a, Event b, ProgramPoint p = ProgramPoint::step);
+
+	/* Returns true if e is maximal in addr */
+	bool isCoMaximal(const llvm::GenericValue *addr, Event e,
+			 bool checkCache = false, ProgramPoint p = ProgramPoint::step);
 
 private:
 	/*** Worklist-related ***/
@@ -358,9 +387,23 @@ private:
 	 * Appropriately calls visitError() and terminates */
 	void checkForDataRaces();
 
+	/* Performs POSIX checks whenever a lock event is added.
+	 * Given its list of possible rfs, makes sure it cannot read
+	 * from a destroyed lock.
+	 * Appropriately calls visitErro() and terminates */
+	void checkLockValidity(const std::vector<Event> &rfs);
+
 	/* Performs POSIX checks whenever an unlock event is added.
 	 * Appropriately calls visitError() and terminates */
 	void checkUnlockValidity();
+
+	/* Perfoms POSIX checks whenever a barrier_init event is added.
+	 Appropriately calls visitError() and terminates */
+	void checkBInitValidity();
+
+	/* Perfoms POSIX checks whenever a barrier_wait event is added.
+	 Appropriately calls visitError() and terminates */
+	void checkBIncValidity(const std::vector<Event> &rfs);
 
 	/* Checks whether there is some race when allocating/deallocating
 	 * memory and reports an error as necessary.
@@ -373,9 +416,9 @@ private:
 	 * Appropriately calls visitError() and terminates */
 	void checkForMemoryRaces(const void *addr);
 
-	/* Calls visitError() if rLab is reading from an uninitialized
+	/* Calls visitError() if a newly added read can read from an uninitialized
 	 * (dynamically allocated) memory location */
-	void checkForUninitializedMem(const ReadLabel *rLab);
+	void checkForUninitializedMem(const std::vector<Event> &rfs);
 
 	/* Returns true if the exploration is guided by a graph */
 	bool isExecutionDrivenByGraph();
@@ -386,12 +429,6 @@ private:
 	/* If the execution is guided, returns the corresponding label for
 	 * this instruction. Reports an error if the execution is not guided */
 	const EventLabel *getCurrentLabel() const;
-
-	/* Returns true if the current graph is consistent */
-	bool isConsistent(ProgramPoint p);
-
-	/* Pers: Returns true if current recovery routine is valid */
-	bool isRecoveryValid(ProgramPoint p);
 
 	/* Calculates revisit options and pushes them to the worklist.
 	 * Returns true if the current exploration should continue */
@@ -425,7 +462,7 @@ private:
 	/* Given a list of stores that it is consistent to read-from,
 	 * removes options that violate atomicity, and determines the
 	 * order in which these options should be explored */
-	std::vector<Event> properlyOrderStores(llvm::Interpreter::InstAttr attr,
+	std::vector<Event> properlyOrderStores(InstAttr attr,
 					       llvm::Type *typ,
 					       const llvm::GenericValue *ptr,
 					       llvm::GenericValue &expVal,
@@ -433,10 +470,11 @@ private:
 
 	/* Helper for visitLoad() that creates a ReadLabel and adds it to the graph */
 	const ReadLabel *
-	createAddReadLabel(llvm::Interpreter::InstAttr attr,
+	createAddReadLabel(InstAttr attr,
 			   llvm::AtomicOrdering ord,
 			   const llvm::GenericValue *addr,
 			   llvm::Type *typ,
+			   std::unique_ptr<SExpr> annot,
 			   const llvm::GenericValue &cmpVal,
 			   const llvm::GenericValue &rmwVal,
 			   llvm::AtomicRMWInst::BinOp op,
@@ -448,7 +486,7 @@ private:
 
 	/* Helper for visitStore() that creates a WriteLabel and adds it to the graph */
 	const WriteLabel *
-	createAddStoreLabel(llvm::Interpreter::InstAttr attr,
+	createAddStoreLabel(InstAttr attr,
 			    llvm::AtomicOrdering ord,
 			    const llvm::GenericValue *addr,
 			    llvm::Type *typ,
@@ -468,6 +506,17 @@ private:
 			    const std::vector<Event> &stores,
 			    const View &v);
 
+	/* SAVer: Checks whether the effects of a write are observable */
+	bool isWriteObservable(const WriteLabel *lab);
+
+	/* SAVer: Checks whether the addition of an event changes our
+	 * perspective of a potential spinloop */
+	void checkReconsiderFaiSpinloop(const MemAccessLabel *lab);
+
+	/* SAVer: Given the end of a potential FAI-ZNE spinloop,
+	 * returns true if it is indeed a spinloop */
+	bool areFaiZNEConstraintsSat(const FaiZNESpinEndLabel *lab);
+
 	/* Opt: Futher reduces the set of available read-from options for a
 	 * read that is part of a lock() op. Returns the filtered set of RFs  */
 	std::vector<Event> filterAcquiredLocks(const llvm::GenericValue *ptr,
@@ -481,11 +530,17 @@ private:
 			      const std::vector<std::pair<Event, Event> > &moPlacings);
 
 	/* Opt: Repairs the reads-from edge of a dangling lock */
-	void repairLock(Event lock);
+	void repairLock(LockCasReadLabel *lab);
 
 	/* Opt: Repairs some locks that may be "dangling", as part of the
 	 * in-place revisiting of locks */
-	bool repairDanglingLocks();
+	void repairDanglingLocks();
+
+	/* Opt: Repairs barriers that may be "dangling" after cutting the graph. */
+	void repairDanglingBarriers();
+
+	/* LKMM: Helper for visiting LKMM fences */
+	void visitFenceLKMM(llvm::AtomicOrdering ord, const char *lkmmType);
 
 	/* LAPOR: Helper for visiting a lock()/unlock() event */
 	void visitLockLAPOR(const llvm::GenericValue *addr);
@@ -506,6 +561,10 @@ private:
 	void filterSymmetricStoresSR(const llvm::GenericValue *addr, llvm::Type *typ,
 				     std::vector<Event> &stores) const;
 
+	/* SAVer: Filters stores that will lead to an assume-blocked execution */
+	bool filterValuesFromAnnotSAVER(const llvm::GenericValue *addr, llvm::Type *typ,
+					const SExpr *annot, std::vector<Event> &stores);
+
 
 	/*** Output-related ***/
 
@@ -517,7 +576,7 @@ private:
 
 	/* Helper for printTraceBefore() that prints events according to po U rf */
 	void recPrintTraceBefore(const Event &e, View &a,
-				 llvm::raw_ostream &ss = llvm::dbgs());
+				 llvm::raw_ostream &ss = llvm::outs());
 
 	/* Outputs the full graph.
 	 * If getMetadata is set, it outputs more debugging information */
@@ -533,142 +592,9 @@ private:
 
 	/*** To be overrided by instances of the Driver ***/
 
-	/* Creates a label for a plain read to be added to the graph */
-	virtual std::unique_ptr<ReadLabel>
-	createReadLabel(int tid, int index, llvm::AtomicOrdering ord,
-			const llvm::GenericValue *ptr, const llvm::Type *typ,
-			Event rf) = 0;
-
-	/* Creates a label for a FAI read to be added to the graph */
-	virtual std::unique_ptr<FaiReadLabel>
-	createFaiReadLabel(int tid, int index, llvm::AtomicOrdering ord,
-			   const llvm::GenericValue *ptr, const llvm::Type *typ,
-			   Event rf, llvm::AtomicRMWInst::BinOp op,
-			   const llvm::GenericValue &opValue) = 0;
-
-	/* Creates a label for a CAS read to be added to the graph */
-	virtual std::unique_ptr<CasReadLabel>
-	createCasReadLabel(int tid, int index, llvm::AtomicOrdering ord,
-			   const llvm::GenericValue *ptr, const llvm::Type *typ,
-			   Event rf, const llvm::GenericValue &expected,
-			   const llvm::GenericValue &swap,
-			   bool isLock = false) = 0;
-
-	/* Creates a label for a library read to be added to the graph */
-	virtual std::unique_ptr<LibReadLabel>
-	createLibReadLabel(int tid, int index, llvm::AtomicOrdering ord,
-			   const llvm::GenericValue *ptr, const llvm::Type *typ,
-			   Event rf, std::string functionName) = 0 ;
-
-	/* Creates a label for a disk read to be added to the graph */
-	virtual std::unique_ptr<DskReadLabel>
-	createDskReadLabel(int tid, int index, llvm::AtomicOrdering ord,
-			   const llvm::GenericValue *addr, const llvm::Type *typ,
-			   Event rf) = 0;
-
-	/* Creates a label for a plain write to be added to the graph */
-	virtual std::unique_ptr<WriteLabel>
-	createStoreLabel(int tid, int index, llvm::AtomicOrdering ord,
-			 const llvm::GenericValue *ptr, const llvm::Type *typ,
-			 const llvm::GenericValue &val, bool isUnlock = false) = 0;
-
-	/* Creates a label for a FAI write to be added to the graph */
-	virtual std::unique_ptr<FaiWriteLabel>
-	createFaiStoreLabel(int tid, int index, llvm::AtomicOrdering ord,
-			    const llvm::GenericValue *ptr, const llvm::Type *typ,
-			    const llvm::GenericValue &val) = 0;
-
-	/* Creates a label for a CAS write to be added to the graph */
-	virtual std::unique_ptr<CasWriteLabel>
-	createCasStoreLabel(int tid, int index, llvm::AtomicOrdering ord,
-			    const llvm::GenericValue *ptr, const llvm::Type *typ,
-			    const llvm::GenericValue &val, bool isLock = false) = 0;
-
-	/* Creates a label for a library write to be added to the graph */
-	virtual std::unique_ptr<LibWriteLabel>
-	createLibStoreLabel(int tid, int index, llvm::AtomicOrdering ord,
-			    const llvm::GenericValue *ptr, const llvm::Type *typ,
-			    llvm::GenericValue &val, std::string functionName,
-			    bool isInit) = 0;
-
-	/* Creates a label for a disk write to be added to the graph */
-	virtual std::unique_ptr<DskWriteLabel>
-	createDskWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
-			    const llvm::GenericValue *ptr, const llvm::Type *typ,
-			    const llvm::GenericValue &val, void *mapping) = 0;
-
-	virtual std::unique_ptr<DskMdWriteLabel>
-	createDskMdWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
-			      const llvm::GenericValue *ptr, const llvm::Type *typ,
-			      const llvm::GenericValue &val, void *mapping,
-			      std::pair<void *, void *> ordDataRange) = 0;
-
-	virtual std::unique_ptr<DskDirWriteLabel>
-	createDskDirWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
-			       const llvm::GenericValue *ptr, const llvm::Type *typ,
-			       const llvm::GenericValue &val, void *mapping) = 0;
-
-	virtual std::unique_ptr<DskJnlWriteLabel>
-	createDskJnlWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
-			       const llvm::GenericValue *ptr, const llvm::Type *typ,
-			       const llvm::GenericValue &val, void *mapping, void *transInode) = 0;
-
-	/* Creates a label for a fence to be added to the graph */
-	virtual std::unique_ptr<FenceLabel>
-	createFenceLabel(int tid, int index, llvm::AtomicOrdering ord) = 0;
-
-
-	/* Creates a label for a malloc event to be added to the graph */
-	virtual std::unique_ptr<MallocLabel>
-	createMallocLabel(int tid, int index, const void *addr,
-			  unsigned int size, Storage s, AddressSpace spc) = 0;
-
-	/* Creates a label for a free event to be added to the graph */
-	virtual std::unique_ptr<FreeLabel>
-	createFreeLabel(int tid, int index, const void *addr) = 0;
-
-	/* Creates a label for a disk open event to be added to the graph */
-	virtual std::unique_ptr<DskOpenLabel>
-	createDskOpenLabel(int tid, int index, const char *fileName,
-			   const llvm::GenericValue &fd) = 0;
-
-	/* Creates a label for an fsync() event to be added to the graph */
-	virtual std::unique_ptr<DskFsyncLabel>
-	createDskFsyncLabel(int tid, int index, const void *inode,
-			    unsigned int size) = 0;
-
-	/* Creates a label for a sync() event to be added to the graph */
-	virtual std::unique_ptr<DskSyncLabel>
-	createDskSyncLabel(int tid, int index) = 0;
-
-	/* Creates a label for a persistency barrier
-	 * (__VERIFIER_pbarrier()) to be added to the graph */
-	virtual std::unique_ptr<DskPbarrierLabel>
-	createDskPbarrierLabel(int tid, int index) = 0;
-
-	/* Creates a label for the creation of a thread to be added to the graph */
-	virtual std::unique_ptr<ThreadCreateLabel>
-	createTCreateLabel(int tid, int index, int cid) = 0;
-
-	/* Creates a label for the join of a thread to be added to the graph */
-	virtual std::unique_ptr<ThreadJoinLabel>
-	createTJoinLabel(int tid, int index, int cid) = 0;
-
-	/* Creates a label for the start of a thread to be added to the graph */
-	virtual std::unique_ptr<ThreadStartLabel>
-	createStartLabel(int tid, int index, Event tc, int symm = -1) = 0;
-
-	/* Creates a label for the end of a thread to be added to the graph */
-	virtual std::unique_ptr<ThreadFinishLabel>
-	createFinishLabel(int tid, int index) = 0;
-
-	/* LAPOR: Creates a (dummy) label for a lock() operation */
-	virtual std::unique_ptr<LockLabelLAPOR>
-	createLockLabelLAPOR(int tid, int index, const llvm::GenericValue *addr) = 0;
-
-	/* LAPOR: Creates a (dummy) label for an unlock() operation */
-	virtual std::unique_ptr<UnlockLabelLAPOR>
-	createUnlockLabelLAPOR(int tid, int index, const llvm::GenericValue *addr) = 0;
+	/* Updates lab with model-specific information.
+	 * Needs to be called every time a new label is added to the graph */
+	virtual void updateLabelViews(EventLabel *lab) = 0;
 
 	/* Checks for races after a load/store is added to the graph.
 	 * Should return the racy event, or INIT if no such event exists */
@@ -686,6 +612,9 @@ private:
 	/* Changes the reads-from edge for the specified label.
 	 * This effectively changes the label, hence this method is virtual */
 	virtual void changeRf(Event read, Event store) = 0;
+
+	/* Synchronizes thread begins with thread create events. */
+	virtual void updateStart(Event create, Event begin) = 0;
 
 	/* Used to make a join label synchronize with a finished thread.
 	 * Returns true if the child thread has finished and updates the
@@ -710,9 +639,6 @@ private:
 	/* User configuration */
 	std::unique_ptr<Config> userConf;
 
-	/* The LLVM module for this program */
-	std::unique_ptr<llvm::Module> mod;
-
 	/* Specifications for libraries assumed correct */
 	std::vector<Library> grantedLibs;
 
@@ -720,7 +646,7 @@ private:
 	std::vector<Library> toVerifyLibs;
 
 	/* The interpreter used by the driver */
-	llvm::Interpreter *EE;
+	std::unique_ptr<llvm::Interpreter> EE;
 
 	/* The graph managing object */
 	std::unique_ptr<ExecutionGraph> execGraph;

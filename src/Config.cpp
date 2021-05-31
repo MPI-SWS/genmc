@@ -21,7 +21,6 @@
 #include "config.h"
 #include "Config.hpp"
 #include "Error.hpp"
-#include <llvm/ADT/ArrayRef.h>	// needed for 3.5
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -46,7 +45,8 @@ clInputFile(llvm::cl::Positional, llvm::cl::Required, llvm::cl::desc("<input fil
 llvm::cl::opt<ModelType>
 clModelType(llvm::cl::values(
 		    clEnumValN(ModelType::rc11, "rc11", "RC11 memory model"),
-		    clEnumValN(ModelType::imm, "imm",       "IMM model")
+		    clEnumValN(ModelType::imm,  "imm",  "IMM memory model"),
+		    clEnumValN(ModelType::lkmm, "lkmm", "LKMM memory model")
 #ifdef LLVM_CL_VALUES_NEED_SENTINEL
 		    , NULL
 #endif
@@ -99,6 +99,9 @@ clCheckConsPoint("check-consistency-point", llvm::cl::init(ProgramPoint::error),
 		    , NULL
 #endif
 		    ));
+llvm::cl::opt<bool>
+clCheckLiveness("check-liveness", llvm::cl::cat(clGeneral),
+		llvm::cl::desc("Check for liveness violations"));
 static llvm::cl::opt<std::string>
 clLibrarySpecsFile("library-specs", llvm::cl::init(""), llvm::cl::value_desc("file"),
 		   llvm::cl::cat(clGeneral),
@@ -106,6 +109,9 @@ clLibrarySpecsFile("library-specs", llvm::cl::init(""), llvm::cl::value_desc("fi
 static llvm::cl::opt<bool>
 clDisableRaceDetection("disable-race-detection", llvm::cl::cat(clGeneral),
 		     llvm::cl::desc("Disable race detection"));
+static llvm::cl::opt<bool>
+clDisableBAM("disable-bam", llvm::cl::cat(clGeneral),
+		    llvm::cl::desc("Disable optimized barrier handling (BAM)"));
 static llvm::cl::opt<bool>
 clDisableStopOnSystemError("disable-stop-on-system-error", llvm::cl::cat(clGeneral),
 			   llvm::cl::desc("Do not stop verification on system errors"));
@@ -156,8 +162,17 @@ clLoopUnroll("unroll", llvm::cl::init(-1), llvm::cl::value_desc("N"),
 	     llvm::cl::cat(clTransformation),
 	     llvm::cl::desc("Unroll loops N times"));
 static llvm::cl::opt<bool>
+clDisableLoopJumpThreading("disable-loop-jump-threading", llvm::cl::cat(clTransformation),
+			   llvm::cl::desc("Disable loop-jump-threading transformation"));
+static llvm::cl::opt<bool>
 clDisableSpinAssume("disable-spin-assume", llvm::cl::cat(clTransformation),
 		    llvm::cl::desc("Disable spin-assume transformation"));
+static llvm::cl::opt<bool>
+clDisableCodeCondenser("disable-code-condenser", llvm::cl::cat(clTransformation),
+		       llvm::cl::desc("Disable code-condenser transformation"));
+static llvm::cl::opt<bool>
+clDisableLoadAnnot("disable-load-annotation", llvm::cl::cat(clTransformation),
+		       llvm::cl::desc("Disable load-annotation transformation"));
 
 
 /* Debugging options */
@@ -226,6 +241,9 @@ void Config::checkConfigOptions() const
 	if (clLAPOR && clCoherenceType == CoherenceType::mo) {
 		WARN("LAPOR usage with -mo is experimental.\n");
 	}
+	if (clLAPOR && clModelType == ModelType::lkmm) {
+		ERROR("LAPOR usage is temporarily disabled under LKMM.\n");
+	}
 
 	/* Check debugging options */
 	if (clSchedulePolicy != SchedulePolicy::random && clPrintRandomScheduleSeed) {
@@ -246,14 +264,16 @@ void Config::saveConfigOptions()
 	specsFile = clLibrarySpecsFile;
 	dotFile = clDotGraphFile;
 	model = clModelType;
-	isDepTrackingModel = (model == ModelType::imm);
+	isDepTrackingModel = (model == ModelType::imm || model == ModelType::lkmm);
 	coherence = clCoherenceType;
 	LAPOR = clLAPOR;
 	symmetryReduction = clSymmetryReduction;
 	printErrorTrace = clPrintErrorTrace;
 	checkConsType = clCheckConsType;
 	checkConsPoint = clCheckConsPoint;
+	checkLiveness = clCheckLiveness;
 	disableRaceDetection = clDisableRaceDetection;
+	disableBAM = clDisableBAM;
 	disableStopOnSystemError = clDisableStopOnSystemError;
 
 	/* Save persistency options */
@@ -266,7 +286,10 @@ void Config::saveConfigOptions()
 
 	/* Save transformation options */
 	unroll = clLoopUnroll;
+	loopJumpThreading = !clDisableLoopJumpThreading;
 	spinAssume = !clDisableSpinAssume;
+	codeCondenser = !clDisableCodeCondenser;
+	loadAnnot = !clDisableLoadAnnot;
 
 	/* Save debugging options */
 	programEntryFun = clProgramEntryFunction;

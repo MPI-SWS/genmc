@@ -57,13 +57,9 @@ public:
 	bool empty() const;
 
 	/* Iterators */
-	using iterator = typename Set::iterator;
 	using const_iterator = typename Set::const_iterator;
-	using reverse_iterator = typename Set::reverse_iterator;
 	using const_reverse_iterator = typename Set::const_reverse_iterator;
 
-	iterator begin() { return set_.begin(); };
-	iterator end() { return set_.end(); };
 	const_iterator begin() const { return set_.begin(); };
 	const_iterator end() const { return set_.end(); };
 

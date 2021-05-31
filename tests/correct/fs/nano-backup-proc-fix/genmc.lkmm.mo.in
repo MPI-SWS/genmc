@@ -1,0 +1,3 @@
+-persevere
+-disable-stop-on-system-error
+-disable-race-detection

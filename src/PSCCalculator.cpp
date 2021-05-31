@@ -19,7 +19,9 @@
  */
 
 #include "PSCCalculator.hpp"
-#include "WBCoherenceCalculator.hpp"
+#include "Error.hpp"
+#include "ExecutionGraph.hpp"
+#include "WBCalculator.hpp"
 
 std::vector<const llvm::GenericValue *> PSCCalculator::getDoubleLocs() const
 {
@@ -359,7 +361,7 @@ Calculator::CalculationResult PSCCalculator::addPscConstraints()
 	auto &pscRelation = g.getGlobalRelation(ExecutionGraph::RelationId::psc);
 	Calculator::CalculationResult result;
 
-	if (auto *wbCoh = llvm::dyn_cast<WBCoherenceCalculator>(
+	if (auto *wbCoh = llvm::dyn_cast<WBCalculator>(
 		    g.getCoherenceCalculator())) {
 		for (auto &coLoc : coRelation)
 			result |= wbCoh->calcWbRelation(coLoc.first, coLoc.second,

@@ -22,12 +22,12 @@
 #define __COHERENCE_CALCULATOR_HPP__
 
 #include "Calculator.hpp"
-#include "EventLabel.hpp"
-#include "ExecutionGraph.hpp"
 #include <llvm/ExecutionEngine/GenericValue.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/raw_ostream.h>
 #include <vector>
+
+class ExecutionGraph;
 
 /*******************************************************************************
  **                      CoherenceCalculator Class (Abstract)
@@ -63,7 +63,7 @@ public:
 	/* Returns the discriminator of this object */
 	CoherenceCalculatorKind getKind() const { return kind; }
 
-	virtual ~CoherenceCalculator() {}
+	virtual ~CoherenceCalculator() = default;
 
 	/* Track coherence at location addr */
 	virtual void
@@ -80,6 +80,15 @@ public:
 	addStoreToLoc(const llvm::GenericValue *addr, Event store, int offset) = 0;
 	virtual void
 	addStoreToLocAfter(const llvm::GenericValue *addr, Event store, Event pred) = 0;
+
+	/* Returns whether STORE is maximal in LOC */
+	virtual bool
+	isCoMaximal(const llvm::GenericValue *addr, Event store) = 0;
+
+	/* Returns whether STORE is maximal in LOC.
+	 * Pre: Cached information for this location exist. */
+	virtual bool
+	isCachedCoMaximal(const llvm::GenericValue *addr, Event store) = 0;
 
 	/* Returns a list of stores to a particular memory location */
 	virtual const std::vector<Event>&

@@ -26,7 +26,7 @@
 #include <string>
 #include <vector>
 
-enum class ModelType { rc11, imm };
+enum class ModelType { rc11, imm, lkmm };
 enum class SchedulePolicy { ltr, wf, random };
 
 struct Config {
@@ -44,9 +44,11 @@ public:
 	bool symmetryReduction;
 	CheckConsType checkConsType;
 	ProgramPoint checkConsPoint;
+	bool checkLiveness;
 	bool printErrorTrace;
 	std::string dotFile;
 	bool disableRaceDetection;
+	bool disableBAM;
 	bool disableStopOnSystemError;
 	std::string specsFile;
 
@@ -60,7 +62,10 @@ public:
 
 	/* Transformation options */
 	int unroll;
+	bool loopJumpThreading;
 	bool spinAssume;
+	bool codeCondenser;
+	bool loadAnnot;
 
 	/* Debugging options */
 	bool countDuplicateExecs;

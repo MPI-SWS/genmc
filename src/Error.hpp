@@ -25,6 +25,8 @@
 #include <llvm/Support/Format.h>
 #include <llvm/Support/raw_ostream.h>
 #include <string>
+#include <sstream>
+#include <vector>
 
 #define WARN_MESSAGE(msg) "WARNING: " << (msg)
 #define ERROR_MESSAGE(msg) "ERROR: " << (msg)
@@ -57,17 +59,37 @@ namespace GenMCError {
 
 }
 
-// /* Useful for debugging */
-// template <typename T>
-// void dumpVector(const std::vector<T>& v)
-// {
-// 	if (v.empty())
-// 		return;
+/* Useful for debugging (naive generalized printing doesn't work for llvm::raw_ostream) */
+template<typename T>
+std::ostream& print(std::ostream &out, const T &val)
+{
+	return (out << val);
+}
 
-// 	llvm::dbgs() << '[';
-// 	std::copy(v.begin(), v.end(), std::ostream_iterator<T>(llvm::dbgs(), ", "));
-// 	llvm::dbgs() << "\b\b]";
-// 	return;
-// }
+template<typename T1, typename T2>
+std::ostream& print(std::ostream &out, const std::pair<T1, T2> &val)
+{
+	return (out << "(" << val.first << ", " << val.second << ")");
+}
+
+template <typename Container>
+std::string format(const Container &c)
+{
+	std::ostringstream out;
+
+	out << "[ ";
+	for (const auto &e : c)
+		print(out, e) << " ";
+	out << "]";
+	return out.str();
+}
+
+template <typename T1, typename T2>
+std::string format(const std::pair<T1, T2> &p)
+{
+	std::ostringstream out;
+	print(out, p);
+	return out.str();
+}
 
 #endif /* __ERROR_HPP__ */

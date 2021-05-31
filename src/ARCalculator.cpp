@@ -19,6 +19,7 @@
  */
 
 #include "ARCalculator.hpp"
+#include "ExecutionGraph.hpp"
 
 bool ARCalculator::addArConstraints()
 {

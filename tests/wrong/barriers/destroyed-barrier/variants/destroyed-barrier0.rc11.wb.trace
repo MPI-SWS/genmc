@@ -1,0 +1,42 @@
+Error detected: Attempt to access freed memory!
+Event (2, 3) conflicts with event (1, 4) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): Wna (barrier.__private, 1) L.34
+	(0, 2): TC [forks 1] L.36
+	(0, 3): TC [forks 2] L.38
+	(0, 4): E
+<0, 1> thread_1:
+	(1, 0): B
+	(1, 1): Uar (barrier.__private, 1) [(0, 1)] L.14
+	(1, 2): Uar (barrier.__private, 1) L.14
+	(1, 3): Racq (barrier.__private, 1) [(1, 2)] L.14
+	(1, 4): Wna (barrier.__private, 0) L.15
+	(1, 5): Wrlx (x, 1) L.17
+	(1, 6): Wrel (y, 1) L.18
+	(1, 7): E
+<0, 2> thread_2:
+	(2, 0): B
+	(2, 1): Racq (y, 1) [(1, 6)] L.24
+	(2, 2): Rrlx (x, 1) [(1, 5)] L.25
+	(2, 3): Uar (barrier.__private, 0) [BOTTOM] L.26
+
+Trace to (2, 3):
+[main] destroyed-barrier0.c: 34: pthread_barrier_init(&barrier, NULL, 1);
+[main] destroyed-barrier0.c: 36: if (pthread_create(&t1, NULL, thread_1, NULL))
+[thread_1] destroyed-barrier0.c: 14: pthread_barrier_wait(&barrier);
+[thread_1] destroyed-barrier0.c: 14: pthread_barrier_wait(&barrier);
+[thread_1] destroyed-barrier0.c: 15: pthread_barrier_destroy(&barrier);
+[thread_1] destroyed-barrier0.c: 17: atomic_store_explicit(&x, 1, memory_order_relaxed);
+[thread_1] destroyed-barrier0.c: 18: atomic_store_explicit(&y, 1, memory_order_release);
+[thread_2] destroyed-barrier0.c: 24: if (atomic_load_explicit(&y, memory_order_acquire))
+[thread_2] destroyed-barrier0.c: 25: if (atomic_load_explicit(&x, memory_order_relaxed))
+[thread_2] destroyed-barrier0.c: 26: pthread_barrier_wait(&barrier);
+Trace to (1, 4):
+[main] destroyed-barrier0.c: 34: pthread_barrier_init(&barrier, NULL, 1);
+[main] destroyed-barrier0.c: 36: if (pthread_create(&t1, NULL, thread_1, NULL))
+[thread_1] destroyed-barrier0.c: 14: pthread_barrier_wait(&barrier);
+[thread_1] destroyed-barrier0.c: 14: pthread_barrier_wait(&barrier);
+[thread_1] destroyed-barrier0.c: 15: pthread_barrier_destroy(&barrier);
+Called barrier_wait() on destroyed barrier!
+Number of complete executions explored: 1

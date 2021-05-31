@@ -19,6 +19,7 @@
  */
 
 #include "LBCalculatorLAPOR.hpp"
+#include "ExecutionGraph.hpp"
 
 Event LBCalculatorLAPOR::getLastNonTrivialInCS(const Event lock) const
 {

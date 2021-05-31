@@ -24,6 +24,10 @@
 #ifndef __CLANG_STDATOMIC_H
 #define __CLANG_STDATOMIC_H
 
+#ifdef __LKMM_H__
+#error "Only one of <stdatomic.h> and <lkmm.h> may be used!"
+#endif
+
 /* If we're hosted, fall back to the system's stdatomic.h. FreeBSD, for
  * example, already has a Clang-compatible stdatomic.h header.
  */
@@ -182,4 +186,3 @@ void atomic_flag_clear_explicit(volatile atomic_flag *, memory_order);
 #endif
 
 #endif /* __CLANG_STDATOMIC_H */
-

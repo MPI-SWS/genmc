@@ -1,0 +1,46 @@
+#include <stdlib.h>
+#include <lkmm.h>
+#include <pthread.h>
+#include <assert.h>
+
+int x;
+int y;
+int z;
+
+void *P0(void *unused)
+{
+	WRITE_ONCE(x, 1);
+	smp_store_release(&y, 1);
+	return NULL;
+}
+
+void *P1(void *unused)
+{
+	int r0;
+
+	r0 = smp_load_acquire(&y);
+	smp_store_release(&z, 1);
+	return NULL;
+}
+
+void *P2(void *unused)
+{
+	int r1;
+
+	WRITE_ONCE(z, 2);
+	smp_mb();
+	r1 = READ_ONCE(x);
+	return NULL;
+}
+
+
+int main()
+{
+	pthread_t t0, t1, t2;
+
+	pthread_create(&t0, NULL, P0, NULL);
+	pthread_create(&t1, NULL, P1, NULL);
+	pthread_create(&t2, NULL, P2, NULL);
+
+	return 0;
+}

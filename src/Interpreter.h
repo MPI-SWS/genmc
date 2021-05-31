@@ -43,6 +43,7 @@
 #include "Config.hpp"
 #include "IMMDepTracker.hpp"
 #include "Library.hpp"
+#include "ModuleInfo.hpp"
 #include "View.hpp"
 #include "CallInstWrapper.hpp"
 
@@ -127,64 +128,6 @@ class ConstantExpr;
 typedef generic_gep_type_iterator<User::const_op_iterator> gep_type_iterator;
 
 typedef std::vector<GenericValue> ValuePlaneTy;
-
-/*
- * VariableInfo struct -- This struct contains source-code level (naming)
- * information for variables.
- */
-struct VariableInfo {
-
-  /*
-   * We keep a map (Values -> (offset, name_at_offset)), and after
-   * the interpreter and the variables are allocated and initialized,
-   * we use the map to dynamically find out the name corresponding to
-   * a particular address.
-   */
-  using NameInfo = std::vector<std::pair<unsigned, std::string > >;
-
-  /* Internal types (not exposed to user programs) for which we might
-   * want to collect naming information */
-  using InternalType = std::string;
-
-  std::unordered_map<Value *, NameInfo> globalInfo;
-  std::unordered_map<Value *, NameInfo> localInfo;
-  std::unordered_map<InternalType, NameInfo> internalInfo;
-};
-
-/*
- * Pers: FsInfo struct -- Maintains some information regarding the
- * filesystem (e.g., type of inodes, files, etc)
- */
-struct FsInfo {
-
-  using Filename = std::string;
-  using NameMap = std::unordered_map<Filename, void *>;
-
-  /* Type information */
-  StructType *inodeTyp;
-  StructType *fileTyp;
-
-  /* A bitvector of available file descriptors */
-  llvm::BitVector fds;
-
-  /* Filesystem options*/
-  unsigned int blockSize;
-  unsigned int maxFileSize;
-
-  /* "Mount" options */
-  JournalDataFS journalData;
-  bool delalloc;
-
-  /* A map from file descriptors to file descriptions */
-  llvm::IndexedMap<void *> fdToFile;
-
-  /* Should hold the address of the directory's inode */
-  void *dirInode;
-
-  /* Maps a filename to the address of the contents of the directory's inode for
-   * said name (the contents should have the address of the file's inode) */
-  NameMap nameToInodeAddr;
-};
 
 /*
  * AllocaTracker class -- Keeps track of addresses that have been allocated,
@@ -290,6 +233,21 @@ struct ExecutionContext {
 class Thread {
 
 public:
+	/* Different ways a thread can be blocked */
+	enum BlockageType {
+		BT_NotBlocked,
+		BT_ThreadJoin,
+		BT_Spinloop,
+		BT_ZNESpinloop,
+		BT_SpinloopEnd,
+		BT_LockAcq,
+		BT_LockRel,
+		BT_Barrier,
+		BT_Cons,
+		BT_Error,
+		BT_User,
+	};
+
 	using MyRNG  = std::minstd_rand;
 	using MyDist = std::uniform_int_distribution<MyRNG::result_type>;
 	static constexpr int seed = 1995;
@@ -303,12 +261,14 @@ public:
 	std::unordered_map<const void *, llvm::GenericValue> tls;
 	unsigned int globalInstructions;
 	unsigned int globalInstSnap;
-	bool isBlocked;
+	BlockageType blocked;
 	MyRNG rng;
 	std::vector<std::pair<int, std::string> > prefixLOC;
 
-	void block() { isBlocked = true; };
-	void unblock() { isBlocked = false; };
+	void block(BlockageType t) { blocked = t; }
+	void unblock() { blocked = BT_NotBlocked; }
+	bool isBlocked() const { return blocked != BT_NotBlocked; }
+	BlockageType getBlockageType() const { return blocked; }
 
 	/* Useful for one-to-many instr->events correspondence */
 	void takeSnapshot()   {
@@ -324,12 +284,12 @@ protected:
 
 	Thread(llvm::Function *F, int id)
 		: id(id), parentId(-1), threadFun(F), initSF(), globalInstructions(0),
-		  isBlocked(false), rng(seed) {}
+		  blocked(BT_NotBlocked), rng(seed) {}
 
 	Thread(llvm::Function *F, const llvm::GenericValue &arg,
 	       int id, int pid, const llvm::ExecutionContext &SF)
 		: id(id), parentId(pid), threadFun(F), threadArg(arg),
-		  initSF(SF), globalInstructions(0), isBlocked(false), rng(seed) {}
+		  initSF(SF), globalInstructions(0), blocked(BT_NotBlocked), rng(seed) {}
 };
 
 llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const Thread &thr);
@@ -338,19 +298,6 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const Thread &thr);
 //
 class Interpreter : public ExecutionEngine, public InstVisitor<Interpreter> {
 public:
-
-  /* Enum to inform the driver about possible special attributes
-   * of the instruction being interpreted */
-  enum InstAttr {
-	  IA_None,
-	  IA_Fai,
-	  IA_Cas,
-	  IA_Lock,
-	  IA_Unlock,
-	  IA_DskMdata,
-	  IA_DskDirOp,
-	  IA_DskJnlOp,
-  };
 
   /* Pers: The state of the program -- i.e., part of the program being interpreted */
   enum ProgramState {
@@ -367,11 +314,10 @@ public:
 protected:
 
   GenericValue ExitValue;          // The return value of the called function
-  DataLayout TD;
   IntrinsicLowering *IL;
 
-  /* Naming information for all variables */
-  VariableInfo VI;
+  /* Information about the module under test */
+  ModuleInfo MI;
 
   /* Tracks the names of variables for each storage type */
   IndexedMap<std::unordered_map<const void *, std::string> > varNames;
@@ -381,9 +327,6 @@ protected:
 
   /* A tracker for dynamic allocations */
   AllocaTracker alloctor;
-
-  /* Pers: Some information about the modeled filesystem */
-  FsInfo FI;
 
   /* (Composition) pointer to the driver */
   GenMCDriver *driver;
@@ -417,7 +360,7 @@ protected:
   std::vector<Function*> AtExitHandlers;
 
 public:
-  explicit Interpreter(Module *M, VariableInfo &&VI, FsInfo &&FI,
+  explicit Interpreter(std::unique_ptr<Module> M, ModuleInfo &&MI,
 		       GenMCDriver *driver, const Config *userConf);
   virtual ~Interpreter();
 
@@ -494,6 +437,17 @@ public:
 
   void clearDeps(unsigned int tid);
 
+  /* Annotation information */
+
+  /* Returns annotation information for the instruction I */
+  const SExpr *getAnnotation(Instruction *I) const {
+	  return MI.annotInfo.annotMap.count(I) ? MI.annotInfo.annotMap.at(I).get() : nullptr;
+  }
+
+  /* Returns (concretized) annotation information for the
+   * current instruction (assuming we're executing it) */
+  std::unique_ptr<SExpr> getCurrentAnnotConcretized();
+
   /* Memory pools checks */
 
   /* Returns the name of the variable residing in addr */
@@ -533,7 +487,7 @@ public:
 
   /// create - Create an interpreter ExecutionEngine. This can never fail.
   ///
-  static ExecutionEngine *create(Module *M, VariableInfo &&VI, FsInfo &&FI,
+  static ExecutionEngine *create(std::unique_ptr<Module> M, ModuleInfo &&MI,
 				 GenMCDriver *driver, const Config *userConf,
 				 std::string *ErrorStr = nullptr);
 
@@ -578,7 +532,6 @@ public:
   unsigned int getTypeSize(Type *typ) const;
   void executeAtomicRMWOperation(GenericValue &result, const GenericValue &oldVal,
 				 const GenericValue &val, AtomicRMWInst::BinOp op);
-
 
   // Methods used to execute code:
   // Place a call on the stack
@@ -765,7 +718,11 @@ private:  // Helper functions
 
   /* Custom Opcode Implementations */
   void callAssertFail(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callRecAssertFail(Function *F, const std::vector<GenericValue> &ArgVals);
+  void callLoopBegin(Function *F, const std::vector<GenericValue> &ArgVals);
+  void callSpinStart(Function *F, const std::vector<GenericValue> &ArgVals);
+  void callSpinEnd(Function *F, const std::vector<GenericValue> &ArgVals);
+  void callFaiZNESpinEnd(Function *F, const std::vector<GenericValue> &ArgVals);
+  void callLockZNESpinEnd(Function *F, const std::vector<GenericValue> &ArgVals);
   void callEndLoop(Function *F, const std::vector<GenericValue> &ArgVals);
   void callAssume(Function *F, const std::vector<GenericValue> &ArgVals);
   void callNondetInt(Function *F, const std::vector<GenericValue> &ArgVals);
@@ -780,6 +737,10 @@ private:  // Helper functions
   void callMutexLock(Function *F, const std::vector<GenericValue> &ArgVals);
   void callMutexUnlock(Function *F, const std::vector<GenericValue> &ArgVals);
   void callMutexTrylock(Function *F, const std::vector<GenericValue> &ArgVals);
+  void callMutexDestroy(Function *F, const std::vector<GenericValue> &ArgVals);
+  void callBarrierInit(Function *F, const std::vector<GenericValue> &ArgVals);
+  void callBarrierWait(Function *F, const std::vector<GenericValue> &ArgVals);
+  void callBarrierDestroy(Function *F, const std::vector<GenericValue> &ArgVals);
   void callReadFunction(const Library &lib, const LibMem &m, Function *F,
 			const std::vector<GenericValue> &ArgVals);
   void callWriteFunction(const Library &lib, const LibMem &m, Function *F,
@@ -799,6 +760,11 @@ private:  // Helper functions
   void callPwriteFS(Function *F, const std::vector<GenericValue> &ArgVals);
   void callLseekFS(Function *F, const std::vector<GenericValue> &ArgVals);
   void callPersBarrierFS(Function *F, const std::vector<GenericValue> &ArgVals);
+  void callSmpFenceLKMM(Function *F, const std::vector<GenericValue> &ArgVals);
+  void callAtomicRmwNoRet(Function *F, const std::vector<GenericValue> &ArgVals);
+  void callRCUReadLockLKMM(Function *F, const std::vector<GenericValue> &ArgVals);
+  void callRCUReadUnlockLKMM(Function *F, const std::vector<GenericValue> &ArgVals);
+  void callSynchronizeRCULKMM(Function *F, const std::vector<GenericValue> &ArgVals);
 
   const Library *isUserLibCall(Function *F);
   void callUserLibFunction(const Library *lib, Function *F, const std::vector<GenericValue> &ArgVals);

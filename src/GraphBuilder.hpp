@@ -24,8 +24,8 @@
 #include "config.h"
 #include "DepExecutionGraph.hpp"
 #include "LBCalculatorLAPOR.hpp"
-#include "MOCoherenceCalculator.hpp"
-#include "WBCoherenceCalculator.hpp"
+#include "MOCalculator.hpp"
+#include "WBCalculator.hpp"
 #include "PersistencyChecker.hpp"
 
 /*******************************************************************************
@@ -55,12 +55,12 @@ public:
 		switch (co) {
 		case CoherenceType::mo:
 			graph->addCalculator(
-				LLVM_MAKE_UNIQUE<MOCoherenceCalculator>(*graph, tracksDeps),
+				LLVM_MAKE_UNIQUE<MOCalculator>(*graph, tracksDeps),
 				ExecutionGraph::RelationId::co, true, true);
 			break;
 		case CoherenceType::wb:
 			graph->addCalculator(
-				LLVM_MAKE_UNIQUE<WBCoherenceCalculator>(*graph, tracksDeps),
+				LLVM_MAKE_UNIQUE<WBCalculator>(*graph, tracksDeps),
 				ExecutionGraph::RelationId::co, true, true);
 			break;
 		default:

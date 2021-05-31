@@ -39,7 +39,7 @@ public:
 	static void stripSlashes(std::string &absPath);
 	static void parseInstFromMData(std::pair<int, std::string> &locAndFile,
 				       std::string functionName,
-				       llvm::raw_ostream &os = llvm::dbgs());
+				       llvm::raw_ostream &os = llvm::outs());
 	std::vector<Library> parseSpecs(const string &fileName);
 };
 

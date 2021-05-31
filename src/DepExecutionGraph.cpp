@@ -117,7 +117,7 @@ DepExecutionGraph::getPrefixLabelsNotBefore(const EventLabel *sLab,
 				    wLab->getStamp() > rLab->getStamp()) {
 					/* Make sure we will not store twice and clone */
 					pporf.removeHole(wLab->getPos());
-					result.push_back(std::unique_ptr<EventLabel>(wLab->clone()));
+					result.push_back(wLab->clone());
 					auto &curLab = result.back();
 					auto curWLab = llvm::dyn_cast<WriteLabel>(curLab.get());
 					curWLab->removeReader([&](Event r) {
@@ -127,7 +127,7 @@ DepExecutionGraph::getPrefixLabelsNotBefore(const EventLabel *sLab,
 				}
 			}
 
-			result.push_back(std::unique_ptr<EventLabel>(lab->clone()));
+			result.push_back(lab->clone());
 
 			auto &curLab = result.back();
 			if (auto *wLab = llvm::dyn_cast<WriteLabel>(curLab.get())) {

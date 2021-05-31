@@ -22,8 +22,6 @@
 #define __LB_CALCULATOR_LAPOR_HPP__
 
 #include "Calculator.hpp"
-#include "EventLabel.hpp"
-#include "ExecutionGraph.hpp"
 #include "Matrix2D.hpp"
 #include <unordered_map>
 #include <vector>

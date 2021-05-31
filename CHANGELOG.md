@@ -1,10 +1,29 @@
 # Changelog
 
-All notable changes to GenMC will be documented in this file. Note
+Notable changes to GenMC will be documented in this file. Note
 that this repository is only updated whenever a new version of GenMC
 is released.
 
 ## [Unreleased]
+
+## [0.6] - 2021.05.30
+### Added
+
+- Support for LKMM (experimental)
+- Native support for `pthread_barrier_t` (via BAM)
+- More loops are automatically transformed into `assume` statements
+- Support for liveness checks reinstated
+- Documentation for new features
+
+### Changed
+
+- Error message for mixed-size accesses
+
+### Fixes
+
+- GenMC's output is now properly directed to stdout
+- Proper support for `pthread_mutex_init` and `pthread_mutex_destroy`
+- Various bugs
 
 ## [0.5.3] - 2020.12.06
 ### Added

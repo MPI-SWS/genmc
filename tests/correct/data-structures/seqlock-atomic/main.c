@@ -1,9 +1,9 @@
 #include "fake.h"
 #include "seqlock.h"
 
-#define MAXREADERS 3
-#define MAXWRITERS 3
-#define MAXRDWR 3
+#define MAXREADERS 64
+#define MAXWRITERS 64
+#define MAXRDWR 64
 
 #ifdef CONFIG_SEQ_READERS
 #define DEFAULT_READERS (CONFIG_SEQ_READERS)

@@ -32,7 +32,7 @@
 template <class T, class Hash = std::hash<T> >
 class AdjList {
 
-protected:
+public:
 	/* Simple aliases to easily defer what function arguments represent */
 	using NodeId = unsigned int;
 	using Timestamp = unsigned int;
@@ -124,8 +124,16 @@ public:
 	}
 
 	/* Performs a DFS exploration */
-	template<typename FC, typename FN, typename FE, typename FEND>
-	void dfs(FC&& onCycle, FN&& onNeighbor, FE&& atExplored, FEND&& atEnd);
+	template<typename FVB, typename FET, typename FEB,
+		 typename FEF, typename FVE, typename FEND>
+	void dfs(FVB&& atEntryV, FET&& atTreeE, FEB&& atBackE,
+		 FEF&& atForwE, FVE&& atExitV, FEND&& atEnd) const;
+
+	/* Visits all reachable nodes starting from a in a DFS manner */
+	template<typename FVB, typename FET, typename FEB,
+		 typename FEF, typename FVE, typename FEND>
+	void visitReachable(T a, FVB&& atEntryV, FET&& atTreeE, FEB&& atBackE,
+			    FEF&& atForwE, FVE&& atExitV, FEND&& atEnd) const;
 
 	/* Returns a topological sorting of the graph */
 	std::vector<T> topoSort();
@@ -160,11 +168,12 @@ public:
 
 private:
 	/* Helper for dfs() */
-	template<typename FC, typename FN, typename FE>
+	template<typename FVB, typename FET, typename FEB,
+		 typename FEF, typename FVE>
 	void dfsUtil(NodeId i, Timestamp &t, std::vector<NodeStatus> &m,
 		     std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		     std::vector<Timestamp> &f, FC&& onCycle,
-		     FN&& onNeighbor, FE&& atExplored);
+		     std::vector<Timestamp> &f, FVB&& atEntryV, FET&& atTreeE,
+		     FEB&& atBackE, FEF&& atForwE, FVE&& atExitV) const;
 
 	template<typename F>
 	bool allTopoSortUtil(std::vector<T> &current, std::vector<bool> visited,

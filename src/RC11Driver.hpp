@@ -25,173 +25,32 @@
 
 class RC11Driver : public GenMCDriver {
 
-protected:
-	View calcBasicHbView(Event e) const;
-	View calcBasicPorfView(Event e) const;
-	void calcBasicReadViews(ReadLabel *lab);
-	void calcBasicWriteViews(WriteLabel *lab);
-	void calcWriteMsgView(WriteLabel *lab);
-	void calcRMWWriteMsgView(WriteLabel *lab);
-	void calcBasicFenceViews(FenceLabel *lab);
-	void calcFenceRelRfPoBefore(Event last, View &v);
-
-	int splitLocMOBefore(const llvm::GenericValue *addr, const View &before);
-
 public:
-	/* Constructor */
-	RC11Driver(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Module> mod,
-		   std::vector<Library> &granted, std::vector<Library> &toVerify,
-		   clock_t start);
+	RC11Driver(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Module> mod, clock_t start);
 
-	/* Creates a label for a plain read to be added to the graph */
-	std::unique_ptr<ReadLabel>
-	createReadLabel(int tid, int index, llvm::AtomicOrdering ord,
-			const llvm::GenericValue *ptr, const llvm::Type *typ,
-			Event rf) override;
-
-	/* Creates a label for a FAI read to be added to the graph */
-	std::unique_ptr<FaiReadLabel>
-	createFaiReadLabel(int tid, int index, llvm::AtomicOrdering ord,
-			   const llvm::GenericValue *ptr, const llvm::Type *typ,
-			   Event rf, llvm::AtomicRMWInst::BinOp op,
-			   const llvm::GenericValue &opValue) override;
-
-	/* Creates a label for a CAS read to be added to the graph */
-	std::unique_ptr<CasReadLabel>
-	createCasReadLabel(int tid, int index, llvm::AtomicOrdering ord,
-			   const llvm::GenericValue *ptr, const llvm::Type *typ,
-			   Event rf, const llvm::GenericValue &expected,
-			   const llvm::GenericValue &swap,
-			   bool isLock = false) override;
-
-	/* Creates a label for a library read to be added to the graph */
-	std::unique_ptr<LibReadLabel>
-	createLibReadLabel(int tid, int index, llvm::AtomicOrdering ord,
-			   const llvm::GenericValue *ptr, const llvm::Type *typ,
-			   Event rf, std::string functionName) override;
-
-	/* Creates a label for a disk read to be added to the graph */
-	std::unique_ptr<DskReadLabel>
-	createDskReadLabel(int tid, int index, llvm::AtomicOrdering ord,
-			   const llvm::GenericValue *ptr, const llvm::Type *typ,
-			   Event rf) override;
-
-	/* Creates a label for a plain write to be added to the graph */
-	std::unique_ptr<WriteLabel>
-	createStoreLabel(int tid, int index, llvm::AtomicOrdering ord,
-			 const llvm::GenericValue *ptr, const llvm::Type *typ,
-			 const llvm::GenericValue &val,
-			 bool isUnlock = false) override;
-
-	/* Creates a label for a FAI write to be added to the graph */
-	std::unique_ptr<FaiWriteLabel>
-	createFaiStoreLabel(int tid, int index, llvm::AtomicOrdering ord,
-			    const llvm::GenericValue *ptr, const llvm::Type *typ,
-			    const llvm::GenericValue &val) override;
-
-	/* Creates a label for a CAS write to be added to the graph */
-	std::unique_ptr<CasWriteLabel>
-	createCasStoreLabel(int tid, int index, llvm::AtomicOrdering ord,
-			    const llvm::GenericValue *ptr, const llvm::Type *typ,
-			    const llvm::GenericValue &val,
-			    bool isLock = false) override;
-
-	/* Creates a label for a library write to be added to the graph */
-	std::unique_ptr<LibWriteLabel>
-	createLibStoreLabel(int tid, int index, llvm::AtomicOrdering ord,
-			    const llvm::GenericValue *ptr, const llvm::Type *typ,
-			    llvm::GenericValue &val, std::string functionName,
-			    bool isInit) override;
-
-	/* Creates a label for a disk write to be added to the graph */
-	std::unique_ptr<DskWriteLabel>
-	createDskWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
-			    const llvm::GenericValue *ptr, const llvm::Type *typ,
-			    const llvm::GenericValue &val, void *mapping) override;
-
-	std::unique_ptr<DskMdWriteLabel>
-	createDskMdWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
-			      const llvm::GenericValue *ptr, const llvm::Type *typ,
-			      const llvm::GenericValue &val, void *mapping,
-			      std::pair<void *, void *> ordDataRange) override;
-
-	std::unique_ptr<DskDirWriteLabel>
-	createDskDirWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
-			       const llvm::GenericValue *ptr, const llvm::Type *typ,
-			       const llvm::GenericValue &val, void *mapping) override;
-
-	std::unique_ptr<DskJnlWriteLabel>
-	createDskJnlWriteLabel(int tid, int index, llvm::AtomicOrdering ord,
-			       const llvm::GenericValue *ptr, const llvm::Type *typ,
-			       const llvm::GenericValue &val, void *mapping, void *transInode) override;
-
-	/* Creates a label for a fence to be added to the graph */
-	std::unique_ptr<FenceLabel>
-	createFenceLabel(int tid, int index, llvm::AtomicOrdering ord) override;
-
-
-	/* Creates a label for a malloc event to be added to the graph */
-	std::unique_ptr<MallocLabel>
-	createMallocLabel(int tid, int index, const void *addr,
-			  unsigned int size, Storage s, AddressSpace spc) override;
-
-	/* Creates a label for a free event to be added to the graph */
-	std::unique_ptr<FreeLabel>
-	createFreeLabel(int tid, int index, const void *addr) override;
-
-	std::unique_ptr<DskOpenLabel>
-	createDskOpenLabel(int tid, int index, const char *fileName,
-			   const llvm::GenericValue &fd) override;
-
-	std::unique_ptr<DskFsyncLabel>
-	createDskFsyncLabel(int tid, int index, const void *inode,
-			    unsigned int size) override;
-
-	std::unique_ptr<DskSyncLabel>
-	createDskSyncLabel(int tid, int index) override;
-
-	std::unique_ptr<DskPbarrierLabel>
-	createDskPbarrierLabel(int tid, int index) override;
-
-	/* Creates a label for the creation of a thread to be added to the graph */
-	std::unique_ptr<ThreadCreateLabel>
-	createTCreateLabel(int tid, int index, int cid) override;
-
-	/* Creates a label for the join of a thread to be added to the graph */
-	std::unique_ptr<ThreadJoinLabel>
-	createTJoinLabel(int tid, int index, int cid) override;
-
-	/* Creates a label for the start of a thread to be added to the graph */
-	std::unique_ptr<ThreadStartLabel>
-	createStartLabel(int tid, int index, Event tc, int symm = -1) override;
-
-	/* Creates a label for the end of a thread to be added to the graph */
-	std::unique_ptr<ThreadFinishLabel>
-	createFinishLabel(int tid, int index) override;
-
-	/* LAPOR: Creates a (dummy) label for a lock() operation */
-	std::unique_ptr<LockLabelLAPOR>
-	createLockLabelLAPOR(int tid, int index, const llvm::GenericValue *addr) override;
-
-	/* LAPOR: Creates a (dummy) label for an unlock() operation */
-	std::unique_ptr<UnlockLabelLAPOR>
-	createUnlockLabelLAPOR(int tid, int index, const llvm::GenericValue *addr) override;
-
-	/* Checks for races after a load/store is added to the graph.
-	 * Return the racy event, or INIT if no such event exists */
+	void updateLabelViews(EventLabel *lab) override;
 	Event findDataRaceForMemAccess(const MemAccessLabel *mLab) override;
-
 	std::vector<Event> getStoresToLoc(const llvm::GenericValue *addr) override;
-
 	std::vector<Event> getRevisitLoads(const WriteLabel *lab) override;
-
 	void changeRf(Event read, Event store) override;
-
+	void updateStart(Event create, Event start) override;
 	bool updateJoin(Event join, Event childLast) override;
-
 	void initConsCalculation() override;
 
 private:
+	View calcBasicHbView(Event e) const;
+	View calcBasicPorfView(Event e) const;
+	void calcWriteMsgView(WriteLabel *lab);
+	void calcRMWWriteMsgView(WriteLabel *lab);
+
+	void calcBasicViews(EventLabel *lab);
+	void calcReadViews(ReadLabel *lab);
+	void calcWriteViews(WriteLabel *lab);
+	void calcFenceViews(FenceLabel *lab);
+	void calcStartViews(ThreadStartLabel *lab);
+	void calcJoinViews(ThreadJoinLabel *lab);
+	void calcFenceRelRfPoBefore(Event last, View &v);
+
 	/* Returns true if aLab and bLab are in an RC11 data race*/
 	bool areInDataRace(const MemAccessLabel *aLab, const MemAccessLabel *bLab);
 

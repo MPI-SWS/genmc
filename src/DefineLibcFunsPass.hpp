@@ -22,7 +22,6 @@
 #define __DEFINE_LIBC_FUNS_PASS_HPP__
 
 #include <llvm/Pass.h>
-#include <llvm/Analysis/LoopPass.h>
 
 class DefineLibcFunsPass : public llvm::ModulePass {
 

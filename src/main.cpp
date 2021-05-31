@@ -21,7 +21,6 @@
 #include "config.h"
 #include "Config.hpp"
 #include "DriverFactory.hpp"
-#include "GenMCDriver.hpp"
 #include "Error.hpp"
 #include "LLVMModule.hpp"
 #include "Parser.hpp"
@@ -83,21 +82,13 @@ int main(int argc, char **argv)
 	clock_t start = clock();
 	std::unique_ptr<Config> conf(new Config());
 	Parser parser;
-	std::vector<Library> granted, toVerify;
 
 	conf->getConfigOptions(argc, argv);
-	if (conf->specsFile != "") {
-		auto res = parser.parseSpecs(conf->specsFile);
-		std::copy_if(res.begin(), res.end(), std::back_inserter(granted),
-			     [](Library &l){ return l.getType() == Granted; });
-		std::copy_if(res.begin(), res.end(), std::back_inserter(toVerify),
-			     [](Library &l){ return l.getType() == ToVerify; });
-	}
 	if (conf->inputFromBitcodeFile) {
 		auto sourceCode = parser.readFile(conf->inputFile);
 		auto mod = LLVMModule::getLLVMModule(conf->inputFile, sourceCode);
 		std::unique_ptr<GenMCDriver> driver =
-			DriverFactory::create(std::move(conf), std::move(mod), granted, toVerify, start);
+			DriverFactory::create(std::move(conf), std::move(mod), start);
 		driver->run();
 		/* TODO: Check globalContext.destroy() and llvm::shutdown() */
 		return 0;
@@ -193,11 +184,11 @@ int main(int argc, char **argv)
 
 #ifdef LLVM_EXECUTIONENGINE_MODULE_UNIQUE_PTR
 	std::unique_ptr<GenMCDriver> driver =
-		DriverFactory::create(std::move(conf), Act->takeModule(), granted, toVerify, start);
+		DriverFactory::create(std::move(conf), Act->takeModule(), start);
 #else
 	std::unique_ptr<GenMCDriver> driver =
 		DriverFactory::create(std::move(conf), std::unique_ptr<llvm::Module>(Act->takeModule()),
-				      granted, toVerify, start);
+				      start);
 #endif
 
 	driver->run();

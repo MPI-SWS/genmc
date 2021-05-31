@@ -63,7 +63,9 @@ public:
 	class Builder;
 
 	/* Different relations that might exist in the graph */
-	enum class RelationId { hb, co, lb, psc, ar };
+	enum class RelationId {
+		hb, co, lb, psc, ar, prop, ar_lkmm, pb, rcu_link, rcu, rcu_fence, xb
+	};
 
 protected:
 	/* Constructor should only be called from the builder */
@@ -71,7 +73,7 @@ protected:
 	ExecutionGraph();
 
 public:
-	virtual ~ExecutionGraph() {};
+	virtual ~ExecutionGraph();
 
 	/* Iterators */
 	using iterator = Graph::iterator;
@@ -158,6 +160,16 @@ public:
 	 * Returns INIT in case no such event is found */
 	Event getPreviousNonTrivial(const Event e) const;
 
+	/* Returns the first event in the thread tid */
+	Event getFirstThreadEvent(int tid) const {
+		return Event(tid, 0);
+	}
+
+	/* Returns the first label in the thread tid */
+	const EventLabel *getFirstThreadLabel(int tid) const {
+		return getEventLabel(getFirstThreadEvent(tid));
+	}
+
 	/* Returns the last label in the thread tid */
 	const EventLabel *getLastThreadLabel(int tid) const;
 
@@ -189,6 +201,10 @@ public:
 	 * read part of a lock operation. If no such event exists,
 	 * returns INIT */
 	Event getMatchingUnlock(const Event lock) const;
+
+	/* Returns the RCU unlock that matches LOCK. If such an event does not exist,
+	 * it returns the (non-existing event) at thread size */
+	Event getMatchingRCUUnlockLKMM(Event lock) const;
 
 	/* LAPOR: Returns the last lock that is not matched before "upperLimit".
 	 * If no such event exists, returns INIT */
@@ -227,6 +243,17 @@ public:
 
 	/* Returns a list of loads that can be revisited */
 	virtual std::vector<Event> getRevisitable(const WriteLabel *sLab) const;
+
+	/* Returns the first po-predecessor satisfying F */
+	template <typename F>
+	const EventLabel *getPreviousLabelST(const EventLabel *lab, F&& cond) const {
+		for (auto j = lab->getIndex() - 1; j >= 0; j--) {
+			auto *eLab = getEventLabel(Event(lab->getThread(), j));
+			if (cond(eLab))
+				return eLab;
+		}
+		return nullptr;
+	}
 
 	/* Returns a list of all events satisfying property F */
 	template <typename F>
@@ -280,9 +307,7 @@ public:
 	LBCalculatorLAPOR *getLbCalculatorLAPOR() const;
 
 	/* Pers: Adds a persistency checker to the graph */
-	void addPersistencyChecker(std::unique_ptr<PersistencyChecker> pc) {
-		persChecker = std::move(pc);
-	}
+	void addPersistencyChecker(std::unique_ptr<PersistencyChecker> pc);
 
 	/* Pers: Returns the persistency checker */
 	PersistencyChecker *getPersChecker() const {
@@ -314,6 +339,15 @@ public:
 
 
 	/* Boolean helper functions */
+
+	/* Returns true if the graph contains e */
+	bool contains(const Event &e) const {
+		return e.thread >= 0 && e.thread < getNumThreads() &&
+			e.index >= 0 && e.index < getThreadSize(e.thread);
+	}
+	bool contains(const EventLabel *lab) const {
+		return contains(lab->getPos());
+	}
 
 	/* Returns true if the event should be taken into account when
 	 * calculating some relation (e.g., hb, ar, etc) */
@@ -364,7 +398,6 @@ public:
 	 * will be the same as the current one */
 	virtual bool revisitModifiesGraph(const ReadLabel *rLab,
 					  const EventLabel *sLab) const;
-
 
 	/* Library consistency checks */
 
@@ -507,7 +540,7 @@ private:
 	std::unordered_map<RelationId, unsigned int, ENUM_HASH(RelationId) > relationIndex;
 
 	/* Pers: An object calculating persistency relations */
-	std::unique_ptr<PersistencyChecker> persChecker = nullptr;
+	std::unique_ptr<PersistencyChecker> persChecker; /* nullptr in ctor */
 
 	/* Pers: The ID of the recovery routine.
 	 * It should be -1 if not in recovery mode, or have the
@@ -549,10 +582,5 @@ bool ExecutionGraph::isWriteRfBeforeRel(const AdjList<Event, EventHasher> &rel, 
 			return true;
 	return false;
 }
-
-#include "CoherenceCalculator.hpp"
-#include "LBCalculatorLAPOR.hpp"
-#include "PSCCalculator.hpp"
-#include "PersistencyChecker.hpp"
 
 #endif /* __EXECUTION_GRAPH_HPP__ */
