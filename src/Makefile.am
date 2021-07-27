@@ -1,15 +1,9 @@
 ## Make autotools quit complaining about explicit rules
 AUTOMAKE_OPTIONS = -Wno-override
 
-# where to install the headers on the system
-libgenmc_adir = $(pkgincludedir)
-
-# the list of header files that belong to the library
-libgenmc_a_HEADERS = $(top_builddir)/include/*.h
-
 noinst_LIBRARIES = libgenmc.a
 libgenmc_a_SOURCES = \
-  $(libgenmc_a_HEADERS) \
+  EliminateCastsPass.cpp EliminateCastsPass.hpp \
   ARCalculator.cpp ARCalculator.hpp \
   ARCalculatorLKMM.cpp ARCalculatorLKMM.hpp \
   BisimilarityCheckerPass.cpp BisimilarityCheckerPass.hpp \

@@ -129,7 +129,7 @@ static void notify_waiters(struct combiner *cmb,
 	 * stop_at from the queue. advance has release ordering.
 	 */
 	struct message_metadata *next = advance(&cmb->queue, stop_at);
-	__atomic_store_n(&stop_at->is_done, Finished, mo_rlx);
+	__atomic_store_n(&stop_at->is_done, Finished, mo_rel); // Michalis: mo_rlx triggers race
 	if (next) {
 		/*
 		 * This is fine without an acquire fence - in the case of not
@@ -148,7 +148,7 @@ static void notify_waiters(struct combiner *cmb,
 		if (cur) {
 			__atomic_store_n(&cur->is_done, next, mo_rel); // Michalis: mo_rlx triggers race
 		} else {
-			__atomic_store_n(&cmb->takeover, next, mo_rlx); // Michalis: mo_rlx triggers assertion
+			__atomic_store_n(&cmb->takeover, next, mo_rel); // Michalis: mo_rlx triggers assertion
 		}
 	}
 }

@@ -62,6 +62,7 @@ public:
 
 	/* Transformation options */
 	int unroll;
+	bool castElimination;
 	bool loopJumpThreading;
 	bool spinAssume;
 	bool codeCondenser;
@@ -78,6 +79,7 @@ public:
 	std::string transformFile;
 	std::string programEntryFun;
 	bool validateExecGraphs;
+	unsigned int warnOnGraphSize;
 
 	void getConfigOptions(int argc, char **argv);
 

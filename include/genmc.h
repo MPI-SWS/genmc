@@ -14,12 +14,29 @@ void __VERIFIER_assume(int);
 int __VERIFIER_nondet_int(void);
 
 /*
- * Two marker functions that can be used to mark the
+ * Marker functions that can be used to mark the
  * beginning and end of spinloops that are not automatically
  * transformed to assume() statements by GenMC.
+ *
+ * 1) __VERIFIER_loop_begin() marks the beginning of a loop
+ * 2) __VERIFIER_spin_start() marks the beginning of an iteration
+ * 3) __VERIFIER_spin_end(cond) ends a given loop iteration if
+ *   COND does not hold
+ *
+ * Example usage:
+ *
+ *     for (__VERIFIER_loop_begin();
+ *          __VERIFIER_spin_start(), ..., __VERIFIER_spin_end(...);
+ *          ...) {
+ *     // no side-effects, preferrably empty
+ * }
+ *
+ * NOTE: These should _not_ be used on top of the
+ * automatic spin-assume transformation.
  */
+void __VERIFIER_loop_begin(void);
 void __VERIFIER_spin_start(void);
-void __VERIFIER_spin_end(void);
+void __VERIFIER_spin_end(int);
 
 /*
  * The signature of a recovery routine to be specified

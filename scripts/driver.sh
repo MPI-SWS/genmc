@@ -121,6 +121,10 @@ do
 	    then
 		continue
 	    fi
+	    if [[ "${cat}" == "liveness" && "${coherence}" != "mo" ]]
+	    then
+		continue
+	    fi
 	    source "${DIR}/runcorrect.sh" # the env variables for runcorrect.sh are set
 	    increase_total_time
 	done
@@ -153,7 +157,12 @@ do
 	    continue
 	fi
 	testdir="${wrongdir}/${cat}"
-	coherence="wb"
+	if [[ "${cat}" == "liveness" ]]
+	then
+	    coherence="mo"
+	else
+	    coherence="wb"
+	fi
 	suppress_diff=""
 	if test "${cat}" = "memory" -o "${cat}" = "fs"
 	then

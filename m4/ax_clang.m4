@@ -123,7 +123,7 @@ AC_DEFUN([AX_CLANG],
 
   if test "x$ax_clang_ok" = "xyes"; then
     AC_MSG_CHECKING([if clang driver has -disable-optnone argument])
-    ax_clang_disable_optnone=`echo "int main() { return 0; }" | $CLANG -Xclang -disable-O0-optnone -S -x c - > /dev/null 2>&1`
+    ax_clang_disable_optnone=`echo "int main() { return 0; }" | $CLANG -Xclang -disable-O0-optnone -S -o /tmp/__clang_optnone -x c - > /dev/null 2>&1`
     if test "x$?" = "x0"; then
       AC_MSG_RESULT([yes])
       AC_DEFINE_UNQUOTED([HAVE_CLANG_DISABLE_OPTNONE], [1], [Define to 1 if clang accepts -Xclang -disable-O0-optnone.])

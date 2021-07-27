@@ -63,8 +63,6 @@ private:
 	bool isPoUnlRfLockPoBefore(Event a, Event b) const;
 	std::vector<Event> getExtOverwrites(Event e) const;
 	bool addConstraint(Event a, Event b);
-	bool addConstraints(const std::vector<Event> &as, Event b);
-	bool addConstraints(Event a, const std::vector<Event> &bs);
 	bool addPropConstraints();
 
 	/* All cumulative fences currently in the graph */

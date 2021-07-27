@@ -89,4 +89,7 @@ llvm::ModulePass *createPromoteMemIntrinsicPass();
  */
 llvm::Pass *createSpinAssumePass(bool markStarts = false);
 
+/* Eliminates certain form of casts */
+llvm::Pass *createEliminateCastsPass();
+
 #endif /* __PASSES_HPP__ */

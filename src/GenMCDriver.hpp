@@ -542,6 +542,9 @@ private:
 	/* LKMM: Helper for visiting LKMM fences */
 	void visitFenceLKMM(llvm::AtomicOrdering ord, const char *lkmmType);
 
+	/* LAPOR: Returns whether the current execution is lock-well-formed */
+	bool isLockWellFormedLAPOR() const;
+
 	/* LAPOR: Helper for visiting a lock()/unlock() event */
 	void visitLockLAPOR(const llvm::GenericValue *addr);
 	void visitUnlockLAPOR(const llvm::GenericValue *addr);

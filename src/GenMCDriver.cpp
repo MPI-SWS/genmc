@@ -56,7 +56,7 @@ GenMCDriver::GenMCDriver(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Mod
 		llvm::Interpreter::create(std::move(mod), std::move(MI), this, getConf(), &buf));
 
 	/* Set up an suitable execution graph with appropriate relations */
-	execGraph = GraphBuilder(userConf->isDepTrackingModel)
+	execGraph = GraphBuilder(userConf->isDepTrackingModel, userConf->warnOnGraphSize)
 		.withCoherenceType(userConf->coherence)
 		.withEnabledLAPOR(userConf->LAPOR)
 		.withEnabledPersevere(userConf->persevere, userConf->blockSize).build();
@@ -120,14 +120,33 @@ void GenMCDriver::resetThreadPrioritization()
 	auto *EE = getEE();
 	for (auto i = 0u; i < g.getNumThreads(); i++) {
 		Event last = g.getLastThreadEvent(i);
-		if (!g.getLastThreadUnmatchedLockLAPOR(last).isInitializer()) {
-			WARN_ONCE("lapor-not-well-formed", "Execution not lock-well-formed!\n");
+		if (!g.getLastThreadUnmatchedLockLAPOR(last).isInitializer())
 			EE->getThrById(i).block(llvm::Thread::BlockageType::BT_LockRel);
-		}
 	}
 
 	/* Clear all prioritization */
 	threadPrios.clear();
+}
+
+bool GenMCDriver::isLockWellFormedLAPOR() const
+{
+	if (!getConf()->LAPOR)
+		return true;
+
+	/*
+	 * Check if there is some thread that did not manage to finish its
+	 * critical section, and mark this execution as blocked
+	 */
+	const auto &g = getGraph();
+	auto *EE = getEE();
+	for (auto i = 0u; i < g.getNumThreads(); i++) {
+		Event last = g.getLastThreadEvent(i);
+		if (!g.getLastThreadUnmatchedLockLAPOR(last).isInitializer() &&
+		    std::none_of(EE->threads.begin(), EE->threads.end(), [](const llvm::Thread &thr){
+				    return thr.getBlockageType() == llvm::Thread::BlockageType::BT_Cons; }))
+			return false;
+	}
+	return true;
 }
 
 void GenMCDriver::prioritizeThreads()
@@ -356,7 +375,11 @@ void GenMCDriver::handleFinishedExecution()
 	/* First, reset all exploration options */
 	resetExplorationOptions();
 
-	/* Ignore the execution if some assume has failed */
+	/* LAPOR: Check lock-well-formedness */
+	if (userConf->LAPOR && !isLockWellFormedLAPOR())
+		WARN_ONCE("lapor-not-well-formed", "Execution not lock-well-formed!\n");
+
+	/* Ignore the execution if some assume has failed; check liveness here */
 	if (std::any_of(getEE()->threads.begin(), getEE()->threads.end(),
 			[](llvm::Thread &thr){ return thr.isBlocked(); })) {
 		++exploredBlocked;
@@ -365,6 +388,7 @@ void GenMCDriver::handleFinishedExecution()
 		return;
 	}
 
+	/* Handle printing and counting */
 	const auto &g = getGraph();
 	if (userConf->checkConsPoint == ProgramPoint::exec &&
 	    !isConsistent(ProgramPoint::exec))
@@ -812,44 +836,74 @@ void GenMCDriver::findMemoryRaceForMemAccess(const MemAccessLabel *mLab)
 {
 	const auto &g = getGraph();
 	const View &before = g.getHbBefore(mLab->getPos().prev());
-	for (auto i = 0u; i < g.getNumThreads(); i++)
+	const MallocLabel *allocLab = nullptr;
+
+	for (auto i = 0u; i < g.getNumThreads(); i++) {
 		for (auto j = 0u; j < g.getThreadSize(i); j++) {
 			const EventLabel *oLab = g.getEventLabel(Event(i, j));
-			if (auto *fLab = llvm::dyn_cast<FreeLabel>(oLab)) {
-				if (fLab->getFreedAddr() == mLab->getAddr()) {
-					visitError(DE_AccessFreed, "", oLab->getPos());
-				}
-			}
+			/* Find preceding malloc */
 			if (auto *aLab = llvm::dyn_cast<MallocLabel>(oLab)) {
 				if (aLab->getAllocAddr() <= mLab->getAddr() &&
 				    ((char *) aLab->getAllocAddr() +
-				     aLab->getAllocSize() > (char *) mLab->getAddr()) &&
-				    !before.contains(oLab->getPos())) {
-					visitError(DE_AccessNonMalloc,
-						   "The allocating operation (malloc()) "
-						   "does not happen-before the memory access!",
-						   oLab->getPos());
+				     aLab->getAllocSize() > (char *) mLab->getAddr())) {
+					allocLab = aLab;
+					if (!before.contains(oLab->getPos())) {
+						visitError(DE_AccessNonMalloc,
+							   "The allocating operation (malloc()) "
+							   "does not happen-before the memory access!",
+							   oLab->getPos());
+						return;
+					}
 				}
 			}
+		}
+	}
+	if (!allocLab) {
+		visitError(DE_AccessNonMalloc, "No happens-before preceding allocation (malloc()) found!");
+		return;
+	}
+
+	for (auto i = 0u; i < g.getNumThreads(); i++) {
+		for (auto j = 0u; j < g.getThreadSize(i); j++) {
+			const EventLabel *oLab = g.getEventLabel(Event(i, j));
+			/* Check if the malloc()-address has been freed */
+			if (auto *fLab = llvm::dyn_cast<FreeLabel>(oLab)) {
+				if (fLab->getFreedAddr() == allocLab->getAllocAddr()) {
+					visitError(DE_AccessFreed, "", oLab->getPos());
+					return;
+				}
+			}
+		}
 	}
 	return;
 }
 
 void GenMCDriver::findMemoryRaceForAllocAccess(const FreeLabel *fLab)
 {
-	const MallocLabel *m = nullptr; /* There must be a malloc() before the free() */
 	const auto &g = getGraph();
 	auto *ptr = fLab->getFreedAddr();
 	auto &before = g.getHbBefore(fLab->getPos());
+	const MallocLabel *allocLab = nullptr; /* There must be a malloc() before the free() */
+
 	for (auto i = 0u; i < g.getNumThreads(); i++) {
 		for (auto j = 1u; j < g.getThreadSize(i); j++) {
 			const EventLabel *lab = g.getEventLabel(Event(i, j));
 			if (auto *aLab = llvm::dyn_cast<MallocLabel>(lab)) {
 				if (aLab->getAllocAddr() == ptr &&
 				    before.contains(aLab->getPos())) {
-					m = aLab;
+					allocLab = aLab;
 				}
 			}
+		}
+	}
+	if (!allocLab) {
+		visitError(DE_FreeNonMalloc);
+		return;
+	}
+
+	for (auto i = 0u; i < g.getNumThreads(); i++) {
+		for (auto j = 1u; j < g.getThreadSize(i); j++) {
+			const EventLabel *lab = g.getEventLabel(Event(i, j));
 			if (auto *dLab = llvm::dyn_cast<FreeLabel>(lab)) {
 				if (dLab->getFreedAddr() == ptr &&
 				    dLab->getPos() != fLab->getPos()) {
@@ -857,17 +911,14 @@ void GenMCDriver::findMemoryRaceForAllocAccess(const FreeLabel *fLab)
 				}
 			}
 			if (auto *mLab = llvm::dyn_cast<MemAccessLabel>(lab)) {
-				if (mLab->getAddr() == ptr &&
+				if (mLab->getAddr() >= allocLab->getAllocAddr() &&
+				    (char *) mLab->getAddr() < (char *) allocLab->getAllocAddr() +
+				    allocLab->getAllocSize() &&
 				    !before.contains(mLab->getPos())) {
 					visitError(DE_AccessFreed, "", mLab->getPos());
 				}
-
 			}
 		}
-	}
-
-	if (!m) {
-		visitError(DE_FreeNonMalloc);
 	}
 	return;
 }
@@ -876,7 +927,7 @@ void GenMCDriver::checkForMemoryRaces(const void *addr)
 {
 	if (userConf->disableRaceDetection)
 		return;
-	if (!getEE()->isDynamic(addr))
+	if (!getEE()->isDynamic(addr) || getEE()->isInternal(addr))
 		return;
 
 	const EventLabel *lab = getCurrentLabel();
@@ -1137,39 +1188,47 @@ bool GenMCDriver::threadReadsMaximal(int tid)
 {
 	auto &g = getGraph();
 
-	for (auto j = g.getThreadSize(tid) - 1; j > 0; j--) {
+	/*
+	 * Depending on whether this is a DSA loop or not, we have to
+	 * adjust the detection starting point: DSA-blocked threads
+	 * will have a SpinStart as their last event.
+	 */
+	auto *lastLab = g.getLastThreadLabel(tid);
+	auto start = llvm::isa<SpinStartLabel>(lastLab) ? lastLab->getPos().prev() : lastLab->getPos();
+	for (auto j = start.index; j > 0; j--) {
 		auto *lab = g.getEventLabel(Event(tid, j));
+		BUG_ON(llvm::isa<LoopBeginLabel>(lab));
 		if (llvm::isa<SpinStartLabel>(lab))
-			return false;
+			return true;
 		if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab)) {
 			if (!isCoMaximal(rLab->getAddr(), rLab->getRf()))
-				return true;
+				return false;
 		}
 	}
-	return false;
+	BUG();
 }
 
 void GenMCDriver::checkLiveness()
 {
-	auto &g = getGraph();
-	auto *EE = getEE();
-	std::vector<int> spinBlocked;
-
 	if (shouldCheckCons(ProgramPoint::exec) && !isConsistent(ProgramPoint::exec))
 		return;
 
+	const auto &g = getGraph();
+	const auto *EE = getEE();
+	std::vector<int> spinBlocked;
+
 	/* Collect all threads blocked at spinloops */
-	for (auto &thr : EE->threads) {
+	for (const auto &thr : EE->threads) {
 		if (thr.getBlockageType() == llvm::Thread::BT_Spinloop)
 			spinBlocked.push_back(thr.id);
 	}
-
 	/* And check whether all of them are live or not */
 	if (!spinBlocked.empty() &&
-	    std::none_of(spinBlocked.begin(), spinBlocked.end(),
+	    std::all_of(spinBlocked.begin(), spinBlocked.end(),
 			[&](int tid){ return threadReadsMaximal(tid); })) {
-		/* Print the name of one of the spinloop variables that are not live */
-		visitError(DE_Liveness, "Non-terminating spinloop");
+		/* Print some TID blocked by a spinloop */
+		visitError(DE_Liveness, "Non-terminating spinloop: " \
+			   "thread " + std::to_string(spinBlocked[0]));
 	}
 	return;
 }
@@ -2853,8 +2912,8 @@ void GenMCDriver::visitSpinStart()
 	auto *lbLab = g.getPreviousLabelST(stLab, [](const EventLabel *lab){
 		return llvm::isa<LoopBeginLabel>(lab);
 	});
-	if (!lbLab)
-		return; /* no begin-loop => full spinloop (liveness-checks) */
+	/* If we did not find a loop-begin, this a manual instrumentation(?); report to user */
+	ERROR_ON(!lbLab, "No loop-beginning found!\n");
 
 	auto *pLab = g.getPreviousLabelST(stLab, [lbLab](const EventLabel *lab){
 		return llvm::isa<SpinStartLabel>(lab) && lab->getIndex() > lbLab->getIndex();

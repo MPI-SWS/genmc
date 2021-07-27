@@ -621,13 +621,12 @@ bool SpinAssumePass::runOnLoop(Loop *l, LPPassManager &lpm)
 	/* Mark spinloop start if we have to */
 	if (checkDynamically || (spinloop && markStarts)) {
 		addSpinStartCall(l);
-		/* DSA also requires us to know when we actually enter the loop */
-		if (checkDynamically) {
-			auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-			auto &LI = lpm.getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
-			auto *ph = INSERT_PREHEADER_FOR_LOOP(l, &DT, &LI);
-			addLoopBeginCallBeforeTerm(ph);
-		}
+		/* DSA also requires us to know when we actually enter the loop;
+		 * mark the beginning anyway to compose with liveness checks and nested loops */
+		auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+		auto &LI = lpm.getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
+		auto *ph = INSERT_PREHEADER_FOR_LOOP(l, &DT, &LI);
+		addLoopBeginCallBeforeTerm(ph);
 	}
 
 	/* If the transformation applied did not apply in all backedges, this is indeed a loop */

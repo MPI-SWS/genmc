@@ -132,22 +132,6 @@ bool PROPCalculator::addConstraint(Event a, Event b)
 	return changed;
 }
 
-bool PROPCalculator::addConstraints(const std::vector<Event> &as, Event b)
-{
-	bool changed = false;
-	for (auto &a : as)
-		changed |= addConstraint(a, b);
-	return false;
-}
-
-bool PROPCalculator::addConstraints(Event a, const std::vector<Event> &bs)
-{
-	bool changed = false;
-	for (auto &b : bs)
-		changed |= addConstraint(a, b);
-	return false;
-}
-
 bool PROPCalculator::addPropConstraints()
 {
 	auto &g = getGraph();

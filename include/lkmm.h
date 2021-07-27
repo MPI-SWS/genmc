@@ -106,23 +106,39 @@ do {								\
 } while (0)
 
 /* Exchange */
-#define xchg(p, v)         atomic_exchange_explicit(p, v, memory_order_seq_cst)
-#define xchg_relaxed(p, v) atomic_exchange_explicit(p, v, memory_order_relaxed)
-#define xchg_release(p, v) atomic_exchange_explicit(p, v, memory_order_release)
-#define xchg_acquire(p, v) atomic_exchange_explicit(p, v, memory_order_acquire)
+#define __xchg(p, v, m)				\
+	atomic_exchange_explicit(p, v, m)
+#define xchg(p, v)							\
+({									\
+	__typeof__((v)) _v_ = (v);					\
+	smp_mb__before_atomic();					\
+	_v_ = __xchg(p, v, memory_order_relaxed);			\
+	smp_mb__after_atomic();						\
+	_v_;								\
+})
+#define xchg_relaxed(p, v) __xchg(p, v, memory_order_relaxed)
+#define xchg_release(p, v) __xchg(p, v, memory_order_release)
+#define xchg_acquire(p, v) __xchg(p, v, memory_order_acquire)
 
 #define __cmpxchg(p, o, n, s, f)					\
 ({									\
 	__typeof__((o)) _o_ = (o);					\
 	(atomic_compare_exchange_strong_explicit(p, &_o_, n, s, f));	\
+	_o_;								\
 })
-#define cmpxchg(p, o, n)					\
-	__cmpxchg(p, o, n, memory_order_seq_cst, memory_order_seq_cst)
+#define cmpxchg(p, o, n)						\
+({									\
+	__typeof__((o)) _o_ = (o);					\
+	smp_mb__before_atomic();					\
+	_o_ = __cmpxchg(p, o, n, memory_order_relaxed, memory_order_relaxed); \
+	smp_mb__after_atomic();						\
+	_o_;								\
+})
 #define cmpxchg_relaxed(p, o, n)				\
 	__cmpxchg(p, o, n, memory_order_relaxed, memory_order_relaxed)
-#define cmpxchg_acquire(x, o, n)				\
+#define cmpxchg_acquire(p, o, n)				\
 	__cmpxchg(p, o, n, memory_order_acquire, memory_order_acquire)
-#define cmpxchg_release(x, o, n)				\
+#define cmpxchg_release(p, o, n)				\
 	__cmpxchg(p, o, n, memory_order_release, memory_order_release)
 
 
@@ -183,23 +199,41 @@ void __VERIFIER_atomicrmw_noret(int *, int, memory_order, int);
 #define __VERIFIER_fetch_add_noret(v, i, m) __VERIFIER_atomicrmw_noret(v, i, m, 1)
 #define __VERIFIER_fetch_sub_noret(v, i, m) __VERIFIER_atomicrmw_noret(v, i, m, 2)
 
+/* Non-value-returning atomics */
 #define __atomic_add(i, v, m) __VERIFIER_fetch_add_noret(&(v)->counter, i, m)
 #define __atomic_sub(i, v, m) __VERIFIER_fetch_sub_noret(&(v)->counter, i, m)
-#define __atomic_fetch_add(i, v, m) atomic_fetch_add_explicit(&(v)->counter, i, m)
-#define __atomic_fetch_sub(i, v, m) atomic_fetch_sub_explicit(&(v)->counter, i, m)
-#define __atomic_add_return(i, v, m) atomic_add_fetch_explicit(&(v)->counter, i, m)
-#define __atomic_sub_return(i, v, m) atomic_sub_fetch_explicit(&(v)->counter, i, m)
 
 #define atomic_add(i, v) __atomic_add(i, v, memory_order_relaxed)
 #define atomic_sub(i, v) __atomic_sub(i, v, memory_order_relaxed)
 #define atomic_inc(v) atomic_add(1, v)
 #define atomic_dec(v) atomic_sub(1, v)
 
-#define atomic_add_return(i, v) __atomic_add_return(i, v, memory_order_seq_cst)
+/* Value-returning atomics */
+#define __atomic_fetch_add(i, v, m) atomic_fetch_add_explicit(&(v)->counter, i, m)
+#define __atomic_fetch_sub(i, v, m) atomic_fetch_sub_explicit(&(v)->counter, i, m)
+#define __atomic_add_return(i, v, m) atomic_add_fetch_explicit(&(v)->counter, i, m)
+#define __atomic_sub_return(i, v, m) atomic_sub_fetch_explicit(&(v)->counter, i, m)
+
+#define atomic_add_return(i, v)						\
+({									\
+	__typeof__((i)) _i_ = (i);					\
+	smp_mb__before_atomic();					\
+	_i_ = __atomic_add_return(i, v, memory_order_relaxed);		\
+	smp_mb__after_atomic();						\
+	_i_;								\
+})
 #define atomic_add_return_relaxed(i, v) __atomic_add_return(i, v, memory_order_relaxed)
 #define atomic_add_return_acquire(i, v) __atomic_add_return(i, v, memory_order_acquire)
 #define atomic_add_return_release(i, v) __atomic_add_return(i, v, memory_order_release)
-#define atomic_fetch_add(i, v)         __atomic_fetch_add(i, v, memory_order_seq_cst)
+
+#define atomic_fetch_add(i, v)						\
+({									\
+	__typeof__((i)) _i_ = (i);					\
+	smp_mb__before_atomic();					\
+	_i_ = __atomic_fetch_add(i, v, memory_order_relaxed);		\
+	smp_mb__after_atomic();						\
+	_i_;								\
+})
 #define atomic_fetch_add_relaxed(i, v) __atomic_fetch_add(i, v, memory_order_relaxed)
 #define atomic_fetch_add_acquire(i, v) __atomic_fetch_add(i, v, memory_order_acquire)
 #define atomic_fetch_add_release(i, v) __atomic_fetch_add(i, v, memory_order_release)
@@ -213,11 +247,26 @@ void __VERIFIER_atomicrmw_noret(int *, int, memory_order, int);
 #define atomic_fetch_inc_acquire(v) atomic_fetch_add_acquire(1, v)
 #define atomic_fetch_inc_release(v) atomic_fetch_add_release(1, v)
 
-#define atomic_sub_return(i, v)         __atomic_sub_return(i, v, memory_order_seq_cst)
+#define atomic_sub_return(i, v)						\
+({									\
+	__typeof__((i)) _i_ = (i);					\
+	smp_mb__before_atomic();					\
+	_i_ = __atomic_sub_return(i, v, memory_order_relaxed);		\
+	smp_mb__after_atomic();						\
+	_i_;								\
+})
 #define atomic_sub_return_relaxed(i, v) __atomic_sub_return(i, v, memory_order_relaxed)
 #define atomic_sub_return_acquire(i, v) __atomic_sub_return(i, v, memory_order_acquire)
 #define atomic_sub_return_release(i, v) __atomic_sub_return(i, v, memory_order_release)
-#define atomic_fetch_sub(i, v)         __atomic_fetch_sub(i, v, memory_order_seq_cst)
+
+#define atomic_fetch_sub(i, v)						\
+({									\
+	__typeof__((i)) _i_ = (i);					\
+	smp_mb__before_atomic();					\
+	_i_ = __atomic_fetch_sub(i, v, memory_order_relaxed);		\
+	smp_mb__after_atomic();						\
+	_i_;								\
+})
 #define atomic_fetch_sub_relaxed(i, v) __atomic_fetch_sub(i, v, memory_order_relaxed)
 #define atomic_fetch_sub_acquire(i, v) __atomic_fetch_sub(i, v, memory_order_acquire)
 #define atomic_fetch_sub_release(i, v) __atomic_fetch_sub(i, v, memory_order_release)

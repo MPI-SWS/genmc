@@ -56,10 +56,10 @@ std::vector<BsPoint> getSatisfiableCandidates(const std::vector<ConstrainedBsPoi
 {
 	std::vector<BsPoint> bsPoints;
 
-	for (auto &c : candidates) {
-		if (c.constraints.empty())
-			bsPoints.push_back(c.p);
-	}
+	/* If the constraints are not satisfiable, we shouldn't go further up */
+	for (auto cit = candidates.begin(), cie = candidates.end();
+	     cit != cie && cit->constraints.empty(); ++cit)
+		bsPoints.push_back(cit->p);
 	return bsPoints;
 }
 

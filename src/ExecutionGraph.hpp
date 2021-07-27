@@ -70,7 +70,7 @@ public:
 protected:
 	/* Constructor should only be called from the builder */
 	friend class GraphBuilder;
-	ExecutionGraph();
+	ExecutionGraph(unsigned warnOnGraphSize = UINT_MAX);
 
 public:
 	virtual ~ExecutionGraph();
@@ -546,6 +546,9 @@ private:
 	 * It should be -1 if not in recovery mode, or have the
 	 * value of the recovery routine otherwise. */
 	int recoveryTID = -1;
+
+	/* Dbg: Size of graphs which triggers a warning */
+	unsigned int warnOnGraphSize = UINT_MAX;
 };
 
 template <typename F>

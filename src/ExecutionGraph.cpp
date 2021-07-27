@@ -32,7 +32,8 @@
  ** Class Constructors
  ***********************************************************/
 
-ExecutionGraph::ExecutionGraph() : timestamp(1), persChecker(nullptr)
+ExecutionGraph::ExecutionGraph(unsigned warnOnGraphSize /* UINT_MAX */)
+	: timestamp(1), persChecker(nullptr), warnOnGraphSize(warnOnGraphSize)
 {
 	/* Create an entry for main() and push the "initializer" label */
 	events.push_back({});
@@ -452,6 +453,8 @@ const EventLabel *ExecutionGraph::addOtherLabelToGraph(std::unique_ptr<EventLabe
 		events[pos.thread].push_back(std::move(lab));
 	}
 	BUG_ON(pos.index > events[pos.thread].size());
+	WARN_ON_ONCE(pos.index > warnOnGraphSize, "large-graph",
+		     "Graph too large! Are all loops bounded?\n");
 	return getEventLabel(pos);
 }
 

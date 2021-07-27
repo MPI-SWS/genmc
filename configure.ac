@@ -1,4 +1,4 @@
-AC_INIT([GenMC], [0.6], [michalis@mpi-sws.org], [genmc], [https://plv.mpi-sws.org/genmc])
+AC_INIT([GenMC], [0.6.1], [michalis@mpi-sws.org], [genmc], [https://plv.mpi-sws.org/genmc])
 
 m4_include([m4/ax_llvm.m4])
 m4_include([m4/ax_clang.m4])
@@ -222,6 +222,31 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
          AC_MSG_RESULT([no])],
         [AC_MSG_RESULT([yes])])
 
+## Check whether llvm::Align has been introduced (>= 11)
+AC_MSG_CHECKING([whether llvm::Align has been introduced])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/Support/Alignment.h>
+]],[[
+  llvm::Align a;
+]])],
+        [AC_DEFINE([LLVM_HAS_ALIGN],[1],
+         [Define if llvm::Align exists.])
+         AC_MSG_RESULT([yes])],
+        [AC_MSG_RESULT([no])])
+
+## Check whether getSyncScopeID() exists (>= 6?)
+AC_MSG_CHECKING([whether getSyncSopeID() exists])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/IR/Instructions.h>
+]],[[
+  llvm::LoadInst *li = nullptr;
+  li->getSyncScopeID();
+]])],
+        [AC_DEFINE([LLVM_HAS_GET_SYNC_SCOPE_ID],[1],
+         [Define if getSyncScopeID() exists.])
+         AC_MSG_RESULT([yes])],
+        [AC_MSG_RESULT([no])])
+
 ## Check whether llvm::SwitchInst::CaseIt needs dereference (>= 4.0)
 AC_MSG_CHECKING([whether llvm::SwitchInst::CaseIt needs dereference])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
@@ -249,6 +274,18 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
          [case llvm::Type::FixedVectorTyID: case llvm::Type::ScalableVectorTyID:],
          [Case labels depending on whether VectorTyID exists.])
          AC_MSG_RESULT([{llvm::Type::FixedVectorTyID, llvm::Type::ScalableVectorTyID}])])
+
+## Check whether the function llvm::onlyUsedByLifetimeMarkersOrDroppableInsts() exists (LLVM >= 12)
+AC_MSG_CHECKING([for llvm::onlyUsedByLifetimeMarkersOrDroppableInsts])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/Analysis/ValueTracking.h>
+]],[[
+  int result = llvm::onlyUsedByLifetimeMarkersOrDroppableInsts(nullptr);
+]])],
+        [AC_DEFINE([LLVM_HAS_ONLYUSEDBYLIFETIMEMARKERSORDROPPABLEINSTS],[1],
+         [Define if the function llvm::onlyUsedByLifetimeMarkersOrDroppableInsts exists.])
+         AC_MSG_RESULT([yes])],
+        [AC_MSG_RESULT([no])])
 
 ## Check whether the class llvm::TerminatorInst exists (LLVM < 8)
 AC_MSG_CHECKING([for llvm::TerminatorInst])
@@ -729,5 +766,5 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 
 
 AC_CONFIG_HEADERS([config.h])
-AC_CONFIG_FILES([Makefile src/Makefile])
+AC_CONFIG_FILES([Makefile src/Makefile include/Makefile])
 AC_OUTPUT

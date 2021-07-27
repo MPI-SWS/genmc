@@ -6,6 +6,22 @@ is released.
 
 ## [Unreleased]
 
+## [0.6.1] - 2021.07.27
+### Added
+
+- Documentation for for `__VERIFIER_spin_{start,end}`
+- More accesses to freed memory are detected
+- GenMC warns about execution graphs getting too large
+
+### Changed
+
+- Liveness checks are only allowed under `-mo` now
+
+### Fixes
+
+- Bug fixes
+
+
 ## [0.6] - 2021.05.30
 ### Added
 

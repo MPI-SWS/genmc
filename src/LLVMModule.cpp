@@ -123,6 +123,8 @@ namespace LLVMModule {
 		OptPM.add(createMDataCollectionPass(MI.varInfo, MI.fsInfo));
 		OptPM.add(createPromoteMemIntrinsicPass());
 		OptPM.add(createIntrinsicLoweringPass(mod));
+		if (conf->castElimination)
+			OptPM.add(createEliminateCastsPass());
 		OptPM.add(llvm::createPromoteMemoryToRegisterPass());
 		OptPM.add(llvm::createDeadArgEliminationPass());
 

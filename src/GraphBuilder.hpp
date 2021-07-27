@@ -43,12 +43,12 @@ class GraphBuilder {
 
 public:
 	/* Create an execution graph of the provided type */
-	GraphBuilder(bool shouldTrackDeps) {
+	GraphBuilder(bool shouldTrackDeps, unsigned int warnOnGraphSize = UINT_MAX) {
                 tracksDeps = shouldTrackDeps;
 		if (tracksDeps)
-			graph = std::unique_ptr<DepExecutionGraph>(new DepExecutionGraph());
+			graph = std::unique_ptr<DepExecutionGraph>(new DepExecutionGraph(warnOnGraphSize));
 		else
-			graph = std::unique_ptr<ExecutionGraph>(new ExecutionGraph());
+			graph = std::unique_ptr<ExecutionGraph>(new ExecutionGraph(warnOnGraphSize));
 	};
 
 	GraphBuilder &withCoherenceType(CoherenceType co) {
