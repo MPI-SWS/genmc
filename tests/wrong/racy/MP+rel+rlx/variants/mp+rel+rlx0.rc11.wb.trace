@@ -13,7 +13,7 @@ Event (2, 2) conflicts with event (1, 1) in graph:
 <0, 2> thread_2:
 	(2, 0): B
 	(2, 1): Rrlx (y, 1) [(1, 2)] L.15: mp+rel+rlx.c
-	(2, 2): Rna (x, 0) [INIT] L.16: mp+rel+rlx.c
+	(2, 2): Rna (x, 1) [(1, 1)] L.16: mp+rel+rlx.c
 
 Trace to (2, 2):
 [main] mp+rel+rlx0.c: 11: if (pthread_create(&t1, NULL, thread_1, NULL))
@@ -25,3 +25,4 @@ Trace to (1, 1):
 [main] mp+rel+rlx0.c: 11: if (pthread_create(&t1, NULL, thread_1, NULL))
 [thread_1] mp+rel+rlx.c: 6: x = 1;
 Number of complete executions explored: 1
+Number of blocked executions seen: 1

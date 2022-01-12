@@ -38,4 +38,5 @@ Trace to (4, 2):
 Trace to (1, 1):
 [main] mpu2+rlx+rlx0.c: 11: if (pthread_create(&t1, NULL, thread_1, NULL))
 [thread_1] mpu2+rlx+rlx.c: 6: x = 1;
-Number of complete executions explored: 6
+Number of complete executions explored: 3
+Number of blocked executions seen: 1

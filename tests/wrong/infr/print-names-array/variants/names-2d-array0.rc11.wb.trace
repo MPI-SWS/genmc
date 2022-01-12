@@ -40,4 +40,5 @@ Trace to (0, 6):
 [main] names-2d-array0.c: 22: if (a[1][1] == 42 && stack.nodes[1][1].value == 42)
 [main] names-2d-array0.c: 22: if (a[1][1] == 42 && stack.nodes[1][1].value == 42)
 Assertion violation: 0
-Number of complete executions explored: 1
+Number of complete executions explored: 0
+Number of blocked executions seen: 1

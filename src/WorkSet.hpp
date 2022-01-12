@@ -81,12 +81,11 @@ public:
 	enum Kind {
 		WI_RevBegin,
 		WI_FRev,
-		WI_FRevLib,
 		WI_FRevLast,
 		WI_BRev,
+		WI_BRevLast,
 		WI_RevLast,
 		WI_MO,
-		WI_MOLib,
 		WI_MOLast
 	};
 
@@ -153,31 +152,25 @@ public:
 
 
 /*
- * FRevLibItem class - Represents a forward revisit for libraries
- */
-class FRevLibItem : public FRevItem {
-
-public:
-	FRevLibItem(Event p, Event r) : FRevItem(WI_FRevLib, p, r) {}
-
-	static bool classof(const WorkItem *item) {
-		return item->getKind() == WI_FRevLib;
-	}
-};
-
-
-/*
  * BRevItem class - Represents a backward revisit
  */
 class BRevItem : public RevItem {
+
+protected:
+	BRevItem(Kind k, Event p, Event r,
+		 std::vector<std::unique_ptr<EventLabel> > &&prefix,
+		 std::vector<std::pair<Event, Event> > &&moPlacings)
+		: RevItem(k, p, r),
+		  prefix(std::move(prefix)),
+		  moPlacings(std::move(moPlacings)) {}
 
 public:
 	BRevItem(Event p, Event r,
 		 std::vector<std::unique_ptr<EventLabel> > &&prefix,
 		 std::vector<std::pair<Event, Event> > &&moPlacings)
-		: RevItem(WI_BRev, p, r),
-		  prefix(std::move(prefix)),
-		  moPlacings(std::move(moPlacings)) {}
+		: BRevItem(WI_BRev, p, r, std::move(prefix), std::move(moPlacings)) {}
+	BRevItem(Event p, Event r)
+		: BRevItem(p, r, {}, {}) {}
 
 	/* Returns (releases) the prefix of the revisiting event */
 	std::vector<std::unique_ptr<EventLabel> > &&getPrefixRel() {
@@ -195,7 +188,7 @@ public:
 	}
 
 	static bool classof(const WorkItem *item) {
-		return item->getKind() == WI_BRev;
+		return item->getKind() >= WI_BRev && item->getKind() <= WI_BRevLast;
 	}
 
 private:
@@ -228,19 +221,5 @@ private:
 	int moPos;
 };
 
-
-/*
- * MOLibItem class - Represents an alternative MO position for a library store
- * (Used by libraries that track MO only)
- */
-class MOLibItem : public MOItem {
-
-public:
-	MOLibItem(Event p, int moPos) : MOItem(WI_MOLib, p, moPos) {}
-
-	static bool classof(const WorkItem *item) {
-		return item->getKind() == WI_MOLib;
-	}
-};
 
 #endif /* __WORK_SET_HPP__ */

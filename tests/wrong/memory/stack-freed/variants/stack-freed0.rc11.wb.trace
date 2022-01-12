@@ -2,26 +2,33 @@ Error detected: Attempt to access freed memory!
 Event (2, 3) conflicts with event (1, 4) in graph:
 <-1, 0> main:
 	(0, 0): B
-	(0, 1): M
-	(0, 2): M
-	(0, 3): TC [forks 1] L.11
-	(0, 4): Wna (t1, 1) L.11
-	(0, 5): TC [forks 2] L.13
-	(0, 6): Wna (t2, 2) L.13
-	(0, 7): D L.16
-	(0, 8): D
-	(0, 9): E
+	(0, 1): TC [forks 1] L.11
+	(0, 2): TC [forks 2] L.13
+	(0, 3): E
 <0, 1> thread1:
 	(1, 0): B
 	(1, 1): M
 	(1, 2): Wna (x, 0) L.5: stack-freed.c
-	(1, 3): Wsc (p, 94504789250424) L.6: stack-freed.c
+	(1, 3): Wsc (p, 4611686018427387904) L.6: stack-freed.c
 	(1, 4): D L.7: stack-freed.c
 	(1, 5): E
 <0, 2> thread2:
 	(2, 0): B
-	(2, 1): Rsc (p, 94504789250424) [(1, 3)] L.12: stack-freed.c
-	(2, 2): Rsc (p, 94504789250424) [(1, 3)] L.13: stack-freed.c
+	(2, 1): Rsc (p, 4611686018427387904) [(1, 3)] L.12: stack-freed.c
+	(2, 2): Rsc (p, 4611686018427387904) [(1, 3)] L.13: stack-freed.c
 	(2, 3): Wna (x, 42) L.13: stack-freed.c
 
-Number of complete executions explored: 1
+Trace to (2, 3):
+[main] stack-freed0.c: 11: if (pthread_create(&t1, NULL, thread1, NULL))
+[thread1] stack-freed.c: 5: int x = 0;
+[thread1] stack-freed.c: 6: p = &x;
+[thread2] stack-freed.c: 12: if (p != NULL)
+[thread2] stack-freed.c: 13: *p = 42;
+[thread2] stack-freed.c: 13: *p = 42;
+Trace to (1, 4):
+[main] stack-freed0.c: 11: if (pthread_create(&t1, NULL, thread1, NULL))
+[thread1] stack-freed.c: 5: int x = 0;
+[thread1] stack-freed.c: 6: p = &x;
+[thread1] stack-freed.c: 7: return NULL;
+Number of complete executions explored: 0
+Number of blocked executions seen: 1

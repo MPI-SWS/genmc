@@ -29,6 +29,7 @@
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/InstIterator.h>
+#include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Intrinsics.h>
@@ -41,10 +42,17 @@
 
 using namespace llvm;
 
-/* Just be lazy and under-approximate this; it should not be that important */
 #ifdef LLVM_HAS_ONLYUSEDBYLIFETIMEMARKERSORDROPPABLEINSTS
-# define IS_LIFETIME_START_OR_END(i) isLifetimeStartOrEnd(i)
-# define IS_DROPPABLE(i) isDroppable(i)
+# ifdef LLVM_HAS_IS_LIFETIME_START_OR_END
+#  define IS_LIFETIME_START_OR_END(i) (i)->isLifetimeStartOrEnd()
+# else
+#  define IS_LIFETIME_START_OR_END(i) isLifetimeStartOrEnd(i)
+# endif
+# ifdef LLVM_HAS_IS_DROPPABLE
+#  define IS_DROPPABLE(i) (i)->isDroppable()
+# else
+#  define IS_DROPPABLE(i) isDroppable(i)
+# endif
 # define ONLY_USED_BY_MARKERS_OR_DROPPABLE(i) onlyUsedByLifetimeMarkersOrDroppableInsts(i)
 #else
 # define IS_LIFETIME_START_OR_END(i)				\

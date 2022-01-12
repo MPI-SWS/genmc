@@ -18,7 +18,6 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-#include "Library.hpp"
 #include "Parser.hpp"
 #include <cstdio>
 
@@ -82,98 +81,4 @@ void Parser::parseInstFromMData(std::pair<int, std::string> &locAndFile,
 		os << "[" << functionName << "] ";
 	os << absPath << ": " << line << ": ";
 	os << s << "\n";
-}
-
-std::vector<Library> Parser::parseSpecs(const string &fileName)
-{
-	FILE *file;
-	std::vector<Library> result;
-	char name[256], rel1[256], rel2[256], rel3[256], rel4[256];
-	char line[256], tmp[256];
-	char type[256], ord[256];
-	int num, mems, rels, steps;
-
-	/* Open specs file for reading */
-	if ((file = fopen(fileName.c_str(), "r")) == NULL)
-		goto cleanup;
-
-	/* Read the number libraries taken for granted */
-	if (fscanf(file, "GRANTED: %d\n", &num) != 1)
-		goto cleanup;
-
-	/* Parse the specs for each of them */
-	for (auto i = 0; i < num; i++) {
-		auto number = 0;
-		/* Get the library's name and create an object */
-		if ((number = fscanf(file, "NAME: %s\n", name)) != 1)
-			goto cleanup;
-		Library lib = Library(std::string(name), Granted);
-
-		/* Read all the member-functions of the library */
-		if (fscanf(file, "MEMBERS: %d\n", &mems) != 1)
-			goto cleanup;
-		for (auto j = 0; j < mems; j++) {
-			if (fscanf(file, "%[^_]_%s = %s\n", type, ord, name) != 3)
-				goto cleanup;
-			lib.addMember(std::string(name), std::string(type), std::string(ord));
-		}
-
-		/* Read the specs for this library */
-		if (fscanf(file, "RELATIONS: %d\n", &rels) != 1)
-			goto cleanup;
-		for (auto j = 0; j < rels; j++) {
-			if (fscanf(file, "NAME: %s\n", name) != 1)
-				goto cleanup;
-			lib.addRelation(std::string(name));
-			if (fscanf(file, "STEPS: %d\n", &steps) != 1)
-				goto cleanup;
-			for (auto k = 0; k < steps; k++) {
-				fgets(line, 256, file);
-				if (sscanf(line, "%s >= %[^;];%[^;];%[^;];%s\n",
-					   tmp, rel1, rel2, rel3, rel4) == 5) {
-					std::string step1(rel1), step2(rel2), step3(rel3), step4(rel4);
-					stripWhitespace(step1);
-					stripWhitespace(step2);
-					stripWhitespace(step3);
-					stripWhitespace(step4);
-					lib.addStepToRelation(name, {step1, step2, step3, step4});
-				} else if (sscanf(line, "%s >= %[^;];%s\n", tmp, rel1, rel2) == 3) {
-					std::string step1(rel1), step2(rel2);
-					stripWhitespace(step1);
-					stripWhitespace(step2);
-					if (step1 == step2)
-						lib.makeRelationTransitive(name);
-					else
-						lib.addStepToRelation(name, {step1, step2});
-				} else if (sscanf(line, "%s >= %s\n", tmp, rel1) == 2) {
-					std::string step(rel1);
-					stripWhitespace(step);
-					lib.addStepToRelation(name, {step});
-				} else {
-					goto cleanup;
-				}
-			}
-		}
-		if (fscanf(file, "ACYCLIC: %d\n", &rels) != 1)
-			goto cleanup;
-		for (auto j = 0; j < rels; j++) {
-			if (fscanf(file, "%s\n", name) != 1)
-				goto cleanup;
-			lib.addConstraint(name);
-		}
-		if (fscanf(file, "FUNCTIONAL: %s\n", tmp) != 1)
-			goto cleanup;
-		if (std::string(tmp) == "YES")
-			lib.markFunctionalRfs();
-
-		if (fscanf(file, "\n") != 0)
-			goto cleanup;
-
-		/* Push the library into the result */
-		result.push_back(lib);
-	}
-
-cleanup:
-	fclose(file);
-	return result;
 }

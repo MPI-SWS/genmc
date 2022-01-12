@@ -1,1 +1,1 @@
--DMAKE_BACKUP -DMAKE_BACKUP_SAFE -I../tests/wrong/fs/nano-backup-proc
+-persevere -disable-stop-on-system-error -disable-race-detection | -DMAKE_BACKUP -DMAKE_BACKUP_SAFE -I../tests/wrong/fs/nano-backup-proc

@@ -25,37 +25,22 @@
 #include <string>
 #include <unordered_map>
 
-/* Used to inform the driver about possible special attributes of the
- * instruction being interpreted */
-enum class InstAttr {
-	IA_None,
-
-	IA_Fai,
-	IA_NoRetFai,
-	IA_BPost,
-	IA_Cas,
-	IA_Lock,
-	IA_Trylock,
-	IA_RMWEnd,
-
-	IA_Unlock,
-	IA_BInit,
-	IA_BWait,
-	IA_BDestroy,
-
-	IA_DskMdata,
-	IA_DskDirOp,
-	IA_DskJnlOp,
-	IA_DskJnlEnd
+/* The different reasons a thread might block */
+enum class BlockageType {
+	NotBlocked,
+	ThreadJoin,
+	Spinloop,
+	SpinloopEnd,
+	FaiZNESpinloop,
+	LockZNESpinloop,
+	LockOptBlock,
+	LockNotAcq,
+	LockNotRel,
+	Barrier,
+	Cons,
+	Error,
+	User,
 };
-
-inline bool isRMWAttr(InstAttr attr) { return attr >= InstAttr::IA_Fai && attr <= InstAttr::IA_RMWEnd; }
-inline bool isFAIAttr(InstAttr attr) { return attr >= InstAttr::IA_Fai && attr <= InstAttr::IA_BPost; }
-inline bool isLockAttr(InstAttr attr) { return attr == InstAttr::IA_Lock; }
-inline bool isTrylockAttr(InstAttr attr) { return attr == InstAttr::IA_Trylock; }
-inline bool isBPostAttr(InstAttr attr) { return attr == InstAttr::IA_BPost; }
-inline bool isBWaitAttr(InstAttr attr) { return attr == InstAttr::IA_BWait; }
-inline bool isDskAttr(InstAttr attr) { return attr >= InstAttr::IA_DskMdata && attr <= InstAttr::IA_DskJnlEnd; }
 
 /* Pers: Journaling mount options */
 enum class JournalDataFS { writeback, ordered, journal };

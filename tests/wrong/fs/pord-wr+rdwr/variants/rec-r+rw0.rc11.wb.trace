@@ -1,2 +1,222 @@
 WARNING: File does not exist in open()
-FIXME: RECOVERY ERROR
+Error detected: Recovery error!
+Event (3, 26) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): M
+	(0, 2): Cacq (__genmc_dir_inode.lock.__private, 0) [INIT] L.65
+	(0, 3): Cacq (__genmc_dir_inode.lock.__private, 1) L.65
+	(0, 4): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.65
+	(0, 5): DRacq (__genmc_dir_inode.data[0], 0x0) [INIT] L.65
+	(0, 6): M
+	(0, 7): Wrel (__inode_x.lock, 0) L.65
+	(0, 8): Wrel (__inode_x.i_size, 0) L.65
+	(0, 9): DWrel (__inode_x.i_transaction, 0) L.65
+	(0, 10): DWrel (__inode_x.i_disksize, 0) L.65
+	(0, 11): DF L.65
+	(0, 12): DWrel (__genmc_dir_inode.data[0], 0x2000000000000010) L.65
+	(0, 13): Wrel (__genmc_dir_inode.lock.__private, 0) L.65
+	(0, 14): FO (x, 0) L.65
+	(0, 15): M
+	(0, 16): Wna (__file_x_0_14.inode, 0x2000000000000010) L.65
+	(0, 17): Wna (__file_x_0_14.flags, 66) L.65
+	(0, 18): Wna (__file_x_0_14.pos, 0) L.65
+	(0, 19): Wrel (__file_x_0_14.pos_lock, 0) L.65
+	(0, 20): Wrel (__file_x_0_14.count, 1) L.65
+	(0, 21): Wna (fd_x, 0) L.65
+	(0, 22): PB L.67
+	(0, 23): TC [forks 1] L.69
+	(0, 24): TC [forks 2] L.71
+	(0, 25): TJ L.73
+	(0, 26): TJ L.75
+	(0, 27): D L.78
+	(0, 28): E
+<0, 1> thread_1:
+	(1, 0): B
+	(1, 1): M
+	(1, 2): Rna (fd_x, 0) [(0, 21)] L.15
+	(1, 3): Wna (buf[0], 42) L.16
+	(1, 4): Rna (__file_x_0_14.flags, 66) [(0, 17)] L.18
+	(1, 5): Rrlx (__file_x_0_14.inode, 0x2000000000000010) [(0, 16)] L.18
+	(1, 6): Cacq (__inode_x.lock, 0) [(0, 7)] L.18
+	(1, 7): Cacq (__inode_x.lock, 1) L.18
+	(1, 8): Racq (__inode_x.i_size, 0) [(0, 8)] L.18
+	(1, 9): Rna (buf[0], 42) [(1, 3)] L.18
+	(1, 10): DWrel (__inode_x.data, 42) L.18
+	(1, 11): Racq (__inode_x.i_size, 0) [(0, 8)] L.18
+	(1, 12): DWrel (__inode_x.i_disksize, 1) L.18
+	(1, 13): Wrel (__inode_x.i_size, 1) L.18
+	(1, 14): Wrel (__inode_x.lock, 0) L.18
+	(1, 15): D L.19
+	(1, 16): E
+<0, 2> thread_2:
+	(2, 0): B
+	(2, 1): M
+	(2, 2): M
+	(2, 3): Rna (fd_x, 0) [(0, 21)] L.26
+	(2, 4): Wna (buf_x[0], 0) L.28
+	(2, 5): Wna (buf_y[0], 42) L.29
+	(2, 6): Cacq (__genmc_dir_inode.lock.__private, 0) [(0, 13)] L.31
+	(2, 7): Cacq (__genmc_dir_inode.lock.__private, 1) L.31
+	(2, 8): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.31
+	(2, 9): DRacq (__genmc_dir_inode.data[8], 0x0) [INIT] L.31
+	(2, 10): M
+	(2, 11): Wrel (__inode_y.lock, 0) L.31
+	(2, 12): Wrel (__inode_y.i_size, 0) L.31
+	(2, 13): DWrel (__inode_y.i_transaction, 0) L.31
+	(2, 14): DWrel (__inode_y.i_disksize, 0) L.31
+	(2, 15): DF L.31
+	(2, 16): DWrel (__genmc_dir_inode.data[8], 0x2000000000000090) L.31
+	(2, 17): Wrel (__genmc_dir_inode.lock.__private, 0) L.31
+	(2, 18): FO (y, 1) L.31
+	(2, 19): M
+	(2, 20): Wna (__file_y_2_18.inode, 0x2000000000000090) L.31
+	(2, 21): Wna (__file_y_2_18.flags, 65) L.31
+	(2, 22): Wna (__file_y_2_18.pos, 0) L.31
+	(2, 23): Wrel (__file_y_2_18.pos_lock, 0) L.31
+	(2, 24): Wrel (__file_y_2_18.count, 1) L.31
+	(2, 25): Rna (__file_x_0_14.flags, 66) [(0, 17)] L.33
+	(2, 26): Rrlx (__file_x_0_14.inode, 0x2000000000000010) [(0, 16)] L.33
+	(2, 27): Racq (__inode_x.i_size, 1) [(1, 13)] L.33
+	(2, 28): DRacq (__inode_x.data, 42) [(1, 10)] L.33
+	(2, 29): Wna (buf_x[0], 42) L.33
+	(2, 30): Rna (buf_x[0], 42) [(2, 29)] L.34
+	(2, 31): Rna (__file_y_2_18.flags, 65) [(2, 21)] L.35
+	(2, 32): Rrlx (__file_y_2_18.inode, 0x2000000000000090) [(2, 20)] L.35
+	(2, 33): Cacq (__inode_y.lock, 0) [(2, 11)] L.35
+	(2, 34): Cacq (__inode_y.lock, 1) L.35
+	(2, 35): Racq (__inode_y.i_size, 0) [(2, 12)] L.35
+	(2, 36): Rna (buf_y[0], 42) [(2, 5)] L.35
+	(2, 37): DWrel (__inode_y.data, 42) L.35
+	(2, 38): Racq (__inode_y.i_size, 0) [(2, 12)] L.35
+	(2, 39): DWrel (__inode_y.i_disksize, 1) L.35
+	(2, 40): Wrel (__inode_y.i_size, 1) L.35
+	(2, 41): Wrel (__inode_y.lock, 0) L.35
+	(2, 42): D L.37
+	(2, 43): D L.37
+	(2, 44): E
+<-1, 3> __VERIFIER_recovery_routine:
+	(3, 0): B
+	(3, 1): M
+	(3, 2): M
+	(3, 3): Wna (buf_x[0], 0) L.45
+	(3, 4): Wna (buf_y[0], 0) L.46
+	(3, 5): DRrlx (__genmc_dir_inode.i_transaction, 0) [INIT] L.48
+	(3, 6): DRrlx (__genmc_dir_inode.data[8], 0x2000000000000090) [(2, 16)] L.48
+	(3, 7): FO (y, 2) L.48
+	(3, 8): M
+	(3, 9): Wna (__file_y_3_7.inode, 0x2000000000000090) L.48
+	(3, 10): Wna (__file_y_3_7.flags, 0) L.48
+	(3, 11): Wna (__file_y_3_7.pos, 0) L.48
+	(3, 12): Wrel (__file_y_3_7.pos_lock, 0) L.48
+	(3, 13): Wrel (__file_y_3_7.count, 1) L.48
+	(3, 14): DRrlx (__genmc_dir_inode.i_transaction, 0) [INIT] L.49
+	(3, 15): DRrlx (__genmc_dir_inode.data[0], 0x2000000000000010) [(0, 12)] L.49
+	(3, 16): FO (x, 3) L.49
+	(3, 17): M
+	(3, 18): Wna (__file_x_3_16.inode, 0x2000000000000010) L.49
+	(3, 19): Wna (__file_x_3_16.flags, 0) L.49
+	(3, 20): Wna (__file_x_3_16.pos, 0) L.49
+	(3, 21): Wrel (__file_x_3_16.pos_lock, 0) L.49
+	(3, 22): Wrel (__file_x_3_16.count, 1) L.49
+	(3, 23): DRrlx (???, 1) [(2, 39)] L.54
+	(3, 24): DRrlx (???, 42) [(2, 37)] L.54
+	(3, 25): Wna (buf_y[0], 42) L.54
+	(3, 26): DRrlx (__inode_x.i_disksize, 0) [(0, 10)] L.55
+
+Trace to (3, 26):
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 65: int fd_x = open("x", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-r+rw0.c: 67: __VERIFIER_pbarrier();
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 45: buf_x[0] = 0;
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 46: buf_y[0] = 0;
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 48: int fd_y = open("y", O_RDONLY, S_IRWXU);
+[main] rec-r+rw0.c: 67: __VERIFIER_pbarrier();
+[main] rec-r+rw0.c: 69: if (pthread_create(&t1, NULL, thread_1, &fd_x))
+[thread_2] rec-r+rw0.c: 26: int fd_x = *((int *) fdx);
+[thread_2] rec-r+rw0.c: 28: buf_x[0] = 0;
+[thread_2] rec-r+rw0.c: 29: buf_y[0] = 42;
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 48: int fd_y = open("y", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 48: int fd_y = open("y", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 48: int fd_y = open("y", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 48: int fd_y = open("y", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 48: int fd_y = open("y", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 48: int fd_y = open("y", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 48: int fd_y = open("y", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 48: int fd_y = open("y", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 49: int fd_x = open("x", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 49: int fd_x = open("x", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 49: int fd_x = open("x", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 49: int fd_x = open("x", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 49: int fd_x = open("x", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 49: int fd_x = open("x", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 49: int fd_x = open("x", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 49: int fd_x = open("x", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 49: int fd_x = open("x", O_RDONLY, S_IRWXU);
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[thread_2] rec-r+rw0.c: 31: int fd_y = creat("y", S_IRWXU);
+[thread_2] rec-r+rw0.c: 33: pread(fd_x, buf_x, 1, 0);
+[thread_2] rec-r+rw0.c: 33: pread(fd_x, buf_x, 1, 0);
+[thread_1] rec-r+rw0.c: 15: int fd_x = *((int *) fdx);
+[thread_1] rec-r+rw0.c: 16: buf[0] = 42;
+[thread_1] rec-r+rw0.c: 18: pwrite(fd_x, buf, 1, 0);
+[thread_1] rec-r+rw0.c: 18: pwrite(fd_x, buf, 1, 0);
+[thread_1] rec-r+rw0.c: 18: pwrite(fd_x, buf, 1, 0);
+[thread_1] rec-r+rw0.c: 18: pwrite(fd_x, buf, 1, 0);
+[thread_1] rec-r+rw0.c: 18: pwrite(fd_x, buf, 1, 0);
+[thread_1] rec-r+rw0.c: 18: pwrite(fd_x, buf, 1, 0);
+[thread_1] rec-r+rw0.c: 18: pwrite(fd_x, buf, 1, 0);
+[thread_1] rec-r+rw0.c: 18: pwrite(fd_x, buf, 1, 0);
+[thread_1] rec-r+rw0.c: 18: pwrite(fd_x, buf, 1, 0);
+[thread_2] rec-r+rw0.c: 33: pread(fd_x, buf_x, 1, 0);
+[thread_2] rec-r+rw0.c: 33: pread(fd_x, buf_x, 1, 0);
+[thread_2] rec-r+rw0.c: 33: pread(fd_x, buf_x, 1, 0);
+[thread_2] rec-r+rw0.c: 34: if (buf_x[0] == 42)
+[thread_2] rec-r+rw0.c: 35: pwrite(fd_y, buf_y, 1, 0);
+[thread_2] rec-r+rw0.c: 35: pwrite(fd_y, buf_y, 1, 0);
+[thread_2] rec-r+rw0.c: 35: pwrite(fd_y, buf_y, 1, 0);
+[thread_2] rec-r+rw0.c: 35: pwrite(fd_y, buf_y, 1, 0);
+[thread_2] rec-r+rw0.c: 35: pwrite(fd_y, buf_y, 1, 0);
+[thread_2] rec-r+rw0.c: 35: pwrite(fd_y, buf_y, 1, 0);
+[thread_2] rec-r+rw0.c: 35: pwrite(fd_y, buf_y, 1, 0);
+[thread_2] rec-r+rw0.c: 35: pwrite(fd_y, buf_y, 1, 0);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 54: pread(fd_y, buf_y, 1, 0);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 54: pread(fd_y, buf_y, 1, 0);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 54: pread(fd_y, buf_y, 1, 0);
+[__VERIFIER_recovery_routine] rec-r+rw0.c: 55: pread(fd_x, buf_x, 1, 0);
+Assertion violation: !(buf_y[0] == 42 && buf_x[0] == 0)
+Number of complete executions explored: 4

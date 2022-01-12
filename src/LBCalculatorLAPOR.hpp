@@ -33,7 +33,7 @@ public:
 	LBCalculatorLAPOR(ExecutionGraph &g) : Calculator(g) {}
 
 	/* Adds a lock to the maintained list */
-	void addLockToList(const llvm::GenericValue *addr, const Event lock);
+	void addLockToList(SAddr addr, const Event lock);
 
 	/* Returns the first non-trivial event in the critical section
 	 * that "lock" opens */
@@ -64,14 +64,13 @@ public:
 	/* The calculator is informed about the removal of some events */
 	void removeAfter(const VectorClock &preds) override;
 
-	/* The calculator is informed about the restoration of some events */
-	void restorePrefix(const ReadLabel *rLab,
-			   const std::vector<std::unique_ptr<EventLabel> > &storePrefix,
-			   const std::vector<std::pair<Event, Event> > &status) override;
+	std::unique_ptr<Calculator> clone(ExecutionGraph &g) const override {
+		return LLVM_MAKE_UNIQUE<LBCalculatorLAPOR>(g);
+	}
 
 private:
 	/* A per-location list of all locks currently present in the graph */
-	std::unordered_map<const llvm::GenericValue *, std::vector<Event> > locks;
+	std::unordered_map<SAddr, std::vector<Event> > locks;
 };
 
 #endif /* __LB_CALCULATOR_LAPOR_HPP__ */

@@ -1,1 +1,294 @@
-FIXME: RECOVERY ERROR
+Error detected: Recovery error!
+Event (1, 30) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): M
+	(0, 2): Wna (buf[0], 1) L.35
+	(0, 3): Wna (buf[1], 1) L.36
+	(0, 4): Wna (buf[2], 2) L.37
+	(0, 5): Wna (buf[3], 2) L.38
+	(0, 6): Cacq (__genmc_dir_inode.lock.__private, 0) [INIT] L.40
+	(0, 7): Cacq (__genmc_dir_inode.lock.__private, 1) L.40
+	(0, 8): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.40
+	(0, 9): DRacq (__genmc_dir_inode.data[8], 0x0) [INIT] L.40
+	(0, 10): M
+	(0, 11): Wrel (__inode_foo.lock, 0) L.40
+	(0, 12): Wrel (__inode_foo.i_size, 0) L.40
+	(0, 13): DWrel (__inode_foo.i_transaction, 0) L.40
+	(0, 14): DWrel (__inode_foo.i_disksize, 0) L.40
+	(0, 15): DF L.40
+	(0, 16): DWrel (__genmc_dir_inode.data[8], 0x2000000000000010) L.40
+	(0, 17): Wrel (__genmc_dir_inode.lock.__private, 0) L.40
+	(0, 18): FO (foo, 0) L.40
+	(0, 19): M
+	(0, 20): Wna (__file_foo_0_18.inode, 0x2000000000000010) L.40
+	(0, 21): Wna (__file_foo_0_18.flags, 66) L.40
+	(0, 22): Wna (__file_foo_0_18.pos, 0) L.40
+	(0, 23): Wrel (__file_foo_0_18.pos_lock, 0) L.40
+	(0, 24): Wrel (__file_foo_0_18.count, 1) L.40
+	(0, 25): Cacq (__genmc_dir_inode.lock.__private, 0) [(0, 17)] L.41
+	(0, 26): Cacq (__genmc_dir_inode.lock.__private, 1) L.41
+	(0, 27): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.41
+	(0, 28): DRacq (__genmc_dir_inode.data[0], 0x0) [INIT] L.41
+	(0, 29): M
+	(0, 30): Wrel (__inode_bar.lock, 0) L.41
+	(0, 31): Wrel (__inode_bar.i_size, 0) L.41
+	(0, 32): DWrel (__inode_bar.i_transaction, 0) L.41
+	(0, 33): DWrel (__inode_bar.i_disksize, 0) L.41
+	(0, 34): DF L.41
+	(0, 35): DWrel (__genmc_dir_inode.data[0], 0x2000000000000090) L.41
+	(0, 36): Wrel (__genmc_dir_inode.lock.__private, 0) L.41
+	(0, 37): FO (bar, 1) L.41
+	(0, 38): M
+	(0, 39): Wna (__file_bar_0_37.inode, 0x2000000000000090) L.41
+	(0, 40): Wna (__file_bar_0_37.flags, 66) L.41
+	(0, 41): Wna (__file_bar_0_37.pos, 0) L.41
+	(0, 42): Wrel (__file_bar_0_37.pos_lock, 0) L.41
+	(0, 43): Wrel (__file_bar_0_37.count, 1) L.41
+	(0, 44): Cacq (__file_foo_0_18.pos_lock, 0) [(0, 23)] L.42
+	(0, 45): Cacq (__file_foo_0_18.pos_lock, 1) L.42
+	(0, 46): Rna (__file_foo_0_18.pos, 0) [(0, 22)] L.42
+	(0, 47): Rna (__file_foo_0_18.flags, 66) [(0, 21)] L.42
+	(0, 48): Rrlx (__file_foo_0_18.inode, 0x2000000000000010) [(0, 20)] L.42
+	(0, 49): Cacq (__inode_foo.lock, 0) [(0, 11)] L.42
+	(0, 50): Cacq (__inode_foo.lock, 1) L.42
+	(0, 51): Racq (__inode_foo.i_size, 0) [(0, 12)] L.42
+	(0, 52): Rna (buf[0], 1) [(0, 2)] L.42
+	(0, 53): DWrel (__inode_foo.data, 1) L.42
+	(0, 54): Rna (buf[1], 1) [(0, 3)] L.42
+	(0, 55): DWrel (__inode_foo.data, 1) L.42
+	(0, 56): Racq (__inode_foo.i_size, 0) [(0, 12)] L.42
+	(0, 57): DWrel (__inode_foo.i_disksize, 2) L.42
+	(0, 58): Wrel (__inode_foo.i_size, 2) L.42
+	(0, 59): Wrel (__inode_foo.lock, 0) L.42
+	(0, 60): Wna (__file_foo_0_18.pos, 2) L.42
+	(0, 61): Wrel (__file_foo_0_18.pos_lock, 0) L.42
+	(0, 62): Cacq (__file_bar_0_37.pos_lock, 0) [(0, 42)] L.43
+	(0, 63): Cacq (__file_bar_0_37.pos_lock, 1) L.43
+	(0, 64): Rna (__file_bar_0_37.pos, 0) [(0, 41)] L.43
+	(0, 65): Rna (__file_bar_0_37.flags, 66) [(0, 40)] L.43
+	(0, 66): Rrlx (__file_bar_0_37.inode, 0x2000000000000090) [(0, 39)] L.43
+	(0, 67): Cacq (__inode_bar.lock, 0) [(0, 30)] L.43
+	(0, 68): Cacq (__inode_bar.lock, 1) L.43
+	(0, 69): Racq (__inode_bar.i_size, 0) [(0, 31)] L.43
+	(0, 70): Rna (buf[0], 1) [(0, 2)] L.43
+	(0, 71): DWrel (__inode_bar.data, 1) L.43
+	(0, 72): Rna (buf[1], 1) [(0, 3)] L.43
+	(0, 73): DWrel (__inode_bar.data, 1) L.43
+	(0, 74): Racq (__inode_bar.i_size, 0) [(0, 31)] L.43
+	(0, 75): DWrel (__inode_bar.i_disksize, 2) L.43
+	(0, 76): Wrel (__inode_bar.i_size, 2) L.43
+	(0, 77): Wrel (__inode_bar.lock, 0) L.43
+	(0, 78): Wna (__file_bar_0_37.pos, 2) L.43
+	(0, 79): Wrel (__file_bar_0_37.pos_lock, 0) L.43
+	(0, 80): PB L.45
+	(0, 81): Cacq (__file_foo_0_18.pos_lock, 0) [(0, 61)] L.47
+	(0, 82): Cacq (__file_foo_0_18.pos_lock, 1) L.47
+	(0, 83): Rna (__file_foo_0_18.pos, 2) [(0, 60)] L.47
+	(0, 84): Rna (__file_foo_0_18.flags, 66) [(0, 21)] L.47
+	(0, 85): Rrlx (__file_foo_0_18.inode, 0x2000000000000010) [(0, 20)] L.47
+	(0, 86): Cacq (__inode_foo.lock, 0) [(0, 59)] L.47
+	(0, 87): Cacq (__inode_foo.lock, 1) L.47
+	(0, 88): Racq (__inode_foo.i_size, 2) [(0, 58)] L.47
+	(0, 89): Rna (buf[2], 2) [(0, 4)] L.47
+	(0, 90): DWrel (__inode_foo.data, 2) L.47
+	(0, 91): Rna (buf[3], 2) [(0, 5)] L.47
+	(0, 92): DWrel (__inode_foo.data, 2) L.47
+	(0, 93): Racq (__inode_foo.i_size, 2) [(0, 58)] L.47
+	(0, 94): DWrel (__inode_foo.i_disksize, 4) L.47
+	(0, 95): Wrel (__inode_foo.i_size, 4) L.47
+	(0, 96): Wrel (__inode_foo.lock, 0) L.47
+	(0, 97): Wna (__file_foo_0_18.pos, 4) L.47
+	(0, 98): Wrel (__file_foo_0_18.pos_lock, 0) L.47
+	(0, 99): Cacq (__file_bar_0_37.pos_lock, 0) [(0, 79)] L.48
+	(0, 100): Cacq (__file_bar_0_37.pos_lock, 1) L.48
+	(0, 101): Rna (__file_bar_0_37.pos, 2) [(0, 78)] L.48
+	(0, 102): Rna (__file_bar_0_37.flags, 66) [(0, 40)] L.48
+	(0, 103): Rrlx (__file_bar_0_37.inode, 0x2000000000000090) [(0, 39)] L.48
+	(0, 104): Cacq (__inode_bar.lock, 0) [(0, 77)] L.48
+	(0, 105): Cacq (__inode_bar.lock, 1) L.48
+	(0, 106): Racq (__inode_bar.i_size, 2) [(0, 76)] L.48
+	(0, 107): Rna (buf[2], 2) [(0, 4)] L.48
+	(0, 108): DWrel (__inode_bar.data, 2) L.48
+	(0, 109): Rna (buf[3], 2) [(0, 5)] L.48
+	(0, 110): DWrel (__inode_bar.data, 2) L.48
+	(0, 111): Racq (__inode_bar.i_size, 2) [(0, 76)] L.48
+	(0, 112): DWrel (__inode_bar.i_disksize, 4) L.48
+	(0, 113): Wrel (__inode_bar.i_size, 4) L.48
+	(0, 114): Wrel (__inode_bar.lock, 0) L.48
+	(0, 115): Wna (__file_bar_0_37.pos, 4) L.48
+	(0, 116): Wrel (__file_bar_0_37.pos_lock, 0) L.48
+	(0, 117): Uar (__file_foo_0_18.count, 1) [(0, 24)] L.50
+	(0, 118): Uar (__file_foo_0_18.count, 0) L.50
+	(0, 119): D L.50
+	(0, 120): Uar (__file_bar_0_37.count, 1) [(0, 43)] L.51
+	(0, 121): Uar (__file_bar_0_37.count, 0) L.51
+	(0, 122): D L.51
+	(0, 123): D L.53
+	(0, 124): E
+<-1, 1> __VERIFIER_recovery_routine:
+	(1, 0): B
+	(1, 1): M
+	(1, 2): M
+	(1, 3): Wna (bufb[0], 0) L.16
+	(1, 4): Wna (buff[0], 0) L.16
+	(1, 5): Wna (bufb[1], 0) L.17
+	(1, 6): Wna (buff[1], 0) L.17
+	(1, 7): DRrlx (__genmc_dir_inode.i_transaction, 0) [INIT] L.19
+	(1, 8): DRrlx (__genmc_dir_inode.data[8], 0x2000000000000010) [(0, 16)] L.19
+	(1, 9): FO (foo, 2) L.19
+	(1, 10): M
+	(1, 11): Wna (__file_foo_1_9.inode, 0x2000000000000010) L.19
+	(1, 12): Wna (__file_foo_1_9.flags, 0) L.19
+	(1, 13): Wna (__file_foo_1_9.pos, 0) L.19
+	(1, 14): Wrel (__file_foo_1_9.pos_lock, 0) L.19
+	(1, 15): Wrel (__file_foo_1_9.count, 1) L.19
+	(1, 16): DRrlx (__genmc_dir_inode.i_transaction, 0) [INIT] L.20
+	(1, 17): DRrlx (__genmc_dir_inode.data[0], 0x2000000000000090) [(0, 35)] L.20
+	(1, 18): FO (bar, 3) L.20
+	(1, 19): M
+	(1, 20): Wna (__file_bar_1_18.inode, 0x2000000000000090) L.20
+	(1, 21): Wna (__file_bar_1_18.flags, 0) L.20
+	(1, 22): Wna (__file_bar_1_18.pos, 0) L.20
+	(1, 23): Wrel (__file_bar_1_18.pos_lock, 0) L.20
+	(1, 24): Wrel (__file_bar_1_18.count, 1) L.20
+	(1, 25): DRrlx (__inode_foo.i_disksize, 2) [(0, 57)] L.23
+	(1, 26): DRrlx (__inode_bar.i_disksize, 4) [(0, 112)] L.24
+	(1, 27): DRrlx (__inode_bar.data, 2) [(0, 108)] L.24
+	(1, 28): Wna (bufb[0], 2) L.24
+	(1, 29): DRrlx (__inode_bar.data, 2) [(0, 110)] L.24
+	(1, 30): Wna (bufb[1], 2) L.24
+
+Trace to (1, 30):
+[main] ordered-append0.c: 35: buf[0] = 1;
+[main] ordered-append0.c: 36: buf[1] = 1;
+[main] ordered-append0.c: 37: buf[2] = 2;
+[main] ordered-append0.c: 38: buf[3] = 2;
+[main] ordered-append0.c: 40: int fdf = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 40: int fdf = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 40: int fdf = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 40: int fdf = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 40: int fdf = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 40: int fdf = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 40: int fdf = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 40: int fdf = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 40: int fdf = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 40: int fdf = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 40: int fdf = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 40: int fdf = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 40: int fdf = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 40: int fdf = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 40: int fdf = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 40: int fdf = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 40: int fdf = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 40: int fdf = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 41: int fdb = open("bar", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 41: int fdb = open("bar", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 41: int fdb = open("bar", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 41: int fdb = open("bar", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 41: int fdb = open("bar", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 41: int fdb = open("bar", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 41: int fdb = open("bar", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 41: int fdb = open("bar", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 41: int fdb = open("bar", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 41: int fdb = open("bar", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 41: int fdb = open("bar", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 41: int fdb = open("bar", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 41: int fdb = open("bar", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 41: int fdb = open("bar", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 41: int fdb = open("bar", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 41: int fdb = open("bar", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 41: int fdb = open("bar", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 41: int fdb = open("bar", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] ordered-append0.c: 42: write(fdf, buf, 2);
+[main] ordered-append0.c: 42: write(fdf, buf, 2);
+[main] ordered-append0.c: 42: write(fdf, buf, 2);
+[main] ordered-append0.c: 42: write(fdf, buf, 2);
+[main] ordered-append0.c: 42: write(fdf, buf, 2);
+[main] ordered-append0.c: 42: write(fdf, buf, 2);
+[main] ordered-append0.c: 42: write(fdf, buf, 2);
+[main] ordered-append0.c: 42: write(fdf, buf, 2);
+[main] ordered-append0.c: 42: write(fdf, buf, 2);
+[main] ordered-append0.c: 42: write(fdf, buf, 2);
+[main] ordered-append0.c: 42: write(fdf, buf, 2);
+[main] ordered-append0.c: 42: write(fdf, buf, 2);
+[main] ordered-append0.c: 42: write(fdf, buf, 2);
+[main] ordered-append0.c: 42: write(fdf, buf, 2);
+[main] ordered-append0.c: 42: write(fdf, buf, 2);
+[main] ordered-append0.c: 42: write(fdf, buf, 2);
+[main] ordered-append0.c: 43: write(fdb, buf, 2);
+[main] ordered-append0.c: 43: write(fdb, buf, 2);
+[main] ordered-append0.c: 43: write(fdb, buf, 2);
+[main] ordered-append0.c: 43: write(fdb, buf, 2);
+[main] ordered-append0.c: 43: write(fdb, buf, 2);
+[main] ordered-append0.c: 43: write(fdb, buf, 2);
+[main] ordered-append0.c: 43: write(fdb, buf, 2);
+[main] ordered-append0.c: 43: write(fdb, buf, 2);
+[main] ordered-append0.c: 43: write(fdb, buf, 2);
+[main] ordered-append0.c: 43: write(fdb, buf, 2);
+[main] ordered-append0.c: 43: write(fdb, buf, 2);
+[main] ordered-append0.c: 43: write(fdb, buf, 2);
+[main] ordered-append0.c: 43: write(fdb, buf, 2);
+[main] ordered-append0.c: 43: write(fdb, buf, 2);
+[main] ordered-append0.c: 43: write(fdb, buf, 2);
+[main] ordered-append0.c: 43: write(fdb, buf, 2);
+[main] ordered-append0.c: 45: __VERIFIER_pbarrier();
+[__VERIFIER_recovery_routine] ordered-append0.c: 16: buff[0] = bufb[0] = 0;
+[__VERIFIER_recovery_routine] ordered-append0.c: 16: buff[0] = bufb[0] = 0;
+[__VERIFIER_recovery_routine] ordered-append0.c: 17: buff[1] = bufb[1] = 0;
+[__VERIFIER_recovery_routine] ordered-append0.c: 17: buff[1] = bufb[1] = 0;
+[__VERIFIER_recovery_routine] ordered-append0.c: 19: int fdf = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] ordered-append0.c: 19: int fdf = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] ordered-append0.c: 19: int fdf = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] ordered-append0.c: 19: int fdf = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] ordered-append0.c: 19: int fdf = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] ordered-append0.c: 19: int fdf = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] ordered-append0.c: 19: int fdf = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] ordered-append0.c: 19: int fdf = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] ordered-append0.c: 19: int fdf = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] ordered-append0.c: 20: int fdb = open("bar", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] ordered-append0.c: 20: int fdb = open("bar", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] ordered-append0.c: 20: int fdb = open("bar", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] ordered-append0.c: 20: int fdb = open("bar", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] ordered-append0.c: 20: int fdb = open("bar", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] ordered-append0.c: 20: int fdb = open("bar", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] ordered-append0.c: 20: int fdb = open("bar", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] ordered-append0.c: 20: int fdb = open("bar", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] ordered-append0.c: 20: int fdb = open("bar", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] ordered-append0.c: 23: int nrf = pread(fdf, buff, 2, 2);
+[main] ordered-append0.c: 45: __VERIFIER_pbarrier();
+[main] ordered-append0.c: 47: write(fdf, buf + 2, 2);
+[main] ordered-append0.c: 47: write(fdf, buf + 2, 2);
+[main] ordered-append0.c: 47: write(fdf, buf + 2, 2);
+[main] ordered-append0.c: 47: write(fdf, buf + 2, 2);
+[main] ordered-append0.c: 47: write(fdf, buf + 2, 2);
+[main] ordered-append0.c: 47: write(fdf, buf + 2, 2);
+[main] ordered-append0.c: 47: write(fdf, buf + 2, 2);
+[main] ordered-append0.c: 47: write(fdf, buf + 2, 2);
+[main] ordered-append0.c: 47: write(fdf, buf + 2, 2);
+[main] ordered-append0.c: 47: write(fdf, buf + 2, 2);
+[main] ordered-append0.c: 47: write(fdf, buf + 2, 2);
+[main] ordered-append0.c: 47: write(fdf, buf + 2, 2);
+[main] ordered-append0.c: 47: write(fdf, buf + 2, 2);
+[main] ordered-append0.c: 47: write(fdf, buf + 2, 2);
+[main] ordered-append0.c: 47: write(fdf, buf + 2, 2);
+[main] ordered-append0.c: 47: write(fdf, buf + 2, 2);
+[main] ordered-append0.c: 48: write(fdb, buf + 2, 2);
+[main] ordered-append0.c: 48: write(fdb, buf + 2, 2);
+[main] ordered-append0.c: 48: write(fdb, buf + 2, 2);
+[main] ordered-append0.c: 48: write(fdb, buf + 2, 2);
+[main] ordered-append0.c: 48: write(fdb, buf + 2, 2);
+[main] ordered-append0.c: 48: write(fdb, buf + 2, 2);
+[main] ordered-append0.c: 48: write(fdb, buf + 2, 2);
+[main] ordered-append0.c: 48: write(fdb, buf + 2, 2);
+[main] ordered-append0.c: 48: write(fdb, buf + 2, 2);
+[main] ordered-append0.c: 48: write(fdb, buf + 2, 2);
+[main] ordered-append0.c: 48: write(fdb, buf + 2, 2);
+[main] ordered-append0.c: 48: write(fdb, buf + 2, 2);
+[__VERIFIER_recovery_routine] ordered-append0.c: 24: int nrb = pread(fdb, bufb, 2, 2);
+[__VERIFIER_recovery_routine] ordered-append0.c: 24: int nrb = pread(fdb, bufb, 2, 2);
+[__VERIFIER_recovery_routine] ordered-append0.c: 24: int nrb = pread(fdb, bufb, 2, 2);
+[__VERIFIER_recovery_routine] ordered-append0.c: 24: int nrb = pread(fdb, bufb, 2, 2);
+[__VERIFIER_recovery_routine] ordered-append0.c: 24: int nrb = pread(fdb, bufb, 2, 2);
+Assertion violation: !(nrb == 2 && nrf == 0)
+Number of complete executions explored: 2

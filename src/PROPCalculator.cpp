@@ -214,9 +214,3 @@ Calculator::CalculationResult PROPCalculator::doCalc()
 void PROPCalculator::removeAfter(const VectorClock &preds)
 {
 }
-
-void PROPCalculator::restorePrefix(const ReadLabel *rLab,
-				   const std::vector<std::unique_ptr<EventLabel> > &storePrefix,
-				   const std::vector<std::pair<Event, Event> > &status)
-{
-}

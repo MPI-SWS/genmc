@@ -48,6 +48,10 @@ public:
 	/* Returns whether the recovery relation is acyclic */
 	bool isRecAcyclic();
 
+	std::unique_ptr<PersistencyChecker> clone(ExecutionGraph &g) {
+		return LLVM_MAKE_UNIQUE<PersistencyChecker>(g, blockSize);
+	}
+
 private:
 	/* Return a reference to the execution graph */
 	ExecutionGraph &getGraph() { return execGraph; }

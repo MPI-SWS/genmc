@@ -32,7 +32,7 @@ bool isDskAccessInRange(const DskAccessLabel *dLab, char *inode, unsigned int iS
 	if (llvm::isa<FenceLabel>(dLab))
 		return true;
 
-	auto *mAddr = (char *) llvm::dyn_cast<MemAccessLabel>(dLab)->getAddr();
+	auto *mAddr = (char *) llvm::dyn_cast<MemAccessLabel>(dLab)->getAddr().get();
 	BUG_ON(!llvm::isa<MemAccessLabel>(dLab));
 	return inode <= mAddr && mAddr < inode + iSize;
 }
@@ -45,8 +45,8 @@ bool writeSameBlock(const DskWriteLabel *dw1, const DskWriteLabel *dw2,
 	if (dw1->getKind() != dw2->getKind())
 		return false;
 
-	ptrdiff_t off1 = (char *) dw1->getAddr() - (char *) dw1->getMapping();
-	ptrdiff_t off2 = (char *) dw2->getAddr() - (char *) dw2->getMapping();
+	ptrdiff_t off1 = (char *) dw1->getAddr().get() - (char *) dw1->getMapping();
+	ptrdiff_t off2 = (char *) dw2->getAddr().get() - (char *) dw2->getMapping();
 	return (off1 / blockSize) == (off2 / blockSize);
 }
 
@@ -94,8 +94,8 @@ void PersistencyChecker::calcDskMemAccessPbView(MemAccessLabel *mLab)
 					if (jLab->getTransInode() == wLab->getMapping())
 						pb.update(jLab->getPbView());
 			if (auto *oLab = llvm::dyn_cast<DskWriteLabel>(lab)) {
-				if (oLab->getAddr() >= ordRange.first &&
-				    oLab->getAddr() <  ordRange.second)
+				if ((void *) oLab->getAddr().get() >= ordRange.first &&
+				    (void *) oLab->getAddr().get() <  ordRange.second)
 					pb.update(oLab->getPbView());
 				if (auto *jLab = llvm::dyn_cast<DskJnlWriteLabel>(mLab))
 					if (jLab->getTransInode() == oLab->getMapping())
@@ -218,7 +218,7 @@ void PersistencyChecker::calcPb()
 			BUG_ON(!lab2);
 			if (lab1->getPbView().contains(d2))
 				pbRelation.addEdge(d2, d1);
-			if (g.getHbBefore(d1).contains(d2)) {
+			if (g.getEventLabel(d1)->getHbView().contains(d2)) {
 				if (writeSameBlock(lab1, lab2, getBlockSize()))
 					pbRelation.addEdge(d2, d1);
 			}
@@ -236,10 +236,9 @@ bool PersistencyChecker::isStoreReadFromRecRoutine(Event s)
 	auto recId = g.getRecoveryRoutineId();
 	auto recLast = g.getLastThreadEvent(recId);
 
-	BUG_ON(!llvm::isa<WriteLabel>(g.getEventLabel(s)));
-	auto *wLab = static_cast<const WriteLabel *>(g.getEventLabel(s));
-	auto &readers = wLab->getReadersList();
-	return std::any_of(readers.begin(), readers.end(), [&](Event r)
+	auto *wLab = llvm::dyn_cast<WriteLabel>(g.getEventLabel(s));
+	BUG_ON(!wLab);
+	return std::any_of(wLab->readers_begin(), wLab->readers_end(), [&](Event r)
 			   { return r.thread == recId &&
 				    r.index <= recLast.index; });
 }

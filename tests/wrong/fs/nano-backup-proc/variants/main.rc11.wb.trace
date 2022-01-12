@@ -1,1 +1,510 @@
-FIXME: RECOVERY ERROR
+In file included from /home/michalis/genmc-tool/scripts/../tests/wrong/fs/nano-backup-proc/variants/main.c:35:
+/home/michalis/genmc-tool/scripts/../tests/wrong/fs/nano-backup-proc/variants/../fake.h:280:9: warning: 'free' macro redefined [-Wmacro-redefined]
+#define free(x) do {} while (0)
+        ^
+/home/michalis/genmc-tool/include/stdlib.h:14:9: note: previous definition is here
+#define free __VERIFIER_free
+        ^
+In file included from /home/michalis/genmc-tool/scripts/../tests/wrong/fs/nano-backup-proc/variants/main.c:35:
+/home/michalis/genmc-tool/scripts/../tests/wrong/fs/nano-backup-proc/variants/../fake.h:366:36: warning: initializing 'char *' with an expression of type 'const char [14]' discards qualifiers [-Wincompatible-pointer-types-discards-qualifiers]
+linestruct __only_line = { .data = buffer_data };
+                                   ^~~~~~~~~~~
+2 warnings generated.
+WARNING: this target does not support the llvm.stacksave intrinsic.
+WARNING: Component does not exist for unlink()
+Error detected: Non-Atomic race!
+Event (1, 13) conflicts with event (0, 109) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): Cacq (__genmc_dir_inode.lock.__private, 0) [INIT] L.69
+	(0, 2): Cacq (__genmc_dir_inode.lock.__private, 1) L.69
+	(0, 3): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.69
+	(0, 4): DRacq (__genmc_dir_inode.data[0], 0x0) [INIT] L.69
+	(0, 5): M
+	(0, 6): Wrel (__inode_foo.txt.lock, 0) L.69
+	(0, 7): Wrel (__inode_foo.txt.i_size, 0) L.69
+	(0, 8): DWrel (__inode_foo.txt.i_transaction, 0) L.69
+	(0, 9): DWrel (__inode_foo.txt.i_disksize, 0) L.69
+	(0, 10): DF L.69
+	(0, 11): DWrel (__genmc_dir_inode.data[0], 0x2000000000000010) L.69
+	(0, 12): Wrel (__genmc_dir_inode.lock.__private, 0) L.69
+	(0, 13): FO (foo.txt, 0) L.69
+	(0, 14): M
+	(0, 15): Wna (__file_foo.txt_0_13.inode, 0x2000000000000010) L.69
+	(0, 16): Wna (__file_foo.txt_0_13.flags, 65) L.69
+	(0, 17): Wna (__file_foo.txt_0_13.pos, 0) L.69
+	(0, 18): Wrel (__file_foo.txt_0_13.pos_lock, 0) L.69
+	(0, 19): Wrel (__file_foo.txt_0_13.count, 1) L.69
+	(0, 20): Cacq (__file_foo.txt_0_13.pos_lock, 0) [(0, 18)] L.70
+	(0, 21): Cacq (__file_foo.txt_0_13.pos_lock, 1) L.70
+	(0, 22): Rna (__file_foo.txt_0_13.pos, 0) [(0, 17)] L.70
+	(0, 23): Rna (__file_foo.txt_0_13.flags, 65) [(0, 16)] L.70
+	(0, 24): Rrlx (__file_foo.txt_0_13.inode, 0x2000000000000010) [(0, 15)] L.70
+	(0, 25): Cacq (__inode_foo.txt.lock, 0) [(0, 6)] L.70
+	(0, 26): Cacq (__inode_foo.txt.lock, 1) L.70
+	(0, 27): Racq (__inode_foo.txt.i_size, 0) [(0, 7)] L.70
+	(0, 28): Rna (initial_data[0], 100) [INIT] L.70
+	(0, 29): DWrel (__inode_foo.txt.data, 100) L.70
+	(0, 30): Rna (initial_data[1], 97) [INIT] L.70
+	(0, 31): DWrel (__inode_foo.txt.data, 97) L.70
+	(0, 32): Racq (__inode_foo.txt.i_size, 0) [(0, 7)] L.70
+	(0, 33): DWrel (__inode_foo.txt.i_disksize, 2) L.70
+	(0, 34): Wrel (__inode_foo.txt.i_size, 2) L.70
+	(0, 35): Rna (initial_data[2], 116) [INIT] L.70
+	(0, 36): DWrel (__inode_foo.txt.data, 116) L.70
+	(0, 37): Rna (initial_data[3], 97) [INIT] L.70
+	(0, 38): DWrel (__inode_foo.txt.data, 97) L.70
+	(0, 39): Racq (__inode_foo.txt.i_size, 2) [(0, 34)] L.70
+	(0, 40): DWrel (__inode_foo.txt.i_disksize, 4) L.70
+	(0, 41): Wrel (__inode_foo.txt.i_size, 4) L.70
+	(0, 42): Rna (initial_data[4], 0) [INIT] L.70
+	(0, 43): DWrel (__inode_foo.txt.data, 0) L.70
+	(0, 44): Racq (__inode_foo.txt.i_size, 4) [(0, 41)] L.70
+	(0, 45): DWrel (__inode_foo.txt.i_disksize, 5) L.70
+	(0, 46): Wrel (__inode_foo.txt.i_size, 5) L.70
+	(0, 47): Wrel (__inode_foo.txt.lock, 0) L.70
+	(0, 48): Wna (__file_foo.txt_0_13.pos, 5) L.70
+	(0, 49): Wrel (__file_foo.txt_0_13.pos_lock, 0) L.70
+	(0, 50): Uar (__file_foo.txt_0_13.count, 1) [(0, 19)] L.71
+	(0, 51): Uar (__file_foo.txt_0_13.count, 0) L.71
+	(0, 52): D L.71
+	(0, 53): PB L.74
+	(0, 54): Wna (openfile, 0x80000000000001b0) L.383: fake.h
+	(0, 55): M
+	(0, 56): Rna (openfile, 0x80000000000001b0) [(0, 54)] L.81: nano.c
+	(0, 57): Rna (__open_file.filetop, 0x8000000000000108) [INIT] L.81: nano.c
+	(0, 58): Wna (st.st_dev, 0) L.196: fake.h
+	(0, 59): Wna (st.st_ino, 0) L.197: fake.h
+	(0, 60): Wna (st.st_mode, 0) L.198: fake.h
+	(0, 61): Wna (st.st_nlink, 0) L.199: fake.h
+	(0, 62): Wna (st.st_uid, 0) L.200: fake.h
+	(0, 63): Wna (st.st_gid, 0) L.201: fake.h
+	(0, 64): Wna (st.st_rdev, 0) L.202: fake.h
+	(0, 65): Wna (st.st_size, 0) L.203: fake.h
+	(0, 66): Wna (st.st_atime, 0) L.204: fake.h
+	(0, 67): Wna (st.st_mtime, 0) L.205: fake.h
+	(0, 68): Wna (st.st_ctime, 0) L.206: fake.h
+	(0, 69): Wna (st.st_blksize, 0) L.207: fake.h
+	(0, 70): Wna (st.st_blocks, 0) L.208: fake.h
+	(0, 71): Wna (st.st_attr, 0) L.209: fake.h
+	(0, 72): Rna (openfile, 0x80000000000001b0) [(0, 54)] L.103: nano.c
+	(0, 73): Rna (__open_file.statinfo, 0x8000000000000138) [INIT] L.103: nano.c
+	(0, 74): Rna (openfile, 0x80000000000001b0) [(0, 54)] L.109: nano.c
+	(0, 75): Rna (__open_file.statinfo, 0x8000000000000138) [INIT] L.109: nano.c
+	(0, 76): Rna (openfile, 0x80000000000001b0) [(0, 54)] L.110: nano.c
+	(0, 77): Rna (__open_file.statinfo, 0x8000000000000138) [INIT] L.110: nano.c
+	(0, 78): Rna (__open_file_stat.st_mtime, 0) [INIT] L.110: nano.c
+	(0, 79): Rna (st.st_mtime, 0) [(0, 67)] L.110: nano.c
+	(0, 80): Rna (openfile, 0x80000000000001b0) [(0, 54)] L.117: nano.c
+	(0, 81): Rna (__open_file.statinfo, 0x8000000000000138) [INIT] L.117: nano.c
+	(0, 82): Rna (__open_file_stat.st_atime, 0) [INIT] L.117: nano.c
+	(0, 83): Wna (write_file.filetime[0].tv_sec, 0) L.117: nano.c
+	(0, 84): Rna (openfile, 0x80000000000001b0) [(0, 54)] L.118: nano.c
+	(0, 85): Rna (__open_file.statinfo, 0x8000000000000138) [INIT] L.118: nano.c
+	(0, 86): Rna (__open_file_stat.st_mtime, 0) [INIT] L.118: nano.c
+	(0, 87): Wna (write_file.filetime[1].tv_sec, 0) L.118: nano.c
+	(0, 88): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.121: nano.c
+	(0, 89): DRacq (__genmc_dir_inode.data[0], 0x2000000000000010) [(0, 11)] L.121: nano.c
+	(0, 90): FO (foo.txt, 1) L.121: nano.c
+	(0, 91): M
+	(0, 92): Wna (__file_foo.txt_0_90.inode, 0x2000000000000010) L.121: nano.c
+	(0, 93): Wna (__file_foo.txt_0_90.flags, 2) L.121: nano.c
+	(0, 94): Wna (__file_foo.txt_0_90.pos, 0) L.121: nano.c
+	(0, 95): Wrel (__file_foo.txt_0_90.pos_lock, 0) L.121: nano.c
+	(0, 96): Wrel (__file_foo.txt_0_90.count, 1) L.121: nano.c
+	(0, 97): Rna (__next_fd, 0) [INIT] L.121: nano.c
+	(0, 98): Rna (__next_fd, 0) [INIT] L.121: nano.c
+	(0, 99): Wna (__fds[0], 1) L.121: nano.c
+	(0, 100): Rna (__next_fd, 0) [INIT] L.121: nano.c
+	(0, 101): Wna (__next_fd, 1) L.121: nano.c
+	(0, 102): Rna (backup_dir, 0x0) [INIT] L.133: nano.c
+	(0, 103): Cacq (__genmc_dir_inode.lock.__private, 0) [(0, 12)] L.166: nano.c
+	(0, 104): Cacq (__genmc_dir_inode.lock.__private, 1) L.166: nano.c
+	(0, 105): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.166: nano.c
+	(0, 106): DRacq (__genmc_dir_inode.data[8], 0x0) [INIT] L.166: nano.c
+	(0, 107): Wrlx (errno, 2) L.166: nano.c
+	(0, 108): Wrel (__genmc_dir_inode.lock.__private, 0) L.166: nano.c
+	(0, 109): Rna (errno, 2) [(0, 107)] L.166: nano.c
+	(0, 110): Cacq (__genmc_dir_inode.lock.__private, 0) [(0, 108)] L.181: nano.c
+	(0, 111): Cacq (__genmc_dir_inode.lock.__private, 1) L.181: nano.c
+	(0, 112): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.181: nano.c
+	(0, 113): DRacq (__genmc_dir_inode.data[8], 0x0) [INIT] L.181: nano.c
+	(0, 114): M
+	(0, 115): Wrel (__inode_foo.txt~.lock, 0) L.181: nano.c
+	(0, 116): Wrel (__inode_foo.txt~.i_size, 0) L.181: nano.c
+	(0, 117): DWrel (__inode_foo.txt~.i_transaction, 0) L.181: nano.c
+	(0, 118): DWrel (__inode_foo.txt~.i_disksize, 0) L.181: nano.c
+	(0, 119): DF L.181: nano.c
+	(0, 120): DWrel (__genmc_dir_inode.data[8], 0x20000000000000b0) L.181: nano.c
+	(0, 121): Wrel (__genmc_dir_inode.lock.__private, 0) L.181: nano.c
+	(0, 122): FO (foo.txt~, 2) L.181: nano.c
+	(0, 123): M
+	(0, 124): Wna (__file_foo.txt~_0_122.inode, 0x20000000000000b0) L.181: nano.c
+	(0, 125): Wna (__file_foo.txt~_0_122.flags, 65) L.181: nano.c
+	(0, 126): Wna (__file_foo.txt~_0_122.pos, 0) L.181: nano.c
+	(0, 127): Wrel (__file_foo.txt~_0_122.pos_lock, 0) L.181: nano.c
+	(0, 128): Wrel (__file_foo.txt~_0_122.count, 1) L.181: nano.c
+	(0, 129): Rna (__next_fd, 1) [(0, 101)] L.229: fake.h
+	(0, 130): Rna (__next_fd, 1) [(0, 101)] L.230: fake.h
+	(0, 131): Wna (__fds[1], 2) L.230: fake.h
+	(0, 132): Rna (__next_fd, 1) [(0, 101)] L.231: fake.h
+	(0, 133): Wna (__next_fd, 2) L.231: fake.h
+	(0, 134): M
+	(0, 135): Rna (__fds[0], 1) [(0, 99)] L.236: fake.h
+	(0, 136): Cacq (__file_foo.txt_0_90.pos_lock, 0) [(0, 95)] L.236: fake.h
+	(0, 137): Cacq (__file_foo.txt_0_90.pos_lock, 1) L.236: fake.h
+	(0, 138): Rna (__file_foo.txt_0_90.pos, 0) [(0, 94)] L.236: fake.h
+	(0, 139): Rna (__file_foo.txt_0_90.flags, 2) [(0, 93)] L.236: fake.h
+	(0, 140): Rrlx (__file_foo.txt_0_90.inode, 0x2000000000000010) [(0, 92)] L.236: fake.h
+	(0, 141): Racq (__inode_foo.txt.i_size, 5) [(0, 46)] L.236: fake.h
+	(0, 142): DRacq (__inode_foo.txt.data, 100) [(0, 29)] L.236: fake.h
+	(0, 143): Wna (buf[0], 100) L.236: fake.h
+	(0, 144): DRacq (__inode_foo.txt.data, 97) [(0, 31)] L.236: fake.h
+	(0, 145): Wna (buf[1], 97) L.236: fake.h
+	(0, 146): DRacq (__inode_foo.txt.data, 116) [(0, 36)] L.236: fake.h
+	(0, 147): Wna (buf[2], 116) L.236: fake.h
+	(0, 148): DRacq (__inode_foo.txt.data, 97) [(0, 38)] L.236: fake.h
+	(0, 149): Wna (buf[3], 97) L.236: fake.h
+	(0, 150): DRacq (__inode_foo.txt.data, 0) [(0, 43)] L.236: fake.h
+	(0, 151): Wna (buf[4], 0) L.236: fake.h
+	(0, 152): Wna (__file_foo.txt_0_90.pos, 5) L.236: fake.h
+	(0, 153): Wrel (__file_foo.txt_0_90.pos_lock, 0) L.236: fake.h
+	(0, 154): Rna (__fds[1], 2) [(0, 131)] L.243: fake.h
+	(0, 155): Cacq (__file_foo.txt~_0_122.pos_lock, 0) [(0, 127)] L.243: fake.h
+	(0, 156): Cacq (__file_foo.txt~_0_122.pos_lock, 1) L.243: fake.h
+	(0, 157): Rna (__file_foo.txt~_0_122.pos, 0) [(0, 126)] L.243: fake.h
+	(0, 158): Rna (__file_foo.txt~_0_122.flags, 65) [(0, 125)] L.243: fake.h
+	(0, 159): Rrlx (__file_foo.txt~_0_122.inode, 0x20000000000000b0) [(0, 124)] L.243: fake.h
+	(0, 160): Cacq (__inode_foo.txt~.lock, 0) [(0, 115)] L.243: fake.h
+	(0, 161): Cacq (__inode_foo.txt~.lock, 1) L.243: fake.h
+	(0, 162): Racq (__inode_foo.txt~.i_size, 0) [(0, 116)] L.243: fake.h
+	(0, 163): Rna (buf[0], 100) [(0, 143)] L.243: fake.h
+	(0, 164): DWrel (__inode_foo.txt~.data, 100) L.243: fake.h
+	(0, 165): Rna (buf[1], 97) [(0, 145)] L.243: fake.h
+	(0, 166): DWrel (__inode_foo.txt~.data, 97) L.243: fake.h
+	(0, 167): Racq (__inode_foo.txt~.i_size, 0) [(0, 116)] L.243: fake.h
+	(0, 168): DWrel (__inode_foo.txt~.i_disksize, 2) L.243: fake.h
+	(0, 169): Wrel (__inode_foo.txt~.i_size, 2) L.243: fake.h
+	(0, 170): Rna (buf[2], 116) [(0, 147)] L.243: fake.h
+	(0, 171): DWrel (__inode_foo.txt~.data, 116) L.243: fake.h
+	(0, 172): Rna (buf[3], 97) [(0, 149)] L.243: fake.h
+	(0, 173): DWrel (__inode_foo.txt~.data, 97) L.243: fake.h
+	(0, 174): Racq (__inode_foo.txt~.i_size, 2) [(0, 169)] L.243: fake.h
+	(0, 175): DWrel (__inode_foo.txt~.i_disksize, 4) L.243: fake.h
+	(0, 176): Wrel (__inode_foo.txt~.i_size, 4) L.243: fake.h
+	(0, 177): Rna (buf[4], 0) [(0, 151)] L.243: fake.h
+	(0, 178): DWrel (__inode_foo.txt~.data, 0) L.243: fake.h
+	(0, 179): Racq (__inode_foo.txt~.i_size, 4) [(0, 176)] L.243: fake.h
+	(0, 180): DWrel (__inode_foo.txt~.i_disksize, 5) L.243: fake.h
+	(0, 181): Wrel (__inode_foo.txt~.i_size, 5) L.243: fake.h
+	(0, 182): Wrel (__inode_foo.txt~.lock, 0) L.243: fake.h
+	(0, 183): Wna (__file_foo.txt~_0_122.pos, 5) L.243: fake.h
+	(0, 184): Wrel (__file_foo.txt~_0_122.pos_lock, 0) L.243: fake.h
+	(0, 185): Rna (__fds[0], 1) [(0, 99)] L.236: fake.h
+	(0, 186): Cacq (__file_foo.txt_0_90.pos_lock, 0) [(0, 153)] L.236: fake.h
+	(0, 187): Cacq (__file_foo.txt_0_90.pos_lock, 1) L.236: fake.h
+	(0, 188): Rna (__file_foo.txt_0_90.pos, 5) [(0, 152)] L.236: fake.h
+	(0, 189): Rna (__file_foo.txt_0_90.flags, 2) [(0, 93)] L.236: fake.h
+	(0, 190): Rrlx (__file_foo.txt_0_90.inode, 0x2000000000000010) [(0, 92)] L.236: fake.h
+	(0, 191): Racq (__inode_foo.txt.i_size, 5) [(0, 46)] L.236: fake.h
+	(0, 192): Wna (__file_foo.txt_0_90.pos, 5) L.236: fake.h
+	(0, 193): Wrel (__file_foo.txt_0_90.pos_lock, 0) L.236: fake.h
+	(0, 194): Rna (__fds[1], 2) [(0, 131)] L.243: fake.h
+	(0, 195): Cacq (__file_foo.txt~_0_122.pos_lock, 0) [(0, 184)] L.243: fake.h
+	(0, 196): Cacq (__file_foo.txt~_0_122.pos_lock, 1) L.243: fake.h
+	(0, 197): Rna (__file_foo.txt~_0_122.pos, 5) [(0, 183)] L.243: fake.h
+	(0, 198): Rna (__file_foo.txt~_0_122.flags, 65) [(0, 125)] L.243: fake.h
+	(0, 199): Rrlx (__file_foo.txt~_0_122.inode, 0x20000000000000b0) [(0, 124)] L.243: fake.h
+	(0, 200): Cacq (__inode_foo.txt~.lock, 0) [(0, 182)] L.243: fake.h
+	(0, 201): Cacq (__inode_foo.txt~.lock, 1) L.243: fake.h
+	(0, 202): Wrel (__inode_foo.txt~.lock, 0) L.243: fake.h
+	(0, 203): Wna (__file_foo.txt~_0_122.pos, 5) L.243: fake.h
+	(0, 204): Wrel (__file_foo.txt~_0_122.pos_lock, 0) L.243: fake.h
+	(0, 205): Rna (__fds[0], 1) [(0, 99)] L.254: fake.h
+	(0, 206): Uar (__file_foo.txt_0_90.count, 1) [(0, 96)] L.254: fake.h
+	(0, 207): Uar (__file_foo.txt_0_90.count, 0) L.254: fake.h
+	(0, 208): D L.254: fake.h
+	(0, 209): D L.52: nano.c
+	(0, 210): Rna (__fds[1], 2) [(0, 131)] L.254: fake.h
+	(0, 211): Uar (__file_foo.txt~_0_122.count, 1) [(0, 128)] L.254: fake.h
+	(0, 212): Uar (__file_foo.txt~_0_122.count, 0) L.254: fake.h
+	(0, 213): D L.254: fake.h
+	(0, 214): Cacq (__genmc_dir_inode.lock.__private, 0) [(0, 121)] L.288: nano.c
+	(0, 215): Cacq (__genmc_dir_inode.lock.__private, 1) L.288: nano.c
+	(0, 216): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.288: nano.c
+	(0, 217): DRacq (__genmc_dir_inode.data[0], 0x2000000000000010) [(0, 11)] L.288: nano.c
+	(0, 218): Wrel (__genmc_dir_inode.lock.__private, 0) L.288: nano.c
+	(0, 219): FO (foo.txt, 3) L.288: nano.c
+	(0, 220): M
+	(0, 221): Wna (__file_foo.txt_0_219.inode, 0x2000000000000010) L.288: nano.c
+	(0, 222): Wna (__file_foo.txt_0_219.flags, 577) L.288: nano.c
+	(0, 223): Wna (__file_foo.txt_0_219.pos, 0) L.288: nano.c
+	(0, 224): Wrel (__file_foo.txt_0_219.pos_lock, 0) L.288: nano.c
+	(0, 225): Wrel (__file_foo.txt_0_219.count, 1) L.288: nano.c
+	(0, 226): Cacq (__inode_foo.txt.lock, 0) [(0, 47)] L.288: nano.c
+	(0, 227): Cacq (__inode_foo.txt.lock, 1) L.288: nano.c
+	(0, 228): Racq (__inode_foo.txt.i_size, 5) [(0, 46)] L.288: nano.c
+	(0, 229): DWrel (__inode_foo.txt.i_disksize, 0) L.288: nano.c
+	(0, 230): Wrel (__inode_foo.txt.i_size, 0) L.288: nano.c
+	(0, 231): DF L.288: nano.c
+	(0, 232): Wrel (__inode_foo.txt.lock, 0) L.288: nano.c
+	(0, 233): Rna (__next_fd, 2) [(0, 133)] L.229: fake.h
+	(0, 234): Rna (__next_fd, 2) [(0, 133)] L.230: fake.h
+	(0, 235): Wna (__fds[2], 3) L.230: fake.h
+	(0, 236): Rna (__next_fd, 2) [(0, 133)] L.231: fake.h
+	(0, 237): Wna (__next_fd, 3) L.231: fake.h
+	(0, 238): Rna (__only_line.data, 0x80000000000000f3) [INIT] L.329: nano.c
+	(0, 239): Rna (__fds[2], 3) [(0, 235)] L.243: fake.h
+	(0, 240): Cacq (__file_foo.txt_0_219.pos_lock, 0) [(0, 224)] L.243: fake.h
+	(0, 241): Cacq (__file_foo.txt_0_219.pos_lock, 1) L.243: fake.h
+	(0, 242): Rna (__file_foo.txt_0_219.pos, 0) [(0, 223)] L.243: fake.h
+	(0, 243): Rna (__file_foo.txt_0_219.flags, 577) [(0, 222)] L.243: fake.h
+	(0, 244): Rrlx (__file_foo.txt_0_219.inode, 0x2000000000000010) [(0, 221)] L.243: fake.h
+	(0, 245): Cacq (__inode_foo.txt.lock, 0) [(0, 232)] L.243: fake.h
+	(0, 246): Cacq (__inode_foo.txt.lock, 1) L.243: fake.h
+	(0, 247): Racq (__inode_foo.txt.i_size, 0) [(0, 230)] L.243: fake.h
+	(0, 248): Rna (buffer_data[0], 109) [INIT] L.243: fake.h
+	(0, 249): DWrel (__inode_foo.txt.data, 109) L.243: fake.h
+	(0, 250): Rna (buffer_data[1], 111) [INIT] L.243: fake.h
+	(0, 251): DWrel (__inode_foo.txt.data, 111) L.243: fake.h
+	(0, 252): Racq (__inode_foo.txt.i_size, 0) [(0, 230)] L.243: fake.h
+	(0, 253): DWrel (__inode_foo.txt.i_disksize, 2) L.243: fake.h
+	(0, 254): Wrel (__inode_foo.txt.i_size, 2) L.243: fake.h
+	(0, 255): Rna (buffer_data[2], 100) [INIT] L.243: fake.h
+	(0, 256): DWrel (__inode_foo.txt.data, 100) L.243: fake.h
+	(0, 257): Rna (buffer_data[3], 105) [INIT] L.243: fake.h
+	(0, 258): DWrel (__inode_foo.txt.data, 105) L.243: fake.h
+	(0, 259): Racq (__inode_foo.txt.i_size, 2) [(0, 254)] L.243: fake.h
+	(0, 260): DWrel (__inode_foo.txt.i_disksize, 4) L.243: fake.h
+	(0, 261): Wrel (__inode_foo.txt.i_size, 4) L.243: fake.h
+	(0, 262): Rna (buffer_data[4], 102) [INIT] L.243: fake.h
+	(0, 263): DWrel (__inode_foo.txt.data, 102) L.243: fake.h
+	(0, 264): Rna (buffer_data[5], 105) [INIT] L.243: fake.h
+	(0, 265): DWrel (__inode_foo.txt.data, 105) L.243: fake.h
+	(0, 266): Racq (__inode_foo.txt.i_size, 4) [(0, 261)] L.243: fake.h
+	(0, 267): DWrel (__inode_foo.txt.i_disksize, 6) L.243: fake.h
+	(0, 268): Wrel (__inode_foo.txt.i_size, 6) L.243: fake.h
+	(0, 269): Rna (buffer_data[6], 101) [INIT] L.243: fake.h
+	(0, 270): DWrel (__inode_foo.txt.data, 101) L.243: fake.h
+	(0, 271): Rna (buffer_data[7], 100) [INIT] L.243: fake.h
+	(0, 272): DWrel (__inode_foo.txt.data, 100) L.243: fake.h
+	(0, 273): Racq (__inode_foo.txt.i_size, 6) [(0, 268)] L.243: fake.h
+	(0, 274): DWrel (__inode_foo.txt.i_disksize, 8) L.243: fake.h
+	(0, 275): Wrel (__inode_foo.txt.i_size, 8) L.243: fake.h
+	(0, 276): Rna (buffer_data[8], 32) [INIT] L.243: fake.h
+	(0, 277): DWrel (__inode_foo.txt.data, 32) L.243: fake.h
+	(0, 278): Rna (buffer_data[9], 100) [INIT] L.243: fake.h
+	(0, 279): DWrel (__inode_foo.txt.data, 100) L.243: fake.h
+	(0, 280): Racq (__inode_foo.txt.i_size, 8) [(0, 275)] L.243: fake.h
+	(0, 281): DWrel (__inode_foo.txt.i_disksize, 10) L.243: fake.h
+	(0, 282): Wrel (__inode_foo.txt.i_size, 10) L.243: fake.h
+	(0, 283): Rna (buffer_data[10], 97) [INIT] L.243: fake.h
+	(0, 284): DWrel (__inode_foo.txt.data, 97) L.243: fake.h
+	(0, 285): Rna (buffer_data[11], 116) [INIT] L.243: fake.h
+	(0, 286): DWrel (__inode_foo.txt.data, 116) L.243: fake.h
+	(0, 287): Racq (__inode_foo.txt.i_size, 10) [(0, 282)] L.243: fake.h
+	(0, 288): DWrel (__inode_foo.txt.i_disksize, 12) L.243: fake.h
+	(0, 289): Wrel (__inode_foo.txt.i_size, 12) L.243: fake.h
+	(0, 290): Rna (buffer_data[12], 97) [INIT] L.243: fake.h
+	(0, 291): DWrel (__inode_foo.txt.data, 97) L.243: fake.h
+	(0, 292): Rna (buffer_data[13], 0) [INIT] L.243: fake.h
+	(0, 293): DWrel (__inode_foo.txt.data, 0) L.243: fake.h
+	(0, 294): Racq (__inode_foo.txt.i_size, 12) [(0, 289)] L.243: fake.h
+	(0, 295): DWrel (__inode_foo.txt.i_disksize, 14) L.243: fake.h
+	(0, 296): Wrel (__inode_foo.txt.i_size, 14) L.243: fake.h
+	(0, 297): Wrel (__inode_foo.txt.lock, 0) L.243: fake.h
+	(0, 298): Wna (__file_foo.txt_0_219.pos, 14) L.243: fake.h
+	(0, 299): Wrel (__file_foo.txt_0_219.pos_lock, 0) L.243: fake.h
+	(0, 300): Rna (__only_line.next, 0x0) [INIT] L.343: nano.c
+	(0, 301): Rna (__only_line.data, 0x80000000000000f3) [INIT] L.344: nano.c
+	(0, 302): Rna (buffer_data[0], 109) [INIT] L.344: nano.c
+	(0, 303): Rna (__fds[2], 3) [(0, 235)] L.254: fake.h
+	(0, 304): Uar (__file_foo.txt_0_219.count, 1) [(0, 225)] L.254: fake.h
+	(0, 305): Uar (__file_foo.txt_0_219.count, 0) L.254: fake.h
+	(0, 306): D L.254: fake.h
+	(0, 307): D L.457: nano.c
+	(0, 308): E
+<-1, 1> __VERIFIER_recovery_routine:
+	(1, 0): B
+	(1, 1): M
+	(1, 2): DRrlx (__genmc_dir_inode.i_transaction, 0) [INIT] L.47
+	(1, 3): DRrlx (__genmc_dir_inode.data[0], 0x2000000000000010) [(0, 11)] L.47
+	(1, 4): FO (foo.txt, 4) L.47
+	(1, 5): M
+	(1, 6): Wna (__file_foo.txt_1_4.inode, 0x2000000000000010) L.47
+	(1, 7): Wna (__file_foo.txt_1_4.flags, 0) L.47
+	(1, 8): Wna (__file_foo.txt_1_4.pos, 0) L.47
+	(1, 9): Wrel (__file_foo.txt_1_4.pos_lock, 0) L.47
+	(1, 10): Wrel (__file_foo.txt_1_4.count, 1) L.47
+	(1, 11): DRrlx (__genmc_dir_inode.i_transaction, 0) [INIT] L.48
+	(1, 12): DRrlx (__genmc_dir_inode.data[8], 0x0) [INIT] L.48
+	(1, 13): Wrlx (errno, 2) L.48
+
+Trace to (1, 13):
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 71: close(fd);
+[main] main.c: 71: close(fd);
+[main] main.c: 74: __VERIFIER_pbarrier();
+[__VERIFIER_recovery_routine] main.c: 45: char buf[MAX(init_len, buf_len)];
+[__VERIFIER_recovery_routine] main.c: 47: int fd = open(__stringify(FILENAME), O_RDONLY, 0640);
+[__VERIFIER_recovery_routine] main.c: 47: int fd = open(__stringify(FILENAME), O_RDONLY, 0640);
+[__VERIFIER_recovery_routine] main.c: 47: int fd = open(__stringify(FILENAME), O_RDONLY, 0640);
+[__VERIFIER_recovery_routine] main.c: 47: int fd = open(__stringify(FILENAME), O_RDONLY, 0640);
+[__VERIFIER_recovery_routine] main.c: 47: int fd = open(__stringify(FILENAME), O_RDONLY, 0640);
+[__VERIFIER_recovery_routine] main.c: 47: int fd = open(__stringify(FILENAME), O_RDONLY, 0640);
+[__VERIFIER_recovery_routine] main.c: 47: int fd = open(__stringify(FILENAME), O_RDONLY, 0640);
+[__VERIFIER_recovery_routine] main.c: 47: int fd = open(__stringify(FILENAME), O_RDONLY, 0640);
+[__VERIFIER_recovery_routine] main.c: 47: int fd = open(__stringify(FILENAME), O_RDONLY, 0640);
+[__VERIFIER_recovery_routine] main.c: 48: int fb = open(__stringify(BACKUPNAME), O_RDONLY, 0640);
+[__VERIFIER_recovery_routine] main.c: 48: int fb = open(__stringify(BACKUPNAME), O_RDONLY, 0640);
+[__VERIFIER_recovery_routine] main.c: 48: int fb = open(__stringify(BACKUPNAME), O_RDONLY, 0640);
+Trace to (0, 109):
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 69: int fd = creat(__stringify(FILENAME), 0640);
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 70: int nw = write(fd, initial_data, strlen(initial_data));
+[main] main.c: 71: close(fd);
+[main] main.c: 71: close(fd);
+[main] main.c: 74: __VERIFIER_pbarrier();
+[main] fake.h: 383: openfile = &__open_file;
+[main] nano.c: 81: linestruct *line = openfile->filetop;
+[main] nano.c: 81: linestruct *line = openfile->filetop;
+[main] fake.h: 196: statbuf->st_dev = 0;
+[main] fake.h: 197: statbuf->st_ino = 0;
+[main] fake.h: 198: statbuf->st_mode = 0;
+[main] fake.h: 199: statbuf->st_nlink = 0;
+[main] fake.h: 200: statbuf->st_uid = 0;
+[main] fake.h: 201: statbuf->st_gid = 0;
+[main] fake.h: 202: statbuf->st_rdev = 0;
+[main] fake.h: 203: statbuf->st_size = 0;
+[main] fake.h: 204: statbuf->st_atime = 0;
+[main] fake.h: 205: statbuf->st_mtime = 0;
+[main] fake.h: 206: statbuf->st_ctime = 0;
+[main] fake.h: 207: statbuf->st_blksize = 0;
+[main] fake.h: 208: statbuf->st_blocks = 0;
+[main] fake.h: 209: statbuf->st_attr = 0;
+[main] nano.c: 103: if (openfile->statinfo == NULL && is_existing_file)
+[main] nano.c: 103: if (openfile->statinfo == NULL && is_existing_file)
+[main] nano.c: 109: if (ISSET(MAKE_BACKUP) && is_existing_file && openfile->statinfo &&
+[main] nano.c: 109: if (ISSET(MAKE_BACKUP) && is_existing_file && openfile->statinfo &&
+[main] nano.c: 110: (openfile->statinfo->st_mtime == st.st_mtime ||
+[main] nano.c: 110: (openfile->statinfo->st_mtime == st.st_mtime ||
+[main] nano.c: 110: (openfile->statinfo->st_mtime == st.st_mtime ||
+[main] nano.c: 110: (openfile->statinfo->st_mtime == st.st_mtime ||
+[main] nano.c: 117: filetime[0].tv_sec = openfile->statinfo->st_atime;
+[main] nano.c: 117: filetime[0].tv_sec = openfile->statinfo->st_atime;
+[main] nano.c: 117: filetime[0].tv_sec = openfile->statinfo->st_atime;
+[main] nano.c: 117: filetime[0].tv_sec = openfile->statinfo->st_atime;
+[main] nano.c: 118: filetime[1].tv_sec = openfile->statinfo->st_mtime;
+[main] nano.c: 118: filetime[1].tv_sec = openfile->statinfo->st_mtime;
+[main] nano.c: 118: filetime[1].tv_sec = openfile->statinfo->st_mtime;
+[main] nano.c: 118: filetime[1].tv_sec = openfile->statinfo->st_mtime;
+[main] nano.c: 121: original = fopen(realname, "rb");
+[main] nano.c: 121: original = fopen(realname, "rb");
+[main] nano.c: 121: original = fopen(realname, "rb");
+[main] nano.c: 121: original = fopen(realname, "rb");
+[main] nano.c: 121: original = fopen(realname, "rb");
+[main] nano.c: 121: original = fopen(realname, "rb");
+[main] nano.c: 121: original = fopen(realname, "rb");
+[main] nano.c: 121: original = fopen(realname, "rb");
+[main] nano.c: 121: original = fopen(realname, "rb");
+[main] nano.c: 121: original = fopen(realname, "rb");
+[main] nano.c: 121: original = fopen(realname, "rb");
+[main] nano.c: 121: original = fopen(realname, "rb");
+[main] nano.c: 121: original = fopen(realname, "rb");
+[main] nano.c: 121: original = fopen(realname, "rb");
+[main] nano.c: 133: if (backup_dir == NULL) {
+[main] nano.c: 166: if (unlink(backupname) < 0 && errno != ENOENT && !ISSET(INSECURE_BACKUP)) {
+[main] nano.c: 166: if (unlink(backupname) < 0 && errno != ENOENT && !ISSET(INSECURE_BACKUP)) {
+[main] nano.c: 166: if (unlink(backupname) < 0 && errno != ENOENT && !ISSET(INSECURE_BACKUP)) {
+[main] nano.c: 166: if (unlink(backupname) < 0 && errno != ENOENT && !ISSET(INSECURE_BACKUP)) {
+[main] nano.c: 166: if (unlink(backupname) < 0 && errno != ENOENT && !ISSET(INSECURE_BACKUP)) {
+[main] nano.c: 166: if (unlink(backupname) < 0 && errno != ENOENT && !ISSET(INSECURE_BACKUP)) {
+Number of complete executions explored: 1

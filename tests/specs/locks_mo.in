@@ -1,9 +1,0 @@
-GRANTED: 1
-NAME: mylock
-MEMBERS: 3
-read_acq = mylock
-write_rel = myunlock
-init_rel = myinit
-RELATIONS: 0
-ACYCLIC: 0
-FUNCTIONAL: YES

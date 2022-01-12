@@ -61,8 +61,8 @@ extern "C" void LLVMLinkInInterpreter() { }
 
 /// create - Create a new interpreter object.  This can never fail.
 ///
-ExecutionEngine *Interpreter::create(std::unique_ptr<Module> M, ModuleInfo &&MI, GenMCDriver *driver,
-				     const Config *userConf, std::string* ErrStr) {
+ExecutionEngine *Interpreter::create(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> MI,
+				     GenMCDriver *driver, const Config *userConf, std::string* ErrStr) {
   // Tell this Module to materialize everything and release the GVMaterializer.
 #ifdef LLVM_MODULE_MATERIALIZE_ALL_PERMANENTLY_ERRORCODE_BOOL
   if (std::error_code EC = M->materializeAllPermanently()) {
@@ -108,7 +108,51 @@ llvm::raw_ostream& llvm::operator<<(llvm::raw_ostream &s, const Thread &thr)
 		 << " " << thr.threadFun->getName().str();
 }
 
-/* Resets the interpreter for a new exploration */
+EELocalState::EELocalState(const SAddrAllocator &alloctor,
+			   const std::unique_ptr<DepTracker> &depTr,
+			   const ExecutionState &execState,
+			   const ProgramState &programState,
+			   const llvm::BitVector &fds,
+			   const llvm::IndexedMap<void *> &fdToFile,
+			   const std::unordered_map<std::string, void *> &nameToInodeAddr,
+			   const std::vector<Thread> &ts,
+			   int current)
+	: alloctor(alloctor),
+	  depTracker(depTr ? LLVM_MAKE_UNIQUE<DepTracker>(*depTr) : nullptr),
+	  execState(execState),
+	  programState(programState), fds(fds), fdToFile(fdToFile),
+	  nameToInodeAddr(nameToInodeAddr), threads(ts), currentThread(current) {}
+
+std::unique_ptr<EELocalState> Interpreter::releaseLocalState()
+{
+	return LLVM_MAKE_UNIQUE<EELocalState>(alloctor, depTracker, execState, programState,
+					      fds, fdToFile, nameToInodeAddr, threads, currentThread);
+}
+
+void Interpreter::restoreLocalState(std::unique_ptr<EELocalState> state)
+{
+	alloctor = std::move(state->alloctor);
+	depTracker = std::move(state->depTracker);
+	execState = state->execState;
+	programState = state->programState;
+	fds = std::move(state->fds);
+	fdToFile = std::move(state->fdToFile);
+	nameToInodeAddr = std::move(state->nameToInodeAddr);
+	threads = std::move(state->threads);
+	currentThread = state->currentThread;
+}
+
+void Interpreter::resetThread(unsigned int id)
+{
+	auto &thr = getThrById(id);
+	thr.ECStack = {};
+	thr.tls = threadLocalVars;
+	thr.blocked = BlockageType::NotBlocked;
+	thr.globalInstructions = 0;
+	thr.rng.seed(Thread::seed);
+	clearDeps(id);
+}
+
 void Interpreter::reset()
 {
 	/*
@@ -117,14 +161,7 @@ void Interpreter::reset()
 	 * that thread (joins do not empty ECStacks)
 	 */
 	currentThread = 0;
-	for (auto i = 0u; i < threads.size(); i++) {
-		threads[i].ECStack = {};
-		threads[i].tls = threadLocalVars;
-		threads[i].blocked = Thread::BlockageType::BT_NotBlocked;
-		threads[i].globalInstructions = 0;
-		threads[i].rng.seed(Thread::seed);
-		clearDeps(i);
-	}
+	std::for_each(threads_begin(), threads_end(), [this](Thread &thr){ resetThread(thr.id); });
 }
 
 void Interpreter::setupRecoveryRoutine(int tid)
@@ -134,7 +171,7 @@ void Interpreter::setupRecoveryRoutine(int tid)
 
 	/* Only fill the stack if a recovery routine actually exists... */
 	ERROR_ON(!recoveryRoutine, "No recovery routine specified!\n");
-	callFunction(recoveryRoutine, {});
+	callFunction(recoveryRoutine, {}, nullptr);
 
 	/* Also set up initSF, if it is the first invocation */
 	if (!getThrById(tid).initSF.CurFunction)
@@ -149,98 +186,40 @@ void Interpreter::cleanupRecoveryRoutine(int tid)
 	return;
 }
 
-/* Creates an entry for the main() function */
-Thread Interpreter::createMainThread(llvm::Function *F)
+Thread &Interpreter::addNewThread(Thread &&thread)
 {
-	Thread thr(F, 0);
-	thr.tls = threadLocalVars;
-	return thr;
+	if (thread.id == threads.size()) {
+	        threads.push_back(std::move(thread));
+		return threads.back();
+	}
+	BUG_ON(threads[thread.id].threadFun != thread.threadFun || threads[thread.id].id != thread.id);
+	return threads[thread.id] = std::move(thread);
+}
+
+/* Creates an entry for the main() function */
+Thread &Interpreter::createAddMainThread(llvm::Function *F)
+{
+	Thread main(F, 0);
+	main.tls = threadLocalVars;
+	threads.clear(); /* make sure its empty */
+	return addNewThread(std::move(main));
 }
 
 /* Creates an entry for another thread */
-Thread Interpreter::createNewThread(llvm::Function *F, const llvm::GenericValue &arg,
-				    int tid, int pid, const llvm::ExecutionContext &SF)
+Thread &Interpreter::createAddNewThread(llvm::Function *F, SVal arg, int tid, int pid,
+				       const llvm::ExecutionContext &SF)
 {
 	Thread thr(F, arg, tid, pid, SF);
 	thr.ECStack.push_back(SF);
 	thr.tls = threadLocalVars;
-	return thr;
+	return addNewThread(std::move(thr));
 }
 
-Thread Interpreter::createRecoveryThread(int tid)
+Thread &Interpreter::createAddRecoveryThread(int tid)
 {
 	Thread rec(recoveryRoutine, tid);
 	rec.tls = threadLocalVars;
-	return rec;
-}
-
-/* Returns the (source-code) variable name corresponding to "addr" */
-std::string Interpreter::getVarName(const void *addr)
-{
-	if (isStatic(addr))
-		return varNames[static_cast<int>(Storage::ST_Static)][addr];
-	if (isStack(addr))
-		return varNames[static_cast<int>(Storage::ST_Automatic)][addr];
-	if (isHeap(addr))
-		return varNames[static_cast<int>(Storage::ST_Heap)][addr];
-	return "";
-}
-
-bool Interpreter::isInternal(const void *addr)
-{
-	return alloctor.isInternal(addr);
-}
-
-bool Interpreter::isStatic(const void *addr)
-{
-	return varNames[static_cast<int>(Storage::ST_Static)].count(addr);
-}
-
-bool Interpreter::isStack(const void *addr)
-{
-	return alloctor.hasStorage(addr, Storage::ST_Automatic);
-}
-
-bool Interpreter::isHeap(const void *addr)
-{
-	return alloctor.hasStorage(addr, Storage::ST_Heap);
-}
-
-bool Interpreter::isDynamic(const void *addr)
-{
-	return isStack(addr) || isHeap(addr);
-}
-
-bool Interpreter::isShared(const void *addr)
-{
-	return isStatic(addr) || isDynamic(addr);
-}
-
-/* Returns a fresh address to be used from the interpreter */
-void *Interpreter::getFreshAddr(unsigned int size, int alignment, Storage s, AddressSpace spc)
-{
-	/* The arguments to getFreshAddr() need to be well-formed;
-	 * make sure the alignment is positive and a power of 2 */
-	BUG_ON(alignment <= 0 || (alignment & (alignment - 1)) != 0);
-	return alloctor.allocate(size, alignment, s, spc);
-}
-
-void Interpreter::trackAlloca(const void *addr, unsigned int size,
-			      Storage s, AddressSpace spc)
-{
-	/* We cannot call updateVarNameInfo just yet, since we might be simply
-	 * restoring a prefix, and cannot get the respective Value. The naming
-	 * information will be updated from the interpreter */
-	alloctor.track(addr, size, s, spc);
-	return;
-}
-
-void Interpreter::untrackAlloca(const void *addr, unsigned int size,
-				Storage s, AddressSpace spc)
-{
-	alloctor.untrack(addr, size, s, spc);
-	eraseVarNameInfo((char *) addr, size, s, spc);
-	return;
+	return addNewThread(std::move(rec));
 }
 
 #ifndef LLVM_BITVECTOR_HAS_FIND_FIRST_UNSET
@@ -256,15 +235,15 @@ int my_find_first_unset(const llvm::BitVector &bv)
 int Interpreter::getFreshFd()
 {
 #ifndef LLVM_BITVECTOR_HAS_FIND_FIRST_UNSET
-	int fd = my_find_first_unset(MI.fsInfo.fds);
+	int fd = my_find_first_unset(fds);
 #else
-	int fd = MI.fsInfo.fds.find_first_unset();
+	int fd = fds.find_first_unset();
 #endif
 
 	/* If no available descriptor found, grow fds and try again */
 	if (fd == -1) {
-		MI.fsInfo.fds.resize(2 * MI.fsInfo.fds.size() + 1);
-		MI.fsInfo.fdToFile.grow(MI.fsInfo.fds.size());
+		fds.resize(2 * fds.size() + 1);
+		fdToFile.grow(fds.size());
 		return getFreshFd();
 	}
 
@@ -275,131 +254,12 @@ int Interpreter::getFreshFd()
 
 void Interpreter::markFdAsUsed(int fd)
 {
-	MI.fsInfo.fds.set(fd);
+	fds.set(fd);
 }
 
 void Interpreter::reclaimUnusedFd(int fd)
 {
-	MI.fsInfo.fds.reset(fd);
-}
-
-void collectUnnamedGlobalAddress(Value *v, char *ptr, unsigned int typeSize,
-				 std::unordered_map<const void *, std::string> &vars)
-{
-	BUG_ON(!isa<GlobalVariable>(v));
-	auto gv = static_cast<GlobalVariable *>(v);
-
-	/* Exit if it is a private variable; it is not accessible in the program */
-	if (gv->hasPrivateLinkage())
-		return;
-
-	/* Otherwise, collect the addresses anyway and use a default name */
-	WARN_ONCE("name-info", ("Inadequate naming info for variable " +
-				v->getName() + ".\nPlease submit a bug report to "
-				PACKAGE_BUGREPORT "\n"));
-	for (auto i = 0u; i < typeSize; i++) {
-		vars[ptr + i] = v->getName().str();
-	}
-	return;
-}
-
-void updateVarInfoHelper(char *ptr, unsigned int typeSize,
-			 std::unordered_map<const void *, std::string> &vars,
-			 VariableInfo::NameInfo &vi, const std::string &baseName)
-{
-	/* If there are no info for the variable, just use the base name.
-	 * (Except for internal types, this should normally be handled by the caller) */
-	if (vi.empty()) {
-		for (auto j = 0u; j < typeSize; j++)
-			vars[ptr + j] = baseName;
-		return;
-	}
-
-	/* If there is no name for the beginning of the block, use a default one */
-	if (vi[0].first != 0) {
-		WARN_ONCE("name-info", ("Inadequate naming info for variable " +
-					baseName + ".\nPlease submit a bug report to "
-					PACKAGE_BUGREPORT "\n"));
-		for (auto j = 0u; j < vi[0].first; j++)
-			vars[ptr + j] = baseName;
-	}
-	for (auto i = 0u; i < vi.size() - 1; i++) {
-		for (auto j = 0u; j < vi[i + 1].first - vi[i].first; j++)
-			vars[ptr + vi[i].first + j] = baseName + vi[i].second;
-	}
-	auto &last = vi.back();
-	for (auto j = 0u; j < typeSize - last.first; j++)
-		vars[ptr + last.first + j] = baseName + last.second;
-	return;
-}
-
-void Interpreter::updateUserTypedVarName(char *ptr, unsigned int typeSize, Storage s,
-					 Value *v, const std::string &prefix,
-					 const std::string &internal)
-{
-	auto &vars = varNames[static_cast<int>(s)];
-	auto &vi = (s == Storage::ST_Automatic) ? MI.varInfo.localInfo[v] : MI.varInfo.globalInfo[v];
-
-	if (vi.empty()) {
-		/* If it is not a local value, then we should collect the address
-		 * anyway, since globalVars will be used to check whether some
-		 * access accesses a global variable */
-		if (s == Storage::ST_Static)
-			collectUnnamedGlobalAddress(v, ptr, typeSize, vars);
-		return;
-	}
-	updateVarInfoHelper(ptr, typeSize, vars, vi, v->getName().str());
-	return;
-}
-
-void Interpreter::updateUserUntypedVarName(char *ptr, unsigned int typeSize, Storage s,
-					   Value *v, const std::string &prefix,
-					   const std::string &internal)
-{
-	/* FIXME: Does nothing now */
-	return;
-}
-
-void Interpreter::updateInternalVarName(char *ptr, unsigned int typeSize, Storage s,
-					Value *v, const std::string &prefix,
-					const std::string &internal)
-{
-	auto &vars = varNames[static_cast<int>(s)];
-	auto &vi = MI.varInfo.internalInfo[internal]; /* should be the name for internals */
-
-	updateVarInfoHelper(ptr, typeSize, vars, vi, prefix);
-	return;
-}
-
-void Interpreter::updateVarNameInfo(char *ptr, unsigned int typeSize, Storage s,
-				    AddressSpace spc, Value *v,
-				    const std::string &prefix, const std::string &extra)
-{
-	if (spc == AddressSpace::AS_Internal) {
-		updateInternalVarName(ptr, typeSize, s, v, prefix, extra);
-		return;
-	}
-
-	BUG_ON(spc != AddressSpace::AS_User);
-	switch (s) {
-	case Storage::ST_Static:
-	case Storage::ST_Automatic:
-		updateUserTypedVarName(ptr, typeSize, s, v, prefix, extra);
-		return;
-	case Storage::ST_Heap:
-		updateUserUntypedVarName(ptr, typeSize, s, v, prefix, extra);
-		return;
-	default:
-		BUG();
-	}
-	return;
-}
-
-void Interpreter::eraseVarNameInfo(char *addr, unsigned int size, Storage s, AddressSpace spc)
-{
-	for (auto i = 0u; i < size; i++)
-		varNames[static_cast<int>(s)].erase(addr + i);
-	return;
+	fds.reset(fd);
 }
 
 #ifdef LLVM_GLOBALVALUE_HAS_GET_ADDRESS_SPACE
@@ -414,17 +274,12 @@ void Interpreter::eraseVarNameInfo(char *addr, unsigned int size, Storage s, Add
 
 void Interpreter::collectStaticAddresses(Module *M)
 {
-	char *allocBegin = nullptr;
+	std::vector<std::pair<const GlobalVariable *, void *> > toReinitialize;
+
 	for (auto &v : M->getGlobalList()) {
 		char *ptr = static_cast<char *>(GVTOP(getConstantValue(&v)));
 		unsigned int typeSize =
 		        getDataLayout().getTypeAllocSize(v.getType()->getElementType());
-
-		/* The allocation pool will point just after the static address
-		 * WARNING: This will not track the allocated space. Do that
-		 * either below, or elsewhere for internal variables */
-		if (!allocBegin || ptr > allocBegin)
-			allocBegin = ptr + typeSize;
 
 		/* Record whether this is a thread local variable or not */
 		if (v.isThreadLocal()) {
@@ -433,14 +288,29 @@ void Interpreter::collectStaticAddresses(Module *M)
 			continue;
 		}
 
-		/* Update the name for this global. We cheat a bit since we will use this
-		 * to indicate whether this is an allocated static address (see isStatic()) */
-		if (GET_GV_ADDRESS_SPACE(v) != 42) /* exclude internal variables */
-			updateVarNameInfo(ptr, typeSize, Storage::ST_Static, AddressSpace::AS_User, &v);
+		/* "Allocate" an address for this global variable... */
+		auto addr = alloctor.allocStatic(typeSize, v.getAlignment(),
+						 GET_GV_ADDRESS_SPACE(v) == 42);
+		staticAllocas.insert(std::make_pair(addr, addr + typeSize - 1));
+		staticValueMap[addr] = ptr;
+
+		/* ... and use that in the EE instead. Make sure to re-initialize it too;
+		 * it might contain the address of another global */
+		updateGlobalMapping(&v, (void *) addr.get());
+		toReinitialize.push_back(std::make_pair(&v, ptr));
+
+		/* Update naming information */
+		staticNames[addr] = &v;
+		if (!v.hasPrivateLinkage() && (!MI->idInfo.VID.count(&v) ||
+					       !MI->varInfo.globalInfo.count(MI->idInfo.VID.at(&v)))) {
+			WARN_ONCE("name-info", ("Inadequate naming info for variable " + v.getName() +
+						".\nPlease submit a bug report to " PACKAGE_BUGREPORT "\n"));
+		}
 	}
-	/* The allocator will start giving out addresses greater than the maximum static address */
-	if (allocBegin)
-		alloctor.initPoolAddress(allocBegin);
+
+	/* Now that we've updated all mappings, go ahead and re-initialize */
+	for (auto &p : toReinitialize)
+		InitializeMemory(p.first->getInitializer(), p.second);
 }
 
 void Interpreter::setupErrorPolicy(Module *M, const Config *userConf)
@@ -458,11 +328,9 @@ void Interpreter::setupErrorPolicy(Module *M, const Config *userConf)
 
 void Interpreter::setupFsInfo(Module *M, const Config *userConf)
 {
-	auto &FI = MI.fsInfo;
+	auto &FI = MI->fsInfo;
 
 	/* Setup config options first */
-	FI.fds = llvm::BitVector(20);
-	FI.fdToFile.grow(FI.fds.size());
 	FI.blockSize = userConf->blockSize;
 	FI.maxFileSize = userConf->maxFileSize;
 	FI.journalData = userConf->journalData;
@@ -475,6 +343,9 @@ void Interpreter::setupFsInfo(Module *M, const Config *userConf)
 	if (!inodeVar || !fileVar)
 		return;
 
+	fds = llvm::BitVector(20);
+	fdToFile.grow(fds.size());
+
 	FI.inodeTyp = dyn_cast<StructType>(inodeVar->getType()->getElementType());
 	FI.fileTyp = dyn_cast<StructType>(fileVar->getType()->getElementType());
 	BUG_ON(!FI.inodeTyp || !FI.fileTyp);
@@ -483,193 +354,109 @@ void Interpreter::setupFsInfo(Module *M, const Config *userConf)
 	 * We track this here to have custom naming info */
 	unsigned int inodeSize = getTypeSize(FI.inodeTyp);
 	FI.dirInode = static_cast<char *>(GVTOP(getConstantValue(inodeVar)));
-	trackAlloca(FI.dirInode, inodeSize, Storage::ST_Heap, AddressSpace::AS_Internal);
 
 	Type *intTyp = FI.inodeTyp->getElementType(0);
 	unsigned int intSize = getTypeSize(intTyp);
-	updateVarNameInfo((char *) FI.dirInode, intSize, Storage::ST_Heap,
-			  AddressSpace::AS_Internal, nullptr, "__dir_inode.lock", "dir_inode_lock");
-	updateVarNameInfo((char *) FI.dirInode + 2 * intSize, intSize, Storage::ST_Heap,
-			  AddressSpace::AS_Internal, nullptr, "__dir_inode.i_transaction", "dir_inode_itrans");
 
 	unsigned int count = 0;
 	unsigned int intPtrSize = getTypeSize(intTyp->getPointerTo());
 	auto *SL = getDataLayout().getStructLayout(FI.inodeTyp);
-	for (auto &fname : FI.nameToInodeAddr) {
+	for (auto &fname : FI.filenames) {
 		auto *addr = (char *) FI.dirInode + SL->getElementOffset(4) + count * intPtrSize;
-		fname.second = addr;
-		updateVarNameInfo((char *) addr, intPtrSize, Storage::ST_Heap, AddressSpace::AS_Internal,
-				  nullptr, "__dir_inode.addr[" + fname.first + "]", "dir_inode_locs");
+		nameToInodeAddr[fname] = addr;
 		++count;
 	}
 	return;
 }
 
-const DepInfo *Interpreter::getAddrPoDeps(unsigned int tid)
+std::unique_ptr<EventDeps>
+Interpreter::makeEventDeps(const DepInfo *addr, const DepInfo *data,
+			   const DepInfo *ctrl, const DepInfo *addrPo,
+			   const DepInfo *cas)
 {
 	if (!depTracker)
 		return nullptr;
-	return depTracker->getAddrPoDeps(tid);
+
+	auto result = LLVM_MAKE_UNIQUE<EventDeps>();
+
+	if (addr)
+		result->addr = *addr;
+	if (data)
+		result->data = *data;
+	if (ctrl)
+		result->ctrl = *ctrl;
+	if (addrPo)
+		result->addrPo = *addrPo;
+	if (cas)
+		result->cas = *cas;
+	return result;
 }
 
-const DepInfo *Interpreter::getDataDeps(unsigned int tid, Value *i)
+std::unique_ptr<EventDeps>
+Interpreter::updateFunArgDeps(unsigned int tid, Function *fun)
 {
 	if (!depTracker)
 		return nullptr;
-	return depTracker->getDataDeps(tid, i);
-}
-
-const DepInfo *Interpreter::getCtrlDeps(unsigned int tid)
-{
-	if (!depTracker)
-		return nullptr;
-	return depTracker->getCtrlDeps(tid);
-}
-
-const DepInfo *Interpreter::getCurrentAddrDeps() const
-{
-	if (!depTracker)
-		return nullptr;
-	return depTracker->getCurrentAddrDeps();
-}
-
-const DepInfo *Interpreter::getCurrentDataDeps() const
-{
-	if (!depTracker)
-		return nullptr;
-	return depTracker->getCurrentDataDeps();
-}
-
-const DepInfo *Interpreter::getCurrentCtrlDeps() const
-{
-	if (!depTracker)
-		return nullptr;
-	return depTracker->getCurrentCtrlDeps();
-}
-
-const DepInfo *Interpreter::getCurrentAddrPoDeps() const
-{
-	if (!depTracker)
-		return nullptr;
-	return depTracker->getCurrentAddrPoDeps();
-}
-
-const DepInfo *Interpreter::getCurrentCasDeps() const
-{
-	if (!depTracker)
-		return nullptr;
-	return depTracker->getCurrentCasDeps();
-}
-
-void Interpreter::setCurrentDeps(const DepInfo *addr, const DepInfo *data,
-				 const DepInfo *ctrl, const DepInfo *addrPo,
-				 const DepInfo *cas)
-{
-	if (!depTracker)
-		return;
-
-	depTracker->setCurrentAddrDeps(addr);
-	depTracker->setCurrentDataDeps(data);
-	depTracker->setCurrentCtrlDeps(ctrl);
-	depTracker->setCurrentAddrPoDeps(addrPo);
-	depTracker->setCurrentCasDeps(cas);
-}
-
-void Interpreter::updateDataDeps(unsigned int tid, Value *dst, Value *src)
-{
-	if (depTracker)
-		depTracker->updateDataDeps(tid, dst, src);
-}
-
-void Interpreter::updateDataDeps(unsigned int tid, Value *dst, const DepInfo *e)
-{
-	if (depTracker)
-		depTracker->updateDataDeps(tid, dst, *e);
-}
-
-void Interpreter::updateDataDeps(unsigned int tid, Value *dst, Event e)
-{
-	if (depTracker)
-		depTracker->updateDataDeps(tid, dst, e);
-}
-
-void Interpreter::updateAddrPoDeps(unsigned int tid, Value *src)
-{
-	if (!depTracker)
-		return;
-
-	depTracker->updateAddrPoDeps(tid, src);
-	depTracker->setCurrentAddrPoDeps(getAddrPoDeps(tid));
-}
-
-void Interpreter::updateCtrlDeps(unsigned int tid, Value *src)
-{
-	if (!depTracker)
-		return;
-
-	depTracker->updateCtrlDeps(tid, src);
-	depTracker->setCurrentCtrlDeps(getCtrlDeps(tid));
-}
-
-void Interpreter::updateFunArgDeps(unsigned int tid, Function *fun)
-{
-	if (!depTracker)
-		return;
 
 	ExecutionContext &SF = ECStack().back();
 	auto name = fun->getName().str();
 
-	/* First handle special cases and then normal function calls */
+	/* Handling non-internals is straightforward: the parameters
+	 * of the function called get the data dependencies of the
+	 * actual arguments */
 	bool isInternal = internalFunNames.count(name);
-	if (isInternal) {
-		auto iFunCode = internalFunNames.at(name);
-		if (iFunCode == InternalFunctions::FN_Assume) {
-			/* We have ctrl dependency on the argument of an assume() */
-			for (auto i = SF.Caller.arg_begin(),
-				     e = SF.Caller.arg_end(); i != e; ++i) {
-				updateCtrlDeps(tid, *i);
-			}
-		} else if (isMutexCode(iFunCode) || isBarrierCode(iFunCode)) {
-			/* We have addr dependency on the argument of mutex/barrier calls */
-			setCurrentDeps(getDataDeps(tid, *SF.Caller.arg_begin()),
-				       nullptr, getCtrlDeps(tid),
-				       getAddrPoDeps(tid), nullptr);
-		} else if (iFunCode == InternalFunctions::FN_AtomicRmwNoRet) {
-			setCurrentDeps(getDataDeps(tid, *SF.Caller.arg_begin()),
-				       getDataDeps(tid, *(SF.Caller.arg_begin() + 1)),
-				       getCtrlDeps(tid), getAddrPoDeps(tid), nullptr);
-		}
-	} else {
-		/* The parameters of the function called get the data
-		 * dependencies of the actual arguments */
+	if (!isInternal) {
 		auto ai = fun->arg_begin();
 		for (auto ci = SF.Caller.arg_begin(),
 			     ce = SF.Caller.arg_end(); ci != ce; ++ci, ++ai) {
 			updateDataDeps(tid, &*ai, &*ci->get());
 		}
+		return nullptr;
 	}
-	return;
+
+	auto iFunCode = internalFunNames.at(name);
+	if (iFunCode == InternalFunctions::FN_Assume) {
+		/* We have ctrl dependency on the argument of an assume() */
+		for (auto i = SF.Caller.arg_begin(),
+			     e = SF.Caller.arg_end(); i != e; ++i) {
+			updateCtrlDeps(tid, *i);
+		}
+	} else if (isMutexCode(iFunCode) || isBarrierCode(iFunCode)) {
+		/* We have addr dependency on the argument of mutex/barrier calls */
+		return makeEventDeps(getDataDeps(tid, *SF.Caller.arg_begin()),
+				     nullptr, getCtrlDeps(tid),
+				     getAddrPoDeps(tid), nullptr);
+	} else if (iFunCode == InternalFunctions::FN_AtomicRmwNoRet) {
+		return makeEventDeps(getDataDeps(tid, *SF.Caller.arg_begin()),
+				     getDataDeps(tid, *(SF.Caller.arg_begin() + 1)),
+				     getCtrlDeps(tid), getAddrPoDeps(tid), nullptr);
+	}
+	return nullptr;
 }
 
-void Interpreter::clearDeps(unsigned int tid)
-{
-	if (depTracker)
-		depTracker->clearDeps(tid);
-}
-
-std::unique_ptr<SExpr> Interpreter::getCurrentAnnotConcretized()
+std::unique_ptr<SExpr<unsigned int>> Interpreter::getCurrentAnnotConcretized()
 {
 	auto *a = getAnnotation(ECStack().back().CurInst->getPrevNode());
 	if (!a)
 		return nullptr;
-	return SExprConcretizer().concretize(a, ECStack().back().Values);
+
+	using Concretizer = SExprConcretizer<AnnotID>;
+	auto &stackVals = ECStack().back().Values;
+	Concretizer::ReplaceMap vMap;
+
+	for (auto &kv : stackVals)
+		vMap.insert({(MI->idInfo.VID.at(kv.first)),
+				std::make_pair(SVal(kv.second.IntVal.getLimitedValue()),
+					       ASize(getTypeSize(kv.first->getType()) * 8))});
+
+	return Concretizer().concretize(a, vMap);
 }
 
 
 //===----------------------------------------------------------------------===//
 // Interpreter ctor - Initialize stuff
 //
-Interpreter::Interpreter(std::unique_ptr<Module> M, ModuleInfo &&MI,
+Interpreter::Interpreter(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> MI,
 			 GenMCDriver *driver, const Config *userConf)
 	: ExecutionEngine(std::move(M)), MI(std::move(MI)), driver(driver) {
 
@@ -683,12 +470,11 @@ Interpreter::Interpreter(std::unique_ptr<Module> M, ModuleInfo &&MI,
   IL = new IntrinsicLowering(getDataLayout());
 
   auto mod = Modules.back().get();
-  varNames.grow(static_cast<int>(Storage::ST_StorageLast));
   collectStaticAddresses(mod);
 
   /* Set up a dependency tracker if the model requires it */
   if (userConf->isDepTrackingModel)
-	  depTracker = LLVM_MAKE_UNIQUE<IMMDepTracker>();
+	  depTracker = LLVM_MAKE_UNIQUE<DepTracker>();
 
   /* Set up the system error policy */
   setupErrorPolicy(mod, userConf);
@@ -702,8 +488,7 @@ Interpreter::Interpreter(std::unique_ptr<Module> M, ModuleInfo &&MI,
   auto mainFun = mod->getFunction(userConf->programEntryFun);
   ERROR_ON(!mainFun, "Could not find program's entry point function!\n");
 
-  auto main = createMainThread(mainFun);
-  threads.push_back(main);
+  createAddMainThread(mainFun);
 }
 
 Interpreter::~Interpreter() {
@@ -712,7 +497,7 @@ Interpreter::~Interpreter() {
 
 void Interpreter::runAtExitHandlers () {
   while (!AtExitHandlers.empty()) {
-    callFunction(AtExitHandlers.back(), std::vector<GenericValue>());
+    callFunction(AtExitHandlers.back(), std::vector<GenericValue>(), nullptr);
     AtExitHandlers.pop_back();
     run();
   }
@@ -744,7 +529,7 @@ Interpreter::runFunction(Function *F,
     ActualArgs.push_back(ArgValues[i]);
 
   // Set up the function call.
-  callFunction(F, ActualArgs);
+  callFunction(F, ActualArgs, nullptr);
 
   // Start executing the function.
   run();

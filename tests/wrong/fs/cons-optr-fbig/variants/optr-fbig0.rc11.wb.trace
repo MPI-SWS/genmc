@@ -1,41 +1,69 @@
 Error detected: File too large!
-Event (0, 33) in graph:
+Event (0, 32) in graph:
 <-1, 0> main:
 	(0, 0): B
 	(0, 1): M
-	(0, 2): Wna (buf[0], 42) L.21
-	(0, 3): Cacq (__dir_inode.lock, 0) [INIT] L.23
-	(0, 4): Cacq (__dir_inode.lock, 1) L.0:
-	(0, 5): FRacq (__dir_inode.addr[foo], 0x0) [INIT] L.0:
-	(0, 6): M
-	(0, 7): Wna (__inode_foo.lock, 0) L.0:
-	(0, 8): Wna (__inode_foo.da_alloc_close, 0) L.0:
-	(0, 9): Wna (__inode_foo.i_reserved_data_blocks, 0) L.0:
-	(0, 10): FWrel (__inode_foo.i_size, 0) L.0:
-	(0, 11): FWrel (__dir_inode.addr[foo], 0x2d7455c) L.0:
-	(0, 12): Wna (__dir_inode.addr[foo], 0) L.0:
-	(0, 13): FS L.0:
-	(0, 14): Wrel (__dir_inode.lock, 0) L.0:
-	(0, 15): FO (foo, 0) L.0:
+	(0, 2): Wna (buf[0], 42) L.22
+	(0, 3): Cacq (__genmc_dir_inode.lock.__private, 0) [INIT] L.24
+	(0, 4): Cacq (__genmc_dir_inode.lock.__private, 1) L.24
+	(0, 5): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.24
+	(0, 6): DRacq (__genmc_dir_inode.data[0], 0x0) [INIT] L.24
+	(0, 7): M
+	(0, 8): Wrel (__inode_foo.lock, 0) L.24
+	(0, 9): Wrel (__inode_foo.i_size, 0) L.24
+	(0, 10): DWrel (__inode_foo.i_transaction, 0) L.24
+	(0, 11): DWrel (__inode_foo.i_disksize, 0) L.24
+	(0, 12): DF L.24
+	(0, 13): DWrel (__genmc_dir_inode.data[0], 0x2000000000000010) L.24
+	(0, 14): Wrel (__genmc_dir_inode.lock.__private, 0) L.24
+	(0, 15): FO (foo, 0) L.24
 	(0, 16): M
-	(0, 17): Wna (__file_foo_0_16.inode, 0x2d7455c) L.0:
-	(0, 18): Wna (__file_foo_0_16.flags, 64) L.0:
-	(0, 19): Wna (__file_foo_0_16.pos, 0) L.0:
-	(0, 20): Wrel (__file_foo_0_16.pos_lock, 0) L.0:
-	(0, 21): Wrel (__file_foo_0_16.count, 1) L.0:
-	(0, 22): Uar (__file_foo_0_16.count, 1) [(0, 21)] L.25
-	(0, 23): Uar (__file_foo_0_16.count, 0) L.0:
-	(0, 24): Rna (__file_foo_0_16.inode, 0x2d7455c) [(0, 17)] L.0:
-	(0, 25): Rna (__inode_foo.da_alloc_close, 0) [(0, 8)] L.0:
-	(0, 26): D L.0:
-	(0, 27): Cacq (__dir_inode.lock, 0) [(0, 14)] L.27
-	(0, 28): Cacq (__dir_inode.lock, 1) L.0:
-	(0, 29): FRacq (__dir_inode.addr[foo], 0x2d7455c) [(0, 11)] L.0:
-	(0, 30): Wrel (__dir_inode.lock, 0) L.0:
-	(0, 31): Cacq (__inode_foo.lock, 0) [(0, 7)] L.0:
-	(0, 32): Cacq (__inode_foo.lock, 1) L.0:
-	(0, 33): FRacq (__inode_foo.i_size, 0) [(0, 10)] L.0:
-	(0, 34): Wrel (__inode_foo.lock, 0) L.0:
+	(0, 17): Wna (__file_foo_0_15.inode, 0x2000000000000010) L.24
+	(0, 18): Wna (__file_foo_0_15.flags, 64) L.24
+	(0, 19): Wna (__file_foo_0_15.pos, 0) L.24
+	(0, 20): Wrel (__file_foo_0_15.pos_lock, 0) L.24
+	(0, 21): Wrel (__file_foo_0_15.count, 1) L.24
+	(0, 22): Uar (__file_foo_0_15.count, 1) [(0, 21)] L.26
+	(0, 23): Uar (__file_foo_0_15.count, 0) L.26
+	(0, 24): D L.26
+	(0, 25): Cacq (__genmc_dir_inode.lock.__private, 0) [(0, 14)] L.28
+	(0, 26): Cacq (__genmc_dir_inode.lock.__private, 1) L.28
+	(0, 27): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.28
+	(0, 28): DRacq (__genmc_dir_inode.data[0], 0x2000000000000010) [(0, 13)] L.28
+	(0, 29): Wrel (__genmc_dir_inode.lock.__private, 0) L.28
+	(0, 30): Cacq (__inode_foo.lock, 0) [(0, 8)] L.28
+	(0, 31): Cacq (__inode_foo.lock, 1) L.28
+	(0, 32): Racq (__inode_foo.i_size, 0) [(0, 9)] L.28
+	(0, 33): Wrel (__inode_foo.lock, 0) L.28
 
+Trace to (0, 32):
+[main] optr-fbig0.c: 22: buf[0] = 42;
+[main] optr-fbig0.c: 24: int fd = open("foo", O_CREAT|O_RDONLY, S_IRWXU);
+[main] optr-fbig0.c: 24: int fd = open("foo", O_CREAT|O_RDONLY, S_IRWXU);
+[main] optr-fbig0.c: 24: int fd = open("foo", O_CREAT|O_RDONLY, S_IRWXU);
+[main] optr-fbig0.c: 24: int fd = open("foo", O_CREAT|O_RDONLY, S_IRWXU);
+[main] optr-fbig0.c: 24: int fd = open("foo", O_CREAT|O_RDONLY, S_IRWXU);
+[main] optr-fbig0.c: 24: int fd = open("foo", O_CREAT|O_RDONLY, S_IRWXU);
+[main] optr-fbig0.c: 24: int fd = open("foo", O_CREAT|O_RDONLY, S_IRWXU);
+[main] optr-fbig0.c: 24: int fd = open("foo", O_CREAT|O_RDONLY, S_IRWXU);
+[main] optr-fbig0.c: 24: int fd = open("foo", O_CREAT|O_RDONLY, S_IRWXU);
+[main] optr-fbig0.c: 24: int fd = open("foo", O_CREAT|O_RDONLY, S_IRWXU);
+[main] optr-fbig0.c: 24: int fd = open("foo", O_CREAT|O_RDONLY, S_IRWXU);
+[main] optr-fbig0.c: 24: int fd = open("foo", O_CREAT|O_RDONLY, S_IRWXU);
+[main] optr-fbig0.c: 24: int fd = open("foo", O_CREAT|O_RDONLY, S_IRWXU);
+[main] optr-fbig0.c: 24: int fd = open("foo", O_CREAT|O_RDONLY, S_IRWXU);
+[main] optr-fbig0.c: 24: int fd = open("foo", O_CREAT|O_RDONLY, S_IRWXU);
+[main] optr-fbig0.c: 24: int fd = open("foo", O_CREAT|O_RDONLY, S_IRWXU);
+[main] optr-fbig0.c: 24: int fd = open("foo", O_CREAT|O_RDONLY, S_IRWXU);
+[main] optr-fbig0.c: 24: int fd = open("foo", O_CREAT|O_RDONLY, S_IRWXU);
+[main] optr-fbig0.c: 26: close(fd);
+[main] optr-fbig0.c: 26: close(fd);
+[main] optr-fbig0.c: 28: int ret = truncate("foo", 4242);
+[main] optr-fbig0.c: 28: int ret = truncate("foo", 4242);
+[main] optr-fbig0.c: 28: int ret = truncate("foo", 4242);
+[main] optr-fbig0.c: 28: int ret = truncate("foo", 4242);
+[main] optr-fbig0.c: 28: int ret = truncate("foo", 4242);
+[main] optr-fbig0.c: 28: int ret = truncate("foo", 4242);
 Length too big in truncate()
 Number of complete executions explored: 0
+Number of blocked executions seen: 1

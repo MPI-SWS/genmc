@@ -21,10 +21,13 @@
 #ifndef __VIEW_HPP__
 #define __VIEW_HPP__
 
-#include <llvm/ADT/IndexedMap.h>
-#include <llvm/Support/raw_ostream.h>
+#include "Error.hpp"
 #include "Event.hpp"
 #include "VectorClock.hpp"
+#include <llvm/ADT/IndexedMap.h>
+#include <llvm/Support/raw_ostream.h>
+
+#include <algorithm>
 
 /*******************************************************************************
  **                             View Class
@@ -48,19 +51,19 @@ public:
 	/* Iterators */
 	typedef int *iterator;
 	typedef const int *const_iterator;
-	iterator begin();
-	iterator end();
-	const_iterator cbegin();
-	const_iterator cend();
+	iterator begin() { return &((*this)[0]); };
+	iterator end()   { return &((*this)[0]) + size(); }
+	const_iterator cbegin() { return &((*this)[0]); }
+	const_iterator cend()	{ return &((*this)[0]) + size(); }
 
 	/* Returns the size of this view (i.e., number of threads seen) */
-	unsigned int size() const;
+	unsigned int size() const { return view_.size(); }
 
 	/* Returns true if this view is empty */
-	bool empty() const;
+	bool empty() const { return size() == 0; }
 
 	/* Returns true if e is contained in the clock */
-	bool contains(const Event e) const;
+	bool contains(const Event e) const { return e.index <= (*this)[e.thread]; }
 
 	/* Updates the view based on another vector clock. We can
 	 * only update the current view given another View (and not
@@ -70,7 +73,11 @@ public:
 	VectorClock &update(const VectorClock &vc);
 
 	/* Makes the maximum event seen in e's thread equal to e */
-	View& updateIdx(const Event e);
+	View& updateIdx(const Event e) {
+		if ((*this)[e.thread] < e.index)
+			(*this)[e.thread] = e.index;
+		return *this;
+	}
 
 	/* Overloaded operators */
 	inline int operator[](int idx) const {

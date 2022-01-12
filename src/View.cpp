@@ -20,45 +20,6 @@
 
 #include "Error.hpp"
 #include "View.hpp"
-#include <algorithm>
-
-
-/************************************************************
- ** Iterators
- ***********************************************************/
-
-View::iterator View::begin() { return &((*this)[0]); }
-View::iterator View::end()   { return &((*this)[0]) + size(); }
-
-View::const_iterator View::cbegin() { return &((*this)[0]); }
-View::const_iterator View::cend()   { return &((*this)[0]) + size(); }
-
-
-/************************************************************
- ** Basic operations on Views
- ***********************************************************/
-
-unsigned int View::size() const
-{
-	return view_.size();
-}
-
-bool View::empty() const
-{
-	return this->size() == 0;
-}
-
-bool View::contains(Event e) const
-{
-	return e.index <= (*this)[e.thread];
-}
-
-View& View::updateIdx(const Event e)
-{
-	if ((*this)[e.thread] < e.index)
-		(*this)[e.thread] = e.index;
-	return *this;
-}
 
 View& View::update(const View &v)
 {

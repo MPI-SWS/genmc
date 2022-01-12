@@ -6,6 +6,34 @@ is released.
 
 ## [Unreleased]
 
+- Documentation (TruSt and spinloop markers)
+- Bug fixes
+
+## [0.7] - 2022.01.13
+### Added
+
+- Core algorithm now follows TruSt
+- Support for concurrent verification (`-nthreads=<uint>`)
+- Support for atomic_{nand,umax,umin,max,min}
+- Support for LLVM-{12,13}
+
+### Changed
+
+- LAPOR is temporarily disabled
+
+### Deprecated
+
+- Support for LLVM-{3.8,4.0}
+
+### Removed
+
+- Verification of user-defined libraries
+
+### Fixes
+
+- Bug fixes
+
+
 ## [0.6.1] - 2021.07.27
 ### Added
 

@@ -14,7 +14,7 @@ Event (2, 3) conflicts with event (1, 1) in graph:
 	(2, 0): B
 	(2, 1): Rrlx (y, 1) [(1, 2)] L.15: mp+rlx+acqf.c
 	(2, 2): Facq L.16: mp+rlx+acqf.c
-	(2, 3): Rna (x, 0) [INIT] L.17: mp+rlx+acqf.c
+	(2, 3): Rna (x, 1) [(1, 1)] L.17: mp+rlx+acqf.c
 
 Trace to (2, 3):
 [main] mp+rlx+acqf0.c: 11: if (pthread_create(&t1, NULL, thread_1, NULL))
@@ -27,3 +27,4 @@ Trace to (1, 1):
 [main] mp+rlx+acqf0.c: 11: if (pthread_create(&t1, NULL, thread_1, NULL))
 [thread_1] mp+rlx+acqf.c: 6: x = 1;
 Number of complete executions explored: 1
+Number of blocked executions seen: 1

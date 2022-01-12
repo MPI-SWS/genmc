@@ -41,14 +41,16 @@
 
 #include "InterpreterEnumAPI.hpp"
 #include "Config.hpp"
-#include "IMMDepTracker.hpp"
-#include "Library.hpp"
+#include "DepTracker.hpp"
+#include "MemAccess.hpp"
 #include "ModuleInfo.hpp"
+#include "SAddr.hpp"
+#include "SAddrAllocator.hpp"
+#include "SVal.hpp"
 #include "View.hpp"
 #include "CallInstWrapper.hpp"
 
 #include <llvm/ADT/BitVector.h>
-#include <llvm/ADT/IndexedMap.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/GenericValue.h>
 #include <llvm/IR/Instructions.h>
@@ -129,71 +131,6 @@ typedef generic_gep_type_iterator<User::const_op_iterator> gep_type_iterator;
 
 typedef std::vector<GenericValue> ValuePlaneTy;
 
-/*
- * AllocaTracker class -- Keeps track of addresses that have been allocated,
- * and provides addresses available for allocation
- */
-class AllocaTracker {
-
-public:
-
-  AllocaTracker() { allocas.grow(static_cast<int>(Storage::ST_StorageLast)); }
-
-  /* Sets the initial address of the pool */
-  void initPoolAddress(char *init) { allocRangeBegin = init; }
-
-  /* Whether an address has a particular storage */
-  bool hasStorage(const void *addr, Storage s) const {
-	  return allocas[static_cast<int>(s)].count(addr);
-  }
-
-  /* Whether an address is in the internal address space */
-  bool isInternal(const void *addr) const {
-	  return internalAllocas.count(addr);
-  }
-
-  /* Allocates a chunk */
-  char *allocate(unsigned int size, unsigned int alignment, Storage s, AddressSpace spc) {
-	  auto offset = alignment - 1;
-	  auto *oldAddr = allocRangeBegin;
-	  allocRangeBegin += (offset + size);
-	  auto *newAddr = (char *) (((uintptr_t) oldAddr + offset) & ~(alignment - 1));
-	  track(newAddr, size, s, spc);
-	  return newAddr;
-  }
-
-  /* Methods to track/untrack allocations */
-  void track(const void *addr, unsigned int size, Storage s, AddressSpace spc) {
-    for (auto i = 0u; i < size; i++)
-      allocas[static_cast<int>(s)].insert((char *) addr + i);
-    if (spc == AddressSpace::AS_Internal) {
-      for (auto i = 0u; i < size; i++)
-        internalAllocas.insert((char *) addr + i);
-    }
-  }
-  void untrack(const void *addr, unsigned int size, Storage s, AddressSpace spc) {
-    for (auto i = 0u; i < size; i++)
-      allocas[static_cast<int>(s)].erase((char *) addr + i);
-    if (spc == AddressSpace::AS_Internal) {
-      for (auto i = 0u; i < size; i++)
-        internalAllocas.erase((char *) addr + i);
-    }
-  }
-
-private:
-
-  /* Allocations for each storage type.
-   * Does not track allocations of static storage */
-  IndexedMap<std::unordered_set<const void *> > allocas;
-
-  /* Keep track of the internal allocations */
-  std::unordered_set<const void *> internalAllocas;
-
-  /* Address from which we will start allocating new addresses.
-   * Should be set by the interpreter accordingly */
-  char *allocRangeBegin = (char *) 620959777;
-};
-
 // AllocaHolder - Object to track all of the blocks of memory allocated by
 // allocas in a particular stack frame. Since the driver needs to be made
 // aware of the deallocs, special care needs to be taken to inform the driver
@@ -233,21 +170,6 @@ struct ExecutionContext {
 class Thread {
 
 public:
-	/* Different ways a thread can be blocked */
-	enum BlockageType {
-		BT_NotBlocked,
-		BT_ThreadJoin,
-		BT_Spinloop,
-		BT_ZNESpinloop,
-		BT_SpinloopEnd,
-		BT_LockAcq,
-		BT_LockRel,
-		BT_Barrier,
-		BT_Cons,
-		BT_Error,
-		BT_User,
-	};
-
 	using MyRNG  = std::minstd_rand;
 	using MyDist = std::uniform_int_distribution<MyRNG::result_type>;
 	static constexpr int seed = 1995;
@@ -255,7 +177,7 @@ public:
 	int id;
 	int parentId;
 	llvm::Function *threadFun;
-	llvm::GenericValue threadArg;
+	SVal threadArg;
 	std::vector<llvm::ExecutionContext> ECStack;
 	llvm::ExecutionContext initSF;
 	std::unordered_map<const void *, llvm::GenericValue> tls;
@@ -266,8 +188,8 @@ public:
 	std::vector<std::pair<int, std::string> > prefixLOC;
 
 	void block(BlockageType t) { blocked = t; }
-	void unblock() { blocked = BT_NotBlocked; }
-	bool isBlocked() const { return blocked != BT_NotBlocked; }
+	void unblock() { blocked = BlockageType::NotBlocked; }
+	bool isBlocked() const { return blocked != BlockageType::NotBlocked; }
 	BlockageType getBlockageType() const { return blocked; }
 
 	/* Useful for one-to-many instr->events correspondence */
@@ -284,66 +206,111 @@ protected:
 
 	Thread(llvm::Function *F, int id)
 		: id(id), parentId(-1), threadFun(F), initSF(), globalInstructions(0),
-		  blocked(BT_NotBlocked), rng(seed) {}
+		  blocked(BlockageType::NotBlocked), rng(seed) {}
 
-	Thread(llvm::Function *F, const llvm::GenericValue &arg,
-	       int id, int pid, const llvm::ExecutionContext &SF)
+	Thread(llvm::Function *F, SVal arg, int id, int pid, const llvm::ExecutionContext &SF)
 		: id(id), parentId(pid), threadFun(F), threadArg(arg),
-		  initSF(SF), globalInstructions(0), blocked(BT_NotBlocked), rng(seed) {}
+		  initSF(SF), globalInstructions(0), blocked(BlockageType::NotBlocked), rng(seed) {}
 };
 
 llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const Thread &thr);
 
+struct ThreadInfo {
+	int id;
+	int parentId;
+	unsigned int funId;
+	SVal arg;
+
+	ThreadInfo() = default;
+	ThreadInfo(int id, int parentId, unsigned funId, SVal arg)
+		: id(id), parentId(parentId), funId(funId), arg(arg) {}
+};
+
+
+/* Pers: The state of the program -- i.e., part of the program being interpreted */
+enum class ProgramState {
+	Main,
+	Recovery
+};
+
+/* The state of the current execution */
+enum class ExecutionState {
+	Normal,
+	Replay
+};
+
+struct EELocalState {
+	SAddrAllocator alloctor;
+	std::unique_ptr<DepTracker> depTracker;
+	ExecutionState execState;
+	ProgramState programState;
+	llvm::BitVector fds;
+	llvm::IndexedMap<void *> fdToFile;
+	std::unordered_map<std::string, void *> nameToInodeAddr;
+	std::vector<Thread> threads;
+	int currentThread = 0;
+
+	EELocalState() = default;
+	EELocalState(const SAddrAllocator &alloctor,
+		     const std::unique_ptr<DepTracker> &depTracker,
+		     const ExecutionState &execState,
+		     const ProgramState &programState,
+		     const llvm::BitVector &fds,
+		     const llvm::IndexedMap<void *> &fdToFile,
+		     const std::unordered_map<std::string, void *> &nameToInodeAddr,
+		     const std::vector<Thread> &ts,
+		     int current);
+};
+
+struct EESharedState {
+	SAddrAllocator alloctor;
+	llvm::BitVector fds;
+	std::vector<ThreadInfo> threadInfos;
+
+	EESharedState() = default;
+	EESharedState(SAddrAllocator alloctor, const llvm::BitVector &fds, std::vector<ThreadInfo> tis)
+		: alloctor(alloctor), fds(fds), threadInfos(tis) {}
+};
+
+
 // Interpreter - This class represents the entirety of the interpreter.
 //
 class Interpreter : public ExecutionEngine, public InstVisitor<Interpreter> {
+
 public:
-
-  /* Pers: The state of the program -- i.e., part of the program being interpreted */
-  enum ProgramState {
-	  PS_Main,
-	  PS_Recovery
-  };
-
-  /* The state of the current execution */
-  enum ExecutionState {
-	  ES_Normal,
-	  ES_Replay
-  };
+  using AnnotID = ModuleID::ID;
+  using AnnotT = SExpr<AnnotID>;
 
 protected:
 
-  GenericValue ExitValue;          // The return value of the called function
-  IntrinsicLowering *IL;
+  /*** Static components (once set, do not change) ***/
 
   /* Information about the module under test */
-  ModuleInfo MI;
-
-  /* Tracks the names of variables for each storage type */
-  IndexedMap<std::unordered_map<const void *, std::string> > varNames;
+  std::unique_ptr<ModuleInfo> MI;
 
   /* List of thread-local variables, with their initializing values */
   std::unordered_map<const void *, llvm::GenericValue> threadLocalVars;
 
-  /* A tracker for dynamic allocations */
-  AllocaTracker alloctor;
+  /* Mapping between static allocation beginning and the actual addresses of
+   * global variables (where their contents are stored) */
+  std::unordered_map<SAddr, void *> staticValueMap;
+
+  /* Keep all static ranges that have been allocated */
+  VSet<std::pair<SAddr, SAddr> > staticAllocas;
+
+  /* Maintain the relationship between SAddr and global variables,
+   * so that we can get naming information */
+  std::unordered_map<SAddr, Value *> staticNames;
 
   /* (Composition) pointer to the driver */
   GenMCDriver *driver;
-
-  /* Pointer to the dependency tracker */
-  std::unique_ptr<DepTracker> depTracker = nullptr;
 
   /* Whether the driver should be called on system errors */
   bool stopOnSystemErrors;
 
   /* Where system errors return values should be stored (if required) */
-  void *errnoAddr;
+  SAddr errnoAddr;
   Type *errnoTyp;
-
-  /* Information about the interpreter's state */
-  ExecutionState execState = ES_Normal;
-  ProgramState programState = PS_Main; /* Pers */
 
   /* Pers: Whether we should run a recovery procedure after the execution finishes */
   bool checkPersistency;
@@ -351,18 +318,90 @@ protected:
   /* Pers: The recovery routine to run */
   Function *recoveryRoutine = nullptr;
 
+  /*** Dynamic components (change during verification) ***/
+
+  /* Information about threads as well as the currently executing thread */
+  std::vector<Thread> threads;
+  int currentThread = 0;
+
+  /* A tracker for dynamic allocations */
+  SAddrAllocator alloctor;
+
+  /* Pointer to the dependency tracker */
+  std::unique_ptr<DepTracker> depTracker = nullptr;
+
+  /* Information about the interpreter's state */
+  ExecutionState execState = ExecutionState::Normal;
+  ProgramState programState = ProgramState::Main; /* Pers */
+
+  /* Pers: A bitvector of available file descriptors */
+  llvm::BitVector fds;
+
+  /* Pers: A map from file descriptors to file descriptions */
+  llvm::IndexedMap<void *> fdToFile;
+
+  /* Pers: Maps a filename to the address of the contents of the directory's inode for
+   * said name (the contents should have the address of the file's inode) */
+  std::unordered_map<std::string, void *> nameToInodeAddr;
+
   // The runtime stack of executing code.  The top of the stack is the current
   // function record.
   std::vector<ExecutionContext> mainECStack;
+
+  GenericValue ExitValue;          // The return value of the called function
+  IntrinsicLowering *IL;
 
   // AtExitHandlers - List of functions to call when the program exits,
   // registered with the atexit() library function.
   std::vector<Function*> AtExitHandlers;
 
 public:
-  explicit Interpreter(std::unique_ptr<Module> M, ModuleInfo &&MI,
+  explicit Interpreter(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> MI,
 		       GenMCDriver *driver, const Config *userConf);
   virtual ~Interpreter();
+
+  /* FIXME: Document and move to .cpp */
+  std::unique_ptr<EELocalState> releaseLocalState();
+  void restoreLocalState(std::unique_ptr<EELocalState> state);
+
+  std::unique_ptr<EESharedState> getSharedState() const {
+	  auto shared = LLVM_MAKE_UNIQUE<EESharedState>();
+
+	  shared->alloctor = alloctor;
+	  shared->fds = fds;
+	  for (auto &thr : threads) {
+		  shared->threadInfos.emplace_back(
+			  thr.id, thr.parentId, MI->idInfo.VID.at(thr.threadFun), thr.threadArg);
+	  }
+	  return shared;
+  }
+  Thread &constructAddThreadFromInfo(const ThreadInfo &ti) {
+	  auto *calledFun = dyn_cast<Function>(const_cast<Value *>(MI->idInfo.IDV.at(ti.funId)));
+	  BUG_ON(!calledFun);
+	  ExecutionContext SF;
+
+	  SF.CurFunction = calledFun;
+	  SF.CurBB = &calledFun->front();
+	  SF.CurInst = SF.CurBB->begin();
+
+	  SF.Values[&*calledFun->arg_begin()] = PTR_TO_GV(ti.arg.get());
+	  return createAddNewThread(calledFun, ti.arg, ti.id, ti.parentId, SF);
+  }
+  void setSharedState(std::unique_ptr<EESharedState> state) {
+	  alloctor = std::move(state->alloctor);
+	  fds = std::move(state->fds);
+	  threads.clear();
+	  for (auto &ti : state->threadInfos)
+		  constructAddThreadFromInfo(ti);
+  }
+
+  /* Blocks the current execution */
+  void block(BlockageType t = BlockageType::Error ) {
+	  std::for_each(threads_begin(), threads_end(), [&](Thread &thr){ thr.block(t); });
+  }
+
+   /* Resets all thread info to their initial values */
+  void resetThread(unsigned int id);
 
   /* Resets the interpreter at the beginning of a new execution */
   void reset();
@@ -375,35 +414,42 @@ public:
   /* Pers: Does cleanups after the recovery routine has run */
   void cleanupRecoveryRoutine(int tid);
 
-  /* Information about threads as well as the currently executing thread */
-  std::vector<Thread> threads;
-  int currentThread = 0;
+  /* Creates a new thread and adds it to the thread list */
+  Thread &createAddNewThread(llvm::Function *F, SVal arg, int tid, int pid,
+			    const llvm::ExecutionContext &SF);
 
-  /* Creates an entry for the main() function. More information are
-   * filled from the execution engine when the exploration starts */
-  Thread createMainThread(llvm::Function *F);
+  /* Pers: Creates a thread for the recovery routine and adds it to
+   * the thread list */
+  Thread &createAddRecoveryThread(int tid);
 
-  /* Creates a new thread, but does _not_ add it to the thread list */
-  Thread createNewThread(llvm::Function *F, const llvm::GenericValue &arg,
-			 int tid, int pid, const llvm::ExecutionContext &SF);
-
-  /* Pers: Creates a thread for the recovery routine.
-   * It does _not_ add it to the thread list */
-  Thread createRecoveryThread(int tid);
+  /* Sets-up the specified thread for execution */
+  void scheduleThread(int tid) { currentThread = tid; }
 
   /* Returns the currently executing thread */
-  Thread& getCurThr() { return threads[currentThread]; };
+  Thread& getCurThr() { return threads[currentThread]; }
+  const Thread &getCurThr() const { return threads.at(currentThread); }
 
   /* Returns the thread with the specified ID (taken from the graph) */
   Thread& getThrById(int id) { return threads[id]; };
+
+  std::vector<Thread>::const_iterator threads_begin() const { return threads.begin(); }
+  std::vector<Thread>::const_iterator threads_end() const { return threads.end(); }
+  std::vector<Thread>::iterator threads_begin() { return threads.begin(); }
+  std::vector<Thread>::iterator threads_end() { return threads.end(); }
 
   /* Returns the stack frame of the currently executing thread */
   std::vector<ExecutionContext> &ECStack() { return getCurThr().ECStack; }
 
   /* Returns the current (global) position (thread, index) interpreted */
-  Event getCurrentPosition() {
-	  const Thread &thr = getCurThr();
-	  return Event(thr.id, thr.globalInstructions);
+  Event currPos() const { return Event(getCurThr().id, getCurThr().globalInstructions); };
+  Event nextPos() const { return currPos().next(); };
+  Event incPos() {
+	  auto &thr = getCurThr();
+	  return Event(thr.id, ++thr.globalInstructions);
+  };
+  Event decPos() {
+	  auto &thr = getCurThr();
+	  return Event(thr.id, --thr.globalInstructions);
   };
 
   /* Set and query interpreter's state */
@@ -412,64 +458,27 @@ public:
   void setProgramState(ProgramState s) { programState = s; }
   void setExecState(ExecutionState s) { execState = s; }
 
-  /* Dependency tracking */
-
-  const DepInfo *getAddrPoDeps(unsigned int tid);
-  const DepInfo *getDataDeps(unsigned int tid, Value *i);
-  const DepInfo *getCtrlDeps(unsigned int tid);
-
-  const DepInfo *getCurrentAddrDeps() const;
-  const DepInfo *getCurrentDataDeps() const;
-  const DepInfo *getCurrentCtrlDeps() const;
-  const DepInfo *getCurrentAddrPoDeps() const;
-  const DepInfo *getCurrentCasDeps() const;
-
-  void setCurrentDeps(const DepInfo *addrDeps, const DepInfo *dataDeps,
-		      const DepInfo *ctrlDeps, const DepInfo *addrPoDeps,
-		      const DepInfo *casDeps);
-
-  void updateDataDeps(unsigned int tid, Value *dst, Value *src);
-  void updateDataDeps(unsigned int tid, Value *dst, const DepInfo *e);
-  void updateDataDeps(unsigned int tid, Value *dst, Event e);
-  void updateAddrPoDeps(unsigned int tid, Value *src);
-  void updateCtrlDeps(unsigned int tid, Value *src);
-  void updateFunArgDeps(unsigned int tid, Function *F);
-
-  void clearDeps(unsigned int tid);
-
   /* Annotation information */
 
   /* Returns annotation information for the instruction I */
-  const SExpr *getAnnotation(Instruction *I) const {
-	  return MI.annotInfo.annotMap.count(I) ? MI.annotInfo.annotMap.at(I).get() : nullptr;
+  const AnnotT *getAnnotation(Instruction *I) const {
+	  auto id = MI->idInfo.VID[I];
+	  return MI->annotInfo.annotMap.count(id) ? MI->annotInfo.annotMap.at(id).get() : nullptr;
   }
 
   /* Returns (concretized) annotation information for the
    * current instruction (assuming we're executing it) */
-  std::unique_ptr<SExpr> getCurrentAnnotConcretized();
+  std::unique_ptr<AnnotT> getCurrentAnnotConcretized();
 
   /* Memory pools checks */
 
-  /* Returns the name of the variable residing in addr */
-  std::string getVarName(const void *addr);
-
-  bool isInternal(const void *addr);
-  bool isStatic(const void *);
-  bool isStack(const void *);
-  bool isHeap(const void *);
-  bool isDynamic(const void *);
-  bool isShared(const void *);
+  /* Returns true if the interpreter has allocated space for the specified static */
+  bool isStaticallyAllocated(SAddr addr) const;
+  void *getStaticAddr(SAddr addr) const;
+  std::string getStaticName(SAddr addr) const;
 
   /* Returns a fresh address for a new allocation */
-  void *getFreshAddr(unsigned int size, int alignment, Storage s, AddressSpace spc);
-
-  /* Records that the memory block in ADDR is used.
-   * Does _not_ update naming information */
-  void trackAlloca(const void *addr, unsigned int size, Storage s, AddressSpace spc);
-
-  /* Records that the memory block in ADDR is no longer used.
-   * Also erases naming information */
-  void untrackAlloca(const void *addr, unsigned int size, Storage s, AddressSpace spc);
+  SAddr getFreshAddr(unsigned int size, int alignment, Storage s, AddressSpace spc);
 
   /* Pers: Returns a fresh file descriptor for a new open() call (marks it as in use) */
   int getFreshFd();
@@ -487,7 +496,7 @@ public:
 
   /// create - Create an interpreter ExecutionEngine. This can never fail.
   ///
-  static ExecutionEngine *create(std::unique_ptr<Module> M, ModuleInfo &&MI,
+  static ExecutionEngine *create(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> MI,
 				 GenMCDriver *driver, const Config *userConf,
 				 std::string *ErrorStr = nullptr);
 
@@ -527,15 +536,15 @@ public:
 
   /* Helper functions */
   void replayExecutionBefore(const VectorClock &before);
-  bool compareValues(const llvm::Type *typ, const GenericValue &val1, const GenericValue &val2);
-  GenericValue getLocInitVal(GenericValue *ptr, Type *typ);
+  SVal getLocInitVal(SAddr addr, AAccess access);
   unsigned int getTypeSize(Type *typ) const;
-  void executeAtomicRMWOperation(GenericValue &result, const GenericValue &oldVal,
-				 const GenericValue &val, AtomicRMWInst::BinOp op);
+  SVal executeAtomicRMWOperation(SVal val1, SVal val2, AtomicRMWInst::BinOp op);
 
   // Methods used to execute code:
   // Place a call on the stack
-  void callFunction(Function *F, const std::vector<GenericValue> &ArgVals);
+  void callFunction(Function *F, const std::vector<GenericValue> &ArgVals,
+		    const std::unique_ptr<EventDeps> &specialDeps);
+
   void run();                // Execute instructions until nothing left to do
 
   /* Pers: Run the specified recovery routine */
@@ -658,117 +667,117 @@ private:  // Helper functions
                                   ExecutionContext &SF);
   GenericValue executeCastOperation(Instruction::CastOps opcode, Value *SrcVal,
                                     Type *Ty, ExecutionContext &SF);
+  std::vector<GenericValue> translateExternalCallArgs(Function *F,
+						      const std::vector<GenericValue> &Args) const;
   void returnValueToCaller(Type *RetTy, GenericValue Result);
   void popStackAndReturnValueToCaller(Type *RetTy, GenericValue Result);
 
   void handleSystemError(SystemError code, const std::string &msg);
 
-  GenericValue getInodeTransStatus(void *inode, Type *intTyp);
-  void setInodeTransStatus(void *inode, Type *intTyp, const GenericValue &status);
-  GenericValue readInodeSizeFS(void *inode, Type *intTyp);
-  void updateInodeSizeFS(void *inode, Type *intTyp, const GenericValue &newSize);
-  void updateInodeDisksizeFS(void *inode, Type *intTyp, const GenericValue &newSize,
-			     const GenericValue &ordDataBegin, const GenericValue &ordDataEnd);
+  SVal getInodeTransStatus(void *inode, Type *intTyp);
+  void setInodeTransStatus(void *inode, Type *intTyp, SVal status);
+  SVal readInodeSizeFS(void *inode, Type *intTyp,
+		       const std::unique_ptr<EventDeps> &deps);
+  void updateInodeSizeFS(void *inode, Type *intTyp, SVal newSize,
+			 const std::unique_ptr<EventDeps> &deps);
+  void updateInodeDisksizeFS(void *inode, Type *intTyp, SVal newSize,
+			     SVal ordDataBegin, SVal ordDataEnd);
   void writeDataToDisk(void *buf, int bufOffset, void *inode, int inodeOffset,
-		       int count, Type *dataTyp);
+		       int count, Type *dataTyp, const std::unique_ptr<EventDeps> &deps);
   void readDataFromDisk(void *inode, int inodeOffset, void *buf, int bufOffset,
-			int count, Type *dataTyp);
-  void updateDirNameInode(const char *name, Type *intTyp, const GenericValue &inode);
+			int count, Type *dataTyp, const std::unique_ptr<EventDeps> &deps);
+  void updateDirNameInode(const std::string &name, Type *intTyp, SVal inode);
 
-  GenericValue checkOpenFlagsFS(GenericValue &flags, Type *intTyp);
-  GenericValue executeInodeLookupFS(const char *name, Type *intTyp);
-  GenericValue executeInodeCreateFS(const char *name, Type *intTyp);
-  GenericValue executeLookupOpenFS(const char *file, GenericValue &flags, Type *intTyp);
-  GenericValue executeOpenFS(const char *file, const GenericValue &flags,
-			     const GenericValue &inode, Type *intTyp);
+  SVal checkOpenFlagsFS(SVal &flags, Type *intTyp);
+  SVal executeInodeLookupFS(const std::string &name, Type *intTyp);
+  SVal executeInodeCreateFS(const std::string &name, Type *intTyp,
+			    const std::unique_ptr<EventDeps> &deps);
+  SVal executeLookupOpenFS(const std::string &filename, SVal &flags, Type *intTyp,
+			   const std::unique_ptr<EventDeps> &deps);
+  SVal executeOpenFS(const std::string &filename, SVal flags, SVal inode, Type *intTyp,
+		     const std::unique_ptr<EventDeps> &deps);
 
-  void executeReleaseFileFS(void *fileDesc, Type *intTyp);
-  GenericValue executeCloseFS(const GenericValue &fd, Type *intTyp);
-  GenericValue executeRenameFS(const char *oldpath, const GenericValue &oldInode,
-			       const char *newpath, const GenericValue &newInode,
-			       Type *intTyp);
-  GenericValue executeLinkFS(const char *newpath, const GenericValue &oldInode, Type *intTyp);
-  GenericValue executeUnlinkFS(const char *pathname, Type *intTyp);
+  void executeReleaseFileFS(void *fileDesc, Type *intTyp, const std::unique_ptr<EventDeps> &deps);
+  SVal executeCloseFS(SVal fd, Type *intTyp, const std::unique_ptr<EventDeps> &deps);
+  SVal executeRenameFS(const std::string &oldpath, SVal oldInode, const std::string &newpath,
+		       SVal newInode, Type *intTyp);
+  SVal executeLinkFS(const std::string &newpath, SVal oldInode, Type *intTyp);
+  SVal executeUnlinkFS(const std::string &pathname, Type *intTyp);
 
 
-  GenericValue executeTruncateFS(const GenericValue &inode, const GenericValue &length,
-				  Type *intTyp);
-  GenericValue executeReadFS(void *file, Type *intTyp, GenericValue *buf,
-			      Type *bufElemTyp, const GenericValue &offset,
-			      const GenericValue &count);
-  void zeroDskRangeFS(void *inode, const GenericValue &start,
-		      const GenericValue &end, Type *writeIntTyp);
-  GenericValue executeWriteChecksFS(void *inode, Type *intTyp, const GenericValue &flags,
-				    const GenericValue &offset, const GenericValue &count,
-				    GenericValue &wOffset);
-  bool shouldUpdateInodeDisksizeFS(void *inode, Type *intTyp, const GenericValue &size,
-				   const GenericValue &offset, const GenericValue &count,
-				   GenericValue &dSize);
-  GenericValue executeBufferedWriteFS(void *inode, Type *intTyp, GenericValue *buf,
-				      Type *bufElemTyp, const GenericValue &wOffset,
-				      const GenericValue &count);
-  GenericValue executeWriteFS(void *file, Type *intTyp, GenericValue *buf,
-			       Type *bufElemTyp, const GenericValue &offset,
-			       const GenericValue &count);
-  GenericValue executeLseekFS(void *file, Type *intTyp,
-			    const GenericValue &offset,
-			    const GenericValue &whence);
+  SVal executeTruncateFS(SVal inode, SVal length, Type *intTyp,
+			 const std::unique_ptr<EventDeps> &deps);
+  SVal executeReadFS(void *file, Type *intTyp, void *buf, Type *bufElemTyp, SVal offset,
+		     SVal count, const std::unique_ptr<EventDeps> &deps);
+  void zeroDskRangeFS(void *inode, SVal start, SVal end, Type *writeIntTyp);
+  SVal executeWriteChecksFS(void *inode, Type *intTyp, SVal flags, SVal offset, SVal count,
+			    SVal &wOffset, const std::unique_ptr<EventDeps> &deps);
+  bool shouldUpdateInodeDisksizeFS(void *inode, Type *intTyp, SVal size,
+				   SVal offset, SVal count, SVal &dSize);
+  SVal executeBufferedWriteFS(void *inode, Type *intTyp, void *buf, Type *bufElemTyp, SVal wOffset,
+			      SVal count, const std::unique_ptr<EventDeps> &deps);
+  SVal executeWriteFS(void *file, Type *intTyp, void *buf, Type *bufElemTyp, SVal offset, SVal count,
+		      const std::unique_ptr<EventDeps> &deps);
+  SVal executeLseekFS(void *file, Type *intTyp, SVal offset, SVal whence,
+		      const std::unique_ptr<EventDeps> &deps);
   void executeFsyncFS(void *inode, Type *intTyp);
 
 
   /* Custom Opcode Implementations */
-  void callAssertFail(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callLoopBegin(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callSpinStart(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callSpinEnd(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callFaiZNESpinEnd(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callLockZNESpinEnd(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callEndLoop(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callAssume(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callNondetInt(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callMalloc(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callMallocAligned(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callFree(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callThreadSelf(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callThreadCreate(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callThreadJoin(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callThreadExit(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callMutexInit(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callMutexLock(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callMutexUnlock(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callMutexTrylock(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callMutexDestroy(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callBarrierInit(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callBarrierWait(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callBarrierDestroy(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callReadFunction(const Library &lib, const LibMem &m, Function *F,
-			const std::vector<GenericValue> &ArgVals);
-  void callWriteFunction(const Library &lib, const LibMem &m, Function *F,
-			 const std::vector<GenericValue> &ArgVals);
-  void callOpenFS(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callCreatFS(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callCloseFS(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callRenameFS(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callLinkFS(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callUnlinkFS(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callTruncateFS(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callReadFS(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callWriteFS(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callSyncFS(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callFsyncFS(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callPreadFS(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callPwriteFS(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callLseekFS(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callPersBarrierFS(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callSmpFenceLKMM(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callAtomicRmwNoRet(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callRCUReadLockLKMM(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callRCUReadUnlockLKMM(Function *F, const std::vector<GenericValue> &ArgVals);
-  void callSynchronizeRCULKMM(Function *F, const std::vector<GenericValue> &ArgVals);
+#define DECLARE_CUSTOM_OPCODE(_name)						  \
+	void call ## _name(Function *F, const std::vector<GenericValue> &ArgVals, \
+			   const std::unique_ptr<EventDeps> &specialDeps)
 
-  const Library *isUserLibCall(Function *F);
-  void callUserLibFunction(const Library *lib, Function *F, const std::vector<GenericValue> &ArgVals);
-  void callInternalFunction(Function *F, const std::vector<GenericValue> &ArgVals);
+  DECLARE_CUSTOM_OPCODE(AssertFail);
+  DECLARE_CUSTOM_OPCODE(LoopBegin);
+  DECLARE_CUSTOM_OPCODE(RecAssertFail);
+  DECLARE_CUSTOM_OPCODE(SpinStart);
+  DECLARE_CUSTOM_OPCODE(SpinEnd);
+  DECLARE_CUSTOM_OPCODE(FaiZNESpinEnd);
+  DECLARE_CUSTOM_OPCODE(LockZNESpinEnd);
+  DECLARE_CUSTOM_OPCODE(EndLoop);
+  DECLARE_CUSTOM_OPCODE(Assume);
+  DECLARE_CUSTOM_OPCODE(NondetInt);
+  DECLARE_CUSTOM_OPCODE(Malloc);
+  DECLARE_CUSTOM_OPCODE(MallocAligned);
+  DECLARE_CUSTOM_OPCODE(Free);
+  DECLARE_CUSTOM_OPCODE(ThreadSelf);
+  DECLARE_CUSTOM_OPCODE(ThreadCreate);
+  DECLARE_CUSTOM_OPCODE(ThreadJoin);
+  DECLARE_CUSTOM_OPCODE(ThreadExit);
+  DECLARE_CUSTOM_OPCODE(MutexInit);
+  DECLARE_CUSTOM_OPCODE(MutexLock);
+  DECLARE_CUSTOM_OPCODE(MutexUnlock);
+  DECLARE_CUSTOM_OPCODE(MutexTrylock);
+  DECLARE_CUSTOM_OPCODE(MutexDestroy);
+  DECLARE_CUSTOM_OPCODE(BarrierInit);
+  DECLARE_CUSTOM_OPCODE(BarrierWait);
+  DECLARE_CUSTOM_OPCODE(BarrierDestroy);
+  DECLARE_CUSTOM_OPCODE(OpenFS);
+  DECLARE_CUSTOM_OPCODE(CreatFS);
+  DECLARE_CUSTOM_OPCODE(CloseFS);
+  DECLARE_CUSTOM_OPCODE(RenameFS);
+  DECLARE_CUSTOM_OPCODE(LinkFS);
+  DECLARE_CUSTOM_OPCODE(UnlinkFS);
+  DECLARE_CUSTOM_OPCODE(TruncateFS);
+  DECLARE_CUSTOM_OPCODE(ReadFS);
+  DECLARE_CUSTOM_OPCODE(WriteFS);
+  DECLARE_CUSTOM_OPCODE(SyncFS);
+  DECLARE_CUSTOM_OPCODE(FsyncFS);
+  DECLARE_CUSTOM_OPCODE(PreadFS);
+  DECLARE_CUSTOM_OPCODE(PwriteFS);
+  DECLARE_CUSTOM_OPCODE(LseekFS);
+  DECLARE_CUSTOM_OPCODE(PersBarrierFS);
+  DECLARE_CUSTOM_OPCODE(SmpFenceLKMM);
+  DECLARE_CUSTOM_OPCODE(AtomicRmwNoRet);
+  DECLARE_CUSTOM_OPCODE(RCUReadLockLKMM);
+  DECLARE_CUSTOM_OPCODE(RCUReadUnlockLKMM);
+  DECLARE_CUSTOM_OPCODE(SynchronizeRCULKMM);
+
+  void callInternalFunction(Function *F, const std::vector<GenericValue> &ArgVals,
+			    const std::unique_ptr<EventDeps> &deps);
+
+  void freeAllocas(const AllocaHolder &allocas);
 
   /* Collects the addresses (and some naming information) for all variables with
    * static storage. Also calculates the starting address of the allocation pool */
@@ -779,6 +788,58 @@ private:  // Helper functions
 
   /* Pers: Sets up information about the modeled filesystem */
   void setupFsInfo(Module *M, const Config *userConf);
+
+  /* Adds the specified thread to the list */
+  Thread &addNewThread(Thread &&thread);
+
+  /* Creates an entry for the main() function. More information are
+   * filled from the execution engine when the exploration starts */
+  Thread &createAddMainThread(llvm::Function *F);
+
+  /* Dependency tracking */
+
+  std::unique_ptr<EventDeps>
+  makeEventDeps(const DepInfo *addr, const DepInfo *data,
+		const DepInfo *ctrl, const DepInfo *addrPo,
+		const DepInfo *cas);
+
+  const DepInfo *getDataDeps(unsigned int tid, Value *i) {
+    return depTracker ? depTracker->getDataDeps(tid, i) : nullptr;
+  }
+  const DepInfo *getAddrPoDeps(unsigned int tid) {
+    return depTracker ? depTracker->getAddrPoDeps(tid) : nullptr;
+  }
+  const DepInfo *getCtrlDeps(unsigned int tid) {
+    return depTracker ? depTracker->getCtrlDeps(tid) : nullptr;
+  }
+
+  void updateDataDeps(unsigned int tid, Value *dst, Value *src) {
+    if (depTracker)
+      depTracker->updateDataDeps(tid, dst, src);
+  }
+  void updateDataDeps(unsigned int tid, Value *dst, const DepInfo *e) {
+    if (depTracker)
+      depTracker->updateDataDeps(tid, dst, *e);
+  }
+  void updateDataDeps(unsigned int tid, Value *dst, Event e) {
+    if (depTracker)
+      depTracker->updateDataDeps(tid, dst, e);
+  }
+  void updateAddrPoDeps(unsigned int tid, Value *src) {
+    if (depTracker)
+      depTracker->updateAddrPoDeps(tid, src);
+  }
+  void updateCtrlDeps(unsigned int tid, Value *src) {
+    if (depTracker)
+      depTracker->updateCtrlDeps(tid, src);
+  }
+
+  std::unique_ptr<EventDeps> updateFunArgDeps(unsigned int tid, Function *F);
+
+  void clearDeps(unsigned int tid) {
+    if (depTracker)
+      depTracker->clearDeps(tid);
+  }
 
   /* Update naming information */
 
@@ -792,12 +853,10 @@ private:  // Helper functions
 			     Value *v, const std::string &prefix,
 			     const std::string &internal);
 
-  /* Update/erase the names of the variables corresponding to addresses
-   * in the range [ptr, ptr + typeSize) */
-  void updateVarNameInfo(char *ptr, unsigned int typeSize, Storage s, AddressSpace spc,
-			 Value *v, const std::string &prefix = {},
-			 const std::string &internal = {});
-  void eraseVarNameInfo(char *ptr, unsigned int typeSize, Storage s, AddressSpace spc);
+  /* Gets naming information for value V (or value with key KEY), if it is
+   * an internal variable with no value correspondence */
+  NameInfo *getVarNameInfo(Value *v, Storage s, AddressSpace spc,
+			   const VariableInfo<ModuleID::ID>::InternalKey &key = {});
 
   /* Pers: Returns the address of the file description referenced by FD */
   void *getFileFromFd(int fd) const;
@@ -807,7 +866,7 @@ private:  // Helper functions
 
   /* Pers: Directory operations */
   void *getDirInode() const;
-  void *getInodeAddrFromName(const char *filename) const;
+  void *getInodeAddrFromName(const std::string &filename) const;
 
 };
 

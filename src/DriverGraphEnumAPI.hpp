@@ -24,8 +24,8 @@
 /* Types of coherence */
 enum class CoherenceType { mo, wb };
 
-/* Whether we should approximate consistency checks when we get the chance */
-enum class CheckConsType { approx, full };
+/* Whether we should approximate consistency checks (when we get the chance) */
+enum class CheckConsType { fast = 1, slow, full };
 
 /* Points of the program (at which consistency/persistency can be checked) */
 enum class ProgramPoint { error = 1, exec, step };

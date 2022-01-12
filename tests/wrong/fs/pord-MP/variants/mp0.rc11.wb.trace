@@ -1,1 +1,302 @@
-FIXME: RECOVERY ERROR
+Error detected: Recovery error!
+Event (2, 28) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): M
+	(0, 2): Wna (buf[0], 1) L.19
+	(0, 3): Wna (buf[1], 2) L.20
+	(0, 4): Cacq (__genmc_dir_inode.lock.__private, 0) [INIT] L.22
+	(0, 5): Cacq (__genmc_dir_inode.lock.__private, 1) L.22
+	(0, 6): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.22
+	(0, 7): DRacq (__genmc_dir_inode.data[0], 0x0) [INIT] L.22
+	(0, 8): M
+	(0, 9): Wrel (__inode_x.lock, 0) L.22
+	(0, 10): Wrel (__inode_x.i_size, 0) L.22
+	(0, 11): DWrel (__inode_x.i_transaction, 0) L.22
+	(0, 12): DWrel (__inode_x.i_disksize, 0) L.22
+	(0, 13): DF L.22
+	(0, 14): DWrel (__genmc_dir_inode.data[0], 0x2000000000000010) L.22
+	(0, 15): Wrel (__genmc_dir_inode.lock.__private, 0) L.22
+	(0, 16): FO (x, 0) L.22
+	(0, 17): M
+	(0, 18): Wna (__file_x_0_16.inode, 0x2000000000000010) L.22
+	(0, 19): Wna (__file_x_0_16.flags, 65) L.22
+	(0, 20): Wna (__file_x_0_16.pos, 0) L.22
+	(0, 21): Wrel (__file_x_0_16.pos_lock, 0) L.22
+	(0, 22): Wrel (__file_x_0_16.count, 1) L.22
+	(0, 23): Cacq (__genmc_dir_inode.lock.__private, 0) [(0, 15)] L.23
+	(0, 24): Cacq (__genmc_dir_inode.lock.__private, 1) L.23
+	(0, 25): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.23
+	(0, 26): DRacq (__genmc_dir_inode.data[8], 0x0) [INIT] L.23
+	(0, 27): M
+	(0, 28): Wrel (__inode_y.lock, 0) L.23
+	(0, 29): Wrel (__inode_y.i_size, 0) L.23
+	(0, 30): DWrel (__inode_y.i_transaction, 0) L.23
+	(0, 31): DWrel (__inode_y.i_disksize, 0) L.23
+	(0, 32): DF L.23
+	(0, 33): DWrel (__genmc_dir_inode.data[8], 0x2000000000000090) L.23
+	(0, 34): Wrel (__genmc_dir_inode.lock.__private, 0) L.23
+	(0, 35): FO (y, 1) L.23
+	(0, 36): M
+	(0, 37): Wna (__file_y_0_35.inode, 0x2000000000000090) L.23
+	(0, 38): Wna (__file_y_0_35.flags, 65) L.23
+	(0, 39): Wna (__file_y_0_35.pos, 0) L.23
+	(0, 40): Wrel (__file_y_0_35.pos_lock, 0) L.23
+	(0, 41): Wrel (__file_y_0_35.count, 1) L.23
+	(0, 42): Cacq (__file_x_0_16.pos_lock, 0) [(0, 21)] L.25
+	(0, 43): Cacq (__file_x_0_16.pos_lock, 1) L.25
+	(0, 44): Rna (__file_x_0_16.pos, 0) [(0, 20)] L.25
+	(0, 45): Rna (__file_x_0_16.flags, 65) [(0, 19)] L.25
+	(0, 46): Rrlx (__file_x_0_16.inode, 0x2000000000000010) [(0, 18)] L.25
+	(0, 47): Cacq (__inode_x.lock, 0) [(0, 9)] L.25
+	(0, 48): Cacq (__inode_x.lock, 1) L.25
+	(0, 49): Racq (__inode_x.i_size, 0) [(0, 10)] L.25
+	(0, 50): Rna (buf[0], 1) [(0, 2)] L.25
+	(0, 51): DWrel (__inode_x.data, 1) L.25
+	(0, 52): Racq (__inode_x.i_size, 0) [(0, 10)] L.25
+	(0, 53): DWrel (__inode_x.i_disksize, 1) L.25
+	(0, 54): Wrel (__inode_x.i_size, 1) L.25
+	(0, 55): Wrel (__inode_x.lock, 0) L.25
+	(0, 56): Wna (__file_x_0_16.pos, 1) L.25
+	(0, 57): Wrel (__file_x_0_16.pos_lock, 0) L.25
+	(0, 58): Cacq (__file_y_0_35.pos_lock, 0) [(0, 40)] L.26
+	(0, 59): Cacq (__file_y_0_35.pos_lock, 1) L.26
+	(0, 60): Rna (__file_y_0_35.pos, 0) [(0, 39)] L.26
+	(0, 61): Rna (__file_y_0_35.flags, 65) [(0, 38)] L.26
+	(0, 62): Rrlx (__file_y_0_35.inode, 0x2000000000000090) [(0, 37)] L.26
+	(0, 63): Cacq (__inode_y.lock, 0) [(0, 28)] L.26
+	(0, 64): Cacq (__inode_y.lock, 1) L.26
+	(0, 65): Racq (__inode_y.i_size, 0) [(0, 29)] L.26
+	(0, 66): Rna (buf[0], 1) [(0, 2)] L.26
+	(0, 67): DWrel (__inode_y.data, 1) L.26
+	(0, 68): Racq (__inode_y.i_size, 0) [(0, 29)] L.26
+	(0, 69): DWrel (__inode_y.i_disksize, 1) L.26
+	(0, 70): Wrel (__inode_y.i_size, 1) L.26
+	(0, 71): Wrel (__inode_y.lock, 0) L.26
+	(0, 72): Wna (__file_y_0_35.pos, 1) L.26
+	(0, 73): Wrel (__file_y_0_35.pos_lock, 0) L.26
+	(0, 74): PB L.28
+	(0, 75): TC [forks 1] L.30
+	(0, 76): TJ L.32
+	(0, 77): D L.35
+	(0, 78): E
+<0, 1> thread_1:
+	(1, 0): B
+	(1, 1): M
+	(1, 2): Wna (buf[0], 42) L.4: mp.c
+	(1, 3): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.6: mp.c
+	(1, 4): DRacq (__genmc_dir_inode.data[0], 0x2000000000000010) [(0, 14)] L.6: mp.c
+	(1, 5): FO (x, 2) L.6: mp.c
+	(1, 6): M
+	(1, 7): Wna (__file_x_1_5.inode, 0x2000000000000010) L.6: mp.c
+	(1, 8): Wna (__file_x_1_5.flags, 1) L.6: mp.c
+	(1, 9): Wna (__file_x_1_5.pos, 0) L.6: mp.c
+	(1, 10): Wrel (__file_x_1_5.pos_lock, 0) L.6: mp.c
+	(1, 11): Wrel (__file_x_1_5.count, 1) L.6: mp.c
+	(1, 12): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.7: mp.c
+	(1, 13): DRacq (__genmc_dir_inode.data[8], 0x2000000000000090) [(0, 33)] L.7: mp.c
+	(1, 14): FO (y, 3) L.7: mp.c
+	(1, 15): M
+	(1, 16): Wna (__file_y_1_14.inode, 0x2000000000000090) L.7: mp.c
+	(1, 17): Wna (__file_y_1_14.flags, 1) L.7: mp.c
+	(1, 18): Wna (__file_y_1_14.pos, 0) L.7: mp.c
+	(1, 19): Wrel (__file_y_1_14.pos_lock, 0) L.7: mp.c
+	(1, 20): Wrel (__file_y_1_14.count, 1) L.7: mp.c
+	(1, 21): Cacq (__file_x_1_5.pos_lock, 0) [(1, 10)] L.9: mp.c
+	(1, 22): Cacq (__file_x_1_5.pos_lock, 1) L.9: mp.c
+	(1, 23): Rna (__file_x_1_5.pos, 0) [(1, 9)] L.9: mp.c
+	(1, 24): Rna (__file_x_1_5.flags, 1) [(1, 8)] L.9: mp.c
+	(1, 25): Rrlx (__file_x_1_5.inode, 0x2000000000000010) [(1, 7)] L.9: mp.c
+	(1, 26): Cacq (__inode_x.lock, 0) [(0, 55)] L.9: mp.c
+	(1, 27): Cacq (__inode_x.lock, 1) L.9: mp.c
+	(1, 28): Racq (__inode_x.i_size, 1) [(0, 54)] L.9: mp.c
+	(1, 29): Rna (buf[0], 42) [(1, 2)] L.9: mp.c
+	(1, 30): DWrel (__inode_x.data, 42) L.9: mp.c
+	(1, 31): Racq (__inode_x.i_size, 1) [(0, 54)] L.9: mp.c
+	(1, 32): Wrel (__inode_x.lock, 0) L.9: mp.c
+	(1, 33): Wna (__file_x_1_5.pos, 1) L.9: mp.c
+	(1, 34): Wrel (__file_x_1_5.pos_lock, 0) L.9: mp.c
+	(1, 35): Cacq (__file_y_1_14.pos_lock, 0) [(1, 19)] L.11: mp.c
+	(1, 36): Cacq (__file_y_1_14.pos_lock, 1) L.11: mp.c
+	(1, 37): Rna (__file_y_1_14.pos, 0) [(1, 18)] L.11: mp.c
+	(1, 38): Rna (__file_y_1_14.flags, 1) [(1, 17)] L.11: mp.c
+	(1, 39): Rrlx (__file_y_1_14.inode, 0x2000000000000090) [(1, 16)] L.11: mp.c
+	(1, 40): Cacq (__inode_y.lock, 0) [(0, 71)] L.11: mp.c
+	(1, 41): Cacq (__inode_y.lock, 1) L.11: mp.c
+	(1, 42): Racq (__inode_y.i_size, 1) [(0, 70)] L.11: mp.c
+	(1, 43): Rna (buf[0], 42) [(1, 2)] L.11: mp.c
+	(1, 44): DWrel (__inode_y.data, 42) L.11: mp.c
+	(1, 45): Racq (__inode_y.i_size, 1) [(0, 70)] L.11: mp.c
+	(1, 46): Wrel (__inode_y.lock, 0) L.11: mp.c
+	(1, 47): Wna (__file_y_1_14.pos, 1) L.11: mp.c
+	(1, 48): Wrel (__file_y_1_14.pos_lock, 0) L.11: mp.c
+	(1, 49): D L.13: mp.c
+	(1, 50): E
+<-1, 2> __VERIFIER_recovery_routine:
+	(2, 0): B
+	(2, 1): M
+	(2, 2): M
+	(2, 3): DRrlx (__genmc_dir_inode.i_transaction, 0) [INIT] L.20: mp.c
+	(2, 4): DRrlx (__genmc_dir_inode.data[8], 0x2000000000000090) [(0, 33)] L.20: mp.c
+	(2, 5): FO (y, 4) L.20: mp.c
+	(2, 6): M
+	(2, 7): Wna (__file_y_2_5.inode, 0x2000000000000090) L.20: mp.c
+	(2, 8): Wna (__file_y_2_5.flags, 0) L.20: mp.c
+	(2, 9): Wna (__file_y_2_5.pos, 0) L.20: mp.c
+	(2, 10): Wrel (__file_y_2_5.pos_lock, 0) L.20: mp.c
+	(2, 11): Wrel (__file_y_2_5.count, 1) L.20: mp.c
+	(2, 12): DRrlx (__genmc_dir_inode.i_transaction, 0) [INIT] L.21: mp.c
+	(2, 13): DRrlx (__genmc_dir_inode.data[0], 0x2000000000000010) [(0, 14)] L.21: mp.c
+	(2, 14): FO (x, 5) L.21: mp.c
+	(2, 15): M
+	(2, 16): Wna (__file_x_2_14.inode, 0x2000000000000010) L.21: mp.c
+	(2, 17): Wna (__file_x_2_14.flags, 0) L.21: mp.c
+	(2, 18): Wna (__file_x_2_14.pos, 0) L.21: mp.c
+	(2, 19): Wrel (__file_x_2_14.pos_lock, 0) L.21: mp.c
+	(2, 20): Wrel (__file_x_2_14.count, 1) L.21: mp.c
+	(2, 21): DRrlx (__inode_y.i_disksize, 1) [(0, 69)] L.23: mp.c
+	(2, 22): DRrlx (__inode_y.data, 42) [(1, 44)] L.23: mp.c
+	(2, 23): Wna (buf_y[0], 42) L.23: mp.c
+	(2, 24): Wna (__file_y_2_5.pos, 1) L.23: mp.c
+	(2, 25): DRrlx (__inode_x.i_disksize, 1) [(0, 53)] L.24: mp.c
+	(2, 26): DRrlx (__inode_x.data, 1) [(0, 51)] L.24: mp.c
+	(2, 27): Wna (buf_x[0], 1) L.24: mp.c
+	(2, 28): Wna (__file_x_2_14.pos, 1) L.24: mp.c
+
+Trace to (2, 28):
+[main] mp0.c: 19: buf[0] = 1;
+[main] mp0.c: 20: buf[1] = 2;
+[main] mp0.c: 22: int fd_x = creat("x", S_IRWXU);
+[main] mp0.c: 22: int fd_x = creat("x", S_IRWXU);
+[main] mp0.c: 22: int fd_x = creat("x", S_IRWXU);
+[main] mp0.c: 22: int fd_x = creat("x", S_IRWXU);
+[main] mp0.c: 22: int fd_x = creat("x", S_IRWXU);
+[main] mp0.c: 22: int fd_x = creat("x", S_IRWXU);
+[main] mp0.c: 22: int fd_x = creat("x", S_IRWXU);
+[main] mp0.c: 22: int fd_x = creat("x", S_IRWXU);
+[main] mp0.c: 22: int fd_x = creat("x", S_IRWXU);
+[main] mp0.c: 22: int fd_x = creat("x", S_IRWXU);
+[main] mp0.c: 22: int fd_x = creat("x", S_IRWXU);
+[main] mp0.c: 22: int fd_x = creat("x", S_IRWXU);
+[main] mp0.c: 22: int fd_x = creat("x", S_IRWXU);
+[main] mp0.c: 22: int fd_x = creat("x", S_IRWXU);
+[main] mp0.c: 22: int fd_x = creat("x", S_IRWXU);
+[main] mp0.c: 22: int fd_x = creat("x", S_IRWXU);
+[main] mp0.c: 22: int fd_x = creat("x", S_IRWXU);
+[main] mp0.c: 22: int fd_x = creat("x", S_IRWXU);
+[main] mp0.c: 23: int fd_y = creat("y", S_IRWXU);
+[main] mp0.c: 23: int fd_y = creat("y", S_IRWXU);
+[main] mp0.c: 23: int fd_y = creat("y", S_IRWXU);
+[main] mp0.c: 23: int fd_y = creat("y", S_IRWXU);
+[main] mp0.c: 23: int fd_y = creat("y", S_IRWXU);
+[main] mp0.c: 23: int fd_y = creat("y", S_IRWXU);
+[main] mp0.c: 23: int fd_y = creat("y", S_IRWXU);
+[main] mp0.c: 23: int fd_y = creat("y", S_IRWXU);
+[main] mp0.c: 23: int fd_y = creat("y", S_IRWXU);
+[main] mp0.c: 23: int fd_y = creat("y", S_IRWXU);
+[main] mp0.c: 23: int fd_y = creat("y", S_IRWXU);
+[main] mp0.c: 23: int fd_y = creat("y", S_IRWXU);
+[main] mp0.c: 23: int fd_y = creat("y", S_IRWXU);
+[main] mp0.c: 23: int fd_y = creat("y", S_IRWXU);
+[main] mp0.c: 23: int fd_y = creat("y", S_IRWXU);
+[main] mp0.c: 23: int fd_y = creat("y", S_IRWXU);
+[main] mp0.c: 23: int fd_y = creat("y", S_IRWXU);
+[main] mp0.c: 23: int fd_y = creat("y", S_IRWXU);
+[main] mp0.c: 25: write(fd_x, buf, 1);
+[main] mp0.c: 25: write(fd_x, buf, 1);
+[main] mp0.c: 25: write(fd_x, buf, 1);
+[main] mp0.c: 25: write(fd_x, buf, 1);
+[main] mp0.c: 25: write(fd_x, buf, 1);
+[main] mp0.c: 25: write(fd_x, buf, 1);
+[main] mp0.c: 25: write(fd_x, buf, 1);
+[main] mp0.c: 25: write(fd_x, buf, 1);
+[main] mp0.c: 25: write(fd_x, buf, 1);
+[main] mp0.c: 25: write(fd_x, buf, 1);
+[main] mp0.c: 25: write(fd_x, buf, 1);
+[main] mp0.c: 25: write(fd_x, buf, 1);
+[main] mp0.c: 25: write(fd_x, buf, 1);
+[main] mp0.c: 25: write(fd_x, buf, 1);
+[main] mp0.c: 26: write(fd_y, buf, 1);
+[main] mp0.c: 26: write(fd_y, buf, 1);
+[main] mp0.c: 26: write(fd_y, buf, 1);
+[main] mp0.c: 26: write(fd_y, buf, 1);
+[main] mp0.c: 26: write(fd_y, buf, 1);
+[main] mp0.c: 26: write(fd_y, buf, 1);
+[main] mp0.c: 26: write(fd_y, buf, 1);
+[main] mp0.c: 26: write(fd_y, buf, 1);
+[main] mp0.c: 26: write(fd_y, buf, 1);
+[main] mp0.c: 26: write(fd_y, buf, 1);
+[main] mp0.c: 26: write(fd_y, buf, 1);
+[main] mp0.c: 26: write(fd_y, buf, 1);
+[main] mp0.c: 26: write(fd_y, buf, 1);
+[main] mp0.c: 26: write(fd_y, buf, 1);
+[main] mp0.c: 28: __VERIFIER_pbarrier();
+[__VERIFIER_recovery_routine] mp.c: 20: int fd_y = open("y", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] mp.c: 20: int fd_y = open("y", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] mp.c: 20: int fd_y = open("y", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] mp.c: 20: int fd_y = open("y", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] mp.c: 20: int fd_y = open("y", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] mp.c: 20: int fd_y = open("y", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] mp.c: 20: int fd_y = open("y", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] mp.c: 20: int fd_y = open("y", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] mp.c: 20: int fd_y = open("y", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] mp.c: 21: int fd_x = open("x", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] mp.c: 21: int fd_x = open("x", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] mp.c: 21: int fd_x = open("x", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] mp.c: 21: int fd_x = open("x", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] mp.c: 21: int fd_x = open("x", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] mp.c: 21: int fd_x = open("x", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] mp.c: 21: int fd_x = open("x", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] mp.c: 21: int fd_x = open("x", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] mp.c: 21: int fd_x = open("x", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] mp.c: 23: read(fd_y, buf_y, 1);
+[main] mp0.c: 28: __VERIFIER_pbarrier();
+[main] mp0.c: 30: if (pthread_create(&t1, NULL, thread_1, NULL))
+[thread_1] mp.c: 4: buf[0] = 42;
+[thread_1] mp.c: 6: int fd_x = open("x", O_WRONLY, S_IRWXU);
+[thread_1] mp.c: 6: int fd_x = open("x", O_WRONLY, S_IRWXU);
+[thread_1] mp.c: 6: int fd_x = open("x", O_WRONLY, S_IRWXU);
+[thread_1] mp.c: 6: int fd_x = open("x", O_WRONLY, S_IRWXU);
+[thread_1] mp.c: 6: int fd_x = open("x", O_WRONLY, S_IRWXU);
+[thread_1] mp.c: 6: int fd_x = open("x", O_WRONLY, S_IRWXU);
+[thread_1] mp.c: 6: int fd_x = open("x", O_WRONLY, S_IRWXU);
+[thread_1] mp.c: 6: int fd_x = open("x", O_WRONLY, S_IRWXU);
+[thread_1] mp.c: 6: int fd_x = open("x", O_WRONLY, S_IRWXU);
+[thread_1] mp.c: 7: int fd_y = open("y", O_WRONLY, S_IRWXU);
+[thread_1] mp.c: 7: int fd_y = open("y", O_WRONLY, S_IRWXU);
+[thread_1] mp.c: 7: int fd_y = open("y", O_WRONLY, S_IRWXU);
+[thread_1] mp.c: 7: int fd_y = open("y", O_WRONLY, S_IRWXU);
+[thread_1] mp.c: 7: int fd_y = open("y", O_WRONLY, S_IRWXU);
+[thread_1] mp.c: 7: int fd_y = open("y", O_WRONLY, S_IRWXU);
+[thread_1] mp.c: 7: int fd_y = open("y", O_WRONLY, S_IRWXU);
+[thread_1] mp.c: 7: int fd_y = open("y", O_WRONLY, S_IRWXU);
+[thread_1] mp.c: 7: int fd_y = open("y", O_WRONLY, S_IRWXU);
+[thread_1] mp.c: 9: write(fd_x, buf, 1);
+[thread_1] mp.c: 9: write(fd_x, buf, 1);
+[thread_1] mp.c: 9: write(fd_x, buf, 1);
+[thread_1] mp.c: 9: write(fd_x, buf, 1);
+[thread_1] mp.c: 9: write(fd_x, buf, 1);
+[thread_1] mp.c: 9: write(fd_x, buf, 1);
+[thread_1] mp.c: 9: write(fd_x, buf, 1);
+[thread_1] mp.c: 9: write(fd_x, buf, 1);
+[thread_1] mp.c: 9: write(fd_x, buf, 1);
+[thread_1] mp.c: 9: write(fd_x, buf, 1);
+[thread_1] mp.c: 9: write(fd_x, buf, 1);
+[thread_1] mp.c: 9: write(fd_x, buf, 1);
+[thread_1] mp.c: 11: write(fd_y, buf, 1);
+[thread_1] mp.c: 11: write(fd_y, buf, 1);
+[thread_1] mp.c: 11: write(fd_y, buf, 1);
+[thread_1] mp.c: 11: write(fd_y, buf, 1);
+[thread_1] mp.c: 11: write(fd_y, buf, 1);
+[thread_1] mp.c: 11: write(fd_y, buf, 1);
+[thread_1] mp.c: 11: write(fd_y, buf, 1);
+[thread_1] mp.c: 11: write(fd_y, buf, 1);
+[__VERIFIER_recovery_routine] mp.c: 23: read(fd_y, buf_y, 1);
+[__VERIFIER_recovery_routine] mp.c: 23: read(fd_y, buf_y, 1);
+[__VERIFIER_recovery_routine] mp.c: 23: read(fd_y, buf_y, 1);
+[__VERIFIER_recovery_routine] mp.c: 24: read(fd_x, buf_x, 1);
+[__VERIFIER_recovery_routine] mp.c: 24: read(fd_x, buf_x, 1);
+[__VERIFIER_recovery_routine] mp.c: 24: read(fd_x, buf_x, 1);
+[__VERIFIER_recovery_routine] mp.c: 24: read(fd_x, buf_x, 1);
+Assertion violation: !(buf_y[0] == 42 && buf_x[0] == 1)
+Number of complete executions explored: 3

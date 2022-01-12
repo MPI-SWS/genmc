@@ -45,18 +45,27 @@ public:
 	std::unique_ptr<VectorClock>
 	getRevisitView(const ReadLabel *rLab, const EventLabel *wLab) const override;
 
-	const VectorClock& getPrefixView(Event e) const override;
+	const VectorClock& getPrefixView(Event e) const override {
+		return getEventLabel(e)->getPPoRfView();
+	}
 
 	std::unique_ptr<VectorClock> getPredsView(Event e) const override;
 
 	bool revisitModifiesGraph(const ReadLabel *rLab,
 				  const EventLabel *sLab) const override;
 
+	bool prefixContainsSameLoc(const ReadLabel *rLab, const WriteLabel *wLab,
+				   const EventLabel *lab) const override;
+
+#ifdef ENABLE_GENMC_DEBUG
 	std::vector<std::unique_ptr<EventLabel> >
-	getPrefixLabelsNotBefore(const EventLabel *sLab,
+	getPrefixLabelsNotBefore(const WriteLabel *sLab,
 				 const ReadLabel *rLab) const override;
+#endif
 
 	void cutToStamp(unsigned int st) override;
+
+	std::unique_ptr<ExecutionGraph> getCopyUpTo(const VectorClock &v) const override;
 };
 
 #endif /* __DEP_EXECUTION_GRAPH_HPP__ */

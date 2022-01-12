@@ -8,12 +8,12 @@ Event (2, 3) in graph:
 <0, 1> thread_1:
 	(1, 0): B
 	(1, 1): M
-	(1, 2): Wsc (p, 3094225988) L.8: stack-uninit.c
+	(1, 2): Wsc (p, 4611686018427387904) L.8: stack-uninit.c
 	(1, 3): Rsc (done, 0) [INIT] L.9: stack-uninit.c
 <0, 2> thread_2:
 	(2, 0): B
-	(2, 1): Rsc (p, 3094225988) [(1, 2)] L.16: stack-uninit.c
-	(2, 2): Rsc (p, 3094225988) [(1, 2)] L.19: stack-uninit.c
+	(2, 1): Rsc (p, 4611686018427387904) [(1, 2)] L.16: stack-uninit.c
+	(2, 2): Rsc (p, 4611686018427387904) [(1, 2)] L.19: stack-uninit.c
 	(2, 3): Rna (x, 0) [BOTTOM] L.19: stack-uninit.c
 
 Trace to (2, 3):

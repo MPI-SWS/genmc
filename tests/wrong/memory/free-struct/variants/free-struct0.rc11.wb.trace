@@ -1,0 +1,23 @@
+Error detected: Attempt to access freed memory!
+Event (0, 5) conflicts with event (0, 4) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): M L.11
+	(0, 2): Wna (, 1) L.13
+	(0, 3): Wna (, 2) L.14
+	(0, 4): D L.15
+	(0, 5): Wna (, 10) L.18
+
+Trace to (0, 5):
+[main] free-struct0.c: 11: obj *o = malloc(sizeof(obj));
+[main] free-struct0.c: 13: o->x = 1;
+[main] free-struct0.c: 14: o->y = 2;
+[main] free-struct0.c: 15: free(o);
+[main] free-struct0.c: 18: o->y = 10;
+Trace to (0, 4):
+[main] free-struct0.c: 11: obj *o = malloc(sizeof(obj));
+[main] free-struct0.c: 13: o->x = 1;
+[main] free-struct0.c: 14: o->y = 2;
+[main] free-struct0.c: 15: free(o);
+Number of complete executions explored: 0
+Number of blocked executions seen: 1

@@ -20,7 +20,7 @@
 
 #include "config.h"
 #include "ExecutionGraph.hpp"
-#include "Library.hpp"
+#include "LabelIterator.hpp"
 #include "LBCalculatorLAPOR.hpp"
 #include "MOCalculator.hpp"
 #include "Parser.hpp"
@@ -29,11 +29,11 @@
 #include <llvm/IR/DebugInfo.h>
 
 /************************************************************
- ** Class Constructors
+ ** Class constructors/destructors
  ***********************************************************/
 
-ExecutionGraph::ExecutionGraph(unsigned warnOnGraphSize /* UINT_MAX */)
-	: timestamp(1), persChecker(nullptr), warnOnGraphSize(warnOnGraphSize)
+ExecutionGraph::ExecutionGraph(unsigned maxSize /* UINT_MAX */)
+	: timestamp(1), persChecker(nullptr), relations(), relsCache(), warnOnGraphSize(maxSize)
 {
 	/* Create an entry for main() and push the "initializer" label */
 	events.push_back({});
@@ -44,8 +44,8 @@ ExecutionGraph::ExecutionGraph(unsigned warnOnGraphSize /* UINT_MAX */)
 					     Event::getInitializer() )
 				     ) );
 
-	globalRelations.push_back(Calculator::GlobalRelation());
-	globalRelationsCache.push_back(Calculator::GlobalRelation());
+	relations.global.push_back(Calculator::GlobalRelation());
+	relsCache.global.push_back(Calculator::GlobalRelation());
 	relationIndex[RelationId::hb] = 0;
 	calculatorIndex[RelationId::hb] = -42; /* no calculator for hb */
 	return;
@@ -57,26 +57,6 @@ ExecutionGraph::~ExecutionGraph() = default;
  ** Basic getter methods
  ***********************************************************/
 
-unsigned int ExecutionGraph::nextStamp()
-{
-	return timestamp++;
-}
-
-const EventLabel *ExecutionGraph::getEventLabel(Event e) const
-{
-	return events[e.thread][e.index].get();
-}
-
-const EventLabel *ExecutionGraph::getPreviousLabel(Event e) const
-{
-	return events[e.thread][e.index - 1].get();
-}
-
-const EventLabel *ExecutionGraph::getPreviousLabel(const EventLabel *lab) const
-{
-	return events[lab->getThread()][lab->getIndex() - 1].get();
-}
-
 const EventLabel *ExecutionGraph::getPreviousNonEmptyLabel(Event e) const
 {
 	for (int i = e.index - 1; i > 0; i--) {
@@ -85,11 +65,6 @@ const EventLabel *ExecutionGraph::getPreviousNonEmptyLabel(Event e) const
 			return eLab;
 	}
 	return getEventLabel(Event(e.thread, 0));
-}
-
-const EventLabel *ExecutionGraph::getPreviousNonEmptyLabel(const EventLabel *lab) const
-{
-	return getPreviousNonEmptyLabel(lab->getPos());
 }
 
 Event ExecutionGraph::getPreviousNonTrivial(const Event e) const
@@ -101,18 +76,7 @@ Event ExecutionGraph::getPreviousNonTrivial(const Event e) const
 	return Event::getInitializer();
 }
 
-const EventLabel *ExecutionGraph::getLastThreadLabel(int thread) const
-{
-	return events[thread][events[thread].size() - 1].get();
-}
-
-Event ExecutionGraph::getLastThreadEvent(int thread) const
-{
-	return Event(thread, events[thread].size() - 1);
-}
-
-Event ExecutionGraph::getLastThreadStoreAtLoc(Event upperLimit,
-					      const llvm::GenericValue *addr) const
+Event ExecutionGraph::getLastThreadStoreAtLoc(Event upperLimit, SAddr addr) const
 {
 	for (auto j = upperLimit.index - 1; j > 0; j--) {
 		const EventLabel *lab = getEventLabel(Event(upperLimit.thread, j));
@@ -124,8 +88,7 @@ Event ExecutionGraph::getLastThreadStoreAtLoc(Event upperLimit,
 	return Event::getInitializer();
 }
 
-Event ExecutionGraph::getLastThreadReleaseAtLoc(Event upperLimit,
-						const llvm::GenericValue *addr) const
+Event ExecutionGraph::getLastThreadReleaseAtLoc(Event upperLimit, SAddr addr) const
 {
 	for (int i = upperLimit.index - 1; i > 0; i--) {
 		const EventLabel *lab = getEventLabel(Event(upperLimit.thread, i));
@@ -200,6 +163,7 @@ Event ExecutionGraph::getMatchingLock(const Event unlock) const
 				if (locUnlocks.empty())
 					return lLab->getPos().prev();
 				locUnlocks.pop_back();
+
 			}
 		}
 	}
@@ -255,15 +219,14 @@ Event ExecutionGraph::getMatchingRCUUnlockLKMM(Event lock) const
 
 Event ExecutionGraph::getLastThreadUnmatchedLockLAPOR(const Event upperLimit) const
 {
-	std::vector<const llvm::GenericValue *> unlocks;
+	std::vector<SAddr > unlocks;
 
 	for (auto j = upperLimit.index; j >= 0; j--) {
 		const EventLabel *lab = getEventLabel(Event(upperLimit.thread, j));
 
 		if (auto *lLab = llvm::dyn_cast<LockLabelLAPOR>(lab)) {
 			if (std::find_if(unlocks.rbegin(), unlocks.rend(),
-					 [&](const llvm::GenericValue *addr)
-					 { return lLab->getLockAddr() == addr; })
+					 [&](SAddr addr){ return lLab->getLockAddr() == addr; })
 			    ==  unlocks.rend())
 				return lLab->getPos();
 		}
@@ -301,8 +264,7 @@ Event ExecutionGraph::getMatchingUnlockLAPOR(const Event lock) const
 	return Event::getInitializer();
 }
 
-Event ExecutionGraph::getLastThreadLockAtLocLAPOR(const Event upperLimit,
-						  const llvm::GenericValue *loc) const
+Event ExecutionGraph::getLastThreadLockAtLocLAPOR(const Event upperLimit, SAddr loc) const
 {
 	for (auto j = upperLimit.index; j >= 0; j--) {
 		const EventLabel *lab = getEventLabel(Event(upperLimit.thread, j));
@@ -316,8 +278,7 @@ Event ExecutionGraph::getLastThreadLockAtLocLAPOR(const Event upperLimit,
 	return Event::getInitializer();
 }
 
-Event ExecutionGraph::getLastThreadUnlockAtLocLAPOR(const Event upperLimit,
-						    const llvm::GenericValue *loc) const
+Event ExecutionGraph::getLastThreadUnlockAtLocLAPOR(const Event upperLimit, SAddr loc) const
 {
 	for (auto j = upperLimit.index; j >= 0; j--) {
 		const EventLabel *lab = getEventLabel(Event(upperLimit.thread, j));
@@ -331,12 +292,43 @@ Event ExecutionGraph::getLastThreadUnlockAtLocLAPOR(const Event upperLimit,
 	return Event::getInitializer();
 }
 
+Event ExecutionGraph::getPrecedingMalloc(const MemAccessLabel *mLab) const
+{
+	const auto &before = getEventLabel(mLab->getPos().prev())->getHbView();
+	for (auto i = 0u; i < getNumThreads(); i++) {
+		for (auto j = 0u; j < getThreadSize(i); j++) {
+			const EventLabel *oLab = getEventLabel(Event(i, j));
+			if (auto *aLab = llvm::dyn_cast<MallocLabel>(oLab)) {
+				if (aLab->contains(mLab->getAddr()) &&
+				    before.contains(oLab->getPos()))
+					return aLab->getPos();
+			}
+		}
+	}
+	return Event::getInitializer();
+}
+
+Event ExecutionGraph::getMallocCounterpart(const FreeLabel *fLab) const
+{
+	const auto &before = getEventLabel(fLab->getPos().prev())->getHbView();
+	for (auto i = 0u; i < getNumThreads(); i++) {
+		for (auto j = 0u; j < getThreadSize(i); j++) {
+			const EventLabel *oLab = getEventLabel(Event(i, j));
+			if (auto *aLab = llvm::dyn_cast<MallocLabel>(oLab)) {
+				if (aLab->getAllocAddr() == fLab->getFreedAddr())
+					return aLab->getPos();
+			}
+		}
+	}
+	return Event::getInitializer();
+}
+
 std::vector<Event> ExecutionGraph::getPendingRMWs(const WriteLabel *sLab) const
 {
 	std::vector<Event> pending;
 
 	/* If this is _not_ an RMW event, return an empty vector */
-	if (!llvm::isa<FaiWriteLabel>(sLab) && !llvm::isa<CasWriteLabel>(sLab))
+	if (!isRMWStore(sLab))
 		return pending;
 
 	/* Otherwise, scan for other RMWs that successfully read the same val */
@@ -357,25 +349,12 @@ std::vector<Event> ExecutionGraph::getPendingRMWs(const WriteLabel *sLab) const
 	return pending;
 }
 
-Event ExecutionGraph::getPendingLibRead(const LibReadLabel *lab) const
-{
-	/* Should only be called with a read of a functional library that doesn't read BOT */
-	BUG_ON(lab->getRf().isInitializer());
-
-	/* Get the conflicting label */
-	const auto *sLab = static_cast<const WriteLabel *>(getEventLabel(lab->getRf()));
-	auto it = std::find_if(sLab->getReadersList().begin(),
-			       sLab->getReadersList().end(),
-			       [&](const Event &e) { return e != lab->getPos(); });
-	BUG_ON(it == sLab->getReadersList().end());
-	return *it;
-}
-
 std::vector<Event> ExecutionGraph::getRevisitable(const WriteLabel *sLab) const
 {
+	auto &before = getPorfBefore(sLab->getPos());
+	auto pendingRMWs = getPendingRMWs(sLab); /* empty or singleton */
 	std::vector<Event> loads;
 
-	auto &before = getPorfBefore(sLab->getPos());
 	for (auto i = 0u; i < getNumThreads(); i++) {
 		for (auto j = before[i] + 1u; j < getThreadSize(i); j++) {
 			const EventLabel *lab = getEventLabel(Event(i, j));
@@ -386,22 +365,23 @@ std::vector<Event> ExecutionGraph::getRevisitable(const WriteLabel *sLab) const
 			}
 		}
 	}
+	if (pendingRMWs.size() > 0)
+		loads.erase(std::remove_if(loads.begin(), loads.end(), [&](Event &e){
+			auto *confLab = getEventLabel(pendingRMWs.back());
+			return getEventLabel(e)->getStamp() > confLab->getStamp();
+		}), loads.end());
 	return loads;
 }
 
 /* Returns a vector with all reads of a particular location reading from INIT */
-std::vector<Event> ExecutionGraph::getInitRfsAtLoc(const llvm::GenericValue *addr) const
+std::vector<Event> ExecutionGraph::getInitRfsAtLoc(SAddr addr) const
 {
 	std::vector<Event> result;
 
-	for (auto i = 0u; i < getNumThreads(); i++) {
-		for (auto j = 1u; j < getThreadSize(i); j++) {
-			auto *lab = getEventLabel(Event(i, j));
-			if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab))
-				if (rLab->getRf().isInitializer() &&
-				    rLab->getAddr() == addr)
-					result.push_back(rLab->getPos());
-		}
+	for (const auto *lab : labels(*this)) {
+		if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab))
+			if (rLab->getRf().isInitializer() && rLab->getAddr() == addr)
+				result.push_back(rLab->getPos());
 	}
 	return result;
 }
@@ -412,29 +392,31 @@ std::vector<Event> ExecutionGraph::getInitRfsAtLoc(const llvm::GenericValue *add
  ******************************************************************************/
 
 const ReadLabel *ExecutionGraph::addReadLabelToGraph(std::unique_ptr<ReadLabel> lab,
-						     Event rf)
+						     Event rf /* = BOTTOM */)
 {
 	if (!lab->getRf().isBottom()) {
-		if (auto *wLab = llvm::dyn_cast<WriteLabel>(getEventLabel(lab->getRf()))) {
+		if (auto *wLab = llvm::dyn_cast<WriteLabel>(getEventLabel(lab->getRf())))
 			wLab->addReader(lab->getPos());
-		}
 	}
 
 	return static_cast<const ReadLabel *>(addOtherLabelToGraph(std::move(lab)));
 }
 
 const WriteLabel *ExecutionGraph::addWriteLabelToGraph(std::unique_ptr<WriteLabel> lab,
-						     unsigned int offsetMO)
+						       int offsetMO /* = -1 */)
 {
-	getCoherenceCalculator()->addStoreToLoc(lab->getAddr(), lab->getPos(), offsetMO);
-	return static_cast<const WriteLabel *>(addOtherLabelToGraph(std::move(lab)));
+	auto *wLab = static_cast<const WriteLabel *>(addOtherLabelToGraph(std::move(lab)));
+	if (offsetMO >= 0)
+		getCoherenceCalculator()->addStoreToLoc(wLab->getAddr(), wLab->getPos(), offsetMO);
+	return wLab;
 }
 
 const WriteLabel *ExecutionGraph::addWriteLabelToGraph(std::unique_ptr<WriteLabel> lab,
-						     Event pred)
+						       Event pred)
 {
-	getCoherenceCalculator()->addStoreToLocAfter(lab->getAddr(), lab->getPos(), pred);
-	return static_cast<const WriteLabel *>(addOtherLabelToGraph(std::move(lab)));
+	auto *wLab = static_cast<const WriteLabel *>(addOtherLabelToGraph(std::move(lab)));
+	getCoherenceCalculator()->addStoreToLocAfter(wLab->getAddr(), wLab->getPos(), pred);
+	return wLab;
 }
 
 const LockLabelLAPOR *ExecutionGraph::addLockLabelToGraphLAPOR(std::unique_ptr<LockLabelLAPOR> lab)
@@ -445,8 +427,13 @@ const LockLabelLAPOR *ExecutionGraph::addLockLabelToGraphLAPOR(std::unique_ptr<L
 
 const EventLabel *ExecutionGraph::addOtherLabelToGraph(std::unique_ptr<EventLabel> lab)
 {
-	auto pos = lab->getPos();
+	setFPStatus(FS_Stale);
 
+	/* Ensure the stamp is valid */
+	if (lab->getStamp() == 0 && !lab->getPos().isInitializer())
+		lab->setStamp(nextStamp());
+
+	auto pos = lab->getPos();
 	if (pos.index < events[pos.thread].size()) {
 		events[pos.thread][pos.index] = std::move(lab);
 	} else {
@@ -475,13 +462,13 @@ void ExecutionGraph::addCalculator(std::unique_ptr<Calculator> cc, RelationId r,
 	/* Add a matrix for this relation */
 	auto relSize = 0u;
 	if (perLoc) {
-		relSize = perLocRelations.size();
-		perLocRelations.push_back(Calculator::PerLocRelation());
-		perLocRelationsCache.push_back(Calculator::PerLocRelation());
+		relSize = relations.perLoc.size();
+		relations.perLoc.push_back(Calculator::PerLocRelation());
+		relsCache.perLoc.push_back(Calculator::PerLocRelation());
 	} else {
-		relSize = globalRelations.size();
-		globalRelations.push_back(Calculator::GlobalRelation());
-		globalRelationsCache.push_back(Calculator::GlobalRelation());
+		relSize = relations.global.size();
+		relations.global.push_back(Calculator::GlobalRelation());
+		relsCache.global.push_back(Calculator::GlobalRelation());
 	}
 
 	/* Update indices trackers */
@@ -492,57 +479,51 @@ void ExecutionGraph::addCalculator(std::unique_ptr<Calculator> cc, RelationId r,
 Calculator::GlobalRelation& ExecutionGraph::getGlobalRelation(RelationId id)
 {
 	BUG_ON(relationIndex.count(id) == 0);
-	return globalRelations[relationIndex[id]];
+	return relations.global[relationIndex[id]];
 }
 
 Calculator::PerLocRelation& ExecutionGraph::getPerLocRelation(RelationId id)
 {
 	BUG_ON(relationIndex.count(id) == 0);
-	return perLocRelations[relationIndex[id]];
+	return relations.perLoc[relationIndex[id]];
 }
 
 Calculator::GlobalRelation& ExecutionGraph::getCachedGlobalRelation(RelationId id)
 {
 	BUG_ON(relationIndex.count(id) == 0);
-	return globalRelationsCache[relationIndex[id]];
+	return relsCache.global[relationIndex[id]];
 }
 
 Calculator::PerLocRelation& ExecutionGraph::getCachedPerLocRelation(RelationId id)
 {
 	BUG_ON(relationIndex.count(id) == 0);
-	return perLocRelationsCache[relationIndex[id]];
+	return relsCache.perLoc[relationIndex[id]];
 }
 
 void ExecutionGraph::cacheRelations(bool copy /* = true */)
 {
-	if (copy) {
-		for (auto i = 0u; i < globalRelations.size(); i++)
-			globalRelationsCache[i] = globalRelations[i];
-		for (auto i = 0u; i < perLocRelations.size(); i++)
-			perLocRelationsCache[i] = perLocRelations[i];
-	} else {
-		for (auto i = 0u; i < globalRelations.size(); i++)
-			globalRelationsCache[i] = std::move(globalRelations[i]);
-		for (auto i = 0u; i < perLocRelations.size(); i++)
-			perLocRelationsCache[i] = std::move(perLocRelations[i]);
-	}
+	if (copy)
+		relsCache = relations;
+	else
+		relsCache = std::move(relations);
 	return;
 }
 
 void ExecutionGraph::restoreCached(bool move /* = false */)
 {
-	if (!move) {
-		for (auto i = 0u; i < globalRelations.size(); i++)
-			globalRelations[i] = globalRelationsCache[i];
-		for (auto i = 0u; i < perLocRelations.size(); i++)
-			perLocRelations[i] = perLocRelationsCache[i];
-	} else {
-		for (auto i = 0u; i < globalRelations.size(); i++)
-			globalRelations[i] = std::move(globalRelationsCache[i]);
-		for (auto i = 0u; i < perLocRelations.size(); i++)
-			perLocRelations[i] = std::move(perLocRelationsCache[i]);
-	}
+	if (!move)
+		relations = relsCache;
+	else
+		relations = std::move(relsCache);
 	return;
+}
+
+bool ExecutionGraph::hasCalculator(RelationId id) const
+{
+	if (!relationIndex.count(id))
+		return false;
+	auto idx = relationIndex.at(id);
+	return 0 <= idx && idx < consistencyCalculators.size();
 }
 
 Calculator *ExecutionGraph::getCalculator(RelationId id)
@@ -603,16 +584,51 @@ void ExecutionGraph::addPersistencyChecker(std::unique_ptr<PersistencyChecker> p
 	return;
 }
 
+bool ExecutionGraph::isHbBefore(Event a, Event b, CheckConsType t /* = fast */)
+{
+	if (getFPStatus() == FS_Done && getFPType() == t)
+		return getGlobalRelation(ExecutionGraph::RelationId::hb)(a, b);
+	if (t == CheckConsType::fast)
+		return getEventLabel(b)->getHbView().contains(a);
+
+	/* We have to trigger a calculation */
+	isConsistent(t);
+	return getGlobalRelation(ExecutionGraph::RelationId::hb)(a, b);
+}
+
+bool isCoMaximalInRel(const Calculator::PerLocRelation &co, SAddr addr, const Event &e)
+{
+	auto &coLoc = co.at(addr);
+	return (e.isInitializer() && coLoc.empty()) ||
+		(!e.isInitializer() && coLoc.adj_begin(e) == coLoc.adj_end(e));
+}
+
+bool ExecutionGraph::isCoMaximal(SAddr addr, Event e, bool checkCache /* = false */,
+				 CheckConsType t /* = fast */)
+{
+	auto *cc = getCoherenceCalculator();
+
+	if (checkCache)
+		return cc->isCachedCoMaximal(addr, e);
+	if (getFPStatus() == FS_Done && getFPType() == t)
+		return isCoMaximalInRel(getPerLocRelation(RelationId::co), addr, e);
+	if (t == CheckConsType::fast)
+		return cc->isCoMaximal(addr, e);
+
+	isConsistent(t);
+	return isCoMaximalInRel(getPerLocRelation(RelationId::co), addr, e);
+}
+
 void ExecutionGraph::doInits(bool full /* = false */)
 {
-	auto &hb = globalRelations[relationIndex[RelationId::hb]];
+	auto &hb = relations.global[relationIndex[RelationId::hb]];
 	populateHbEntries(hb);
 	hb.transClosure();
 
 	/* Clear out unused locations */
-	for (auto i = 0u; i < perLocRelations.size(); i++) {
-		perLocRelations[i].clear();
-		perLocRelationsCache[i].clear();
+	for (auto i = 0u; i < relations.perLoc.size(); i++) {
+		relations.perLoc[i].clear();
+		relsCache.perLoc[i].clear();
        }
 
 	auto &calcs = consistencyCalculators;
@@ -646,31 +662,147 @@ Calculator::CalculationResult ExecutionGraph::doCalcs(bool full /* = false */)
 	return result;
 }
 
-void ExecutionGraph::trackCoherenceAtLoc(const llvm::GenericValue *addr)
+
+void addPerLocRelationToExtend(Calculator::PerLocRelation &rel,
+			       std::vector<Calculator::GlobalRelation *> &toExtend,
+			       std::vector<SAddr > &extOrder)
+
+{
+	for (auto &loc : rel) {
+		toExtend.push_back(&loc.second);
+		extOrder.push_back(loc.first);
+	}
+}
+
+void extendPerLocRelation(Calculator::PerLocRelation &rel,
+			  std::vector<std::vector<Event> >::iterator extsBegin,
+			  std::vector<std::vector<Event> >::iterator extsEnd,
+			  std::vector<SAddr >::iterator locsBegin,
+			  std::vector<SAddr >::iterator locsEnd)
+
+{
+	BUG_ON(std::distance(extsBegin, extsEnd) != std::distance(locsBegin, locsEnd));
+	auto locIt = locsBegin;
+	for (auto extIt = extsBegin; extIt != extsEnd; ++extIt, ++locIt) {
+		rel[*locIt] = Calculator::GlobalRelation(*extIt);
+		for (auto j = 1; j < extIt->size(); j++)
+			rel[*locIt].addEdge((*extIt)[j - 1], (*extIt)[j]);
+	}
+}
+
+bool ExecutionGraph::doFinalConsChecks(bool checkFull /* = false */)
+{
+	if (!checkFull)
+		return true;
+
+	bool hasLB = hasCalculator(RelationId::lb);
+	bool hasWB = llvm::isa<WBCalculator>(getCoherenceCalculator());
+	if (!hasLB && !hasWB)
+		return true;
+
+	/* Cache all relations because we will need to restore them
+	 * after possible extensions were tried*/
+	cacheRelations();
+
+	/* We flatten all per-location relations that need to be
+	 * extended.  However, we need to ensure that, for each
+	 * per-location relation, the order in which the locations of
+	 * the relation are added to the extension list is the same as
+	 * the order in which the extensions of said locations are
+	 * restored.
+	 *
+	 * This is not the case in all platforms if we are simply
+	 * iterating over unordered_maps<> (e.g. macΟS). The iteration
+	 * order may differ if, e.g., when saving an extension we
+	 * iterate over a relation's cache, while when restoring we
+	 * iterate over the relation itself, even though the relation
+	 * is the same as its cache just before restoring. */
+	auto coSize = 0u;
+	auto lbSize = 0u;
+	std::vector<Calculator::GlobalRelation *> toExtend;
+	std::vector<SAddr> extOrder;
+	if (hasWB) {
+		addPerLocRelationToExtend(getCachedPerLocRelation(ExecutionGraph::RelationId::co),
+					  toExtend, extOrder);
+		coSize = getCachedPerLocRelation(ExecutionGraph::RelationId::co).size();
+	}
+	if (hasLB) {
+		addPerLocRelationToExtend(getCachedPerLocRelation(ExecutionGraph::RelationId::lb),
+					  toExtend, extOrder);
+		lbSize = getCachedPerLocRelation(ExecutionGraph::RelationId::lb).size();
+	}
+
+	auto res = Calculator::GlobalRelation::
+		combineAllTopoSort(toExtend, [&](std::vector<std::vector<Event>> &sortings){
+			restoreCached();
+			auto count = 0u;
+			if (hasWB) {
+				extendPerLocRelation(getPerLocRelation(ExecutionGraph::RelationId::co),
+						     sortings.begin(), sortings.begin() + coSize,
+						     extOrder.begin(), extOrder.begin() + coSize);
+			}
+			count += coSize;
+			if (hasLB && count >= coSize) {
+				extendPerLocRelation(getPerLocRelation(ExecutionGraph::RelationId::lb),
+						     sortings.begin() + count,
+						     sortings.begin() + count + lbSize,
+						     extOrder.begin() + count,
+						     extOrder.begin() + count + lbSize);
+			}
+			count += lbSize;
+			return doCalcs(true).cons;
+		});
+	return res;
+}
+
+bool ExecutionGraph::isConsistent(CheckConsType checkT)
+{
+	/* Fastpath: We have cached info or no fixpoint is required */
+	if (getFPStatus() == FS_Done && getFPType() == checkT)
+		return getFPResult().cons;
+	if (checkT == CheckConsType::fast)
+		return true;
+
+	/* Slowpath: Go calculate fixpoint */
+	setFPStatus(FS_InProgress);
+	doInits(checkT == CheckConsType::full);
+	do {
+		setFPResult(doCalcs(checkT == CheckConsType::full));
+		if (!getFPResult().cons)
+			return false;
+	} while (getFPResult().changed);
+
+	/* Do final checks, after the fixpoint is over */
+	setFPResult(FixpointResult(false, doFinalConsChecks(checkT == CheckConsType::full)));
+	setFPStatus(FS_Done);
+	setFPType(checkT);
+	return getFPResult().cons;
+}
+
+void ExecutionGraph::trackCoherenceAtLoc(SAddr addr)
 {
 	return getCoherenceCalculator()->trackCoherenceAtLoc(addr);
 }
 
 const std::vector<Event>&
-ExecutionGraph::getStoresToLoc(const llvm::GenericValue *addr) const
+ExecutionGraph::getStoresToLoc(SAddr addr) const
 {
 	return getCoherenceCalculator()->getStoresToLoc(addr);
 }
 
 const std::vector<Event>&
-ExecutionGraph::getStoresToLoc(const llvm::GenericValue *addr)
+ExecutionGraph::getStoresToLoc(SAddr addr)
 {
 	return getCoherenceCalculator()->getStoresToLoc(addr);
 }
 
 std::pair<int, int>
-ExecutionGraph::getCoherentPlacings(const llvm::GenericValue *addr,
-				    Event pos, bool isRMW) {
+ExecutionGraph::getCoherentPlacings(SAddr addr, Event pos, bool isRMW) {
 	return getCoherenceCalculator()->getPossiblePlacings(addr, pos, isRMW);
 };
 
 std::vector<Event>
-ExecutionGraph::getCoherentStores(const llvm::GenericValue *addr, Event pos)
+ExecutionGraph::getCoherentStores(SAddr addr, Event pos)
 {
 	return getCoherenceCalculator()->getCoherentStores(addr, pos);
 }
@@ -698,20 +830,6 @@ const DepView &ExecutionGraph::getPPoRfBefore(Event e) const
 const View &ExecutionGraph::getPorfBefore(Event e) const
 {
 	return getEventLabel(e)->getPorfView();
-}
-
-const View &ExecutionGraph::getHbBefore(Event e) const
-{
-	return getEventLabel(e)->getHbView();
-}
-
-View ExecutionGraph::getHbBefore(const std::vector<Event> &es) const
-{
-	View v;
-
-	for (auto &e : es)
-		v.update(getEventLabel(e)->getHbView());
-	return v;
 }
 
 const View &ExecutionGraph::getHbPoBefore(Event e) const
@@ -775,7 +893,7 @@ void ExecutionGraph::populateHbEntries(AdjList<Event, EventHasher> &relation) co
 					auto pred = (labIdx > thrIdx) ?
 						elems[labIdx - 1] : Event::getInitializer();
 					auto &v = rLab->getHbView();
-					auto &predV = getHbBefore(pred);
+					auto &predV = getEventLabel(pred)->getHbView();
 					for (auto k = 0u; k < v.size(); k++) {
 						if (k != rLab->getThread() &&
 						    v[k] > 0 &&
@@ -801,19 +919,15 @@ void ExecutionGraph::populateHbEntries(AdjList<Event, EventHasher> &relation) co
  ** Calculation of particular sets of events/event labels
  ***********************************************************/
 
-const VectorClock& ExecutionGraph::getPrefixView(Event e) const
-{
-	return getPorfBefore(e);
-}
-
 std::unique_ptr<VectorClock> ExecutionGraph::getPredsView(Event e) const
 {
 	auto stamp = getEventLabel(e)->getStamp();
 	return LLVM_MAKE_UNIQUE<View>(getViewFromStamp(stamp));
 }
 
+#ifdef ENABLE_GENMC_DEBUG
 std::vector<std::unique_ptr<EventLabel> >
-ExecutionGraph::getPrefixLabelsNotBefore(const EventLabel *sLab,
+ExecutionGraph::getPrefixLabelsNotBefore(const WriteLabel *sLab,
 					 const ReadLabel *rLab) const
 {
 	std::vector<std::unique_ptr<EventLabel> > result;
@@ -857,10 +971,29 @@ ExecutionGraph::extractRfs(const std::vector<std::unique_ptr<EventLabel> > &labs
 	return rfs;
 }
 
+std::vector<std::pair<Event, Event> >
+ExecutionGraph::saveCoherenceStatus(const std::vector<std::unique_ptr<EventLabel> > &prefix,
+				    const ReadLabel *rLab) const
+{
+	return getCoherenceCalculator()->saveCoherenceStatus(prefix, rLab);
+}
+#endif
 
 /************************************************************
  ** Calculation of writes a read can read from
  ***********************************************************/
+
+void ExecutionGraph::remove(const EventLabel *lab)
+{
+	if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab)) {
+		if (auto *wLab = llvm::dyn_cast<WriteLabel>(getEventLabel(rLab->getRf())))
+			wLab->removeReader([&](const Event &r){ return r == rLab->getPos(); });
+	}
+	if (lab != getLastThreadLabel(lab->getThread()))
+		events[lab->getThread()][lab->getIndex()] = EmptyLabel::create(lab->getPos());
+	BUG_ON(lab->getIndex() >= getThreadSize(lab->getThread()));
+	resizeThread(lab->getPos());
+}
 
 bool ExecutionGraph::isNonTrivial(const Event e) const
 {
@@ -896,7 +1029,7 @@ bool ExecutionGraph::isHbOptRfBefore(const Event e, const Event write) const
 		return true;
 
 	for (auto &r : sLab->getReadersList()) {
-		if (getHbBefore(r).contains(e))
+		if (getEventLabel(r)->getHbView().contains(e))
 			return true;
 	}
 	return false;
@@ -913,7 +1046,7 @@ bool ExecutionGraph::isHbOptRfBeforeInView(const Event e, const Event write,
 		return true;
 
 	for (auto &r : sLab->getReadersList()) {
-		if (v.contains(r) && r != e && getHbBefore(r).contains(e))
+		if (v.contains(r) && r != e && getEventLabel(r)->getHbView().contains(e))
 			return true;
 	}
 	return false;
@@ -935,41 +1068,33 @@ bool ExecutionGraph::isWriteRfBefore(Event a, Event b) const
 	return false;
 }
 
-bool ExecutionGraph::isStoreReadByExclusiveRead(Event store,
-						const llvm::GenericValue *ptr) const
+bool ExecutionGraph::isStoreReadByExclusiveRead(Event store, SAddr ptr) const
 {
-	for (auto i = 0u; i < getNumThreads(); i++) {
-		for (auto j = 0u; j < getThreadSize(i); j++) {
-			const EventLabel *lab = getEventLabel(Event(i, j));
-			if (!isRMWLoad(lab))
-				continue;
+	for (const auto *lab : labels(*this)) {
+		if (!isRMWLoad(lab))
+			continue;
 
-			auto *rLab = static_cast<const ReadLabel *>(lab);
-			if (rLab->getRf() == store && rLab->getAddr() == ptr)
-				return true;
-		}
+		auto *rLab = llvm::dyn_cast<ReadLabel>(lab);
+		if (rLab->getRf() == store && rLab->getAddr() == ptr)
+			return true;
 	}
 	return false;
 }
 
-bool ExecutionGraph::isStoreReadBySettledRMW(Event store, const llvm::GenericValue *ptr,
-					     const VectorClock &prefix) const
+bool ExecutionGraph::isStoreReadBySettledRMW(Event store, SAddr ptr, const VectorClock &prefix) const
 {
-	for (auto i = 0u; i < getNumThreads(); i++) {
-		for (auto j = 0u; j < getThreadSize(i); j++) {
-			const EventLabel *lab = getEventLabel(Event(i, j));
-			if (!isRMWLoad(lab))
-				continue;
+	for (const auto *lab : labels(*this)) {
+		if (!isRMWLoad(lab))
+			continue;
 
-			auto *rLab = static_cast<const ReadLabel *>(lab);
-			if (rLab->getRf() != store || rLab->getAddr() != ptr)
-				continue;
+		auto *rLab = llvm::dyn_cast<ReadLabel>(lab);
+		if (rLab->getRf() != store || rLab->getAddr() != ptr)
+			continue;
 
-			if (!rLab->isRevisitable())
-				return true;
-			if (prefix.contains(rLab->getPos()))
-				return true;
-		}
+		if (!rLab->isRevisitable())
+			return true;
+		if (prefix.contains(rLab->getPos()))
+			return true;
 	}
 	return false;
 }
@@ -981,6 +1106,22 @@ bool ExecutionGraph::isRecoveryValid() const
 	return pc->isRecAcyclic();
 }
 
+bool ExecutionGraph::hasBeenRevisitedByDeleted(const ReadLabel *rLab, const WriteLabel *sLab,
+					       const EventLabel *eLab) const
+{
+	auto *lab = llvm::dyn_cast<ReadLabel>(eLab);
+	if (!lab)
+		return false;
+
+	auto *rfLab = getEventLabel(lab->getRf());
+	auto v = getRevisitView(rLab, sLab);
+	return !v->contains(rfLab->getPos()) &&
+		rfLab->getStamp() > lab->getStamp() &&
+		!prefixContainsSameLoc(rLab, sLab, rfLab) &&
+		!prefixContainsMatchingLock(rfLab, sLab) &&
+		(!hasBAM() || !llvm::isa<BIncFaiWriteLabel>(getEventLabel(rfLab->getPos())));
+}
+
 bool ExecutionGraph::revisitModifiesGraph(const ReadLabel *rLab,
 					  const EventLabel *sLab) const
 {
@@ -989,10 +1130,23 @@ bool ExecutionGraph::revisitModifiesGraph(const ReadLabel *rLab,
 
 	v.update(pfx);
 	for (auto i = 0u; i < getNumThreads(); i++) {
-		if (v[i] + 1 != (int) getThreadSize(i))
+		if (v[i] + 1 != (int) getThreadSize(i) &&
+		    !llvm::isa<BlockLabel>(getEventLabel(Event(i, v[i] + 1))))
 			return true;
 	}
 	return false;
+}
+
+bool ExecutionGraph::prefixContainsSameLoc(const ReadLabel *rLab, const WriteLabel *wLab,
+					   const EventLabel *lab) const
+{
+	return false;
+}
+
+bool ExecutionGraph::isMaximalExtension(const ReadLabel *rLab,
+					const WriteLabel *sLab) const
+{
+	return getCoherenceCalculator()->inMaximalPath(rLab, sLab);
 }
 
 
@@ -1002,6 +1156,8 @@ bool ExecutionGraph::revisitModifiesGraph(const ReadLabel *rLab,
 
 void ExecutionGraph::changeRf(Event read, Event store)
 {
+	setFPStatus(FS_Stale);
+
 	EventLabel *lab = events[read.thread][read.index].get();
 	BUG_ON(!llvm::isa<ReadLabel>(lab));
 
@@ -1036,6 +1192,8 @@ void ExecutionGraph::changeRf(Event read, Event store)
 
 bool ExecutionGraph::updateJoin(Event join, Event childLast)
 {
+	setFPStatus(FS_Stale);
+
 	EventLabel *lab = events[join.thread][join.index].get();
 	BUG_ON(!llvm::isa<ThreadJoinLabel>(lab));
 
@@ -1055,6 +1213,8 @@ bool ExecutionGraph::updateJoin(Event join, Event childLast)
 
 void ExecutionGraph::resetJoin(Event join)
 {
+	setFPStatus(FS_Stale);
+
 	/* If there is no parent join label, return */
 	EventLabel *lab = events[join.thread][join.index].get();
 	if (!llvm::isa<ThreadJoinLabel>(lab))
@@ -1106,25 +1266,17 @@ DepView ExecutionGraph::getDepViewFromStamp(unsigned int stamp) const
 	return preds;
 }
 
-void ExecutionGraph::changeStoreOffset(const llvm::GenericValue *addr,
-				     Event s, int newOffset)
+void ExecutionGraph::changeStoreOffset(SAddr addr, Event s, int newOffset)
 {
-	BUG_ON(!llvm::isa<MOCalculator>(getCoherenceCalculator()));
-	auto *cohTracker = static_cast<MOCalculator *>(
-		getCoherenceCalculator());
+	setFPStatus(FS_Stale);
 
-	cohTracker->changeStoreOffset(addr, s, newOffset);
-}
-
-std::vector<std::pair<Event, Event> >
-ExecutionGraph::saveCoherenceStatus(const std::vector<std::unique_ptr<EventLabel> > &prefix,
-				    const ReadLabel *rLab) const
-{
-	return getCoherenceCalculator()->saveCoherenceStatus(prefix, rLab);
+	if (auto *cohTracker = llvm::dyn_cast<MOCalculator>(getCoherenceCalculator()))
+		cohTracker->changeStoreOffset(addr, s, newOffset);
 }
 
 void ExecutionGraph::cutToStamp(unsigned int stamp)
 {
+	setFPStatus(FS_Stale);
 	auto preds = getViewFromStamp(stamp);
 
 	/* Inform all calculators about the events cutted */
@@ -1163,49 +1315,83 @@ void ExecutionGraph::cutToStamp(unsigned int stamp)
 	return;
 }
 
-void ExecutionGraph::restoreStorePrefix(const ReadLabel *rLab,
-					std::vector<std::unique_ptr<EventLabel> > &storePrefix,
-					std::vector<std::pair<Event, Event> > &moPlacings)
+void ExecutionGraph::copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) const
 {
-	auto &calcs = consistencyCalculators;
-	for (auto i = 0u; i < calcs.size() ; i++)
-		calcs[i]->restorePrefix(rLab, storePrefix, moPlacings);
+	/* First, populate calculators, etc */
+	other.timestamp = timestamp;
 
-	std::vector<Event> inserted;
+	other.relations = relations;
+	other.relsCache = relsCache;
 
-	for (auto &lab : storePrefix) {
-		inserted.push_back(lab->getPos());
-		if (events[lab->getThread()].size() <= lab->getIndex()) {
-			events[lab->getThread()].resize(lab->getIndex());
-			events[lab->getThread()].push_back(std::move(lab));
-		} else { /* size() > index */
-			events[lab->getThread()][lab->getIndex()] = std::move(lab);
-		}
-	}
+	other.relations.fixStatus = FS_Stale;
+	other.relsCache.fixStatus = FS_Stale;
 
-	for (const auto &e : inserted) {
-		EventLabel *curLab = events[e.thread][e.index].get();
-		if (auto *curRLab = llvm::dyn_cast<ReadLabel>(curLab)) {
-			curRLab->setRevisitStatus(false);
-			Event curRf = curRLab->getRf();
-			if (auto *wLab = llvm::dyn_cast<WriteLabel>(
-				    events[curRf.thread][curRf.index].get())) {
-				wLab->addReader(curRLab->getPos());
-			}
-		} else if (auto *curWLab = llvm::dyn_cast<WriteLabel>(curLab)) {
-			curWLab->removeReader([&](Event r){ return r == rLab->getPos(); });
-		}
-	}
+	for (const auto &cc : consistencyCalculators)
+		other.consistencyCalculators.push_back(cc->clone(other));
 
-	/* Do not keep any nullptrs in the graph */
+	other.partialConsCalculators = partialConsCalculators;
+
+	other.calculatorIndex = calculatorIndex;
+	other.relationIndex = relationIndex;
+
+	if (persChecker.get())
+		other.persChecker = persChecker->clone(other);
+	other.recoveryTID = recoveryTID;
+
+	other.bam = bam;
+
+	/* Then, copy the appropriate events */
+	/* FIXME: Fix LAPOR (use addLockLabelToGraphLAPOR??) */
+	auto *cc = getCoherenceCalculator();
+	auto *occ = other.getCoherenceCalculator();
+	BUG_ON(!cc || !occ);
+
+	// FIXME: The reason why we resize to num of threads instead of v.size() is
+	// to keep the same size as the interpreter threads.
+	other.events.resize(getNumThreads());
 	for (auto i = 0u; i < getNumThreads(); i++) {
-		for (auto j = 0u; j < getThreadSize(i); j++) {
-			if (events[i][j])
+		other.addOtherLabelToGraph(std::move(getEventLabel(Event(i, 0))->clone()));
+		for (auto j = 1; j <= v[i]; j++) {
+			if (!v.contains(Event(i, j))) {
+				other.addOtherLabelToGraph(
+					EmptyLabel::create(other.nextStamp(), Event(i, j)));
 				continue;
-			events[i][j] = std::unique_ptr<EmptyLabel>(
-				new EmptyLabel(nextStamp(), Event(i, j)));
+			}
+			auto *nLab = other.addOtherLabelToGraph(getEventLabel(Event(i, j))->clone());
+			if (auto *wLab = llvm::dyn_cast<WriteLabel>(nLab)) {
+				const_cast<WriteLabel *>(wLab)->removeReader([&v](const Event &r){
+					return !v.contains(r);
+				});
+			}
+			if (auto *mLab = llvm::dyn_cast<MemAccessLabel>(nLab))
+				occ->trackCoherenceAtLoc(mLab->getAddr());
+			if (auto *tcLab = llvm::dyn_cast<ThreadCreateLabel>(nLab))
+				;
+			if (auto *eLab = llvm::dyn_cast<ThreadFinishLabel>(nLab))
+				;
+			if (auto *lLab = llvm::dyn_cast<LockLabelLAPOR>(nLab))
+				other.getLbCalculatorLAPOR()->addLockToList(lLab->getLockAddr(), lLab->getPos());
 		}
 	}
+
+	/* Finally, copy coherence info */
+	/* FIXME: Temporary ugly hack */
+	for (auto it = cc->begin(); it != cc->end(); ++it) {
+		for (auto sIt = it->second.begin(); sIt != it->second.end(); ++sIt) {
+			if (v.contains(*sIt)) {
+				occ->addStoreToLoc(it->first, *sIt, occ->getStoresToLoc(it->first).size());
+			}
+		}
+	}
+	/* FIXME: Make sure all fields are copied */
+	return;
+}
+
+std::unique_ptr<ExecutionGraph> ExecutionGraph::getCopyUpTo(const VectorClock &v) const
+{
+	auto og = std::unique_ptr<ExecutionGraph>(new ExecutionGraph(warnOnGraphSize));
+	copyGraphUpTo(*og, v);
+	return og;
 }
 
 
@@ -1228,15 +1414,7 @@ bool ExecutionGraph::isRMWLoad(const EventLabel *lab) const
 		return false;
 	auto *mLab = static_cast<const MemAccessLabel *>(nLab);
 
-	if ((llvm::isa<CasWriteLabel>(mLab) || llvm::isa<FaiWriteLabel>(mLab)) &&
-	    mLab->getAddr() == rLab->getAddr())
-		return true;
-	return false;
-}
-
-bool ExecutionGraph::isRMWLoad(Event e) const
-{
-	return isRMWLoad(getEventLabel(e));
+	return isRMWStore(mLab) && mLab->getAddr() == rLab->getAddr();
 }
 
 std::pair<std::vector<Event>, std::vector<Event> >
@@ -1244,278 +1422,13 @@ ExecutionGraph::getSCs() const
 {
 	std::vector<Event> scs, fcs;
 
-	for (auto i = 0u; i < getNumThreads(); i++) {
-		for (auto j = 0u; j < getThreadSize(i); j++) {
-			const EventLabel *lab = getEventLabel(Event(i, j));
-			if (lab->isSC() && !isRMWLoad(lab))
-				scs.push_back(lab->getPos());
-			if (lab->isSC() && llvm::isa<FenceLabel>(lab))
-				fcs.push_back(lab->getPos());
-		}
+	for (const auto *lab : labels(*this)) {
+		if (lab->isSC() && !isRMWLoad(lab))
+			scs.push_back(lab->getPos());
+		if (lab->isSC() && llvm::isa<FenceLabel>(lab))
+			fcs.push_back(lab->getPos());
 	}
 	return std::make_pair(scs,fcs);
-}
-
-
-/************************************************************
- ** Library consistency checking methods
- ***********************************************************/
-
-std::vector<Event> ExecutionGraph::getLibEventsInView(const Library &lib, const View &v)
-{
-	std::vector<Event> result;
-
-	for (auto i = 0u; i < getNumThreads(); i++) {
-		for (auto j = 1; j <= v[i]; j++) { /* Do not consider thread inits */
-			const EventLabel *lab = getEventLabel(Event(i, j));
-
-			if (auto *rLab = llvm::dyn_cast<LibReadLabel>(lab)) {
-				if (lib.hasMember(rLab->getFunctionName()))
-					result.push_back(rLab->getPos());
-			}
-			if (auto *wLab = llvm::dyn_cast<LibWriteLabel>(lab)) {
-				if (lib.hasMember(wLab->getFunctionName()))
-					result.push_back(wLab->getPos());
-			}
-		}
-	}
-	return result;
-}
-
-void ExecutionGraph::getPoEdgePairs(std::vector<std::pair<Event, std::vector<Event> > > &froms,
-				    std::vector<Event> &tos)
-{
-	std::vector<Event> buf;
-
-	for (auto i = 0u; i < froms.size(); i++) {
-		buf = {};
-		for (auto j = 0u; j < froms[i].second.size(); j++) {
-			for (auto &e : tos)
-				if (froms[i].second[j].thread == e.thread &&
-				    froms[i].second[j].index < e.index)
-					buf.push_back(e);
-		}
-		froms[i].second = buf;
-	}
-}
-
-void ExecutionGraph::getRfm1EdgePairs(std::vector<std::pair<Event, std::vector<Event> > > &froms,
-				      std::vector<Event> &tos)
-{
-	std::vector<Event> buf;
-
-	for (auto i = 0u; i < froms.size(); i++) {
-		buf = {};
-		for (auto j = 0u; j < froms[i].second.size(); j++) {
-			const EventLabel *lab = getEventLabel(froms[i].second[j]);
-			if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab)) {
-				if (std::find(tos.begin(), tos.end(), rLab->getRf()) !=
-				    tos.end())
-					buf.push_back(rLab->getRf());
-			}
-		}
-		froms[i].second = buf;
-	}
-}
-
-void ExecutionGraph::getRfEdgePairs(std::vector<std::pair<Event, std::vector<Event> > > &froms,
-				    std::vector<Event> &tos)
-{
-	std::vector<Event> buf;
-
-	for (auto i = 0u; i < froms.size(); i++) {
-		buf = {};
-		for (auto j = 0u; j < froms[i].second.size(); j++) {
-			const EventLabel *lab = getEventLabel(froms[i].second[j]);
-			if (auto *wLab = llvm::dyn_cast<WriteLabel>(lab)) {
-				const std::vector<Event> readers = wLab->getReadersList();
-				std::copy_if(readers.begin(), readers.end(),
-					     std::back_inserter(buf),
-					     [&](const Event &e) {
-						     return std::find(tos.begin(), tos.end(),
-								      e) != tos.end();
-					     });
-			}
-		}
-		froms[i].second = buf;
-	}
-}
-
-void ExecutionGraph::getHbEdgePairs(std::vector<std::pair<Event, std::vector<Event> > > &froms,
-				    std::vector<Event> &tos)
-{
-	std::vector<Event> buf;
-
-	for (auto i = 0u; i < froms.size(); i++) {
-		buf = {};
-		for (auto j = 0u; j < froms[i].second.size(); j++) {
-			for (auto &e : tos) {
-				auto &before = getHbBefore(e);
-				if (froms[i].second[j].index <
-				    before[froms[i].second[j].thread])
-					buf.push_back(e);
-			}
-		}
-		froms[i].second = buf;
-	}
-}
-
-void ExecutionGraph::getWbEdgePairs(std::vector<std::pair<Event, std::vector<Event> > > &froms,
-				    std::vector<Event> &tos)
-{
-	auto *cc = getCoherenceCalculator();
-	BUG_ON(!llvm::isa<WBCalculator>(cc));
-	auto *cohTracker = static_cast<WBCalculator *>(cc);
-	std::vector<Event> buf;
-
-	for (auto i = 0u; i < froms.size(); i++) {
-		buf = {};
-		for (auto j = 0u; j < froms[i].second.size(); j++) {
-			const EventLabel *lab = getEventLabel(froms[i].second[j]);
-			if (!llvm::isa<WriteLabel>(lab))
-				continue;
-
-			auto *wLab = static_cast<const WriteLabel *>(lab);
-			View v(getHbBefore(tos[0]));
-			for (auto &t : tos)
-				v.update(getEventLabel(t)->getHbView());
-
-			auto wb = cohTracker->calcWbRestricted(wLab->getAddr(), v);
-			auto &ss = wb.getElems();
-			// TODO: Make a map with already calculated WBs??
-
-			if (std::find(ss.begin(), ss.end(), wLab->getPos()) == ss.end())
-				continue;
-
-			/* Collect all wb-after stores that are in "tos" range */
-			auto k = wb.getIndex(wLab->getPos());
-			for (auto l = 0u; l < ss.size(); l++)
-				if (wb(k, l))
-					buf.push_back(ss[l]);
-		}
-		froms[i].second = buf;
-	}
-}
-
-void ExecutionGraph::getMoEdgePairs(std::vector<std::pair<Event, std::vector<Event> > > &froms,
-				    std::vector<Event> &tos)
-{
-	std::vector<Event> buf;
-
-	BUG_ON(!llvm::isa<MOCalculator>(getCoherenceCalculator()));
-	auto *cohTracker = static_cast<MOCalculator *>(getCoherenceCalculator());
-
-	for (auto i = 0u; i < froms.size(); i++) {
-		buf = {};
-		for (auto j = 0u; j < froms[i].second.size(); j++) {
-			const EventLabel *lab = getEventLabel(froms[i].second[j]);
-			if (!llvm::isa<WriteLabel>(lab))
-				continue;
-
-			/* Collect all mo-after events that are in the "tos" range */
-			auto *wLab = static_cast<const WriteLabel *>(lab);
-			auto moAfter = cohTracker->getMOAfter(wLab->getAddr(), wLab->getPos());
-			for (const auto &s : moAfter)
-				if (std::find(tos.begin(), tos.end(), s) != tos.end())
-					buf.push_back(s);
-		}
-		froms[i].second = buf;
-	}
-}
-
-void ExecutionGraph::calcSingleStepPairs(std::vector<std::pair<Event, std::vector<Event> > > &froms,
-					 const std::string &step, std::vector<Event> &tos)
-{
-	if (step == "po")
-		return getPoEdgePairs(froms, tos);
-	else if (step == "rf")
-		return getRfEdgePairs(froms, tos);
-	else if (step == "hb")
-		return getHbEdgePairs(froms, tos);
-	else if (step == "rf-1")
-		return getRfm1EdgePairs(froms, tos);
-	else if (step == "wb")
-		return getWbEdgePairs(froms, tos);
-	else if (step == "mo")
-		return getMoEdgePairs(froms, tos);
-	else
-		BUG();
-}
-
-void addEdgePairsToMatrix(std::vector<std::pair<Event, std::vector<Event> > > &pairs,
-			  AdjList<Event, EventHasher> &matrix)
-{
-	for (auto &p : pairs) {
-		for (auto k = 0u; k < p.second.size(); k++) {
-			matrix.addEdge(p.first, p.second[k]);
-		}
-	}
-}
-
-void ExecutionGraph::addStepEdgeToMatrix(std::vector<Event> &es,
-					 AdjList<Event, EventHasher> &relMatrix,
-					 const std::vector<std::string> &substeps)
-{
-	std::vector<std::pair<Event, std::vector<Event> > > edges;
-
-	/* Initialize edges */
-	for (auto &e : es)
-		edges.push_back(std::make_pair(e, std::vector<Event>({e})));
-
-	for (auto i = 0u; i < substeps.size(); i++)
-		calcSingleStepPairs(edges, substeps[i], es);
-	addEdgePairsToMatrix(edges, relMatrix);
-}
-
-llvm::StringMap<AdjList<Event, EventHasher> >
-ExecutionGraph::calculateAllRelations(const Library &lib, std::vector<Event> &es)
-{
-	llvm::StringMap<AdjList<Event, EventHasher> > relMap;
-
-	for (auto &r : lib.getRelations()) {
-		AdjList<Event, EventHasher> relMatrix(es);
-		auto &steps = r.getSteps();
-		for (auto &s : steps)
-			addStepEdgeToMatrix(es, relMatrix, s);
-
-		if (r.isTransitive())
-			relMatrix.transClosure();
-		relMap[r.getName()] = relMatrix;
-	}
-	return relMap;
-}
-
-bool ExecutionGraph::isLibConsistentInView(const Library &lib, const View &v)
-{
-	auto es = getLibEventsInView(lib, v);
-	auto relations = calculateAllRelations(lib, es);
-	auto &constraints = lib.getConstraints();
-	if (std::all_of(constraints.begin(), constraints.end(),
-			[&](const Constraint &c)
-			{ return relations[c.getName()].isIrreflexive(); }))
-		return true;
-	return false;
-}
-
-void ExecutionGraph::addInvalidRfs(Event read, const std::vector<Event> &rfs)
-{
-	EventLabel *lab = events[read.thread][read.index].get();
-	BUG_ON(!llvm::isa<LibReadLabel>(lab));
-
-	auto *lLab = static_cast<LibReadLabel *>(lab);
-	for (auto &s : rfs)
-		lLab->addInvalidRf(s);
-}
-
-void ExecutionGraph::addBottomToInvalidRfs(Event read)
-{
-	EventLabel *lab = events[read.thread][read.index].get();
-
-	if (auto *rLab = llvm::dyn_cast<LibReadLabel>(lab)) {
-		rLab->addInvalidRf(Event::getInitializer());
-		return;
-	}
-	BUG();
 }
 
 
@@ -1606,12 +1519,19 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const ExecutionGraph &g)
 		s << "Thread " << i << ":\n";
 		for (auto j = 0u; j < g.getThreadSize(i); j++) {
 			const EventLabel *lab = g.getEventLabel(Event(i, j));
-			s << "\t" << *lab << "\n";
+			s << "\t" << lab->getStamp() << " @ " << *lab << "\n";
 		}
 	}
 	s << "Thread sizes:\n\t";
 	for (auto i = 0u; i < g.getNumThreads(); i++)
 		s << g.events[i].size() << " ";
 	s << "\n";
+
+	auto *cc = g.getCoherenceCalculator();
+	BUG_ON(!cc);
+	for (auto it = cc->begin(); it != cc->end(); ++it) {
+		s << it->first << ": ";
+		s << format(it->second) << "\n";
+	}
 	return s;
 }

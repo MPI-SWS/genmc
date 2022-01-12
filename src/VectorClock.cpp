@@ -19,8 +19,14 @@
  */
 
 #include "VectorClock.hpp"
+#include "EventLabel.hpp"
 #include "View.hpp"
 #include "DepView.hpp"
+
+bool VectorClock::contains(const EventLabel *lab) const
+{
+	return contains(lab->getPos());
+}
 
 VectorClock *VectorClock::clone() const
 {

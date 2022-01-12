@@ -2,23 +2,29 @@ Error detected: Invalid function call during recovery!
 Event (1, 0) in graph:
 <-1, 0> main:
 	(0, 0): B
-	(0, 1): Cacq (__dir_inode.lock, 0) [INIT] L.21
-	(0, 2): Cacq (__dir_inode.lock, 1) L.0:
-	(0, 3): FRacq (__dir_inode.addr[foo], 0x0) [INIT] L.0:
-	(0, 4): M
-	(0, 5): Wna (__inode_foo.lock, 0) L.0:
-	(0, 6): FWrel (__inode_foo.isize, 0) L.0:
-	(0, 7): FWrel (__dir_inode.addr[foo], 0x2fbf028) L.0:
-	(0, 8): Wrel (__dir_inode.lock, 0) L.0:
-	(0, 9): FO (foo, 0) L.0:
-	(0, 10): M
-	(0, 11): Wrel (__file_foo_0_10.inode, 0x2fbf028) L.0:
-	(0, 12): Wrel (__file_foo_0_10.lock, 0) L.0:
-	(0, 13): Wrel (__file_foo_0_10.flags, 65) L.0:
-	(0, 14): Wrel (__file_foo_0_10.offset, 0) L.0:
-	(0, 15): E
+	(0, 1): Cacq (__genmc_dir_inode.lock.__private, 0) [INIT] L.22
+	(0, 2): Cacq (__genmc_dir_inode.lock.__private, 1) L.22
+	(0, 3): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.22
+	(0, 4): DRacq (__genmc_dir_inode.data[0], 0x0) [INIT] L.22
+	(0, 5): M
+	(0, 6): Wrel (__inode_foo.lock, 0) L.22
+	(0, 7): Wrel (__inode_foo.i_size, 0) L.22
+	(0, 8): DWrel (__inode_foo.i_transaction, 0) L.22
+	(0, 9): DWrel (__inode_foo.i_disksize, 0) L.22
+	(0, 10): DF L.22
+	(0, 11): DWrel (__genmc_dir_inode.data[0], 0x2000000000000010) L.22
+	(0, 12): Wrel (__genmc_dir_inode.lock.__private, 0) L.22
+	(0, 13): FO (foo, 0) L.22
+	(0, 14): M
+	(0, 15): Wna (__file_foo_0_13.inode, 0x2000000000000010) L.22
+	(0, 16): Wna (__file_foo_0_13.flags, 65) L.22
+	(0, 17): Wna (__file_foo_0_13.pos, 0) L.22
+	(0, 18): Wrel (__file_foo_0_13.pos_lock, 0) L.22
+	(0, 19): Wrel (__file_foo_0_13.count, 1) L.22
+	(0, 20): E
 <-1, 1> __VERIFIER_recovery_routine:
 	(1, 0): B
 
-creat() cannot be called during recovery
+Trace to (1, 0):
+__VERIFIER_creatFS() cannot be called during recovery
 Number of complete executions explored: 1

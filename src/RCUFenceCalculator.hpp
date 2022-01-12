@@ -47,10 +47,9 @@ public:
 	/* The calculator is informed about the removal of some events */
 	void removeAfter(const VectorClock &preds) override;
 
-	/* The calculator is informed about the restoration of some events */
-	void restorePrefix(const ReadLabel *rLab,
-			   const std::vector<std::unique_ptr<EventLabel> > &storePrefix,
-			   const std::vector<std::pair<Event, Event> > &status) override;
+	std::unique_ptr<Calculator> clone(ExecutionGraph &g) const override {
+		return LLVM_MAKE_UNIQUE<RCUFenceCalculator>(g);
+	}
 
 private:
 	bool checkAddRcuFenceConstraint(Event a, Event b);

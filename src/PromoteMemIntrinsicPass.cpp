@@ -37,10 +37,10 @@ using namespace llvm;
 void promoteMemCpy(IRBuilder<> &builder, Value *dst, Value *src,
 		   const std::vector<Value *> &args, Type *typ)
 {
-	Value *srcGEP = builder.CreateInBoundsGEP(nullptr, src, args,
-						  "memcpy.src.gep");
-	Value *dstGEP = builder.CreateInBoundsGEP(nullptr, dst, args,
-						  "memcpy.dst.gep");
+	Value *srcGEP = builder.CreateInBoundsGEP(dyn_cast<PointerType>(src->getType())->getElementType(),
+						  src, args, "memcpy.src.gep");
+	Value *dstGEP = builder.CreateInBoundsGEP(dyn_cast<PointerType>(dst->getType())->getElementType(),
+						  dst, args, "memcpy.dst.gep");
 	Value *srcLoad = builder.CreateLoad(typ, srcGEP, "memcpy.src.load");
 	Value *dstStore = builder.CreateStore(srcLoad, dstGEP);
 	return;
@@ -55,8 +55,8 @@ void promoteMemSet(IRBuilder<> &builder, Value *dst, Value *argVal,
 	long int ival = dyn_cast<ConstantInt>(argVal)->getSExtValue();
 	Value *val = Constant::getIntegerValue(typ, APInt(typ->getIntegerBitWidth(), ival));
 
-	Value *dstGEP = builder.CreateInBoundsGEP(nullptr, dst, args,
-						  "memset.dst.gep");
+	Value *dstGEP = builder.CreateInBoundsGEP(dyn_cast<PointerType>(dst->getType())->getElementType(),
+						  dst, args, "memset.dst.gep");
 	Value *dstStore = builder.CreateStore(val, dstGEP);
 	return;
 }

@@ -32,7 +32,8 @@ n * You should have received a copy of the GNU General Public License
 /*
  * A class to model the dependencies (of some kind) of an event. Each DepInfo
  * objects holds a collection of events on which some events depend on. In
- * principle, such an object should be used for each event of each thread.
+ * principle, such an object should be used for each dependency kind of
+ * a particular event.
  */
 class DepInfo {
 
@@ -45,16 +46,16 @@ public:
 	DepInfo(Event e) : set_({ e }) {}
 
 	/* Updates this object based on the dependencies of dep (union) */
-	void update(const DepInfo& dep);
+	void update(const DepInfo& dep) { set_.insert(dep.set_); }
 
 	/* Clears all the stored dependencies */
-	void clear();
+	void clear() { set_.clear(); }
 
 	/* Returns true if e is contained in the dependencies */
 	bool contains(Event e) const { return set_.count(e); }
 
 	/* Returns true if there are no dependencies */
-	bool empty() const;
+	bool empty() const { return set_.empty(); }
 
 	/* Iterators */
 	using const_iterator = typename Set::const_iterator;
@@ -69,6 +70,27 @@ public:
 private:
 	/* The actual container for the dependencies */
 	Set set_;
+};
+
+
+/*******************************************************************************
+ **                             EventDeps Class
+ ******************************************************************************/
+
+/*
+ * Packs together all the dependencies of a given event.
+ *
+ * Dependencies have one of the following types:
+ *     addr, data, ctrl, addr;po, cas.
+ * Models are free to ignore some of these if they are of no use.
+ */
+struct EventDeps {
+
+	DepInfo addr;
+	DepInfo data;
+	DepInfo ctrl;
+	DepInfo addrPo;
+	DepInfo cas;
 };
 
 #endif /* __DEP_INFO_HPP__ */

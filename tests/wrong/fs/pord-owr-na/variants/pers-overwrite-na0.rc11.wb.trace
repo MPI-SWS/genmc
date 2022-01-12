@@ -1,2 +1,153 @@
 WARNING: Memory intrinsic found! Attempting to promote it...
-FIXME: RECOVERY ERROR
+Error detected: Recovery error!
+Event (1, 15) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): M
+	(0, 2): Rna (main.buf[0], 48) [INIT] L.27
+	(0, 3): Wna (buf[0], 48) L.27
+	(0, 4): Rna (main.buf[1], 48) [INIT] L.27
+	(0, 5): Wna (buf[1], 48) L.27
+	(0, 6): Rna (main.buf[2], 49) [INIT] L.27
+	(0, 7): Wna (buf[2], 49) L.27
+	(0, 8): Rna (main.buf[3], 49) [INIT] L.27
+	(0, 9): Wna (buf[3], 49) L.27
+	(0, 10): Cacq (__genmc_dir_inode.lock.__private, 0) [INIT] L.30
+	(0, 11): Cacq (__genmc_dir_inode.lock.__private, 1) L.30
+	(0, 12): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.30
+	(0, 13): DRacq (__genmc_dir_inode.data[0], 0x0) [INIT] L.30
+	(0, 14): M
+	(0, 15): Wrel (__inode_foo.lock, 0) L.30
+	(0, 16): Wrel (__inode_foo.i_size, 0) L.30
+	(0, 17): DWrel (__inode_foo.i_transaction, 0) L.30
+	(0, 18): DWrel (__inode_foo.i_disksize, 0) L.30
+	(0, 19): DF L.30
+	(0, 20): DWrel (__genmc_dir_inode.data[0], 0x2000000000000010) L.30
+	(0, 21): Wrel (__genmc_dir_inode.lock.__private, 0) L.30
+	(0, 22): FO (foo, 0) L.30
+	(0, 23): M
+	(0, 24): Wna (__file_foo_0_22.inode, 0x2000000000000010) L.30
+	(0, 25): Wna (__file_foo_0_22.flags, 65) L.30
+	(0, 26): Wna (__file_foo_0_22.pos, 0) L.30
+	(0, 27): Wrel (__file_foo_0_22.pos_lock, 0) L.30
+	(0, 28): Wrel (__file_foo_0_22.count, 1) L.30
+	(0, 29): Cacq (__file_foo_0_22.pos_lock, 0) [(0, 27)] L.31
+	(0, 30): Cacq (__file_foo_0_22.pos_lock, 1) L.31
+	(0, 31): Rna (__file_foo_0_22.pos, 0) [(0, 26)] L.31
+	(0, 32): Rna (__file_foo_0_22.flags, 65) [(0, 25)] L.31
+	(0, 33): Rrlx (__file_foo_0_22.inode, 0x2000000000000010) [(0, 24)] L.31
+	(0, 34): Cacq (__inode_foo.lock, 0) [(0, 15)] L.31
+	(0, 35): Cacq (__inode_foo.lock, 1) L.31
+	(0, 36): Racq (__inode_foo.i_size, 0) [(0, 16)] L.31
+	(0, 37): Rna (buf[0], 48) [(0, 3)] L.31
+	(0, 38): DWrel (__inode_foo.data, 48) L.31
+	(0, 39): Rna (buf[1], 48) [(0, 5)] L.31
+	(0, 40): DWrel (__inode_foo.data, 48) L.31
+	(0, 41): Racq (__inode_foo.i_size, 0) [(0, 16)] L.31
+	(0, 42): DWrel (__inode_foo.i_disksize, 2) L.31
+	(0, 43): Wrel (__inode_foo.i_size, 2) L.31
+	(0, 44): Wrel (__inode_foo.lock, 0) L.31
+	(0, 45): Wna (__file_foo_0_22.pos, 2) L.31
+	(0, 46): Wrel (__file_foo_0_22.pos_lock, 0) L.31
+	(0, 47): PB L.33
+	(0, 48): Rna (__file_foo_0_22.flags, 65) [(0, 25)] L.36
+	(0, 49): Rrlx (__file_foo_0_22.inode, 0x2000000000000010) [(0, 24)] L.36
+	(0, 50): Cacq (__inode_foo.lock, 0) [(0, 44)] L.36
+	(0, 51): Cacq (__inode_foo.lock, 1) L.36
+	(0, 52): Racq (__inode_foo.i_size, 2) [(0, 43)] L.36
+	(0, 53): Rna (buf[2], 49) [(0, 7)] L.36
+	(0, 54): DWrel (__inode_foo.data, 49) L.36
+	(0, 55): Rna (buf[3], 49) [(0, 9)] L.36
+	(0, 56): DWrel (__inode_foo.data, 49) L.36
+	(0, 57): Racq (__inode_foo.i_size, 2) [(0, 43)] L.36
+	(0, 58): Wrel (__inode_foo.lock, 0) L.36
+	(0, 59): Uar (__file_foo_0_22.count, 1) [(0, 28)] L.38
+	(0, 60): Uar (__file_foo_0_22.count, 0) L.38
+	(0, 61): D L.38
+	(0, 62): D L.40
+	(0, 63): E
+<-1, 1> __VERIFIER_recovery_routine:
+	(1, 0): B
+	(1, 1): M
+	(1, 2): DRrlx (__genmc_dir_inode.i_transaction, 0) [INIT] L.16
+	(1, 3): DRrlx (__genmc_dir_inode.data[0], 0x2000000000000010) [(0, 20)] L.16
+	(1, 4): FO (foo, 1) L.16
+	(1, 5): M
+	(1, 6): Wna (__file_foo_1_4.inode, 0x2000000000000010) L.16
+	(1, 7): Wna (__file_foo_1_4.flags, 0) L.16
+	(1, 8): Wna (__file_foo_1_4.pos, 0) L.16
+	(1, 9): Wrel (__file_foo_1_4.pos_lock, 0) L.16
+	(1, 10): Wrel (__file_foo_1_4.count, 1) L.16
+	(1, 11): DRrlx (__inode_foo.i_disksize, 2) [(0, 42)] L.18
+	(1, 12): DRrlx (__inode_foo.data, 49) [(0, 54)] L.18
+	(1, 13): Wna (buf[0], 49) L.18
+	(1, 14): DRrlx (__inode_foo.data, 48) [(0, 40)] L.18
+	(1, 15): Wna (buf[1], 48) L.18
+
+Trace to (1, 15):
+[main] pers-overwrite-na0.c: 27: char buf[4] = "0011";
+[main] pers-overwrite-na0.c: 27: char buf[4] = "0011";
+[main] pers-overwrite-na0.c: 27: char buf[4] = "0011";
+[main] pers-overwrite-na0.c: 27: char buf[4] = "0011";
+[main] pers-overwrite-na0.c: 27: char buf[4] = "0011";
+[main] pers-overwrite-na0.c: 27: char buf[4] = "0011";
+[main] pers-overwrite-na0.c: 27: char buf[4] = "0011";
+[main] pers-overwrite-na0.c: 27: char buf[4] = "0011";
+[main] pers-overwrite-na0.c: 30: int fd = creat("foo", 0640);
+[main] pers-overwrite-na0.c: 30: int fd = creat("foo", 0640);
+[main] pers-overwrite-na0.c: 30: int fd = creat("foo", 0640);
+[main] pers-overwrite-na0.c: 30: int fd = creat("foo", 0640);
+[main] pers-overwrite-na0.c: 30: int fd = creat("foo", 0640);
+[main] pers-overwrite-na0.c: 30: int fd = creat("foo", 0640);
+[main] pers-overwrite-na0.c: 30: int fd = creat("foo", 0640);
+[main] pers-overwrite-na0.c: 30: int fd = creat("foo", 0640);
+[main] pers-overwrite-na0.c: 30: int fd = creat("foo", 0640);
+[main] pers-overwrite-na0.c: 30: int fd = creat("foo", 0640);
+[main] pers-overwrite-na0.c: 30: int fd = creat("foo", 0640);
+[main] pers-overwrite-na0.c: 30: int fd = creat("foo", 0640);
+[main] pers-overwrite-na0.c: 30: int fd = creat("foo", 0640);
+[main] pers-overwrite-na0.c: 30: int fd = creat("foo", 0640);
+[main] pers-overwrite-na0.c: 30: int fd = creat("foo", 0640);
+[main] pers-overwrite-na0.c: 30: int fd = creat("foo", 0640);
+[main] pers-overwrite-na0.c: 30: int fd = creat("foo", 0640);
+[main] pers-overwrite-na0.c: 30: int fd = creat("foo", 0640);
+[main] pers-overwrite-na0.c: 31: write(fd, buf, 2);
+[main] pers-overwrite-na0.c: 31: write(fd, buf, 2);
+[main] pers-overwrite-na0.c: 31: write(fd, buf, 2);
+[main] pers-overwrite-na0.c: 31: write(fd, buf, 2);
+[main] pers-overwrite-na0.c: 31: write(fd, buf, 2);
+[main] pers-overwrite-na0.c: 31: write(fd, buf, 2);
+[main] pers-overwrite-na0.c: 31: write(fd, buf, 2);
+[main] pers-overwrite-na0.c: 31: write(fd, buf, 2);
+[main] pers-overwrite-na0.c: 31: write(fd, buf, 2);
+[main] pers-overwrite-na0.c: 31: write(fd, buf, 2);
+[main] pers-overwrite-na0.c: 31: write(fd, buf, 2);
+[main] pers-overwrite-na0.c: 31: write(fd, buf, 2);
+[main] pers-overwrite-na0.c: 31: write(fd, buf, 2);
+[main] pers-overwrite-na0.c: 31: write(fd, buf, 2);
+[main] pers-overwrite-na0.c: 31: write(fd, buf, 2);
+[main] pers-overwrite-na0.c: 31: write(fd, buf, 2);
+[main] pers-overwrite-na0.c: 33: __VERIFIER_pbarrier();
+[__VERIFIER_recovery_routine] pers-overwrite-na0.c: 16: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] pers-overwrite-na0.c: 16: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] pers-overwrite-na0.c: 16: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] pers-overwrite-na0.c: 16: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] pers-overwrite-na0.c: 16: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] pers-overwrite-na0.c: 16: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] pers-overwrite-na0.c: 16: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] pers-overwrite-na0.c: 16: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] pers-overwrite-na0.c: 16: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] pers-overwrite-na0.c: 18: pread(fd, &buf[0], 2, 0);
+[main] pers-overwrite-na0.c: 33: __VERIFIER_pbarrier();
+[main] pers-overwrite-na0.c: 36: pwrite(fd, buf + 2, 2, 0);
+[main] pers-overwrite-na0.c: 36: pwrite(fd, buf + 2, 2, 0);
+[main] pers-overwrite-na0.c: 36: pwrite(fd, buf + 2, 2, 0);
+[main] pers-overwrite-na0.c: 36: pwrite(fd, buf + 2, 2, 0);
+[main] pers-overwrite-na0.c: 36: pwrite(fd, buf + 2, 2, 0);
+[main] pers-overwrite-na0.c: 36: pwrite(fd, buf + 2, 2, 0);
+[__VERIFIER_recovery_routine] pers-overwrite-na0.c: 18: pread(fd, &buf[0], 2, 0);
+[__VERIFIER_recovery_routine] pers-overwrite-na0.c: 18: pread(fd, &buf[0], 2, 0);
+[__VERIFIER_recovery_routine] pers-overwrite-na0.c: 18: pread(fd, &buf[0], 2, 0);
+[__VERIFIER_recovery_routine] pers-overwrite-na0.c: 18: pread(fd, &buf[0], 2, 0);
+Assertion violation: !(buf[0] == '1' && buf[1] == '0')
+Number of complete executions explored: 2

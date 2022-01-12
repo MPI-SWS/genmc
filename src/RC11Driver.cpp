@@ -25,8 +25,9 @@
 #include "PSCCalculator.hpp"
 #include "PersistencyChecker.hpp"
 
-RC11Driver::RC11Driver(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Module> mod, clock_t start)
-	: GenMCDriver(std::move(conf), std::move(mod), start)
+RC11Driver::RC11Driver(std::shared_ptr<const Config> conf, std::unique_ptr<llvm::Module> mod,
+		       std::unique_ptr<ModuleInfo> MI)
+	: GenMCDriver(conf, std::move(mod), std::move(MI))
 {
 	auto &g = getGraph();
 
@@ -71,11 +72,13 @@ void RC11Driver::calcReadViews(ReadLabel *lab)
 	View hb = calcBasicHbView(lab->getPos());
 	View porf = calcBasicPorfView(lab->getPos());
 
-	const auto *rfLab = g.getEventLabel(lab->getRf());
-	porf.update(rfLab->getPorfView());
-	if (lab->isAtLeastAcquire()) {
-		if (auto *wLab = llvm::dyn_cast<WriteLabel>(rfLab))
-			hb.update(wLab->getMsgView());
+	if (!lab->getRf().isBottom()) {
+		const auto *rfLab = g.getEventLabel(lab->getRf());
+		porf.update(rfLab->getPorfView());
+		if (lab->isAtLeastAcquire()) {
+			if (auto *wLab = llvm::dyn_cast<WriteLabel>(rfLab))
+				hb.update(wLab->getMsgView());
+		}
 	}
 
 	lab->setHbView(std::move(hb));
@@ -103,8 +106,8 @@ void RC11Driver::calcWriteMsgView(WriteLabel *lab)
 		msg = lab->getHbView();
 	else if (lab->getOrdering() == llvm::AtomicOrdering::Monotonic ||
 		 lab->getOrdering() == llvm::AtomicOrdering::Acquire)
-		msg = g.getHbBefore(g.getLastThreadReleaseAtLoc(lab->getPos(),
-								lab->getAddr()));
+		msg = g.getEventLabel(g.getLastThreadReleaseAtLoc(lab->getPos(),
+								  lab->getAddr()))->getHbView();
 	lab->setMsgView(std::move(msg));
 }
 
@@ -128,8 +131,8 @@ void RC11Driver::calcRMWWriteMsgView(WriteLabel *lab)
 	if (rLab->isAtLeastRelease())
 		msg.update(lab->getHbView());
 	else
-		msg.update(g.getHbBefore(g.getLastThreadReleaseAtLoc(lab->getPos(),
-								     lab->getAddr())));
+		msg.update(g.getEventLabel(g.getLastThreadReleaseAtLoc(lab->getPos(),
+								       lab->getAddr()))->getHbView());
 
 	lab->setMsgView(std::move(msg));
 }
@@ -201,14 +204,13 @@ void RC11Driver::calcJoinViews(ThreadJoinLabel *lab)
 	lab->setPorfView(std::move(porf));
 }
 
-void RC11Driver::updateLabelViews(EventLabel *lab)
+void RC11Driver::updateLabelViews(EventLabel *lab, const EventDeps *deps) /* deps ignored */
 {
 	const auto &g = getGraph();
 
 	switch (lab->getKind()) {
 	case EventLabel::EL_Read:
 	case EventLabel::EL_BWaitRead:
-	case EventLabel::EL_LibRead:
 	case EventLabel::EL_DskRead:
 	case EventLabel::EL_CasRead:
 	case EventLabel::EL_LockCasRead:
@@ -222,7 +224,6 @@ void RC11Driver::updateLabelViews(EventLabel *lab)
 	case EventLabel::EL_BInitWrite:
 	case EventLabel::EL_BDestroyWrite:
 	case EventLabel::EL_UnlockWrite:
-	case EventLabel::EL_LibWrite:
 	case EventLabel::EL_CasWrite:
 	case EventLabel::EL_LockCasWrite:
 	case EventLabel::EL_FaiWrite:
@@ -261,6 +262,9 @@ void RC11Driver::updateLabelViews(EventLabel *lab)
 	case EventLabel::EL_UnlockLabelLAPOR:
 	case EventLabel::EL_DskOpen:
 		calcBasicViews(lab);
+		break;
+	case EventLabel::EL_SmpFenceLKMM:
+		ERROR("LKMM fences can only be used with -lkmm!\n");
 		break;
 	case EventLabel::EL_RCULockLKMM:
 	case EventLabel::EL_RCUUnlockLKMM:
@@ -359,16 +363,6 @@ Event RC11Driver::findDataRaceForMemAccess(const MemAccessLabel *mLab)
 	return Event::getInitializer();
 }
 
-std::vector<Event> RC11Driver::getStoresToLoc(const llvm::GenericValue *addr)
-{
-	return getGraph().getCoherentStores(addr, getEE()->getCurrentPosition());
-}
-
-std::vector<Event> RC11Driver::getRevisitLoads(const WriteLabel *sLab)
-{
-	return getGraph().getCoherentRevisits(sLab);
-}
-
 void RC11Driver::changeRf(Event read, Event store)
 {
 	auto &g = getGraph();
@@ -389,8 +383,8 @@ void RC11Driver::updateStart(Event create, Event start)
 	auto &g = getGraph();
 	auto *bLab = g.getEventLabel(start);
 
-	View hb(g.getHbBefore(create));
-	View porf(g.getPorfBefore(create));
+	View hb(g.getEventLabel(create)->getHbView());
+	View porf(g.getEventLabel(create)->getPorfView());
 
 	hb[start.thread] = 0;
 	porf[start.thread] = 0;

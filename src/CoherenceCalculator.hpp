@@ -65,53 +65,67 @@ public:
 
 	virtual ~CoherenceCalculator() = default;
 
+	using StoresList = std::unordered_map<SAddr, std::vector<Event>>;
+
+	using iterator = StoresList::iterator;
+	using const_iterator = StoresList::const_iterator;
+	virtual iterator begin() = 0;
+	virtual iterator end() = 0;
+	virtual const_iterator cbegin() const = 0;
+	virtual const_iterator cend() const = 0;
+
 	/* Track coherence at location addr */
 	virtual void
-	trackCoherenceAtLoc(const llvm::GenericValue *addr) = 0;
+	trackCoherenceAtLoc(SAddr addr) = 0;
 
 	/* Returns the range of all the possible (i.e., not violating coherence
 	 * places a store can be inserted without inserting it */
 	virtual std::pair<int, int>
-	getPossiblePlacings(const llvm::GenericValue *addr,
-			    Event store, bool isRMW) = 0;
+	getPossiblePlacings(SAddr addr, Event store, bool isRMW) = 0;
 
 	/* Tracks a store by inserting it into the appropriate offset */
 	virtual void
-	addStoreToLoc(const llvm::GenericValue *addr, Event store, int offset) = 0;
+	addStoreToLoc(SAddr addr, Event store, int offset) = 0;
 	virtual void
-	addStoreToLocAfter(const llvm::GenericValue *addr, Event store, Event pred) = 0;
+	addStoreToLocAfter(SAddr addr, Event store, Event pred) = 0;
 
 	/* Returns whether STORE is maximal in LOC */
 	virtual bool
-	isCoMaximal(const llvm::GenericValue *addr, Event store) = 0;
+	isCoMaximal(SAddr addr, Event store) = 0;
 
 	/* Returns whether STORE is maximal in LOC.
 	 * Pre: Cached information for this location exist. */
 	virtual bool
-	isCachedCoMaximal(const llvm::GenericValue *addr, Event store) = 0;
+	isCachedCoMaximal(SAddr addr, Event store) = 0;
 
 	/* Returns a list of stores to a particular memory location */
 	virtual const std::vector<Event>&
-	getStoresToLoc(const llvm::GenericValue *addr) const = 0;
+	getStoresToLoc(SAddr addr) const = 0;
 
 	/* Returns all the stores for which if "read" reads-from, coherence
 	 * is not violated */
 	virtual std::vector<Event>
-	getCoherentStores(const llvm::GenericValue *addr, Event read) = 0;
+	getCoherentStores(SAddr addr, Event read) = 0;
 
 	/* Returns all the reads that "wLab" can revisit without violating
 	 * coherence */
 	virtual std::vector<Event>
 	getCoherentRevisits(const WriteLabel *wLab) = 0;
 
+	/* Returns whether the path from RLAB to WLAB is maximal */
+	virtual bool
+	inMaximalPath(const ReadLabel *rLab, const WriteLabel *wLab) = 0;
+
+#ifdef ENABLE_GENMC_DEBUG
 	/* Saves the coherence status for all write labels in prefix.
 	 * This means that for each write we save a predecessor in preds (or within
 	 * the prefix itself), which will be present when the prefix is restored. */
 	virtual std::vector<std::pair<Event, Event> >
 	saveCoherenceStatus(const std::vector<std::unique_ptr<EventLabel> > &prefix,
 			    const ReadLabel *rLab) const = 0;
+#endif
 
-private:
+protected:
 
 	/* Discriminator enum for LLVM-style RTTI */
 	const CoherenceCalculatorKind kind;

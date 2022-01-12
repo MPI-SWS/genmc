@@ -77,6 +77,9 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s,
 	case EventLabel::EL_Empty:
 		s << "EMPTY";
 		break;
+	case EventLabel::EL_Block:
+		s << "BLOCK";
+		break;
 	case EventLabel::EL_LoopBegin:
 		s << "LOOP_BEGIN";
 		break;
@@ -89,7 +92,6 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s,
 		break;
 	case EventLabel::EL_Read:
 	case EventLabel::EL_BWaitRead:
-	case EventLabel::EL_LibRead:
 		s << "R";
 		break;
 	case EventLabel::EL_FaiRead:
@@ -110,7 +112,6 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s,
 	case EventLabel::EL_BInitWrite:
 	case EventLabel::EL_BDestroyWrite:
 	case EventLabel::EL_UnlockWrite:
-	case EventLabel::EL_LibWrite:
 		s << "W";
 		break;
 	case EventLabel::EL_Fence:
@@ -199,6 +200,10 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const SmpFenceType t)
 	case SmpFenceType::MB : return s << "mb";
 	case SmpFenceType::WMB : return s << "wmb";
 	case SmpFenceType::RMB : return s << "rmb";
+	case SmpFenceType::MBBA: return s << "ba";
+	case SmpFenceType::MBAA: return s << "aa";
+	case SmpFenceType::MBAS: return s << "as";
+	case SmpFenceType::MBAUL: return s << "aul";
 	default : BUG();
 	}
 	return s;
@@ -222,17 +227,13 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const EventLabel &lab)
 	case EventLabel::EL_BIncFaiRead:
 	case EventLabel::EL_BWaitRead:
 	case EventLabel::EL_CasRead:
-	case EventLabel::EL_LockCasRead: {
+	case EventLabel::EL_LockCasRead:
+	case EventLabel::EL_TrylockCasRead: {
 		auto &rLab = static_cast<const ReadLabel&>(lab);
 		s << rLab.getKind() << rLab.getOrdering() << " [";
 		PRINT_RF(s, rLab.getRf());
 		s << "]";
 		break;
-	}
-	case EventLabel::EL_LibRead: {
-		auto &rLab = static_cast<const LibReadLabel&>(lab);
-		s << rLab.getKind() << rLab.getOrdering() << " ("
-		  << rLab.getFunctionName() << ") [";
 	}
 	case EventLabel::EL_DskRead: {
 		auto &rLab = static_cast<const DskReadLabel&>(lab);
@@ -246,21 +247,16 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const EventLabel &lab)
 	case EventLabel::EL_FaiWrite:
 	case EventLabel::EL_BIncFaiWrite:
 	case EventLabel::EL_CasWrite:
-	case EventLabel::EL_LockCasWrite: {
+	case EventLabel::EL_LockCasWrite:
+	case EventLabel::EL_TrylockCasWrite: {
 		auto &wLab = static_cast<const WriteLabel&>(lab);
 		s << wLab.getKind() << wLab.getOrdering() << " "
-		  << wLab.getVal().IntVal;
-		break;
-	}
-	case EventLabel::EL_LibWrite: {
-		auto &wLab = static_cast<const LibWriteLabel&>(lab);
-		s << wLab.getKind() << wLab.getOrdering() << " ("
-		  << wLab.getFunctionName() << ") " << wLab.getVal().IntVal;
+		  << wLab.getVal();
 		break;
 	}
 	case EventLabel::EL_DskWrite: {
 		auto &wLab = static_cast<const DskWriteLabel&>(lab);
-		s << wLab.getKind() << " " << wLab.getVal().IntVal;
+		s << wLab.getKind() << " " << wLab.getVal();
 		break;
 	}
 
@@ -284,7 +280,7 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const EventLabel &lab)
 		auto &bLab = static_cast<const DskOpenLabel&>(lab);
 		s << bLab.getKind() << " (";
 		s << bLab.getFileName() << ", ";
-		s << bLab.getFd().IntVal.getLimitedValue() << ")";
+		s << bLab.getFd() << ")";
 		break;
 	}
 	default:

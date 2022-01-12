@@ -1,2 +1,203 @@
 WARNING: Memory intrinsic found! Attempting to promote it...
-FIXME: RECOVERY ERROR
+Error detected: Recovery error!
+Event (1, 15) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): M
+	(0, 2): Rna (main.buf[0], 49) [INIT] L.33
+	(0, 3): Wna (buf[0], 49) L.33
+	(0, 4): Rna (main.buf[1], 49) [INIT] L.33
+	(0, 5): Wna (buf[1], 49) L.33
+	(0, 6): Rna (main.buf[2], 49) [INIT] L.33
+	(0, 7): Wna (buf[2], 49) L.33
+	(0, 8): Rna (main.buf[3], 49) [INIT] L.33
+	(0, 9): Wna (buf[3], 49) L.33
+	(0, 10): Rna (main.buf[4], 50) [INIT] L.33
+	(0, 11): Wna (buf[4], 50) L.33
+	(0, 12): Rna (main.buf[5], 50) [INIT] L.33
+	(0, 13): Wna (buf[5], 50) L.33
+	(0, 14): Rna (main.buf[6], 50) [INIT] L.33
+	(0, 15): Wna (buf[6], 50) L.33
+	(0, 16): Rna (main.buf[7], 50) [INIT] L.33
+	(0, 17): Wna (buf[7], 50) L.33
+	(0, 18): Cacq (__genmc_dir_inode.lock.__private, 0) [INIT] L.35
+	(0, 19): Cacq (__genmc_dir_inode.lock.__private, 1) L.35
+	(0, 20): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.35
+	(0, 21): DRacq (__genmc_dir_inode.data[0], 0x0) [INIT] L.35
+	(0, 22): M
+	(0, 23): Wrel (__inode_foo.lock, 0) L.35
+	(0, 24): Wrel (__inode_foo.i_size, 0) L.35
+	(0, 25): DWrel (__inode_foo.i_transaction, 0) L.35
+	(0, 26): DWrel (__inode_foo.i_disksize, 0) L.35
+	(0, 27): DF L.35
+	(0, 28): DWrel (__genmc_dir_inode.data[0], 0x2000000000000010) L.35
+	(0, 29): Wrel (__genmc_dir_inode.lock.__private, 0) L.35
+	(0, 30): FO (foo, 0) L.35
+	(0, 31): M
+	(0, 32): Wna (__file_foo_0_30.inode, 0x2000000000000010) L.35
+	(0, 33): Wna (__file_foo_0_30.flags, 66) L.35
+	(0, 34): Wna (__file_foo_0_30.pos, 0) L.35
+	(0, 35): Wrel (__file_foo_0_30.pos_lock, 0) L.35
+	(0, 36): Wrel (__file_foo_0_30.count, 1) L.35
+	(0, 37): Cacq (__file_foo_0_30.pos_lock, 0) [(0, 35)] L.36
+	(0, 38): Cacq (__file_foo_0_30.pos_lock, 1) L.36
+	(0, 39): Rna (__file_foo_0_30.pos, 0) [(0, 34)] L.36
+	(0, 40): Rna (__file_foo_0_30.flags, 66) [(0, 33)] L.36
+	(0, 41): Rrlx (__file_foo_0_30.inode, 0x2000000000000010) [(0, 32)] L.36
+	(0, 42): Cacq (__inode_foo.lock, 0) [(0, 23)] L.36
+	(0, 43): Cacq (__inode_foo.lock, 1) L.36
+	(0, 44): Racq (__inode_foo.i_size, 0) [(0, 24)] L.36
+	(0, 45): Rna (buf[0], 49) [(0, 3)] L.36
+	(0, 46): DWrel (__inode_foo.data, 49) L.36
+	(0, 47): Rna (buf[1], 49) [(0, 5)] L.36
+	(0, 48): DWrel (__inode_foo.data, 49) L.36
+	(0, 49): Racq (__inode_foo.i_size, 0) [(0, 24)] L.36
+	(0, 50): DWrel (__inode_foo.i_disksize, 2) L.36
+	(0, 51): Wrel (__inode_foo.i_size, 2) L.36
+	(0, 52): Rna (buf[2], 49) [(0, 7)] L.36
+	(0, 53): DWrel (__inode_foo.data, 49) L.36
+	(0, 54): Rna (buf[3], 49) [(0, 9)] L.36
+	(0, 55): DWrel (__inode_foo.data, 49) L.36
+	(0, 56): Racq (__inode_foo.i_size, 2) [(0, 51)] L.36
+	(0, 57): DWrel (__inode_foo.i_disksize, 4) L.36
+	(0, 58): Wrel (__inode_foo.i_size, 4) L.36
+	(0, 59): Wrel (__inode_foo.lock, 0) L.36
+	(0, 60): Wna (__file_foo_0_30.pos, 4) L.36
+	(0, 61): Wrel (__file_foo_0_30.pos_lock, 0) L.36
+	(0, 62): PB L.38
+	(0, 63): Cacq (__file_foo_0_30.pos_lock, 0) [(0, 61)] L.40
+	(0, 64): Cacq (__file_foo_0_30.pos_lock, 1) L.40
+	(0, 65): Rna (__file_foo_0_30.pos, 4) [(0, 60)] L.40
+	(0, 66): Rna (__file_foo_0_30.flags, 66) [(0, 33)] L.40
+	(0, 67): Rrlx (__file_foo_0_30.inode, 0x2000000000000010) [(0, 32)] L.40
+	(0, 68): Cacq (__inode_foo.lock, 0) [(0, 59)] L.40
+	(0, 69): Cacq (__inode_foo.lock, 1) L.40
+	(0, 70): Racq (__inode_foo.i_size, 4) [(0, 58)] L.40
+	(0, 71): Rna (buf[4], 50) [(0, 11)] L.40
+	(0, 72): DWrel (__inode_foo.data, 50) L.40
+	(0, 73): Rna (buf[5], 50) [(0, 13)] L.40
+	(0, 74): DWrel (__inode_foo.data, 50) L.40
+	(0, 75): Racq (__inode_foo.i_size, 4) [(0, 58)] L.40
+	(0, 76): DWrel (__inode_foo.i_disksize, 6) L.40
+	(0, 77): Wrel (__inode_foo.i_size, 6) L.40
+	(0, 78): Rna (buf[6], 50) [(0, 15)] L.40
+	(0, 79): DWrel (__inode_foo.data, 50) L.40
+	(0, 80): Rna (buf[7], 50) [(0, 17)] L.40
+	(0, 81): DWrel (__inode_foo.data, 50) L.40
+	(0, 82): Racq (__inode_foo.i_size, 6) [(0, 77)] L.40
+	(0, 83): DWrel (__inode_foo.i_disksize, 8) L.40
+	(0, 84): Wrel (__inode_foo.i_size, 8) L.40
+	(0, 85): Wrel (__inode_foo.lock, 0) L.40
+	(0, 86): Wna (__file_foo_0_30.pos, 8) L.40
+	(0, 87): Wrel (__file_foo_0_30.pos_lock, 0) L.40
+	(0, 88): Uar (__file_foo_0_30.count, 1) [(0, 36)] L.41
+	(0, 89): Uar (__file_foo_0_30.count, 0) L.41
+	(0, 90): D L.41
+	(0, 91): D L.43
+	(0, 92): E
+<-1, 1> __VERIFIER_recovery_routine:
+	(1, 0): B
+	(1, 1): M
+	(1, 2): DRrlx (__genmc_dir_inode.i_transaction, 0) [INIT] L.17
+	(1, 3): DRrlx (__genmc_dir_inode.data[0], 0x2000000000000010) [(0, 28)] L.17
+	(1, 4): FO (foo, 1) L.17
+	(1, 5): M
+	(1, 6): Wna (__file_foo_1_4.inode, 0x2000000000000010) L.17
+	(1, 7): Wna (__file_foo_1_4.flags, 0) L.17
+	(1, 8): Wna (__file_foo_1_4.pos, 0) L.17
+	(1, 9): Wrel (__file_foo_1_4.pos_lock, 0) L.17
+	(1, 10): Wrel (__file_foo_1_4.count, 1) L.17
+	(1, 11): DRrlx (__inode_foo.i_disksize, 6) [(0, 76)] L.20
+	(1, 12): DRrlx (__inode_foo.data, 50) [(0, 72)] L.20
+	(1, 13): Wna (buf[0], 50) L.20
+	(1, 14): DRrlx (__inode_foo.data, 50) [(0, 74)] L.20
+	(1, 15): Wna (buf[1], 50) L.20
+
+Trace to (1, 15):
+[main] rec-append-natomic0.c: 33: char buf[8] = "11112222";
+[main] rec-append-natomic0.c: 33: char buf[8] = "11112222";
+[main] rec-append-natomic0.c: 33: char buf[8] = "11112222";
+[main] rec-append-natomic0.c: 33: char buf[8] = "11112222";
+[main] rec-append-natomic0.c: 33: char buf[8] = "11112222";
+[main] rec-append-natomic0.c: 33: char buf[8] = "11112222";
+[main] rec-append-natomic0.c: 33: char buf[8] = "11112222";
+[main] rec-append-natomic0.c: 33: char buf[8] = "11112222";
+[main] rec-append-natomic0.c: 33: char buf[8] = "11112222";
+[main] rec-append-natomic0.c: 33: char buf[8] = "11112222";
+[main] rec-append-natomic0.c: 33: char buf[8] = "11112222";
+[main] rec-append-natomic0.c: 33: char buf[8] = "11112222";
+[main] rec-append-natomic0.c: 33: char buf[8] = "11112222";
+[main] rec-append-natomic0.c: 33: char buf[8] = "11112222";
+[main] rec-append-natomic0.c: 33: char buf[8] = "11112222";
+[main] rec-append-natomic0.c: 33: char buf[8] = "11112222";
+[main] rec-append-natomic0.c: 35: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-append-natomic0.c: 35: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-append-natomic0.c: 35: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-append-natomic0.c: 35: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-append-natomic0.c: 35: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-append-natomic0.c: 35: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-append-natomic0.c: 35: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-append-natomic0.c: 35: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-append-natomic0.c: 35: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-append-natomic0.c: 35: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-append-natomic0.c: 35: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-append-natomic0.c: 35: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-append-natomic0.c: 35: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-append-natomic0.c: 35: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-append-natomic0.c: 35: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-append-natomic0.c: 35: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-append-natomic0.c: 35: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-append-natomic0.c: 35: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 36: write(fd, buf, 4);
+[main] rec-append-natomic0.c: 38: __VERIFIER_pbarrier();
+[__VERIFIER_recovery_routine] rec-append-natomic0.c: 17: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] rec-append-natomic0.c: 17: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] rec-append-natomic0.c: 17: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] rec-append-natomic0.c: 17: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] rec-append-natomic0.c: 17: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] rec-append-natomic0.c: 17: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] rec-append-natomic0.c: 17: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] rec-append-natomic0.c: 17: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] rec-append-natomic0.c: 17: int fd = open("foo", O_RDONLY, 0666);
+[main] rec-append-natomic0.c: 38: __VERIFIER_pbarrier();
+[main] rec-append-natomic0.c: 40: write(fd, buf + 4, 4);
+[main] rec-append-natomic0.c: 40: write(fd, buf + 4, 4);
+[main] rec-append-natomic0.c: 40: write(fd, buf + 4, 4);
+[main] rec-append-natomic0.c: 40: write(fd, buf + 4, 4);
+[main] rec-append-natomic0.c: 40: write(fd, buf + 4, 4);
+[main] rec-append-natomic0.c: 40: write(fd, buf + 4, 4);
+[main] rec-append-natomic0.c: 40: write(fd, buf + 4, 4);
+[main] rec-append-natomic0.c: 40: write(fd, buf + 4, 4);
+[main] rec-append-natomic0.c: 40: write(fd, buf + 4, 4);
+[main] rec-append-natomic0.c: 40: write(fd, buf + 4, 4);
+[main] rec-append-natomic0.c: 40: write(fd, buf + 4, 4);
+[main] rec-append-natomic0.c: 40: write(fd, buf + 4, 4);
+[__VERIFIER_recovery_routine] rec-append-natomic0.c: 20: int nr = pread(fd, buf, 4, 4);
+[__VERIFIER_recovery_routine] rec-append-natomic0.c: 20: int nr = pread(fd, buf, 4, 4);
+[__VERIFIER_recovery_routine] rec-append-natomic0.c: 20: int nr = pread(fd, buf, 4, 4);
+[__VERIFIER_recovery_routine] rec-append-natomic0.c: 20: int nr = pread(fd, buf, 4, 4);
+[__VERIFIER_recovery_routine] rec-append-natomic0.c: 20: int nr = pread(fd, buf, 4, 4);
+Assertion violation: nr == 4
+Number of complete executions explored: 3

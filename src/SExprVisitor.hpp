@@ -22,9 +22,11 @@
 #define __S_EXPR_VISITOR_HPP__
 
 #include "Error.hpp"
+#include "MemAccess.hpp"
+#include "ModuleID.hpp"
 #include "SExpr.hpp"
 #include "VSet.hpp"
-#include <llvm/IR/Type.h>
+#include <llvm/Support/Casting.h>
 
 #include <map>
 #include <unordered_map>
@@ -43,20 +45,20 @@
  * stored, or decide to keep collections of SExprs.
  */
 
-template<typename Subclass, typename RetTy = void>
+template<template<typename T> class Subclass, typename T, typename RetTy = void>
 class SExprVisitor {
 
 public:
 #define VISIT_EXPR(NAME)						\
-	case SExpr::NAME:						\
-		return static_cast<Subclass *>(this)->			\
-		visit##NAME##Expr(static_cast<NAME##Expr&>(e));
+	case SExpr<T>::NAME:						\
+		return static_cast<Subclass<T> *>(this)->		\
+		visit##NAME##Expr(static_cast<NAME##Expr<T>&>(e));
 
-	RetTy visit(SExpr *e) { return visit(*e); }
-	RetTy visit(const std::unique_ptr<SExpr> &e) { return visit(*e); }
-	RetTy visit(const std::shared_ptr<SExpr> &e) { return visit(*e); }
+	RetTy visit(SExpr<T> *e) { return visit(*e); }
+	RetTy visit(const std::unique_ptr<SExpr<T>> &e) { return visit(*e); }
+	RetTy visit(const std::shared_ptr<SExpr<T>> &e) { return visit(*e); }
 
-	RetTy visit(SExpr &e) {
+	RetTy visit(SExpr<T> &e) {
 		switch(e.getKind()) {
 			VISIT_EXPR(Concrete);
 			VISIT_EXPR(Register);
@@ -98,58 +100,58 @@ public:
 	}
 
 #define DELEGATE(TO_CLASS)						\
-	return static_cast<Subclass *>(this)->				\
-	visit##TO_CLASS(static_cast<TO_CLASS&>(e));
+	return static_cast<Subclass<T> *>(this)->			\
+	visit##TO_CLASS(static_cast<TO_CLASS<T>&>(e));
 
-	RetTy visitConcreteExpr(ConcreteExpr &e) { DELEGATE(SExpr); }
-	RetTy visitRegisterExpr(RegisterExpr &e) { DELEGATE(SExpr); }
-	RetTy visitSelectExpr(SelectExpr &e) { DELEGATE(SExpr); }
-	// RetTy visitConcatExpr(ConcatExpr &e) { DELEGATE(SExpr); }
-	// RetTy visitExtractExpr(ExtractExpr &e) { DELEGATE(SExpr); }
-	RetTy visitConjunctionExpr(ConjunctionExpr &e) { DELEGATE(LogicalExpr); }
-	RetTy visitDisjunctionExpr(DisjunctionExpr &e) { DELEGATE(LogicalExpr); }
-	RetTy visitZExtExpr(ZExtExpr &e) { DELEGATE(CastExpr); }
-	RetTy visitSExtExpr(SExtExpr &e) { DELEGATE(CastExpr); }
-	RetTy visitTruncExpr(TruncExpr &e) { DELEGATE(CastExpr); }
-	RetTy visitNotExpr(NotExpr &e) { DELEGATE(SExpr); }
-	RetTy visitAddExpr(AddExpr &e) { DELEGATE(BinaryExpr); }
-	RetTy visitSubExpr(SubExpr &e) { DELEGATE(BinaryExpr); }
-	RetTy visitMulExpr(MulExpr &e) { DELEGATE(BinaryExpr); }
-	RetTy visitUDivExpr(UDivExpr &e) { DELEGATE(BinaryExpr); }
-	RetTy visitSDivExpr(SDivExpr &e) { DELEGATE(BinaryExpr); }
-	RetTy visitURemExpr(URemExpr &e) { DELEGATE(BinaryExpr); }
-	RetTy visitSRemExpr(SRemExpr &e) { DELEGATE(BinaryExpr); }
-	RetTy visitAndExpr(AndExpr &e) { DELEGATE(BinaryExpr); }
-	RetTy visitOrExpr(OrExpr &e) { DELEGATE(BinaryExpr); }
-	RetTy visitXorExpr(XorExpr &e) { DELEGATE(BinaryExpr); }
-	RetTy visitShlExpr(ShlExpr &e) { DELEGATE(BinaryExpr); }
-	RetTy visitLShrExpr(LShrExpr &e) { DELEGATE(BinaryExpr); }
-	RetTy visitAShrExpr(AShrExpr &e) { DELEGATE(BinaryExpr); }
-	RetTy visitEqExpr(EqExpr &e) { DELEGATE(CmpExpr); }
-	RetTy visitNeExpr(NeExpr &e) { DELEGATE(CmpExpr); }
-	RetTy visitUltExpr(UltExpr &e) { DELEGATE(CmpExpr); }
-	RetTy visitUleExpr(UleExpr &e) { DELEGATE(CmpExpr); }
-	RetTy visitUgtExpr(UgtExpr &e) { DELEGATE(CmpExpr); }
-	RetTy visitUgeExpr(UgeExpr &e) { DELEGATE(CmpExpr); }
-	RetTy visitSltExpr(SltExpr &e) { DELEGATE(CmpExpr); }
-	RetTy visitSleExpr(SleExpr &e) { DELEGATE(CmpExpr); }
-	RetTy visitSgtExpr(SgtExpr &e) { DELEGATE(CmpExpr); }
-	RetTy visitSgeExpr(SgeExpr &e) { DELEGATE(CmpExpr); }
+	RetTy visitConcreteExpr(ConcreteExpr<T> &e) { DELEGATE(SExpr); }
+	RetTy visitRegisterExpr(RegisterExpr<T> &e) { DELEGATE(SExpr); }
+	RetTy visitSelectExpr(SelectExpr<T> &e) { DELEGATE(SExpr); }
+	// RetTy visitConcatExpr(ConcatExpr<T> &e) { DELEGATE(SExpr); }
+	// RetTy visitExtractExpr(ExtractExpr<T> &e) { DELEGATE(SExpr); }
+	RetTy visitConjunctionExpr(ConjunctionExpr<T> &e) { DELEGATE(LogicalExpr); }
+	RetTy visitDisjunctionExpr(DisjunctionExpr<T> &e) { DELEGATE(LogicalExpr); }
+	RetTy visitZExtExpr(ZExtExpr<T> &e) { DELEGATE(CastExpr); }
+	RetTy visitSExtExpr(SExtExpr<T> &e) { DELEGATE(CastExpr); }
+	RetTy visitTruncExpr(TruncExpr<T> &e) { DELEGATE(CastExpr); }
+	RetTy visitNotExpr(NotExpr<T> &e) { DELEGATE(SExpr); }
+	RetTy visitAddExpr(AddExpr<T> &e) { DELEGATE(BinaryExpr); }
+	RetTy visitSubExpr(SubExpr<T> &e) { DELEGATE(BinaryExpr); }
+	RetTy visitMulExpr(MulExpr<T> &e) { DELEGATE(BinaryExpr); }
+	RetTy visitUDivExpr(UDivExpr<T> &e) { DELEGATE(BinaryExpr); }
+	RetTy visitSDivExpr(SDivExpr<T> &e) { DELEGATE(BinaryExpr); }
+	RetTy visitURemExpr(URemExpr<T> &e) { DELEGATE(BinaryExpr); }
+	RetTy visitSRemExpr(SRemExpr<T> &e) { DELEGATE(BinaryExpr); }
+	RetTy visitAndExpr(AndExpr<T> &e) { DELEGATE(BinaryExpr); }
+	RetTy visitOrExpr(OrExpr<T> &e) { DELEGATE(BinaryExpr); }
+	RetTy visitXorExpr(XorExpr<T> &e) { DELEGATE(BinaryExpr); }
+	RetTy visitShlExpr(ShlExpr<T> &e) { DELEGATE(BinaryExpr); }
+	RetTy visitLShrExpr(LShrExpr<T> &e) { DELEGATE(BinaryExpr); }
+	RetTy visitAShrExpr(AShrExpr<T> &e) { DELEGATE(BinaryExpr); }
+	RetTy visitEqExpr(EqExpr<T> &e) { DELEGATE(CmpExpr); }
+	RetTy visitNeExpr(NeExpr<T> &e) { DELEGATE(CmpExpr); }
+	RetTy visitUltExpr(UltExpr<T> &e) { DELEGATE(CmpExpr); }
+	RetTy visitUleExpr(UleExpr<T> &e) { DELEGATE(CmpExpr); }
+	RetTy visitUgtExpr(UgtExpr<T> &e) { DELEGATE(CmpExpr); }
+	RetTy visitUgeExpr(UgeExpr<T> &e) { DELEGATE(CmpExpr); }
+	RetTy visitSltExpr(SltExpr<T> &e) { DELEGATE(CmpExpr); }
+	RetTy visitSleExpr(SleExpr<T> &e) { DELEGATE(CmpExpr); }
+	RetTy visitSgtExpr(SgtExpr<T> &e) { DELEGATE(CmpExpr); }
+	RetTy visitSgeExpr(SgeExpr<T> &e) { DELEGATE(CmpExpr); }
 
 	/*
 	 * If none of the above matched, propagate to the next level before
 	 * calling the generic visitExpr
 	 */
-	RetTy visitLogicalExpr(LogicalExpr &e) { DELEGATE(SExpr); }
-	RetTy visitCastExpr(CastExpr &e) { DELEGATE(SExpr); }
-	RetTy visitBinaryExpr(BinaryExpr &e) { DELEGATE(SExpr); }
-	RetTy visitCmpExpr(CmpExpr &e) { DELEGATE(SExpr); }
+	RetTy visitLogicalExpr(LogicalExpr<T> &e) { DELEGATE(SExpr); }
+	RetTy visitCastExpr(CastExpr<T> &e) { DELEGATE(SExpr); }
+	RetTy visitBinaryExpr(BinaryExpr<T> &e) { DELEGATE(SExpr); }
+	RetTy visitCmpExpr(CmpExpr<T> &e) { DELEGATE(SExpr); }
 
 	/*
 	 * If no one else could handle this particular instruction, we ignore it.
 	 * Note: If a subclass overrides RetTy, this function needs to be overrided too
 	 */
-	RetTy visitSExpr(SExpr &e) { return; }
+	RetTy visitSExpr(SExpr<T> &e) { return; }
 
 };
 
@@ -162,55 +164,56 @@ public:
  * Prints an expression to a string.
  */
 
-class SExprPrinter: public SExprVisitor<SExprPrinter> {
+template<typename T>
+class SExprPrinter : public SExprVisitor<SExprPrinter, T> {
 
 public:
-	const std::string &toString(SExpr &e) {
-		visit(e);
+	const std::string &toString(SExpr<T> &e) {
+		this->visit(e);
 		return getOutput();
 	}
 
-	void visitConcreteExpr(ConcreteExpr &e);
-	void visitRegisterExpr(RegisterExpr &e);
-	void visitSelectExpr(SelectExpr &e);
-	// void visitConcatExpr(ConcatExpr &e);
-	// void visitExtractExpr(ExtractExpr &e);
-	void visitConjunctionExpr(ConjunctionExpr &e);
-	void visitDisjunctionExpr(DisjunctionExpr &e);
-	// void visitZExtExpr(ZExtExpr &e);
-	// void visitSExtExpr(SExtExpr &e);
-	// void visitTruncExpr(TruncExpr &e);
-	void visitNotExpr(NotExpr &e);
-	void visitAddExpr(AddExpr &e);
-	void visitSubExpr(SubExpr &e);
-	void visitMulExpr(MulExpr &e);
-	void visitUDivExpr(UDivExpr &e);
-	void visitSDivExpr(SDivExpr &e);
-	void visitURemExpr(URemExpr &e);
-	void visitSRemExpr(SRemExpr &e);
-	void visitAndExpr(AndExpr &e);
-	void visitOrExpr(OrExpr &e);
-	void visitXorExpr(XorExpr &e);
-	void visitShlExpr(ShlExpr &e);
-	void visitLShrExpr(LShrExpr &e);
-	void visitAShrExpr(AShrExpr &e);
-	void visitEqExpr(EqExpr &e);
-	void visitNeExpr(NeExpr &e);
-	void visitUltExpr(UltExpr &e);
-	void visitUleExpr(UleExpr &e);
-	void visitUgtExpr(UgtExpr &e);
-	void visitUgeExpr(UgeExpr &e);
-	void visitSltExpr(SltExpr &e);
-	void visitSleExpr(SleExpr &e);
-	void visitSgtExpr(SgtExpr &e);
-	void visitSgeExpr(SgeExpr &e);
+	void visitConcreteExpr(ConcreteExpr<T> &e);
+	void visitRegisterExpr(RegisterExpr<T> &e);
+	void visitSelectExpr(SelectExpr<T> &e);
+	// void visitConcatExpr(ConcatExpr<T> &e);
+	// void visitExtractExpr(ExtractExpr<T> &e);
+	void visitConjunctionExpr(ConjunctionExpr<T> &e);
+	void visitDisjunctionExpr(DisjunctionExpr<T> &e);
+	// void visitZExtExpr(ZExtExpr<T> &e);
+	// void visitSExtExpr(SExtExpr<T> &e);
+	// void visitTruncExpr(TruncExpr<T> &e);
+	void visitNotExpr(NotExpr<T> &e);
+	void visitAddExpr(AddExpr<T> &e);
+	void visitSubExpr(SubExpr<T> &e);
+	void visitMulExpr(MulExpr<T> &e);
+	void visitUDivExpr(UDivExpr<T> &e);
+	void visitSDivExpr(SDivExpr<T> &e);
+	void visitURemExpr(URemExpr<T> &e);
+	void visitSRemExpr(SRemExpr<T> &e);
+	void visitAndExpr(AndExpr<T> &e);
+	void visitOrExpr(OrExpr<T> &e);
+	void visitXorExpr(XorExpr<T> &e);
+	void visitShlExpr(ShlExpr<T> &e);
+	void visitLShrExpr(LShrExpr<T> &e);
+	void visitAShrExpr(AShrExpr<T> &e);
+	void visitEqExpr(EqExpr<T> &e);
+	void visitNeExpr(NeExpr<T> &e);
+	void visitUltExpr(UltExpr<T> &e);
+	void visitUleExpr(UleExpr<T> &e);
+	void visitUgtExpr(UgtExpr<T> &e);
+	void visitUgeExpr(UgeExpr<T> &e);
+	void visitSltExpr(SltExpr<T> &e);
+	void visitSleExpr(SleExpr<T> &e);
+	void visitSgtExpr(SgtExpr<T> &e);
+	void visitSgeExpr(SgeExpr<T> &e);
 
-	void visitLogicalExpr(LogicalExpr &e);
-	void visitCastExpr(CastExpr &e);
-	void visitBinaryExpr(BinaryExpr &e);
-	void visitCmpExpr(CmpExpr &e);
+	void visitLogicalExpr(LogicalExpr<T> &e);
+	void visitCastExpr(CastExpr<T> &e);
+	void visitBinaryExpr(BinaryExpr<T> &e);
+	void visitCmpExpr(CmpExpr<T> &e);
 
-	void visitSExpr(SExpr &e) { output += "unhandled"; }
+	void visitSExpr(SExpr<T> &e) { output += "unhandled"; }
 
 private:
 	/* Returns the output constructed so far */
@@ -230,102 +233,99 @@ private:
  * and that are no registers (these should have been concretized).
  */
 
-class SExprEvaluator: public SExprVisitor<SExprEvaluator, llvm::APInt> {
+template<typename T>
+class SExprEvaluator : public SExprVisitor<SExprEvaluator, T, SVal> {
 
 public:
 	/*
 	 * We could implement this using a stack for intermediate results,
 	 * but overriding the return type is easier
 	 */
-	using RetTy = llvm::APInt;
+	using RetTy = SVal;
+	using VMap = std::unordered_map<T, RetTy>;
 
 	/* BFE: Evaluates the given expression replacing _all_ symbolic variables with v */
-	RetTy evaluate(const SExpr *e, llvm::APInt v, size_t *numUnknown = nullptr) {
+	RetTy evaluate(const SExpr<T> *e, SVal v, size_t *numUnknown = nullptr) {
 		bruteForce = true;
 		val = v;
 		unknown.clear();
 		valueMapping = nullptr;
-		auto res = visit(const_cast<SExpr *>(e));
+		auto res = this->visit(const_cast<SExpr<T> *>(e));
 		if (numUnknown)
 			*numUnknown = unknown.size();
 		bruteForce = false;
 		return res;
 	}
-	RetTy evaluate(const SExpr *e, const llvm::GenericValue &v, size_t *numUnknown = nullptr) {
-		return evaluate(e, v.IntVal, numUnknown);
-	}
 
 	/* NBFE: Evaluates according to a given mapping */
-	RetTy evaluate(const SExpr *e, const std::unordered_map<llvm::Value *, llvm::APInt> &map,
-		       size_t *numUnknown = nullptr) {
+	RetTy evaluate(const SExpr<T> *e, const VMap &map, size_t *numUnknown = nullptr) {
 		valueMapping = &map;
-		auto res = visit(const_cast<SExpr *>(e));
+		auto res = this->visit(const_cast<SExpr<T> *>(e));
 		if (numUnknown)
 			*numUnknown = unknown.size();
 		return res;
 	}
 
-	RetTy visitConcreteExpr(ConcreteExpr &e);
-	RetTy visitRegisterExpr(RegisterExpr &e);
-	RetTy visitSelectExpr(SelectExpr &e);
-	// RetTy visitConcatExpr(ConcatExpr &e);
-	// RetTy visitExtractExpr(ExtractExpr &e);
-	RetTy visitConjunctionExpr(ConjunctionExpr &e);
-	RetTy visitDisjunctionExpr(DisjunctionExpr &e);
-	RetTy visitZExtExpr(ZExtExpr &e);
-	RetTy visitSExtExpr(SExtExpr &e);
-	RetTy visitTruncExpr(TruncExpr &e);
-	RetTy visitNotExpr(NotExpr &e);
-	RetTy visitAddExpr(AddExpr &e);
-	RetTy visitSubExpr(SubExpr &e);
-	RetTy visitMulExpr(MulExpr &e);
-	RetTy visitUDivExpr(UDivExpr &e);
-	RetTy visitSDivExpr(SDivExpr &e);
-	RetTy visitURemExpr(URemExpr &e);
-	RetTy visitSRemExpr(SRemExpr &e);
-	RetTy visitAndExpr(AndExpr &e);
-	RetTy visitOrExpr(OrExpr &e);
-	RetTy visitXorExpr(XorExpr &e);
-	RetTy visitShlExpr(ShlExpr &e);
-	RetTy visitLShrExpr(LShrExpr &e);
-	RetTy visitAShrExpr(AShrExpr &e);
-	RetTy visitEqExpr(EqExpr &e);
-	RetTy visitNeExpr(NeExpr &e);
-	RetTy visitUltExpr(UltExpr &e);
-	RetTy visitUleExpr(UleExpr &e);
-	RetTy visitUgtExpr(UgtExpr &e);
-	RetTy visitUgeExpr(UgeExpr &e);
-	RetTy visitSltExpr(SltExpr &e);
-	RetTy visitSleExpr(SleExpr &e);
-	RetTy visitSgtExpr(SgtExpr &e);
-	RetTy visitSgeExpr(SgeExpr &e);
+	RetTy visitConcreteExpr(ConcreteExpr<T> &e);
+	RetTy visitRegisterExpr(RegisterExpr<T> &e);
+	RetTy visitSelectExpr(SelectExpr<T> &e);
+	// RetTy visitConcatExpr(ConcatExpr<T> &e);
+	// RetTy visitExtractExpr(ExtractExpr<T> &e);
+	RetTy visitConjunctionExpr(ConjunctionExpr<T> &e);
+	RetTy visitDisjunctionExpr(DisjunctionExpr<T> &e);
+	RetTy visitZExtExpr(ZExtExpr<T> &e);
+	RetTy visitSExtExpr(SExtExpr<T> &e);
+	RetTy visitTruncExpr(TruncExpr<T> &e);
+	RetTy visitNotExpr(NotExpr<T> &e);
+	RetTy visitAddExpr(AddExpr<T> &e);
+	RetTy visitSubExpr(SubExpr<T> &e);
+	RetTy visitMulExpr(MulExpr<T> &e);
+	RetTy visitUDivExpr(UDivExpr<T> &e);
+	RetTy visitSDivExpr(SDivExpr<T> &e);
+	RetTy visitURemExpr(URemExpr<T> &e);
+	RetTy visitSRemExpr(SRemExpr<T> &e);
+	RetTy visitAndExpr(AndExpr<T> &e);
+	RetTy visitOrExpr(OrExpr<T> &e);
+	RetTy visitXorExpr(XorExpr<T> &e);
+	RetTy visitShlExpr(ShlExpr<T> &e);
+	RetTy visitLShrExpr(LShrExpr<T> &e);
+	RetTy visitAShrExpr(AShrExpr<T> &e);
+	RetTy visitEqExpr(EqExpr<T> &e);
+	RetTy visitNeExpr(NeExpr<T> &e);
+	RetTy visitUltExpr(UltExpr<T> &e);
+	RetTy visitUleExpr(UleExpr<T> &e);
+	RetTy visitUgtExpr(UgtExpr<T> &e);
+	RetTy visitUgeExpr(UgeExpr<T> &e);
+	RetTy visitSltExpr(SltExpr<T> &e);
+	RetTy visitSleExpr(SleExpr<T> &e);
+	RetTy visitSgtExpr(SgtExpr<T> &e);
+	RetTy visitSgeExpr(SgeExpr<T> &e);
 
-	RetTy visitSExpr(SExpr &e) { BUG(); }
+	RetTy visitSExpr(SExpr<T> &e) { BUG(); }
 
 private:
 	/* NBFE: Checks whether a symbolic variable has a mapping */
-	bool hasKnownMapping(llvm::Value *reg) const { return valueMapping && valueMapping->count(reg); }
+	bool hasKnownMapping(const T& reg) const { return valueMapping && valueMapping->count(reg); }
 
 	/* NBFE: Returns the value of a symbolic variable */
-	llvm::APInt getMappingFor(llvm::Value *reg) const {
-		return (hasKnownMapping(reg)) ? valueMapping->at(reg) :
-			llvm::APInt(reg->getType()->getPrimitiveSizeInBits(), 42);
+	RetTy getMappingFor(const T& reg) const {
+		return (hasKnownMapping(reg)) ? valueMapping->at(reg) :	SVal(42);
 	}
 
 	/* BFE: Returns the value we are evaluating with in a brute-force eval */
-	llvm::APInt getVal() const { return val; }
+	RetTy getVal() const { return val; }
 
 	/* NBFE: Value mapping we are evaluating with */
-	const std::unordered_map<llvm::Value *, llvm::APInt> *valueMapping;
+	const std::unordered_map<T, RetTy> *valueMapping;
 
 	/* BFE: Value we are evaluating with */
-	llvm::APInt val;
+	RetTy val;
 
 	/* Whether this is a BFE */
 	bool bruteForce = false;
 
 	/* Unknown symbolic variables seen during an evaluation */
-	VSet<llvm::Value *> unknown;
+	VSet<T> unknown;
 };
 
 /*******************************************************************************
@@ -336,39 +336,39 @@ private:
  * Replaces all occurrences of a given register with a given expression.
  */
 
-class SExprRegSubstitutor: public SExprVisitor<SExprRegSubstitutor> {
+template<typename T>
+class SExprRegSubstitutor : public SExprVisitor<SExprRegSubstitutor, T> {
 
 public:
 	/* Performs the substitution (returns a new expression) */
-	std::unique_ptr<SExpr>
-	substitute(const SExpr *orig, llvm::Value *reg,
-		   const SExpr *r) {
+	std::unique_ptr<SExpr<T>>
+	substitute(const SExpr<T> *orig, T&& reg, const SExpr<T> *r) {
 		auto e = orig->clone();
-		if (auto *re = llvm::dyn_cast<RegisterExpr>(e.get()))
+		if (auto *re = llvm::dyn_cast<RegisterExpr<T>>(e.get()))
 			if (re->getRegister() == reg)
 				return r->clone();
 
 		replaceReg = reg;
 		replaceExpr = r;
-		visit(e.get());
+		this->visit(e.get());
 		return e;
 	}
 
-	void visitSExpr(SExpr &e) {
+	void visitSExpr(SExpr<T> &e) {
 		for (auto i = 0u; i < e.getNumKids(); i++) {
-			visit(e.getKid(i));
-			if (auto *re = llvm::dyn_cast<RegisterExpr>(e.getKid(i)))
+			this->visit(e.getKid(i));
+			if (auto *re = llvm::dyn_cast<RegisterExpr<T>>(e.getKid(i)))
 				if (re->getRegister() == getRegToReplace())
 					e.setKid(i, getReplaceExpr()->clone());
 		}
 	}
 
 private:
-	llvm::Value *getRegToReplace() const { return replaceReg; }
-	const SExpr *getReplaceExpr() const { return replaceExpr; }
+	const T& getRegToReplace() const { return replaceReg; }
+	const SExpr<T> *getReplaceExpr() const { return replaceExpr; }
 
-	llvm::Value *replaceReg;
-	const SExpr *replaceExpr;
+	T replaceReg;
+	const SExpr<T> *replaceExpr;
 };
 
 
@@ -380,37 +380,109 @@ private:
  * Applies a given mapping "register->values" to a given expression
  */
 
-class SExprConcretizer: public SExprVisitor<SExprConcretizer> {
+template<typename T>
+class SExprConcretizer: public SExprVisitor<SExprConcretizer, T> {
 
 public:
-	/* Performs the concretization (returns a new expression) */
-	std::unique_ptr<SExpr>
-	concretize(const SExpr *orig,
-		   const std::map<llvm::Value *, llvm::GenericValue> &rMap) {
-		auto e = orig->clone();
-		if (auto *re = llvm::dyn_cast<RegisterExpr>(e.get()))
-			if (shouldReplace(re->getRegister()))
-				return ConcreteExpr::create(getReplaceVal(re->getRegister()));
+	using ReplaceMap = std::map<T, std::pair<SVal, ASize>>;
 
+	/* Performs the concretization (returns a new expression) */
+	std::unique_ptr<SExpr<T>>
+	concretize(const SExpr<T> *orig, const ReplaceMap &rMap) {
 		replaceMap = &rMap;
-		visit(e.get());
+		auto e = orig->clone();
+		if (auto *re = llvm::dyn_cast<RegisterExpr<T>>(e.get())) {
+			if (shouldReplace(re->getRegister()))
+				return ConcreteExpr<T>::create(getReplaceValSize(re->getRegister()),
+							       getReplaceVal(re->getRegister()));
+		}
+		this->visit(e.get());
 		return e;
 	}
 
-	void visitSExpr(SExpr &e) {
+	void visitSExpr(SExpr<T> &e) {
 		for (auto i = 0u; i < e.getNumKids(); i++) {
-			visit(e.getKid(i));
-			if (auto *re = llvm::dyn_cast<RegisterExpr>(e.getKid(i)))
+			this->visit(e.getKid(i));
+			if (auto *re = llvm::dyn_cast<RegisterExpr<T>>(e.getKid(i)))
 				if (shouldReplace(re->getRegister()))
-					e.setKid(i, ConcreteExpr::create(getReplaceVal(re->getRegister())));
+					e.setKid(i, ConcreteExpr<T>::create(getReplaceValSize(re->getRegister()),
+									    getReplaceVal(re->getRegister())));
 		}
 	}
 
 private:
-	bool shouldReplace(llvm::Value *reg) const { return replaceMap->count(reg); }
-	llvm::APInt getReplaceVal(llvm::Value *reg) const { return replaceMap->at(reg).IntVal; }
+	bool shouldReplace(const T& reg) const { return replaceMap->count(reg); }
+	SVal getReplaceVal(const T& reg) const { return replaceMap->at(reg).first; }
+	typename SExpr<T>::Width getReplaceValSize(const T& reg) const { return replaceMap->at(reg).second.get(); }
 
-	const std::map<llvm::Value *, llvm::GenericValue> *replaceMap;
+	const ReplaceMap *replaceMap;
 };
+
+
+/*******************************************************************************
+ **                           SExprTransformer Class
+ ******************************************************************************/
+
+/*
+ * Given a function F: T -> ModuleID::ID, transforms an SExpr<T> to a SExpr<ModuleID::ID>.
+ */
+
+template<typename T>
+class SExprTransformer : public SExprVisitor<SExprTransformer, T, std::unique_ptr<SExpr<ModuleID::ID>>> {
+
+public:
+	using RetTy = std::unique_ptr<SExpr<ModuleID::ID>>;
+
+	/* Performs the transformation (returns a new expression) */
+	template<typename F>
+	RetTy transform(SExpr<T> *orig, F&& fun) {
+		transformer = fun;
+		return this->visit(*orig);
+	}
+
+	RetTy visitConcreteExpr(ConcreteExpr<T> &e);
+	RetTy visitRegisterExpr(RegisterExpr<T> &e);
+	RetTy visitSelectExpr(SelectExpr<T> &e);
+	// RetTy visitConcatExpr(ConcatExpr<T> &e);
+	// RetTy visitExtractExpr(ExtractExpr<T> &e);
+	RetTy visitConjunctionExpr(ConjunctionExpr<T> &e);
+	RetTy visitDisjunctionExpr(DisjunctionExpr<T> &e);
+	RetTy visitZExtExpr(ZExtExpr<T> &e);
+	RetTy visitSExtExpr(SExtExpr<T> &e);
+	RetTy visitTruncExpr(TruncExpr<T> &e);
+	RetTy visitNotExpr(NotExpr<T> &e);
+	RetTy visitAddExpr(AddExpr<T> &e);
+	RetTy visitSubExpr(SubExpr<T> &e);
+	RetTy visitMulExpr(MulExpr<T> &e);
+	RetTy visitUDivExpr(UDivExpr<T> &e);
+	RetTy visitSDivExpr(SDivExpr<T> &e);
+	RetTy visitURemExpr(URemExpr<T> &e);
+	RetTy visitSRemExpr(SRemExpr<T> &e);
+	RetTy visitAndExpr(AndExpr<T> &e);
+	RetTy visitOrExpr(OrExpr<T> &e);
+	RetTy visitXorExpr(XorExpr<T> &e);
+	RetTy visitShlExpr(ShlExpr<T> &e);
+	RetTy visitLShrExpr(LShrExpr<T> &e);
+	RetTy visitAShrExpr(AShrExpr<T> &e);
+	RetTy visitEqExpr(EqExpr<T> &e);
+	RetTy visitNeExpr(NeExpr<T> &e);
+	RetTy visitUltExpr(UltExpr<T> &e);
+	RetTy visitUleExpr(UleExpr<T> &e);
+	RetTy visitUgtExpr(UgtExpr<T> &e);
+	RetTy visitUgeExpr(UgeExpr<T> &e);
+	RetTy visitSltExpr(SltExpr<T> &e);
+	RetTy visitSleExpr(SleExpr<T> &e);
+	RetTy visitSgtExpr(SgtExpr<T> &e);
+	RetTy visitSgeExpr(SgeExpr<T> &e);
+
+	RetTy visitSExpr(SExpr<T> &e) { BUG(); }
+
+private:
+	const std::function<ModuleID::ID(T)> &getTransformer() const { return transformer; }
+
+	std::function<ModuleID::ID(T)> transformer;
+};
+
+#include "SExprVisitor.tcc"
 
 #endif /* __S_EXPR_VISITOR_HPP__ */

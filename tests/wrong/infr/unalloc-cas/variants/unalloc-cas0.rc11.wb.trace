@@ -2,8 +2,9 @@ Error detected: Attempt to access non-allocated memory!
 Event (0, 1) in graph:
 <-1, 0> main:
 	(0, 0): B
-	(0, 1): Csc (, 0) [BOTTOM] L.10
+	(0, 1): Csc (???, 0) [BOTTOM] L.10
 
 Trace to (0, 1):
 [main] unalloc-cas0.c: 10: int a = atomic_compare_exchange_strong((atomic_int *) 0xdeadbeef, &r, 42);
 Number of complete executions explored: 0
+Number of blocked executions seen: 1

@@ -28,9 +28,9 @@
  **                        VectorClock Class (Abstract)
  ******************************************************************************/
 
-/* Instantiations of this abstract class */
 class View;
 class DepView;
+class EventLabel;
 
 /*
  * An abstract class for modeling vector clocks. Contains the bare
@@ -57,6 +57,7 @@ public:
 
 	/* Returns true if this clock contains e */
 	virtual bool contains(const Event e) const = 0;
+	bool contains(const EventLabel *lab) const;
 
 	/* Updates the clock based on another clock **of the same kind** */
 	virtual View& update(const View &v) = 0;

@@ -87,6 +87,12 @@ public:
 		return *this;
 	}
 
+	GraphBuilder &withEnabledBAM(bool bam) {
+		if (bam)
+			graph->enableBAM();
+		return *this;
+	}
+
 	std::unique_ptr<ExecutionGraph> build() {
 		BUG_ON(!graph->getCoherenceCalculator());
 		return std::move(graph);

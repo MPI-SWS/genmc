@@ -23,6 +23,7 @@
 
 std::vector<Event> DepExecutionGraph::getRevisitable(const WriteLabel *sLab) const
 {
+	auto pendingRMWs = getPendingRMWs(sLab); /* empty or singleton */
 	std::vector<Event> loads;
 
 	for (auto i = 0u; i < getNumThreads(); i++) {
@@ -38,6 +39,11 @@ std::vector<Event> DepExecutionGraph::getRevisitable(const WriteLabel *sLab) con
 			}
 		}
 	}
+	if (pendingRMWs.size() > 0)
+		loads.erase(std::remove_if(loads.begin(), loads.end(), [&](Event &e){
+			auto *confLab = getEventLabel(pendingRMWs.back());
+			return getEventLabel(e)->getStamp() > confLab->getStamp();
+		}), loads.end());
 	return loads;
 }
 
@@ -55,19 +61,13 @@ DepExecutionGraph::getRevisitView(const ReadLabel *rLab,
 			auto *lab = getEventLabel(Event(i, j));
 			if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab)) {
 				if (preds->contains(rLab->getPos()) && !preds->contains(rLab->getRf())) {
-					BUG_ON(rLab->getRf().thread != rLab->getThread() &&
-					       !rLab->getRf().isInitializer());
-					preds->removeHole(rLab->getRf());
+					if (rLab->getRf().thread == rLab->getThread())
+						preds->removeHole(rLab->getRf());
 				}
 			}
 		}
 	}
 	return std::move(preds);
-}
-
-const VectorClock& DepExecutionGraph::getPrefixView(Event e) const
-{
-	return getPPoRfBefore(e);
 }
 
 std::unique_ptr<VectorClock> DepExecutionGraph::getPredsView(Event e) const
@@ -82,20 +82,61 @@ bool DepExecutionGraph::revisitModifiesGraph(const ReadLabel *rLab,
 	auto v = getRevisitView(rLab, sLab);
 
 	for (auto i = 0u; i < getNumThreads(); i++) {
-		if ((*v)[i] + 1 != (long) getThreadSize(i))
+		if ((*v)[i] + 1 != (long) getThreadSize(i) &&
+		    !llvm::isa<BlockLabel>(getEventLabel(Event(i, (*v)[i] + 1))))
 			return true;
 		for (auto j = 0u; j < getThreadSize(i); j++) {
 			const EventLabel *lab = getEventLabel(Event(i, j));
-			if (!v->contains(lab->getPos()) &&
-			    !llvm::isa<EmptyLabel>(lab))
+			if (!v->contains(lab->getPos()) && !llvm::isa<EmptyLabel>(lab) &&
+			    !llvm::isa<BlockLabel>(lab))
 				return true;
 		}
 	}
 	return false;
 }
 
+bool DepExecutionGraph::prefixContainsSameLoc(const ReadLabel *rLab, const WriteLabel *wLab,
+					      const EventLabel *lab) const
+{
+	/* Some holes need to be treated specially. However, it is _wrong_ to keep
+	 * porf views around. What we should do instead is simply check whether
+	 * an event is "part" of WLAB's pporf view (even if it is not contained in it).
+	 * Similar actions are taken in {WB,MO}Calculator */
+	auto &v = getPrefixView(wLab->getPos());
+	if (lab->getIndex() > wLab->getPPoRfView()[lab->getThread()])
+		return false;
+
+	if (auto *wLabB = llvm::dyn_cast<WriteLabel>(lab))
+		return std::any_of(wLabB->getReadersList().begin(), wLabB->getReadersList().end(),
+				   [&v](const Event &r){ return v.contains(r); });
+
+	auto *rLabB = llvm::dyn_cast<ReadLabel>(lab);
+	if (!rLabB)
+		return false;
+
+	/* If prefix has same address load, we must read from the same write */
+	for (auto i = 0u; i < v.size(); i++) {
+		for (auto j = 0u; j <= v[i]; j++) {
+			if (!v.contains(Event(i, j)))
+				continue;
+			if (auto *mLab = llvm::dyn_cast<ReadLabel>(getEventLabel(Event(i, j))))
+				if (mLab->getAddr() == rLabB->getAddr() && mLab->getRf() == rLabB->getRf())
+						return true;
+		}
+	}
+
+	if (isRMWLoad(rLabB)) {
+		auto *wLabB = llvm::dyn_cast<WriteLabel>(getEventLabel(rLabB->getPos().next()));
+		return std::any_of(wLabB->getReadersList().begin(), wLabB->getReadersList().end(),
+				   [&v](const Event &r){ return v.contains(r); });
+
+	}
+	return false;
+}
+
+#ifdef ENABLE_GENMC_DEBUG
 std::vector<std::unique_ptr<EventLabel> >
-DepExecutionGraph::getPrefixLabelsNotBefore(const EventLabel *sLab,
+DepExecutionGraph::getPrefixLabelsNotBefore(const WriteLabel *sLab,
 					    const ReadLabel *rLab) const
 {
 	std::vector<std::unique_ptr<EventLabel> > result;
@@ -148,6 +189,7 @@ DepExecutionGraph::getPrefixLabelsNotBefore(const EventLabel *sLab,
 	}
 	return result;
 }
+#endif
 
 void DepExecutionGraph::cutToStamp(unsigned int stamp)
 {
@@ -206,4 +248,12 @@ void DepExecutionGraph::cutToStamp(unsigned int stamp)
 				      new EmptyLabel(nextStamp(), Event(i, j))));
 		}
 	}
+}
+
+std::unique_ptr<ExecutionGraph>
+DepExecutionGraph::getCopyUpTo(const VectorClock &v) const
+{
+	auto og = std::unique_ptr<DepExecutionGraph>(new DepExecutionGraph());
+	copyGraphUpTo(*og, v);
+	return og;
 }

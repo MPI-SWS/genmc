@@ -1,1 +1,1 @@
--I../tests/correct/data-structures/seqlock-atomic/
+ -unroll=3 | -I../tests/correct/data-structures/seqlock-atomic/

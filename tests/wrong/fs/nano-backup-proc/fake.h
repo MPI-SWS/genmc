@@ -277,6 +277,7 @@ int ferror(FILE *stream)
 #define mallocstrcpy(...) ({ assert(0); NULL; })
 
 /* We replaced all dynamic allocations, so make free() do nothing */
+#undef free
 #define free(x) do {} while (0)
 
 /*************************************************************
@@ -363,7 +364,7 @@ openfilestruct *openfile = NULL;
 #error "Test case parameters need to be defined!"
 #endif
 
-linestruct __only_line = { .data = buffer_data };
+linestruct __only_line = { .data = (char *) buffer_data };
 struct stat __open_file_stat;
 openfilestruct __open_file = {
 	.filetop = &__only_line,

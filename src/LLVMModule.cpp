@@ -23,7 +23,14 @@
 #include "LLVMModule.hpp"
 #include "Error.hpp"
 #include "Passes.hpp"
+#include "SExprVisitor.hpp"
 #include <llvm/InitializePasses.h>
+#if defined(HAVE_LLVM_BITCODE_READERWRITER_H)
+# include <llvm/Bitcode/ReaderWriter.h>
+#else
+# include <llvm/Bitcode/BitcodeReader.h>
+# include <llvm/Bitcode/BitcodeWriter.h>
+#endif
 #if defined(HAVE_LLVM_PASSMANAGER_H)
 # include <llvm/PassManager.h>
 #elif defined(HAVE_LLVM_IR_PASSMANAGER_H)
@@ -53,54 +60,84 @@
 # define PassManager llvm::PassManager
 #endif
 
-/* TODO: Move explanation comments to *.hpp files. */
 namespace LLVMModule {
-/* Global variable to handle the LLVM context */
-	llvm::LLVMContext *globalContext = nullptr;
 
-/* Returns the LLVM context */
-	llvm::LLVMContext &getLLVMContext(void)
+	std::unique_ptr<llvm::Module>
+	parseLLVMModule(std::string &filename, const std::unique_ptr<llvm::LLVMContext> &ctx)
 	{
-		if (!globalContext)
-			globalContext = new llvm::LLVMContext();
-		return *globalContext;
-	}
-
-/*
- * Destroys the LLVM context. This function should be called explicitly
- * when we are done managing the LLVM data.
- */
-	void destroyLLVMContext(void)
-	{
-		delete globalContext;
-	}
-
-/* Returns the LLVM module corresponding to the source code stored in src. */
-	std::unique_ptr<llvm::Module> getLLVMModule(std::string &filename, std::string &src)
-	{
-		llvm::MemoryBuffer *buf;
 		llvm::SMDiagnostic err;
 
-#ifdef LLVM_GETMEMBUFFER_RET_PTR
-		buf = llvm::MemoryBuffer::getMemBuffer(src, "", false);
-#else
-		buf = llvm::MemoryBuffer::getMemBuffer(src, "", false).release();
-#endif
-#ifdef LLVM_PARSE_IR_MEMBUF_PTR
-		auto mod = llvm::ParseIR(buf, err, getLLVMContext());
-#else
-		auto mod = llvm::parseIR(buf->getMemBufferRef(), err, getLLVMContext()).release();
-#endif
+		auto mod = llvm::parseIRFile(filename, err, *ctx);
 		if (!mod) {
 			err.print(filename.c_str(), llvm::dbgs());
 			ERROR("Could not parse LLVM IR!\n");
 		}
-		return std::unique_ptr<llvm::Module>(mod);
+		return std::move(mod);
 	}
 
-	bool transformLLVMModule(llvm::Module &mod, const Config *conf, ModuleInfo &MI)
+	std::unique_ptr<llvm::Module>
+	cloneModule(const std::unique_ptr<llvm::Module> &mod,
+		    const std::unique_ptr<llvm::LLVMContext> &ctx)
+	{
+		/* Roundtrip the module to a stream and then back into the new context */
+		std::string str;
+		llvm::raw_string_ostream  stream(str);
+
+#ifdef LLVM_WRITE_BITCODE_TO_FILE_PTR
+		llvm::WriteBitcodeToFile(&*mod, stream);
+#else
+		llvm::WriteBitcodeToFile(*mod, stream);
+#endif
+
+		llvm::StringRef ref(stream.str());
+		std::unique_ptr<llvm::MemoryBuffer> buf(llvm::MemoryBuffer::getMemBuffer(ref));
+
+		return std::move(llvm::parseBitcodeFile(buf->getMemBufferRef(), *ctx).get());
+	}
+
+	void initializeVariableInfo(ModuleInfo &MI, PassModuleInfo &PI)
+	{
+		for (auto &kv : PI.varInfo.globalInfo)
+			MI.varInfo.globalInfo[MI.idInfo.VID.at(kv.first)] = kv.second;
+		for (auto &kv : PI.varInfo.localInfo) {
+			if (MI.idInfo.VID.count(kv.first))
+				MI.varInfo.localInfo[MI.idInfo.VID.at(kv.first)] = kv.second;
+		}
+		MI.varInfo.internalInfo = PI.varInfo.internalInfo;
+		return;
+	}
+
+	void initializeAnnotationInfo(ModuleInfo &MI, PassModuleInfo &PI)
+	{
+		using Transformer = SExprTransformer<llvm::Value *>;
+		Transformer tr;
+
+		for (auto &kv : PI.annotInfo.annotMap) {
+			MI.annotInfo.annotMap[MI.idInfo.VID.at(kv.first)] =
+				tr.transform(&*kv.second, [&](llvm::Value *v){ return MI.idInfo.VID.at(v); });
+		}
+	}
+
+	void initializeFsInfo(ModuleInfo &MI, PassModuleInfo &PI)
+	{
+		MI.fsInfo.filenames.insert(PI.filenames.begin(), PI.filenames.end());
+		return;
+	}
+
+	void initializeModuleInfo(ModuleInfo &MI, PassModuleInfo &PI)
+	{
+		MI.collectIDs();
+		initializeVariableInfo(MI, PI);
+		initializeAnnotationInfo(MI, PI);
+		initializeFsInfo(MI, PI);
+		return;
+	}
+
+	bool transformLLVMModule(llvm::Module &mod, ModuleInfo &MI,
+				 const std::shared_ptr<const Config> &conf)
 	{
 		llvm::PassRegistry &Registry = *llvm::PassRegistry::getPassRegistry();
+		PassModuleInfo PI;
 		PassManager OptPM, BndPM;
 		bool modified;
 
@@ -120,7 +157,7 @@ namespace LLVMModule {
 
 		OptPM.add(createDeclareInternalsPass());
 		OptPM.add(createDefineLibcFunsPass());
-		OptPM.add(createMDataCollectionPass(MI.varInfo, MI.fsInfo));
+		OptPM.add(createMDataCollectionPass(&PI));
 		OptPM.add(createPromoteMemIntrinsicPass());
 		OptPM.add(createIntrinsicLoweringPass(mod));
 		if (conf->castElimination)
@@ -143,10 +180,12 @@ namespace LLVMModule {
 
 		modified |= BndPM.run(mod);
 
-		/* The last pass we run is the load-annotation pass */
+		/* Run load-annotation last so that the module is stable */
 		if (conf->loadAnnot)
-			OptPM.add(createLoadAnnotationPass(MI.annotInfo));
+			OptPM.add(createLoadAnnotationPass(PI.annotInfo));
 		modified |= OptPM.run(mod);
+
+		initializeModuleInfo(MI, PI);
 
 		assert(!llvm::verifyModule(mod, &llvm::dbgs()));
 		return modified;
@@ -160,24 +199,28 @@ namespace LLVMModule {
 #else
 		std::error_code errs;
 #endif
-#ifdef HAVE_LLVM_SYS_FS_OPENFLAGS
-		llvm::raw_ostream *os = new llvm::raw_fd_ostream(out.c_str(), errs,
-								 llvm::sys::fs::F_None);
+		auto flags =
+#ifdef HAVE_LLVM_SYS_FS_OPENFLAGS_FNONE
+			llvm::sys::fs::F_None;
 #else
-		llvm::raw_ostream *os = new llvm::raw_fd_ostream(out.c_str(), errs, 0);
+			llvm::sys::fs::OF_None;
+#endif
+
+#ifdef HAVE_LLVM_SYS_FS_OPENFLAGS
+		auto os = LLVM_MAKE_UNIQUE<llvm::raw_fd_ostream>(out.c_str(), errs, flags);
+#else
+		auto os = LLVM_MAKE_UNIQUE<llvm::raw_fd_ostream>(out.c_str(), errs, 0);
 #endif
 
 		/* TODO: Do we need an exception? If yes, properly handle it */
 #ifdef LLVM_RAW_FD_OSTREAM_ERR_STR
 		if (errs.size()) {
-			delete os;
 			WARN("Failed to write transformed module to file "
 			     + out + ": " + errs);
 			return;
 		}
 #else
 		if (errs) {
-			delete os;
 			WARN("Failed to write transformed module to file "
 			     + out + ": " + errs.message());
 			return;

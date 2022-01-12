@@ -23,17 +23,25 @@
 #include "Config.hpp"
 #include "ModuleInfo.hpp"
 
-#if defined(HAVE_LLVM_IR_MODULE_H)
 #include <llvm/IR/Module.h>
-#elif defined(HAVE_LLVM_MODULE_H)
-#include <llvm/Module.h>
-#endif
 #include <memory>
 
 namespace LLVMModule {
-	llvm::LLVMContext &getLLVMContext(void);
-	void destroyLLVMContext(void);
-	std::unique_ptr<llvm::Module> getLLVMModule(std::string &filename, std::string &source);
-	bool transformLLVMModule(llvm::Module &mod, const Config *conf, ModuleInfo &MI);
-	void printLLVMModule(llvm::Module &mod, const std::string &out);
+
+	/* Parses an LLVM module from FILENAME into CTX */
+	std::unique_ptr<llvm::Module>
+	parseLLVMModule(std::string &filename, const std::unique_ptr<llvm::LLVMContext> &ctx);
+
+	/* Clones MOD into CTX */
+	std::unique_ptr<llvm::Module>
+	cloneModule(const std::unique_ptr<llvm::Module> &mod,
+		    const std::unique_ptr<llvm::LLVMContext> &ctx);
+
+	/* Transforms MOD according to CONF. Collected info are stored in MI */
+	bool transformLLVMModule(llvm::Module &mod, ModuleInfo &MI,
+				 const std::shared_ptr<const Config> &conf);
+
+	/* Prints MOD to the file FILENAME */
+	void printLLVMModule(llvm::Module &mod, const std::string &filename);
+
 }

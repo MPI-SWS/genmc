@@ -1,5 +1,5 @@
 Error detected: Liveness violation!
-Event (2, 7) in graph:
+Event (1, 7) in graph:
 <-1, 0> main:
 	(0, 0): B
 	(0, 1): TC [forks 1] L.11
@@ -24,14 +24,15 @@ Event (2, 7) in graph:
 	(2, 6): SPIN_START
 	(2, 7): Cacq (lock_a, 1) [(1, 4)] L.8: lock-deadlock.c
 
-Trace to (2, 7):
+Trace to (1, 7):
+[main] lock-deadlock0.c: 11: if (pthread_create(&t1, NULL, thread_1, NULL))
+[thread_1] lock-deadlock.c: 8: while (!atomic_compare_exchange_strong_explicit(lock, &r, 1, memory_order_acquire,
+[thread_1] lock-deadlock.c: 8: while (!atomic_compare_exchange_strong_explicit(lock, &r, 1, memory_order_acquire,
+[thread_1] lock-deadlock.c: 8: while (!atomic_compare_exchange_strong_explicit(lock, &r, 1, memory_order_acquire,
 [main] lock-deadlock0.c: 11: if (pthread_create(&t1, NULL, thread_1, NULL))
 [thread_2] lock-deadlock.c: 8: while (!atomic_compare_exchange_strong_explicit(lock, &r, 1, memory_order_acquire,
 [thread_2] lock-deadlock.c: 8: while (!atomic_compare_exchange_strong_explicit(lock, &r, 1, memory_order_acquire,
-[thread_2] lock-deadlock.c: 8: while (!atomic_compare_exchange_strong_explicit(lock, &r, 1, memory_order_acquire,
 [thread_1] lock-deadlock.c: 8: while (!atomic_compare_exchange_strong_explicit(lock, &r, 1, memory_order_acquire,
-[thread_1] lock-deadlock.c: 8: while (!atomic_compare_exchange_strong_explicit(lock, &r, 1, memory_order_acquire,
-[thread_2] lock-deadlock.c: 8: while (!atomic_compare_exchange_strong_explicit(lock, &r, 1, memory_order_acquire,
 Non-terminating spinloop: thread 1
 Number of complete executions explored: 1
 Number of blocked executions seen: 3

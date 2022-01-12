@@ -70,9 +70,3 @@ Calculator::CalculationResult ARCalculatorLKMM::doCalc()
 void ARCalculatorLKMM::removeAfter(const VectorClock &preds)
 {
 }
-
-void ARCalculatorLKMM::restorePrefix(const ReadLabel *rLab,
-				 const std::vector<std::unique_ptr<EventLabel> > &storePrefix,
-				 const std::vector<std::pair<Event, Event> > &status)
-{
-}

@@ -14,8 +14,8 @@ Event (2, 4) in graph:
 <0, 1> runLock:
 	(1, 0): B
 	(1, 1): Wrlx (x, 1) L.10: diff-thread-unlock.c
-	(1, 2): Cacq (lock.__private, 0) [(2, 4)] L.11: diff-thread-unlock.c
-	(1, 3): Cacq (lock.__private, 1) L.11: diff-thread-unlock.c
+	(1, 2): Cacq (lock.__private, 1) [(0, 3)] L.11: diff-thread-unlock.c
+	(1, 3): BLOCK L.11: diff-thread-unlock.c
 <0, 2> runUnlock:
 	(2, 0): B
 	(2, 1): Rrlx (x, 0) [INIT] L.17: diff-thread-unlock.c
@@ -33,4 +33,4 @@ Trace to (2, 4):
 [runUnlock] diff-thread-unlock.c: 19: pthread_mutex_unlock(&lock);
 Called unlock() on mutex not locked by the same thread!
 Number of complete executions explored: 0
-Number of blocked executions seen: 1
+Number of blocked executions seen: 2

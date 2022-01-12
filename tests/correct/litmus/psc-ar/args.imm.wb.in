@@ -1,1 +1,1 @@
--DCHECK_ASSERTION
+-check-consistency-type=full -check-consistency-point=exec  | -DCHECK_ASSERTION

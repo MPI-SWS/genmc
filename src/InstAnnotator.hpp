@@ -21,6 +21,7 @@
 #ifndef __INST_ANNOTATOR_HPP__
 #define __INST_ANNOTATOR_HPP__
 
+#include "Error.hpp"
 #include "VSet.hpp"
 #include <llvm/Pass.h>
 #include <llvm/Analysis/LoopInfo.h>
@@ -30,58 +31,85 @@
 
 using namespace llvm;
 
+template<typename T>
 class SExpr;
 
 /*
  * A class that annotates loads by performing a DFS-like propagation procedure.
  * Also exports utilities for calculating symbolic expressions across basic blocks.
+ *
+ * NOTE: For annotations to be used in a multithreaded environment
+ * we have to translate the annotation info we get in a module-agnostic form
  */
 
 class InstAnnotator {
 
 public:
+	using IRExpr = SExpr<Value *>;
+	using IRExprUP = std::unique_ptr<SExpr<Value *>>;
+
 	/* Returns the annotation for a load L */
-	std::unique_ptr<SExpr> annotate(LoadInst *l);
+	IRExprUP annotate(LoadInst *l);
 
 	/* Returns the condition under which BB jumps to its first successor.
 	 * If PRED is non-null, assumes that the predecessor of the basic block is PRED
 	 * during the calculation of the annotation */
-	std::unique_ptr<SExpr> annotateBBCond(BasicBlock *bb, BasicBlock *pred = nullptr);
+	IRExprUP annotateBBCond(BasicBlock *bb, BasicBlock *pred = nullptr);
 
 	/* Returns the annotation for a CAS associated with the backedge LATCH->header(L) */
-	std::unique_ptr<SExpr> annotateCASWithBackedgeCond(AtomicCmpXchgInst *cas,
-							   BasicBlock *latch,
-							   Loop *l,
-							   const VSet<llvm::Function *> *cleanSet = nullptr);
+	IRExprUP annotateCASWithBackedgeCond(AtomicCmpXchgInst *cas, BasicBlock *latch, Loop *l,
+					     const VSet<llvm::Function *> *cleanSet = nullptr);
 
 private:
 	/* Helper types for the annotation routines */
 	enum Status { unseen, entered, left };
 
+	/* InstAnnotMap maps void * so that we can use it both with ID keys and Value *.
+	 * It is a big ugly, but on par with RegisterExpr identifiers (see SExpr.hpp) */
+	using InstAnnotMap = std::unordered_map<Value *, IRExprUP>;
 	using InstStatusMap = DenseMap<Instruction *, Status>;
-	using InstAnnotMap = std::unordered_map<Instruction *, std::unique_ptr<SExpr> >;
 
 	/* Resets all helper members used in the annotation */
 	void reset();
 
+	/* Generates an expression for a given instruction operand */
+	IRExprUP generateOperandExpr(Value *op);
+
+	/* Generates an expression for an instruction */
+	IRExprUP generateInstExpr(Instruction *curr);
+
 	/* Helper that returns the annotation for CURR by propagating SUCC's annotation backwards */
-	std::unique_ptr<SExpr> propagateAnnotFromSucc(Instruction *curr, Instruction *succ);
+	IRExprUP propagateAnnotFromSucc(Instruction *curr, Instruction *succ);
 
 	/* Helper for annotate(); performs the actual annotation */
 	void annotateDFS(Instruction *curr);
 
 	/* Similar to propagateAnnotFromSucc, but for when annotating backedges */
-	std::unique_ptr<SExpr> propagateAnnotFromSuccInLoop(Instruction *curr, Instruction *succ,
+	IRExprUP propagateAnnotFromSuccInLoop(Instruction *curr, Instruction *succ,
 							    const VSet<BasicBlock *> &latch, Loop *l);
 
 	/* Helper for annotateCASWithBackedgeCond(); performs the actual annotation (for backedge paths) */
 	void annotateCASWithBackedgeCondDFS(Instruction *curr, const VSet<BasicBlock *> &backedgePaths,
 					    Loop *l, const VSet<llvm::Function *> *cleanSet);
 
+	/* Various getters/setters */
+
+	/* Returns the appropriate key to be used when accessing annotMaps depending on useIDs */
+	Value *getAnnotMapKey(Value *i) const;
+
+	/* Returns the annotation of I */
+	const IRExpr *getAnnot(Instruction *i);
+
+	/* Assumes ownership of I's annotation */
+	IRExprUP releaseAnnot(Instruction *i);
+
+	/* Sets the annotation of I To be ANNOT */
+	void setAnnot(Instruction *i, IRExprUP annot);
+
 	/* A helper status map */
 	InstStatusMap statusMap;
 
-	/* A map storing the annotations for this function's annotatable loads */
+	/* Maps instructions to annotations */
 	InstAnnotMap annotMap;
 };
 

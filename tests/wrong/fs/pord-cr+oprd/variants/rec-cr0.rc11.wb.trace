@@ -1,26 +1,35 @@
 Error detected: No such file or directory!
-Event (1, 2) in graph:
+Event (1, 3) in graph:
 <-1, 0> main:
 	(0, 0): B
-	(0, 1): Cacq (__dir_inode.lock, 0) [INIT] L.27
-	(0, 2): Cacq (__dir_inode.lock, 1) L.0:
-	(0, 3): FRacq (__dir_inode.addr[foo], 0x0) [INIT] L.0:
-	(0, 4): M
-	(0, 5): Wna (__inode_foo.lock, 0) L.0:
-	(0, 6): FWrel (__inode_foo.isize, 0) L.0:
-	(0, 7): FWrel (__dir_inode.addr[foo], 0x1d0f614) L.0:
-	(0, 8): Wrel (__dir_inode.lock, 0) L.0:
-	(0, 9): FO (foo, 0) L.0:
-	(0, 10): M
-	(0, 11): Wrel (__file_foo_0_10.inode, 0x1d0f614) L.0:
-	(0, 12): Wrel (__file_foo_0_10.lock, 0) L.0:
-	(0, 13): Wrel (__file_foo_0_10.flags, 65) L.0:
-	(0, 14): Wrel (__file_foo_0_10.offset, 0) L.0:
-	(0, 15): E
+	(0, 1): Cacq (__genmc_dir_inode.lock.__private, 0) [INIT] L.28
+	(0, 2): Cacq (__genmc_dir_inode.lock.__private, 1) L.28
+	(0, 3): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.28
+	(0, 4): DRacq (__genmc_dir_inode.data[0], 0x0) [INIT] L.28
+	(0, 5): M
+	(0, 6): Wrel (__inode_foo.lock, 0) L.28
+	(0, 7): Wrel (__inode_foo.i_size, 0) L.28
+	(0, 8): DWrel (__inode_foo.i_transaction, 0) L.28
+	(0, 9): DWrel (__inode_foo.i_disksize, 0) L.28
+	(0, 10): DF L.28
+	(0, 11): DWrel (__genmc_dir_inode.data[0], 0x2000000000000010) L.28
+	(0, 12): Wrel (__genmc_dir_inode.lock.__private, 0) L.28
+	(0, 13): FO (foo, 0) L.28
+	(0, 14): M
+	(0, 15): Wna (__file_foo_0_13.inode, 0x2000000000000010) L.28
+	(0, 16): Wna (__file_foo_0_13.flags, 65) L.28
+	(0, 17): Wna (__file_foo_0_13.pos, 0) L.28
+	(0, 18): Wrel (__file_foo_0_13.pos_lock, 0) L.28
+	(0, 19): Wrel (__file_foo_0_13.count, 1) L.28
+	(0, 20): E
 <-1, 1> __VERIFIER_recovery_routine:
 	(1, 0): B
 	(1, 1): M
-	(1, 2): FRrlx (__dir_inode.addr[foo], 0x0) [INIT] L.14
+	(1, 2): DRrlx (__genmc_dir_inode.i_transaction, 0) [INIT] L.15
+	(1, 3): DRrlx (__genmc_dir_inode.data[0], 0x0) [INIT] L.15
 
+Trace to (1, 3):
+[__VERIFIER_recovery_routine] rec-cr0.c: 15: int fd = open("foo", O_RDONLY, S_IRWXU);
+[__VERIFIER_recovery_routine] rec-cr0.c: 15: int fd = open("foo", O_RDONLY, S_IRWXU);
 File does not exist in open()
 Number of complete executions explored: 1

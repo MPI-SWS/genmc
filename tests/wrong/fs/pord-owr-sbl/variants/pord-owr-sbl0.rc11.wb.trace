@@ -1,1 +1,142 @@
-FIXME: RECOVERY ERROR
+Error detected: Recovery error!
+Event (1, 17) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): M
+	(0, 2): M
+	(0, 3): Wna (buf1[0], 1) L.36
+	(0, 4): Wna (buf1[1], 1) L.37
+	(0, 5): Wna (buf2[0], 2) L.38
+	(0, 6): Wna (buf2[1], 2) L.39
+	(0, 7): Cacq (__genmc_dir_inode.lock.__private, 0) [INIT] L.41
+	(0, 8): Cacq (__genmc_dir_inode.lock.__private, 1) L.41
+	(0, 9): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.41
+	(0, 10): DRacq (__genmc_dir_inode.data[0], 0x0) [INIT] L.41
+	(0, 11): M
+	(0, 12): Wrel (__inode_foo.lock, 0) L.41
+	(0, 13): Wrel (__inode_foo.i_size, 0) L.41
+	(0, 14): DWrel (__inode_foo.i_transaction, 0) L.41
+	(0, 15): DWrel (__inode_foo.i_disksize, 0) L.41
+	(0, 16): DF L.41
+	(0, 17): DWrel (__genmc_dir_inode.data[0], 0x2000000000000010) L.41
+	(0, 18): Wrel (__genmc_dir_inode.lock.__private, 0) L.41
+	(0, 19): FO (foo, 0) L.41
+	(0, 20): M
+	(0, 21): Wna (__file_foo_0_19.inode, 0x2000000000000010) L.41
+	(0, 22): Wna (__file_foo_0_19.flags, 66) L.41
+	(0, 23): Wna (__file_foo_0_19.pos, 0) L.41
+	(0, 24): Wrel (__file_foo_0_19.pos_lock, 0) L.41
+	(0, 25): Wrel (__file_foo_0_19.count, 1) L.41
+	(0, 26): PB L.43
+	(0, 27): Rna (__file_foo_0_19.flags, 66) [(0, 22)] L.45
+	(0, 28): Rrlx (__file_foo_0_19.inode, 0x2000000000000010) [(0, 21)] L.45
+	(0, 29): Cacq (__inode_foo.lock, 0) [(0, 12)] L.45
+	(0, 30): Cacq (__inode_foo.lock, 1) L.45
+	(0, 31): Racq (__inode_foo.i_size, 0) [(0, 13)] L.45
+	(0, 32): Rna (buf1[0], 1) [(0, 3)] L.45
+	(0, 33): DWrel (__inode_foo.data, 1) L.45
+	(0, 34): Rna (buf1[1], 1) [(0, 4)] L.45
+	(0, 35): DWrel (__inode_foo.data, 1) L.45
+	(0, 36): Racq (__inode_foo.i_size, 0) [(0, 13)] L.45
+	(0, 37): DWrel (__inode_foo.i_disksize, 2) L.45
+	(0, 38): Wrel (__inode_foo.i_size, 2) L.45
+	(0, 39): Wrel (__inode_foo.lock, 0) L.45
+	(0, 40): Rna (__file_foo_0_19.flags, 66) [(0, 22)] L.46
+	(0, 41): Rrlx (__file_foo_0_19.inode, 0x2000000000000010) [(0, 21)] L.46
+	(0, 42): Cacq (__inode_foo.lock, 0) [(0, 39)] L.46
+	(0, 43): Cacq (__inode_foo.lock, 1) L.46
+	(0, 44): Racq (__inode_foo.i_size, 2) [(0, 38)] L.46
+	(0, 45): Rna (buf2[0], 2) [(0, 5)] L.46
+	(0, 46): DWrel (__inode_foo.data, 2) L.46
+	(0, 47): Rna (buf2[1], 2) [(0, 6)] L.46
+	(0, 48): DWrel (__inode_foo.data, 2) L.46
+	(0, 49): Racq (__inode_foo.i_size, 2) [(0, 38)] L.46
+	(0, 50): Wrel (__inode_foo.lock, 0) L.46
+	(0, 51): Uar (__file_foo_0_19.count, 1) [(0, 25)] L.48
+	(0, 52): Uar (__file_foo_0_19.count, 0) L.48
+	(0, 53): D L.48
+	(0, 54): D L.50
+	(0, 55): D L.50
+	(0, 56): E
+<-1, 1> __VERIFIER_recovery_routine:
+	(1, 0): B
+	(1, 1): M
+	(1, 2): Wna (buf[0], 0) L.15
+	(1, 3): Wna (buf[1], 0) L.16
+	(1, 4): DRrlx (__genmc_dir_inode.i_transaction, 0) [INIT] L.18
+	(1, 5): DRrlx (__genmc_dir_inode.data[0], 0x2000000000000010) [(0, 17)] L.18
+	(1, 6): FO (foo, 1) L.18
+	(1, 7): M
+	(1, 8): Wna (__file_foo_1_6.inode, 0x2000000000000010) L.18
+	(1, 9): Wna (__file_foo_1_6.flags, 0) L.18
+	(1, 10): Wna (__file_foo_1_6.pos, 0) L.18
+	(1, 11): Wrel (__file_foo_1_6.pos_lock, 0) L.18
+	(1, 12): Wrel (__file_foo_1_6.count, 1) L.18
+	(1, 13): DRrlx (__inode_foo.i_disksize, 2) [(0, 37)] L.23
+	(1, 14): DRrlx (__inode_foo.data, 2) [(0, 46)] L.23
+	(1, 15): Wna (buf[0], 2) L.23
+	(1, 16): DRrlx (__inode_foo.data, 1) [(0, 35)] L.23
+	(1, 17): Wna (buf[1], 1) L.23
+
+Trace to (1, 17):
+[main] pord-owr-sbl0.c: 36: buf1[0] = 1;
+[main] pord-owr-sbl0.c: 37: buf1[1] = 1;
+[main] pord-owr-sbl0.c: 38: buf2[0] = 2;
+[main] pord-owr-sbl0.c: 39: buf2[1] = 2;
+[main] pord-owr-sbl0.c: 41: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] pord-owr-sbl0.c: 41: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] pord-owr-sbl0.c: 41: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] pord-owr-sbl0.c: 41: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] pord-owr-sbl0.c: 41: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] pord-owr-sbl0.c: 41: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] pord-owr-sbl0.c: 41: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] pord-owr-sbl0.c: 41: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] pord-owr-sbl0.c: 41: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] pord-owr-sbl0.c: 41: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] pord-owr-sbl0.c: 41: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] pord-owr-sbl0.c: 41: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] pord-owr-sbl0.c: 41: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] pord-owr-sbl0.c: 41: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] pord-owr-sbl0.c: 41: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] pord-owr-sbl0.c: 41: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] pord-owr-sbl0.c: 41: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] pord-owr-sbl0.c: 41: int fd = open("foo", O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+[main] pord-owr-sbl0.c: 43: __VERIFIER_pbarrier();
+[__VERIFIER_recovery_routine] pord-owr-sbl0.c: 15: buf[0] = 0;
+[__VERIFIER_recovery_routine] pord-owr-sbl0.c: 16: buf[1] = 0;
+[__VERIFIER_recovery_routine] pord-owr-sbl0.c: 18: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] pord-owr-sbl0.c: 18: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] pord-owr-sbl0.c: 18: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] pord-owr-sbl0.c: 18: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] pord-owr-sbl0.c: 18: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] pord-owr-sbl0.c: 18: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] pord-owr-sbl0.c: 18: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] pord-owr-sbl0.c: 18: int fd = open("foo", O_RDONLY, 0666);
+[__VERIFIER_recovery_routine] pord-owr-sbl0.c: 18: int fd = open("foo", O_RDONLY, 0666);
+[main] pord-owr-sbl0.c: 43: __VERIFIER_pbarrier();
+[main] pord-owr-sbl0.c: 45: pwrite(fd, buf1, 2, 0);
+[main] pord-owr-sbl0.c: 45: pwrite(fd, buf1, 2, 0);
+[main] pord-owr-sbl0.c: 45: pwrite(fd, buf1, 2, 0);
+[main] pord-owr-sbl0.c: 45: pwrite(fd, buf1, 2, 0);
+[main] pord-owr-sbl0.c: 45: pwrite(fd, buf1, 2, 0);
+[main] pord-owr-sbl0.c: 45: pwrite(fd, buf1, 2, 0);
+[main] pord-owr-sbl0.c: 45: pwrite(fd, buf1, 2, 0);
+[main] pord-owr-sbl0.c: 45: pwrite(fd, buf1, 2, 0);
+[main] pord-owr-sbl0.c: 45: pwrite(fd, buf1, 2, 0);
+[main] pord-owr-sbl0.c: 45: pwrite(fd, buf1, 2, 0);
+[__VERIFIER_recovery_routine] pord-owr-sbl0.c: 23: int nr = pread(fd, buf, 2, 0);
+[main] pord-owr-sbl0.c: 45: pwrite(fd, buf1, 2, 0);
+[main] pord-owr-sbl0.c: 45: pwrite(fd, buf1, 2, 0);
+[main] pord-owr-sbl0.c: 45: pwrite(fd, buf1, 2, 0);
+[main] pord-owr-sbl0.c: 46: pwrite(fd, buf2, 2, 0);
+[main] pord-owr-sbl0.c: 46: pwrite(fd, buf2, 2, 0);
+[main] pord-owr-sbl0.c: 46: pwrite(fd, buf2, 2, 0);
+[main] pord-owr-sbl0.c: 46: pwrite(fd, buf2, 2, 0);
+[main] pord-owr-sbl0.c: 46: pwrite(fd, buf2, 2, 0);
+[main] pord-owr-sbl0.c: 46: pwrite(fd, buf2, 2, 0);
+[__VERIFIER_recovery_routine] pord-owr-sbl0.c: 23: int nr = pread(fd, buf, 2, 0);
+[__VERIFIER_recovery_routine] pord-owr-sbl0.c: 23: int nr = pread(fd, buf, 2, 0);
+[__VERIFIER_recovery_routine] pord-owr-sbl0.c: 23: int nr = pread(fd, buf, 2, 0);
+[__VERIFIER_recovery_routine] pord-owr-sbl0.c: 23: int nr = pread(fd, buf, 2, 0);
+Assertion violation: !(buf[0] == 2 && buf[1] == 1)
+Number of complete executions explored: 3

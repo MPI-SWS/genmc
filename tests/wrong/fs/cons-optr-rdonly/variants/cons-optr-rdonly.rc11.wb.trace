@@ -1,1 +1,69 @@
-EMPTY
+Error detected: Invalid file truncation!
+Event (0, 31) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): Cacq (__genmc_dir_inode.lock.__private, 0) [INIT] L.15
+	(0, 2): Cacq (__genmc_dir_inode.lock.__private, 1) L.15
+	(0, 3): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.15
+	(0, 4): DRacq (__genmc_dir_inode.data[0], 0x0) [INIT] L.15
+	(0, 5): M
+	(0, 6): Wrel (__inode_foo.lock, 0) L.15
+	(0, 7): Wrel (__inode_foo.i_size, 0) L.15
+	(0, 8): DWrel (__inode_foo.i_transaction, 0) L.15
+	(0, 9): DWrel (__inode_foo.i_disksize, 0) L.15
+	(0, 10): DF L.15
+	(0, 11): DWrel (__genmc_dir_inode.data[0], 0x2000000000000010) L.15
+	(0, 12): Wrel (__genmc_dir_inode.lock.__private, 0) L.15
+	(0, 13): FO (foo, 0) L.15
+	(0, 14): M
+	(0, 15): Wna (__file_foo_0_13.inode, 0x2000000000000010) L.15
+	(0, 16): Wna (__file_foo_0_13.flags, 65) L.15
+	(0, 17): Wna (__file_foo_0_13.pos, 0) L.15
+	(0, 18): Wrel (__file_foo_0_13.pos_lock, 0) L.15
+	(0, 19): Wrel (__file_foo_0_13.count, 1) L.15
+	(0, 20): Uar (__file_foo_0_13.count, 1) [(0, 19)] L.16
+	(0, 21): Uar (__file_foo_0_13.count, 0) L.16
+	(0, 22): D L.16
+	(0, 23): DRacq (__genmc_dir_inode.i_transaction, 0) [INIT] L.19
+	(0, 24): DRacq (__genmc_dir_inode.data[0], 0x2000000000000010) [(0, 11)] L.19
+	(0, 25): FO (foo, 1) L.19
+	(0, 26): M
+	(0, 27): Wna (__file_foo_0_25.inode, 0x2000000000000010) L.19
+	(0, 28): Wna (__file_foo_0_25.flags, 512) L.19
+	(0, 29): Wna (__file_foo_0_25.pos, 0) L.19
+	(0, 30): Wrel (__file_foo_0_25.pos_lock, 0) L.19
+	(0, 31): Wrel (__file_foo_0_25.count, 1) L.19
+
+Trace to (0, 31):
+[main] cons-optr-rdonly.c: 15: int fd = creat("foo", S_IRWXU);
+[main] cons-optr-rdonly.c: 15: int fd = creat("foo", S_IRWXU);
+[main] cons-optr-rdonly.c: 15: int fd = creat("foo", S_IRWXU);
+[main] cons-optr-rdonly.c: 15: int fd = creat("foo", S_IRWXU);
+[main] cons-optr-rdonly.c: 15: int fd = creat("foo", S_IRWXU);
+[main] cons-optr-rdonly.c: 15: int fd = creat("foo", S_IRWXU);
+[main] cons-optr-rdonly.c: 15: int fd = creat("foo", S_IRWXU);
+[main] cons-optr-rdonly.c: 15: int fd = creat("foo", S_IRWXU);
+[main] cons-optr-rdonly.c: 15: int fd = creat("foo", S_IRWXU);
+[main] cons-optr-rdonly.c: 15: int fd = creat("foo", S_IRWXU);
+[main] cons-optr-rdonly.c: 15: int fd = creat("foo", S_IRWXU);
+[main] cons-optr-rdonly.c: 15: int fd = creat("foo", S_IRWXU);
+[main] cons-optr-rdonly.c: 15: int fd = creat("foo", S_IRWXU);
+[main] cons-optr-rdonly.c: 15: int fd = creat("foo", S_IRWXU);
+[main] cons-optr-rdonly.c: 15: int fd = creat("foo", S_IRWXU);
+[main] cons-optr-rdonly.c: 15: int fd = creat("foo", S_IRWXU);
+[main] cons-optr-rdonly.c: 15: int fd = creat("foo", S_IRWXU);
+[main] cons-optr-rdonly.c: 15: int fd = creat("foo", S_IRWXU);
+[main] cons-optr-rdonly.c: 16: close(fd);
+[main] cons-optr-rdonly.c: 16: close(fd);
+[main] cons-optr-rdonly.c: 19: fd = open("foo", O_RDONLY|O_TRUNC, 0640);
+[main] cons-optr-rdonly.c: 19: fd = open("foo", O_RDONLY|O_TRUNC, 0640);
+[main] cons-optr-rdonly.c: 19: fd = open("foo", O_RDONLY|O_TRUNC, 0640);
+[main] cons-optr-rdonly.c: 19: fd = open("foo", O_RDONLY|O_TRUNC, 0640);
+[main] cons-optr-rdonly.c: 19: fd = open("foo", O_RDONLY|O_TRUNC, 0640);
+[main] cons-optr-rdonly.c: 19: fd = open("foo", O_RDONLY|O_TRUNC, 0640);
+[main] cons-optr-rdonly.c: 19: fd = open("foo", O_RDONLY|O_TRUNC, 0640);
+[main] cons-optr-rdonly.c: 19: fd = open("foo", O_RDONLY|O_TRUNC, 0640);
+[main] cons-optr-rdonly.c: 19: fd = open("foo", O_RDONLY|O_TRUNC, 0640);
+File is not open for writing
+Number of complete executions explored: 0
+Number of blocked executions seen: 1

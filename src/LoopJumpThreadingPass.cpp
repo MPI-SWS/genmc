@@ -62,16 +62,16 @@ PHINode *getPHIConstEntryValueUsedInCond(Loop *l)
 	return nullptr;
 }
 
-std::unique_ptr<SExpr> generateExprJumpsToBody(Loop *l)
+std::unique_ptr<SExpr<Value *>> generateExprJumpsToBody(Loop *l)
 {
 	auto condExp  = InstAnnotator().annotateBBCond(l->getHeader(), l->getLoopPredecessor());
 	auto *bi = dyn_cast<BranchInst>(l->getHeader()->getTerminator());
 	if (!bi)
-		return ConcreteExpr::createFalse();
+		return ConcreteExpr<Value *>::createFalse();
 
 	if (inLoopBody(l, bi->getSuccessor(0)))
 		return condExp;
-	return NotExpr::create(std::move(condExp));
+	return NotExpr<Value *>::create(std::move(condExp));
 }
 
 bool entryAlwaysJumpsToBody(Loop *l)
@@ -86,8 +86,8 @@ bool entryAlwaysJumpsToBody(Loop *l)
 
 	/* ...and check whether it always evaluates to true */
 	size_t numSeen;
-	auto res = SExprEvaluator().evaluate(e.get(), std::unordered_map<Value *, APInt>(), &numSeen);
-	return (numSeen == 0) && res.getBoolValue();
+	auto res = SExprEvaluator<Value *>().evaluate(e.get(), SExprEvaluator<Value *>::VMap(), &numSeen);
+	return (numSeen == 0) && res.getBool();
 }
 
 bool invertLoop(Loop *l, PHINode *criticalPHI)

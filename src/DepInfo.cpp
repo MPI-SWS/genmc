@@ -20,22 +20,6 @@ n * You should have received a copy of the GNU General Public License
 
 #include "DepInfo.hpp"
 
-void DepInfo::update(const DepInfo& dep)
-{
-	set_.insert(dep.set_);
-	return;
-}
-
-void DepInfo::clear()
-{
-	set_.clear();
-}
-
-bool DepInfo::empty() const
-{
-	return set_.empty();
-}
-
 llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const DepInfo &dep)
 {
 	return s << dep.set_;

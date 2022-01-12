@@ -37,13 +37,20 @@
 #define WARN_ON_ONCE(condition, id, msg) GenMCError::warnOnOnce(condition, id) << WARN_MESSAGE(msg)
 #define ERROR(msg) ({ GenMCError::warn() << ERROR_MESSAGE(msg); exit(EUSER); })
 #define ERROR_ON(condition, msg) ({ if (condition) { ERROR(msg); } })
-
 #define BUG() do { \
 	llvm::errs() << "BUG: Failure at " << __FILE__ ":" << __LINE__ \
 		     << "/" << __func__ << "()!\n";		       \
 	exit(EGENMC);						       \
 	} while (0)
 #define BUG_ON(condition) do { if (condition) BUG(); } while (0)
+
+#ifdef ENABLE_GENMC_DEBUG
+# define GENMC_DEBUG(s) do {			\
+	s					\
+	} while (0)
+#else
+# define GENMC_DEBUG(s) do {} while (0)
+#endif
 
 #define ECOMPILE 5
 #define EGENMC   7
@@ -61,13 +68,13 @@ namespace GenMCError {
 
 /* Useful for debugging (naive generalized printing doesn't work for llvm::raw_ostream) */
 template<typename T>
-std::ostream& print(std::ostream &out, const T &val)
+llvm::raw_ostream& print(llvm::raw_ostream &out, const T &val)
 {
 	return (out << val);
 }
 
 template<typename T1, typename T2>
-std::ostream& print(std::ostream &out, const std::pair<T1, T2> &val)
+llvm::raw_ostream& print(llvm::raw_ostream &out, const std::pair<T1, T2> &val)
 {
 	return (out << "(" << val.first << ", " << val.second << ")");
 }
@@ -75,7 +82,8 @@ std::ostream& print(std::ostream &out, const std::pair<T1, T2> &val)
 template <typename Container>
 std::string format(const Container &c)
 {
-	std::ostringstream out;
+	std::string str;
+	llvm::raw_string_ostream out(str);
 
 	out << "[ ";
 	for (const auto &e : c)
@@ -87,7 +95,8 @@ std::string format(const Container &c)
 template <typename T1, typename T2>
 std::string format(const std::pair<T1, T2> &p)
 {
-	std::ostringstream out;
+	std::string str;
+	llvm::raw_string_ostream out(str);
 	print(out, p);
 	return out.str();
 }

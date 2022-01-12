@@ -36,3 +36,4 @@ Trace to (1, 5):
 [thread_1] var_names.c: 20: atomic_store_explicit(&shared->y[0].c, 42, memory_order_relaxed);
 [thread_1] var_names.c: 23: shared->z = 42;
 Number of complete executions explored: 0
+Number of blocked executions seen: 1

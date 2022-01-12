@@ -59,8 +59,7 @@ public:
 
 	/* Represents the structure on which calculations take place */
 	using GlobalRelation = AdjList<Event, EventHasher>;
-	using PerLocRelation = std::unordered_map<const llvm::GenericValue *,
-						  GlobalRelation >;
+	using PerLocRelation = std::unordered_map<SAddr, GlobalRelation>;
 
 	/* Constructor */
 	Calculator(ExecutionGraph &g) : execGraph(g) {}
@@ -80,11 +79,7 @@ public:
 	/* The calculator is informed about the removal of some events */
 	virtual void removeAfter(const VectorClock &preds) = 0;
 
-	/* The calculator is informed about the restoration of some events */
-	virtual void
-	restorePrefix(const ReadLabel *rLab,
-		      const std::vector<std::unique_ptr<EventLabel> > &storePrefix,
-		      const std::vector<std::pair<Event, Event> > &status) = 0;
+	virtual std::unique_ptr<Calculator> clone(ExecutionGraph &g) const = 0;
 
 private:
 	/* A reference to the graph managing object */

@@ -36,97 +36,12 @@
  */
 class WBCalculator : public CoherenceCalculator {
 
-public:
-
-	/* Constructor */
-	WBCalculator(ExecutionGraph &m, bool ooo)
-		: CoherenceCalculator(CC_WritesBefore, m, ooo) {}
-
-	/* Track coherence at location addr */
-	void
-	trackCoherenceAtLoc(const llvm::GenericValue *addr) override;
-
-	/* Returns the range of all the possible (i.e., not violating coherence
-	 * places a store can be inserted without inserting it */
-	std::pair<int, int>
-	getPossiblePlacings(const llvm::GenericValue *addr,
-			    Event store, bool isRMW) override;
-
-	/* Tracks a store by inserting it into the appropriate offset */
-	void
-	addStoreToLoc(const llvm::GenericValue *addr, Event store, int offset) override;
-	void
-	addStoreToLocAfter(const llvm::GenericValue *addr, Event store, Event pred) override;
-
-	/* Returns whether STORE is maximal in LOC */
-	bool isCoMaximal(const llvm::GenericValue *addr, Event store) override;
-	/* Returns whether STORE is maximal in LOC */
-	bool isCachedCoMaximal(const llvm::GenericValue *addr, Event store) override;
-
-	/* Returns a list of stores to a particular memory location */
-	const std::vector<Event>&
-	getStoresToLoc(const llvm::GenericValue *addr) const override;
-
-	/* Returns all the stores for which if "read" reads-from, coherence
-	 * is not violated */
-	std::vector<Event>
-	getCoherentStores(const llvm::GenericValue *addr, Event read) override;
-
-	/* Returns all the reads that "wLab" can revisit without violating
-	 * coherence */
-	std::vector<Event>
-	getCoherentRevisits(const WriteLabel *wLab) override;
-
-	/* Saves the coherence status for all write labels in prefix.
-	 * This means that for each write we save a predecessor in preds (or within
-	 * the prefix itself), which will be present when the prefix is restored. */
-	std::vector<std::pair<Event, Event> >
-	saveCoherenceStatus(const std::vector<std::unique_ptr<EventLabel> > &prefix,
-			    const ReadLabel *rLab) const override;
-
-	/* Calculates WB */
-	GlobalRelation calcWb(const llvm::GenericValue *addr) const;
-
-	/* Calculates WB restricted in v */
-	GlobalRelation calcWbRestricted(const llvm::GenericValue *addr,
-					const VectorClock &v) const;
-
-	/* Populates "wb" so that it represents coherence at loc "addr".
-	 * If "prop" is provided, only stores satisfying it are considered.
-	 * If "rel" is provided, "rel" is used instead of hb to provide ordering */
-	template <typename F>
-	Calculator::CalculationResult
-	calcWbRelation(const llvm::GenericValue *addr, GlobalRelation &wb,
-		       F prop = [](Event e){ return true; });
-	template <typename F>
-	Calculator::CalculationResult
-	calcWbRelation(const llvm::GenericValue *addr, GlobalRelation &wb,
-		       const GlobalRelation &rel,
-		       F prop = [](Event e){ return true; });
-
-
-	void initCalc() override;
-
-	Calculator::CalculationResult doCalc() override;
-
-	/* Restores a previously saved coherence status */
-	void
-	restorePrefix(const ReadLabel *rLab,
-		      const std::vector<std::unique_ptr<EventLabel> > &storePrefix,
-		      const std::vector<std::pair<Event, Event> > &status) override;
-
-	/* Will remove stores not in preds */
-	void removeAfter(const VectorClock &preds) override;
-
-	static bool classof(const CoherenceCalculator *cohTracker) {
-		return cohTracker->getKind() == CC_WritesBefore;
-	}
-
 private:
 	/*
 	 * Stores a calculation results so that subsequent queries of particular
 	 * kinds will not have to calculate WB again. Currently stores information
 	 * about (the most recent) calculations taking place on a single memory location.
+	 * FIXME: Now assumes that the user knows beforehand whether some info is cached.
 	 */
 	class Cache {
 
@@ -141,7 +56,7 @@ private:
 		Kind getKind() { return k; }
 
 		/*
-		 * Caches the fact that E1 and E2 aer maximal;
+		 * Caches the fact that E1 and E2 are maximal;
 		 * (assumes that we got this from an optimization)
 		 */
 		void addMaximalInfo(const std::vector<Event> &es) {
@@ -161,6 +76,10 @@ private:
 		void addCalcInfo(GlobalRelation &&wb) {
 			k = InternalCalc;
 			cache = std::move(wb);
+		}
+		const GlobalRelation &getCalcInfo() {
+			BUG_ON(getKind() != InternalCalc);;
+			return cache;
 		}
 
 		bool isMaximal(const Event &store) {
@@ -185,6 +104,105 @@ private:
 		GlobalRelation cache;
 	};
 
+public:
+
+	/* Constructor */
+	WBCalculator(ExecutionGraph &m, bool ooo)
+		: CoherenceCalculator(CC_WritesBefore, m, ooo) {}
+
+	iterator begin() override { return stores_.begin(); };
+	iterator end() override { return stores_.end(); };
+	const_iterator cbegin() const override { return stores_.cbegin(); };
+	const_iterator cend() const override { return stores_.cend(); };
+
+	/* Track coherence at location addr */
+	void
+	trackCoherenceAtLoc(SAddr addr) override;
+
+	/* Returns the range of all the possible (i.e., not violating coherence
+	 * places a store can be inserted without inserting it */
+	std::pair<int, int>
+	getPossiblePlacings(SAddr addr, Event store, bool isRMW) override;
+
+	/* Tracks a store by inserting it into the appropriate offset */
+	void
+	addStoreToLoc(SAddr addr, Event store, int offset) override;
+	void
+	addStoreToLocAfter(SAddr addr, Event store, Event pred) override;
+
+	/* Returns whether STORE is maximal in LOC */
+	bool isCoMaximal(SAddr addr, Event store) override;
+	/* Returns whether STORE is maximal in LOC */
+	bool isCachedCoMaximal(SAddr addr, Event store) override;
+
+	/* Returns a list of stores to a particular memory location */
+	const std::vector<Event>&
+	getStoresToLoc(SAddr addr) const override;
+
+	/* Returns all the stores for which if "read" reads-from,
+	 * coherence is not violated.
+	 * Result is ordered according to coherence maximality */
+	std::vector<Event>
+	getCoherentStores(SAddr addr, Event read) override;
+
+	/* Returns all the reads that "wLab" can revisit without violating
+	 * coherence */
+	std::vector<Event>
+	getCoherentRevisits(const WriteLabel *wLab) override;
+
+	bool inMaximalPath(const ReadLabel *rLab, const WriteLabel *wLab) override;
+
+	/* Calculates WB */
+	GlobalRelation calcWb(SAddr addr) const;
+	GlobalRelation calcWbRestricted(SAddr addr, const VectorClock &v) const;
+
+	/* Calculates and caches WB */
+	const GlobalRelation &calcCacheWb(SAddr addr);
+	const GlobalRelation &calcCacheWbRestricted(SAddr addr, const VectorClock &v);
+
+	/* Populates "wb" so that it represents coherence at loc "addr".
+	 * If "prop" is provided, only stores satisfying it are considered.
+	 * If "rel" is provided, "rel" is used instead of hb to provide ordering */
+	template <typename F>
+	Calculator::CalculationResult
+	calcWbRelation(SAddr addr, GlobalRelation &wb,
+		       F prop = [](Event e){ return true; });
+	template <typename F>
+	Calculator::CalculationResult
+	calcWbRelation(SAddr addr, GlobalRelation &wb, const GlobalRelation &rel,
+		       F prop = [](Event e){ return true; });
+
+
+	void initCalc() override;
+
+	Calculator::CalculationResult doCalc() override;
+
+	void removeAfter(const VectorClock &preds) override;
+
+#ifdef ENABLE_GENMC_DEBUG
+	/* Saves the coherence status for all write labels in prefix.
+	 * This means that for each write we save a predecessor in preds (or within
+	 * the prefix itself), which will be present when the prefix is restored. */
+	std::vector<std::pair<Event, Event> >
+	saveCoherenceStatus(const std::vector<std::unique_ptr<EventLabel> > &prefix,
+			    const ReadLabel *rLab) const override;
+#endif
+
+	/* FIXME: When copying coherence calcs, OOO should be decided based on G */
+	std::unique_ptr<Calculator> clone(ExecutionGraph &g) const override {
+		return LLVM_MAKE_UNIQUE<WBCalculator>(g, outOfOrder);
+	}
+
+	static bool classof(const CoherenceCalculator *cohTracker) {
+		return cohTracker->getKind() == CC_WritesBefore;
+	}
+
+private:
+
+	bool isLocOrdered(SAddr addr) const { return ordered_.at(addr); }
+	bool isLocOrderedRestricted(SAddr addr, const VectorClock &v) const;
+	void setLocOrderedStatus(SAddr addr, bool status) { ordered_[addr] = status; }
+
 	Cache &getCache() { return cache_; }
 
 	std::vector<unsigned int> calcRMWLimits(const GlobalRelation &wb) const;
@@ -194,28 +212,59 @@ private:
 	void expandMaximalAndMarkOverwritten(const std::vector<Event> &stores,
 					     View &storeView);
 
-	bool tryOptimizeWBCalculation(const llvm::GenericValue *addr,
-				      Event read, std::vector<Event> &result);
+	bool tryOptimizeWBCalculation(SAddr addr, Event read, std::vector<Event> &result);
 
 	bool isWbMaximal(const WriteLabel *wLab, const std::vector<Event> &ls) const;
 
-	bool isCoherentRf(const llvm::GenericValue *addr,
-			  const GlobalRelation &wb, Event read,
-			  Event store, int storeWbIdx);
-	bool isInitCoherentRf(const GlobalRelation &wb, Event read);
+	bool hasSuccRfBefore(SAddr addr, Event a, Event b);
+	bool hasSuccRfBeforeRestricted(SAddr addr, Event a, Event b,
+				       const VectorClock &v, bool orderedInView);
 
-	bool isCoherentRevisit(const WriteLabel *sLab, Event read) const;
+	bool hasPredHbOptRfAfter(SAddr addr, Event a, Event b);
+	bool hasPredHbOptRfAfterRestricted(SAddr addr, Event a, Event b,
+					   const VectorClock &v, bool orderedInView);
 
-	typedef std::unordered_map<const llvm::GenericValue *,
-				   std::vector<Event> > StoresList;
+	bool isCoherentRf(SAddr addr, Event read, Event store);
+	bool isInitCoherentRf(SAddr addr, Event read);
+
+	bool isCoherentRevisit(const WriteLabel *sLab, Event read);
+
+	const Calculator::GlobalRelation &
+	getOrInsertWbCalc(SAddr addr, const VectorClock &v, Calculator::PerLocRelation &cache);
+
+	Event getOrInsertWbMaximal(const ReadLabel *lab, const VectorClock &v,
+				   std::unordered_map<SAddr, Event> &cache);
+
+	bool coherenceSuccRemainInGraph(const ReadLabel *rLab, const WriteLabel *wLab);
+
+	Event getMaximalOOO(const ReadLabel *rLab, const WriteLabel *wLab, const ReadLabel *lab);
+	bool wasAddedMaximally(const ReadLabel *rLab, const WriteLabel *wLab,
+			       const EventLabel *lab, std::unordered_map<SAddr, Event> &cache);
+
+	/* Returns true if LAB is co-after any event that would be
+	 * removed by the revisit SLAB->RLAB */
+	bool isCoAfterRemoved(const ReadLabel *rLab, const WriteLabel *sLab,
+			      const EventLabel *lab, Calculator::PerLocRelation &wbs);
+
+	/* Returns true if LAB is rb-before any event that would be part
+	 * of the saved prefix triggered by the revisit SLAB->RLAB  */
+	bool isRbBeforeSavedPrefix(const ReadLabel *rLab, const WriteLabel *sLab,
+				   const EventLabel *lab, Calculator::PerLocRelation &wbs);
+
+	Event getTiebraker(const ReadLabel *revLab, const WriteLabel *wLab, const ReadLabel *lab) const;
+	bool ignoresDeletedStore(const ReadLabel *revLab, const WriteLabel *wLab, const ReadLabel *lab) const;
+
+	typedef std::unordered_map<SAddr, std::vector<Event> > StoresList;
 	StoresList stores_;
+
+	std::unordered_map<SAddr, bool> ordered_;
 
 	Cache cache_;
 };
 
 template <typename F>
 Calculator::CalculationResult
-WBCalculator::calcWbRelation(const llvm::GenericValue *addr, GlobalRelation &wb,
+WBCalculator::calcWbRelation(SAddr addr, GlobalRelation &wb,
 			     F prop /* = [](Event e){ return true; } */)
 {
 	auto &gm = getGraph();
@@ -226,7 +275,7 @@ WBCalculator::calcWbRelation(const llvm::GenericValue *addr, GlobalRelation &wb,
 
 template <typename F>
 Calculator::CalculationResult
-WBCalculator::calcWbRelation(const llvm::GenericValue *addr, GlobalRelation &matrix,
+WBCalculator::calcWbRelation(SAddr addr, GlobalRelation &matrix,
 			     const GlobalRelation &rel,
 			     F prop /* = [](Event e){ return true; } */)
 {

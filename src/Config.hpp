@@ -28,18 +28,22 @@
 
 enum class ModelType { rc11, imm, lkmm };
 enum class SchedulePolicy { ltr, wf, random };
+#ifdef ENABLE_GENMC_DEBUG
+enum class VerbosityLevel { V0, V1, V2, V3 };
+#endif
 
 struct Config {
 
 public:
-	/* General syntax */
+	/*** General syntax ***/
 	std::vector<std::string> cflags;
 	std::string inputFile;
 
-	/* Exploration options */
+	/*** Exploration options ***/
 	ModelType model;
 	bool isDepTrackingModel;
 	CoherenceType coherence;
+	unsigned int threads;
 	bool LAPOR;
 	bool symmetryReduction;
 	CheckConsType checkConsType;
@@ -50,9 +54,8 @@ public:
 	bool disableRaceDetection;
 	bool disableBAM;
 	bool disableStopOnSystemError;
-	std::string specsFile;
 
-	/* Persistency options */
+	/*** Persistency options ***/
 	bool persevere;
 	ProgramPoint checkPersPoint;
 	unsigned int blockSize;
@@ -60,7 +63,7 @@ public:
 	JournalDataFS journalData;
 	bool disableDelalloc;
 
-	/* Transformation options */
+	/*** Transformation options ***/
 	int unroll;
 	bool castElimination;
 	bool loopJumpThreading;
@@ -68,8 +71,7 @@ public:
 	bool codeCondenser;
 	bool loadAnnot;
 
-	/* Debugging options */
-	bool countDuplicateExecs;
+	/*** Debugging options ***/
 	bool inputFromBitcodeFile;
 	bool printExecGraphs;
 	bool prettyPrintExecGraphs;
@@ -78,9 +80,14 @@ public:
 	bool printRandomScheduleSeed;
 	std::string transformFile;
 	std::string programEntryFun;
-	bool validateExecGraphs;
 	unsigned int warnOnGraphSize;
+#ifdef ENABLE_GENMC_DEBUG
+	bool validateExecGraphs;
+	bool countDuplicateExecs;
+	VerbosityLevel vLevel;
+#endif
 
+	/* Parses the CLI options and initialized the respective fields */
 	void getConfigOptions(int argc, char **argv);
 
 private:

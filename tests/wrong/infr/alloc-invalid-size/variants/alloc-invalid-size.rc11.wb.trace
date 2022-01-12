@@ -6,3 +6,4 @@ Event (0, 0) in graph:
 Trace to (0, 0):
 Invalid size in malloc()
 Number of complete executions explored: 0
+Number of blocked executions seen: 1

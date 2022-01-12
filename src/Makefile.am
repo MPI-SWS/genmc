@@ -20,7 +20,7 @@ libgenmc_a_SOURCES = \
   DepTracker.hpp \
   DepView.cpp DepView.hpp \
   DriverGraphEnumAPI.hpp \
-  DriverFactory.cpp DriverFactory.hpp \
+  DriverFactory.hpp \
   Error.cpp Error.hpp \
   Event.cpp Event.hpp \
   EventLabel.cpp EventLabel.hpp \
@@ -29,14 +29,13 @@ libgenmc_a_SOURCES = \
   ExternalFunctions.cpp \
   GenMCDriver.cpp GenMCDriver.hpp \
   GraphBuilder.hpp \
-  IMMDepTracker.hpp \
   IMMDriver.cpp IMMDriver.hpp \
   InstAnnotator.cpp InstAnnotator.hpp \
   Interpreter.cpp Interpreter.h \
   IntrinsicLoweringPass.cpp IntrinsicLoweringPass.hpp \
+  LabelIterator.hpp \
   LoadAnnotationPass.cpp LoadAnnotationPass.hpp \
   LBCalculatorLAPOR.hpp LBCalculatorLAPOR.cpp \
-  Library.cpp Library.hpp \
   LKMMDriver.cpp LKMMDriver.hpp \
   LLVMModule.cpp LLVMModule.hpp \
   LLVMUtils.cpp LLVMUtils.hpp \
@@ -44,8 +43,11 @@ libgenmc_a_SOURCES = \
   LoopJumpThreadingPass.cpp LoopJumpThreadingPass.hpp \
   Matrix2D.hpp Matrix2D.tcc \
   MDataCollectionPass.hpp MDataCollectionPass.cpp \
+  MemAccess.hpp \
   MOCalculator.hpp MOCalculator.cpp \
+  ModuleID.hpp \
   ModuleInfo.cpp ModuleInfo.hpp \
+  NameInfo.cpp NameInfo.hpp \
   Parser.cpp Parser.hpp \
   PersistencyChecker.cpp PersistencyChecker.hpp \
   PromoteMemIntrinsicPass.cpp PromoteMemIntrinsicPass.hpp \
@@ -57,11 +59,18 @@ libgenmc_a_SOURCES = \
   RCULinkCalculator.cpp RCULinkCalculator.hpp \
   RCUFenceCalculator.cpp RCUFenceCalculator.hpp \
   RevisitSet.cpp RevisitSet.hpp \
-  SExpr.cpp SExpr.hpp \
-  SExprVisitor.cpp SExprVisitor.hpp \
+  SAddr.cpp SAddr.hpp \
+  SAddrAllocator.hpp \
+  SExpr.tcc SExpr.hpp \
+  SExprVisitor.tcc SExprVisitor.hpp \
+  SVal.cpp SVal.hpp \
   SpinAssumePass.cpp SpinAssumePass.hpp \
+  WBIterator.hpp \
   WBCalculator.cpp WBCalculator.hpp \
+  ThreadPinner.cpp ThreadPinner.hpp \
+  ThreadPool.cpp ThreadPool.hpp \
   WorkSet.hpp WorkSet.cpp \
+  value_ptr.hpp \
   VectorClock.hpp VectorClock.cpp \
   View.hpp View.cpp \
   VSet.hpp VSet.tcc \
@@ -71,4 +80,4 @@ libgenmc_a_SOURCES = \
 AM_CXXFLAGS = -Wno-unknown-warning-option -DINCLUDE_DIR=\"$(pkgincludedir)/$(pkg)\" -DSRC_INCLUDE_DIR=\"$(abs_top_builddir)/include\"
 bin_PROGRAMS = genmc
 genmc_SOURCES = main.cpp
-genmc_LDADD   = libgenmc.a -lclangCodeGen -lclangFrontend -lclangFrontendTool -lclangDriver -lclangSerialization -lclangParse -lclangSema -lclangStaticAnalyzerFrontend -lclangStaticAnalyzerCheckers -lclangStaticAnalyzerCore -lclangAnalysis -lclangARCMigrate -lclangRewriteFrontend -lclangEdit -lclangAST -lclangASTMatchers -lclangLex -lclangBasic
+genmc_LDADD   = libgenmc.a -lclangCodeGen -lclangFrontend -lclangFrontendTool -lclangDriver -lclangSerialization -lclangParse -lclangSema -lclangStaticAnalyzerFrontend -lclangStaticAnalyzerCheckers -lclangStaticAnalyzerCore -lclangAnalysis -lclangARCMigrate -lclangRewriteFrontend -lclangEdit -lclangAST -lclangASTMatchers -lclangLex -lclangBasic -lpthread

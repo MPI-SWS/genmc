@@ -23,8 +23,8 @@
 
 bool DepView::contains(const Event e) const
 {
-	return e.index <= (*this)[e.thread] && e.thread <= holes_.size() &&
-		!holes_[e.thread].count(e.index);
+	return e.thread < view_.size() && e.index <= (*this)[e.thread] &&
+	       e.thread < holes_.size() && !holes_[e.thread].count(e.index);
 }
 
 void DepView::addHole(const Event e)

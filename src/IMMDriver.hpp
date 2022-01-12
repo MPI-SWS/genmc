@@ -26,13 +26,11 @@
 class IMMDriver : public GenMCDriver {
 
 public:
+	IMMDriver(std::shared_ptr<const Config> conf, std::unique_ptr<llvm::Module> mod,
+		  std::unique_ptr<ModuleInfo> MI);
 
-	IMMDriver(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Module> mod, clock_t start);
-
-	void updateLabelViews(EventLabel *lab) override;
+	void updateLabelViews(EventLabel *lab, const EventDeps *deps) override;
 	Event findDataRaceForMemAccess(const MemAccessLabel *mLab) override;
-	std::vector<Event> getStoresToLoc(const llvm::GenericValue *addr) override;
-	std::vector<Event> getRevisitLoads(const WriteLabel *lab) override;
 	void changeRf(Event read, Event store) override;
 	void updateStart(Event create, Event start) override;
 	bool updateJoin(Event join, Event childLast) override;
@@ -40,21 +38,22 @@ public:
 
 private:
 
+	DepView getDepsAsView(const EventDeps *deps);
 	View calcBasicHbView(Event e) const;
-	DepView calcPPoView(Event e); /* not const */
+	DepView calcPPoView(Event e, const EventDeps *deps); /* not const */
 	void updateRelView(DepView &pporf, EventLabel *lab);
 	void calcFenceRelRfPoBefore(Event last, View &v);
 	void updateReadViewsFromRf(DepView &pporf, View &hb, const ReadLabel *lab);
 
-	void calcBasicViews(EventLabel *lab);
-	void calcReadViews(ReadLabel *lab);
-	void calcWriteViews(WriteLabel *lab);
+	void calcBasicViews(EventLabel *lab, const EventDeps *deps);
+	void calcReadViews(ReadLabel *lab, const EventDeps *deps);
+	void calcWriteViews(WriteLabel *lab, const EventDeps *deps);
 	void calcWriteMsgView(WriteLabel *lab);
 	void calcRMWWriteMsgView(WriteLabel *lab);
-	void calcFenceViews(FenceLabel *lab);
-	void calcJoinViews(ThreadJoinLabel *lab);
+	void calcFenceViews(FenceLabel *lab, const EventDeps *deps);
+	void calcJoinViews(ThreadJoinLabel *lab, const EventDeps *deps);
 	void calcStartViews(ThreadStartLabel *lab);
-	void calcLockLAPORViews(LockLabelLAPOR *lab);
+	void calcLockLAPORViews(LockLabelLAPOR *lab, const EventDeps *deps);
 };
 
 #endif /* __IMM_WB_DRIVER_HPP__ */

@@ -253,12 +253,10 @@ Calculator::CalculationResult LBCalculatorLAPOR::doCalc()
 				if (coLoc.second(s1, s2) && g.isHbOptRfBeforeRel(hbRelation, s2, s1))
 					return Calculator::CalculationResult(changed, false);
 
-				auto *oLab = g.getEventLabel(s2);
-				BUG_ON(!llvm::isa<WriteLabel>(oLab));
-				auto *sLab = static_cast<const WriteLabel *>(oLab);
-				auto &readers = sLab->getReadersList();
+				auto *sLab = llvm::dyn_cast<WriteLabel>(g.getEventLabel(s2));
+				BUG_ON(!sLab);
 				if (coLoc.second(s1, s2) &&
-				    std::any_of(readers.begin(), readers.end(),
+				    std::any_of(sLab->readers_begin(), sLab->readers_end(),
 						[&](Event r)
 						{ return g.isHbOptRfBeforeRel(hbRelation, r, s1); }))
 					return Calculator::CalculationResult(changed, false);
@@ -278,17 +276,7 @@ void LBCalculatorLAPOR::removeAfter(const VectorClock &preds)
 	return;
 }
 
-void LBCalculatorLAPOR::addLockToList(const llvm::GenericValue *addr, const Event lock)
+void LBCalculatorLAPOR::addLockToList(SAddr addr, const Event lock)
 {
 	locks[addr].push_back(lock);
-}
-
-void LBCalculatorLAPOR::restorePrefix(const ReadLabel *rLab,
-				      const std::vector<std::unique_ptr<EventLabel> > &storePrefix,
-				      const std::vector<std::pair<Event, Event> > &status)
-{
-	for (const auto &lab : storePrefix) {
-		if (auto *lLab = llvm::dyn_cast<LockLabelLAPOR>(lab.get()))
-			addLockToList(lLab->getLockAddr(), lLab->getPos());
-	}
 }

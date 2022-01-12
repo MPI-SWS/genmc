@@ -26,12 +26,11 @@
 class RC11Driver : public GenMCDriver {
 
 public:
-	RC11Driver(std::unique_ptr<Config> conf, std::unique_ptr<llvm::Module> mod, clock_t start);
+	RC11Driver(std::shared_ptr<const Config> conf, std::unique_ptr<llvm::Module> mod,
+		   std::unique_ptr<ModuleInfo> MI);
 
-	void updateLabelViews(EventLabel *lab) override;
+	void updateLabelViews(EventLabel *lab, const EventDeps *deps) override;
 	Event findDataRaceForMemAccess(const MemAccessLabel *mLab) override;
-	std::vector<Event> getStoresToLoc(const llvm::GenericValue *addr) override;
-	std::vector<Event> getRevisitLoads(const WriteLabel *lab) override;
 	void changeRf(Event read, Event store) override;
 	void updateStart(Event create, Event start) override;
 	bool updateJoin(Event join, Event childLast) override;

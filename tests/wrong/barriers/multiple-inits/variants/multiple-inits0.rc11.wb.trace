@@ -29,3 +29,4 @@ Trace to (0, 1):
 [main] multiple-inits0.c: 31: pthread_barrier_init(&barrier, NULL, 42);
 Called barrier_init() multiple times!
 Number of complete executions explored: 1
+Number of blocked executions seen: 1

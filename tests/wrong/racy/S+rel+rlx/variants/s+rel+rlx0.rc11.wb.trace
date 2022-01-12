@@ -24,4 +24,5 @@ Trace to (2, 2):
 Trace to (1, 1):
 [main] s+rel+rlx0.c: 11: if (pthread_create(&t1, NULL, thread_1, NULL))
 [thread_1] s+rel+rlx.c: 6: x = 1;
-Number of complete executions explored: 1
+Number of complete executions explored: 0
+Number of blocked executions seen: 1

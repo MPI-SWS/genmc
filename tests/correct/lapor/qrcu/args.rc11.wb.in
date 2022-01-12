@@ -1,1 +1,1 @@
--I../tests/correct/lapor/qrcu/
+-lapor -unroll=3 | -I../tests/correct/lapor/qrcu/

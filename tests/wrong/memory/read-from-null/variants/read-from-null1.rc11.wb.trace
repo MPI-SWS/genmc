@@ -2,20 +2,16 @@ Error detected: Attempt to access non-allocated memory!
 Event (1, 5) in graph:
 <-1, 0> main:
 	(0, 0): B
-	(0, 1): M
-	(0, 2): M
-	(0, 3): TC [forks 1] L.11
-	(0, 4): Wna (t2, 1) L.11
-	(0, 5): TC [forks 2] L.13
-	(0, 6): Wna (t1, 2) L.13
-	(0, 7): E
+	(0, 1): TC [forks 1] L.11
+	(0, 2): TC [forks 2] L.13
+	(0, 3): E
 <0, 1> thread2:
 	(1, 0): B
 	(1, 1): M
 	(1, 2): Racq (p, 0) [INIT] L.14: read-from-null.c
-	(1, 3): Wna (, 0) L.14: read-from-null.c
-	(1, 4): Rna (, 0x0) [(1, 3)] L.14: read-from-null.c
-	(1, 5): Rrlx (, 0) [BOTTOM] L.15: read-from-null.c
+	(1, 3): Wna (atomic-temp, 0) L.14: read-from-null.c
+	(1, 4): Rna (atomic-temp, 0x0) [(1, 3)] L.14: read-from-null.c
+	(1, 5): Rrlx (???, 0) [BOTTOM] L.15: read-from-null.c
 <0, 2> thread1:
 	(2, 0): B
 
@@ -26,3 +22,4 @@ Trace to (1, 5):
 [thread2] read-from-null.c: 14: atomic_int *a = atomic_load_explicit(&p, memory_order_acquire);
 [thread2] read-from-null.c: 15: atomic_load_explicit(a, memory_order_relaxed);
 Number of complete executions explored: 0
+Number of blocked executions seen: 1

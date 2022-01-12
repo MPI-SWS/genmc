@@ -106,7 +106,14 @@ print_variant_debug_results() {
     elif test -n "${failure}"
     then
 	outcome="${LIME_YELLOW}FAILED${NC}"
-	explored="${explored_failed:-0}/${expected}"
+	if [[ -n "${explored_failed}" ]]
+	then
+	    explored="${explored_failed}/${expected}"
+	fi
+	if [[ -n "${blocked_failed}" ]]
+	then
+	    blocked="${blocked_failed}/${expected_blocked}"
+	fi
 	result=1
     else
 	outcome="${GREEN}SAFE  ${NC}"
@@ -158,13 +165,12 @@ runvariants() {
     failure=""
     outcome_failure=""
     failure_output=""
-    unroll="" && [[ -f "${dir}/unroll.in" ]] && unroll="-unroll="`head -1 "${dir}/unroll.in"`
-    checker_args=() && [[ -f "${dir}/genmc.${model}.${coherence}.in" ]] &&
-	checker_args=(`cat "${dir}/genmc.${model}.${coherence}.in"`)
+    genmc_args=$(echo "$test_args" | cut -f1 -d'|')
+    clang_args=$(echo "$test_args" | cut -f2 -d'|')
     for t in $dir/variants/*.c $dir/variants/*.cpp
     do
 	vars=$((vars+1))
-	output=`"${GenMC}" ${GENMCFLAGS} "-${model}" "-${coherence}" "${unroll}" $(echo ${checker_args[@]}) -- ${CFLAGS} ${test_args} "${t}" 2>&1`
+	output=`"${GenMC}" ${GENMCFLAGS} "-${model}" "-${coherence}" $genmc_args -- ${CFLAGS} ${clang_args} "${t}" 2>&1`
 	if test "$?" -ne 0
 	then
 	    failure_output="${output}"
@@ -184,6 +190,15 @@ runvariants() {
 	    failure=1
 	fi
     done
+    if test -n "${check_blocked}" -a "${blocked}" != "${expected_blocked}"
+    then
+	blocked_failed="${blocked}"
+	if [[ -z "${failure_output}" ]]
+	then
+	    failure_output="${output}"
+	fi
+	failure=1
+    fi
     average_time=`echo "scale=2; ${test_time}/${vars}" | bc -l`
     print_variant_results
 }
@@ -196,15 +211,21 @@ runtest() {
     fi
     if test -f "${dir}/args.${model}.${coherence}.in"
     then
+	varNum=0
 	while read test_args <&3 && read expected <&4; do
+	    varNum=$((varNum + 1))
 	    n="/`echo ${test_args} |
                  awk ' { if (match($0, /-DN=[0-9]+/)) print substr($0, RSTART+4, RLENGTH-4) } '`"
+	    expected_blocked="" && [[ -f "${dir}/blocked.${model}.${coherence}.in" ]] &&
+		expected_blocked=`sed "${varNum}q;d" "${dir}/blocked.${model}.${coherence}.in"`
 	    runvariants
 	done 3<"${dir}/args.${model}.${coherence}.in" 4<"${dir}/expected.${model}.${coherence}.in"
     else
 	test_args=""
 	n=""
 	expected=`head -n 1 "${dir}/expected.${model}.${coherence}.in"`
+	expected_blocked="" && [[ -f "${dir}/blocked.${model}.${coherence}.in" ]] &&
+	    expected_blocked=`head -n 1 "${dir}/blocked.${model}.${coherence}.in"`
 	runvariants
     fi
 }

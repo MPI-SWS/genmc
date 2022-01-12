@@ -26,17 +26,11 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s,  const WorkItem::Kind k)
 	case WorkItem::WI_FRev:
 		s << "FR";
 		break;
-	case WorkItem::WI_FRevLib:
-		s << "FRL";
-		break;
 	case WorkItem::WI_BRev:
 		s << "BR";
 		break;
 	case WorkItem::WI_MO:
 		s << "MO";
-		break;
-	case WorkItem::WI_MOLib:
-		s << "MOL";
 		break;
 	default:
 		s << "UNKNOWN";
@@ -48,8 +42,7 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s,  const WorkItem::Kind k)
 llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const WorkItem &item)
 {
 	switch (item.getKind()) {
-	case WorkItem::WI_FRev:
-	case WorkItem::WI_FRevLib: {
+	case WorkItem::WI_FRev: {
 		auto &fi = static_cast<const FRevItem &>(item);
 		s << fi.getKind() << "(" << fi.getPos() << ": " << fi.getRev() << ")";
 		break;
@@ -63,8 +56,7 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const WorkItem &item)
 		s << "]";
 		break;
 	}
-	case WorkItem::WI_MO:
-	case WorkItem::WI_MOLib: {
+	case WorkItem::WI_MO: {
 		auto &mi = static_cast<const MOItem &>(item);
 		s << mi.getKind() << "(" << mi.getPos() << ": " << mi.getMOPos() << ")";
 		break;

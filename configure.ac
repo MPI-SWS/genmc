@@ -1,4 +1,4 @@
-AC_INIT([GenMC], [0.6.1], [michalis@mpi-sws.org], [genmc], [https://plv.mpi-sws.org/genmc])
+AC_INIT([GenMC], [0.7], [michalis@mpi-sws.org], [genmc], [https://plv.mpi-sws.org/genmc])
 
 m4_include([m4/ax_llvm.m4])
 m4_include([m4/ax_clang.m4])
@@ -19,9 +19,10 @@ AX_CLANG(,[
 ])
 AX_GIT_COMMIT
 
-## Checks for libraries
+## Check for libraries
 AC_CHECK_LIB([dl], [dlopen],[],[AC_MSG_FAILURE([Could not find library libdl.])])
 AC_CHECK_LIB([ffi], [ffi_call],[],[AC_MSG_FAILURE([Could not find library libffi.])])
+AC_CHECK_LIB([hwloc], [hwloc_topology_init], [], [])
 
 ## Check for (proper) C++11 stdlibc++ support
 AC_MSG_CHECKING([whether enum class can be used as unordered_map<> key])
@@ -37,7 +38,7 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
          AC_MSG_RESULT([yes])],
         [AC_MSG_RESULT([no])])
 
-
+## Check for LLVM headers
 ## XXX: List below is currently INCOMPLETE
 AC_CHECK_HEADERS([\
   stdlib.h \
@@ -48,7 +49,7 @@ AC_CHECK_HEADERS([\
   llvm/Support/ErrorHandling.h
 ],[],[AC_MSG_FAILURE([Could not find necessary headers.])],[AC_INCLUDES_DEFAULT])
 
-## Checks for header files in alternative locations
+## Checks for headers in alternative locations (useful for LLVM headers)
 AC_DEFUN([AC_CHECK_HEADERS_ALT],
 [
   ac_check_headers_alt_ok="no"
@@ -62,6 +63,7 @@ AC_DEFUN([AC_CHECK_HEADERS_ALT],
   fi
 ])
 
+AC_CHECK_HEADERS_ALT([llvm/Bitcode/ReaderWriter.h llvm/Bitcode/BitcodeReader.h llvm/Bitcode/BitcodeWriter.h], [], [AC_MSG_FAILURE([Could not find necessary headers.])], [AC_INCLUDES_DEFAULT])
 AC_CHECK_HEADERS_ALT([llvm/DataLayout.h llvm/IR/DataLayout.h],[],[AC_MSG_FAILURE([Could not find necessary headers.])],[AC_INCLUDES_DEFAULT])
 AC_CHECK_HEADERS_ALT([llvm/DebugInfo.h llvm/Analysis/DebugInfo.h llvm/IR/DebugInfo.h],[],[AC_MSG_FAILURE([Could not find necessary headers.])],[AC_INCLUDES_DEFAULT])
 AC_CHECK_HEADERS_ALT([llvm/DerivedTypes.h llvm/IR/DerivedTypes.h],[],[AC_MSG_FAILURE([Could not find necessary headers.])],[AC_INCLUDES_DEFAULT])
@@ -208,6 +210,26 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
          AC_MSG_RESULT([yes])],
         [AC_MSG_RESULT([no])])
 
+## Check whether llvm::WriteBitcodeToFile takes a pointer (>= 7)
+AC_MSG_CHECKING([whether llvm::WriteBitcodeToFile takes a pointer])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <string>
+#include <llvm/Support/raw_ostream.h>
+#ifdef HAVE_LLVM_BITCODE_BITCODEWRITER_H
+# include <llvm/Bitcode/BitcodeWriter.h>
+#else
+# include <llvm/Bitcode/ReaderWriter.h>
+#endif
+]],[[
+	std::string str;
+	llvm::raw_string_ostream  stream(str);
+	llvm::WriteBitcodeToFile(nullptr, stream);
+]])],
+        [AC_DEFINE([LLVM_WRITE_BITCODE_TO_FILE_PTR],[1],
+         [Define if llvm::WriteBitcodeToFile takes a pointer.])
+         AC_MSG_RESULT([yes])],
+        [AC_MSG_RESULT([no])])
+
 ## Check whether llvm::LoadInst constructor needs a type argument (>= 11)
 AC_MSG_CHECKING([whether llvm::LoadInst constructor needs a type argument])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
@@ -244,6 +266,21 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 ]])],
         [AC_DEFINE([LLVM_HAS_GET_SYNC_SCOPE_ID],[1],
          [Define if getSyncScopeID() exists.])
+	 AC_MSG_RESULT([yes])],
+	 [AC_MSG_RESULT([no])])
+
+## Check whether llvm::AllocaInst constructor takes an AddressSpace argument (> 4)
+AC_MSG_CHECKING([whether llvm::AllocaInst constructor takes an AddressSpace argument])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/IR/Instructions.h>
+]],[[
+  llvm::Type *type = nullptr;
+  llvm::Value *size = nullptr;
+  llvm::BasicBlock *bb = nullptr;
+  llvm::AllocaInst a(type, 0, size, "value", bb);
+]])],
+        [AC_DEFINE([LLVM_ALLOCAINST_TAKES_ADDRSPACE],[1],
+         [Define if llvm::AllocaInst constructor takes an address space argument.])
          AC_MSG_RESULT([yes])],
         [AC_MSG_RESULT([no])])
 
@@ -274,6 +311,33 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
          [case llvm::Type::FixedVectorTyID: case llvm::Type::ScalableVectorTyID:],
          [Case labels depending on whether VectorTyID exists.])
          AC_MSG_RESULT([{llvm::Type::FixedVectorTyID, llvm::Type::ScalableVectorTyID}])])
+
+## Check whether Instruction::isLifetimeStartOrEnd() exists (LLVM > 12)
+AC_MSG_CHECKING([for Instruction::isLifetimeStartOrEnd])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/IR/Instruction.h>
+]],[[
+  llvm::Instruction *i = nullptr;
+  auto res = i->isLifetimeStartOrEnd();
+]])],
+        [AC_DEFINE([LLVM_HAS_IS_LIFETIME_START_OR_END],[1],
+         [Define if the function Instruction::isLifetimeStartOrEnd() exists.])
+         AC_MSG_RESULT([yes])],
+        [AC_MSG_RESULT([no])])
+
+## Check whether Instruction::isDroppable() exists (LLVM > 12)
+AC_MSG_CHECKING([for Instruction::isDroppable])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/IR/Instruction.h>
+]],[[
+  llvm::Instruction *i = nullptr;
+  auto res = i->isDroppable()
+]])],
+        [AC_DEFINE([LLVM_HAS_IS_DROPPABLE],[1],
+         [Define if the function Instruction::isDroppable() exists.])
+         AC_MSG_RESULT([yes])],
+        [AC_MSG_RESULT([no])])
+
 
 ## Check whether the function llvm::onlyUsedByLifetimeMarkersOrDroppableInsts() exists (LLVM >= 12)
 AC_MSG_CHECKING([for llvm::onlyUsedByLifetimeMarkersOrDroppableInsts])
@@ -429,16 +493,27 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
            [AC_MSG_RESULT([() -> llvm::error_code])])
 ])])
 
-## Check if the value F_None in llvm::sys::fs::OpenFlags exists
-AC_MSG_CHECKING([for llvm::sys::fs::OpenFlags (F_None)])
+## Check if llvm::sys::fs::OpenFlags exists
+AC_MSG_CHECKING([for llvm::sys::fs::OpenFlags])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/Support/FileSystem.h>
+]],[[
+  llvm::sys::fs::OpenFlags f;
+]])],
+           [AC_DEFINE([HAVE_LLVM_SYS_FS_OPENFLAGS],[1],
+            [Define if the type llvm::sys::fs::OpenFlags exists.])
+            AC_MSG_RESULT([yes])],
+           [AC_MSG_RESULT([no])])
+
+## Check if llvm::sys::fs::OpenFlags::F_None exists
+AC_MSG_CHECKING([for llvm::sys::fs::OpenFlags::F_None])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 #include <llvm/Support/FileSystem.h>
 ]],[[
   llvm::sys::fs::OpenFlags f = llvm::sys::fs::F_None;
-  return f;
 ]])],
-           [AC_DEFINE([HAVE_LLVM_SYS_FS_OPENFLAGS],[1],
-            [Define if the type llvm::sys::fs::OpenFlags exists.])
+           [AC_DEFINE([HAVE_LLVM_SYS_FS_OPENFLAGS_FNONE],[1],
+            [Define if the type llvm::sys::fs::OpenFlags::F_None exists.])
             AC_MSG_RESULT([yes])],
            [AC_MSG_RESULT([no])])
 

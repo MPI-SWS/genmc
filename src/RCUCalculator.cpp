@@ -141,9 +141,3 @@ Calculator::CalculationResult RCUCalculator::doCalc()
 void RCUCalculator::removeAfter(const VectorClock &preds)
 {
 }
-
-void RCUCalculator::restorePrefix(const ReadLabel *rLab,
-				 const std::vector<std::unique_ptr<EventLabel> > &storePrefix,
-				 const std::vector<std::pair<Event, Event> > &status)
-{
-}

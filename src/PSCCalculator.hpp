@@ -39,14 +39,13 @@ public:
 	/* The calculator is informed about the removal of some events */
 	void removeAfter(const VectorClock &preds) override;
 
-	/* The calculator is informed about the restoration of some events */
-	void restorePrefix(const ReadLabel *rLab,
-			   const std::vector<std::unique_ptr<EventLabel> > &storePrefix,
-			   const std::vector<std::pair<Event, Event> > &status) override;
+	std::unique_ptr<Calculator> clone(ExecutionGraph &g) const override {
+		return LLVM_MAKE_UNIQUE<PSCCalculator>(g);
+	}
 
 private:
 	/* Returns a list with all accesses that are accessed at least twice */
-	std::vector<const llvm::GenericValue *> getDoubleLocs() const;
+	std::vector<SAddr> getDoubleLocs() const;
 
 	std::vector<Event> calcSCFencesSuccs(const std::vector<Event> &fcs,
 					     const Event e) const;
@@ -74,7 +73,7 @@ private:
 			  Calculator::GlobalRelation &pscMatrix) const;
 
 	void addSCEcos(const std::vector<Event> &fcs,
-		       const std::vector<const llvm::GenericValue *> &scLocs,
+		       const std::vector<SAddr> &scLocs,
 		       Calculator::GlobalRelation &matrix) const;
 
 	void addInitEdges(const std::vector<Event> &fcs,

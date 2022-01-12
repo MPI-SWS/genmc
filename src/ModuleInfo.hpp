@@ -23,59 +23,64 @@
 
 #include "config.h"
 #include "Config.hpp"
+#include "ModuleID.hpp"
+#include "NameInfo.hpp"
+#include "SExpr.hpp"
+#include "VSet.hpp"
 #include <llvm/ADT/BitVector.h>
 #include <llvm/ADT/IndexedMap.h>
 #include <llvm/IR/DerivedTypes.h>
-#include <llvm/IR/Value.h>
+#include <llvm/IR/Instructions.h>
 
 #include <memory>
 #include <string>
 #include <unordered_map>
 
+namespace llvm {
+	class Value;
+};
+
 /*
  * Information kept about the module under test by the interpreter.
  */
 
-class SExpr;
 
 /*
  * VariableInfo struct -- This struct contains source-code level (naming)
  * information for variables.
  */
+template<typename Key>
 struct VariableInfo {
 
-  /*
-   * We keep a map (Values -> (offset, name_at_offset)), and after
-   * the interpreter and the variables are allocated and initialized,
-   * we use the map to dynamically find out the name corresponding to
-   * a particular address.
-   */
-  using NameInfo = std::vector<std::pair<unsigned, std::string > >;
+	/* Internal types (not exposed to user programs) for which we might
+	 * want to collect naming information */
+	using ID = Key;
+	using InternalKey = std::string;
 
-  /* Internal types (not exposed to user programs) for which we might
-   * want to collect naming information */
-  using InternalType = std::string;
+	std::unordered_map<ID, NameInfo> globalInfo;
+	std::unordered_map<ID, NameInfo> localInfo;
+	std::unordered_map<InternalKey, NameInfo> internalInfo;
 
-  std::unordered_map<llvm::Value *, NameInfo> globalInfo;
-  std::unordered_map<llvm::Value *, NameInfo> localInfo;
-  std::unordered_map<InternalType, NameInfo> internalInfo;
+	void clear() {
+		globalInfo.clear();
+		localInfo.clear();
+		internalInfo.clear();
+	}
 };
 
 /*
  * SAVer: AnnotationInfo struct -- Contains annotations for loads used by assume()s
  */
+template<typename K, typename V>
 struct AnnotationInfo {
 
-  using AnnotUM = std::unordered_map<llvm::Instruction *, std::unique_ptr<SExpr> >;
+	using AnnotUM = std::unordered_map<K, std::unique_ptr<SExpr<V>>>;
 
-  /* Forward declarations (pimpl-style) */
-  AnnotationInfo();
-  AnnotationInfo(AnnotationInfo &&other);
-  ~AnnotationInfo();
-  AnnotationInfo &operator=(AnnotationInfo &&other);
+	void clear() { annotMap.clear(); }
 
-  AnnotUM annotMap;
+	AnnotUM annotMap;
 };
+
 
 /*
  * Pers: FsInfo struct -- Maintains some information regarding the
@@ -83,44 +88,79 @@ struct AnnotationInfo {
  */
 struct FsInfo {
 
-  using Filename = std::string;
-  using NameMap = std::unordered_map<Filename, void *>;
+	/* Explicitly initialize PODs to be C++11-compatible */
+	FsInfo() : inodeTyp(nullptr), fileTyp(nullptr), blockSize(0), maxFileSize(0),
+		   journalData(JournalDataFS::writeback), delalloc(false), dirInode(nullptr) {}
 
-  /* Type information */
-  llvm::StructType *inodeTyp;
-  llvm::StructType *fileTyp;
+	/* Type information */
+	llvm::StructType *inodeTyp;
+	llvm::StructType *fileTyp;
 
-  /* A bitvector of available file descriptors */
-  llvm::BitVector fds;
+	/* Filesystem options*/
+	unsigned int blockSize;
+	unsigned int maxFileSize;
 
-  /* Filesystem options*/
-  unsigned int blockSize;
-  unsigned int maxFileSize;
+	/* "Mount" options */
+	JournalDataFS journalData;
+	bool delalloc;
 
-  /* "Mount" options */
-  JournalDataFS journalData;
-  bool delalloc;
+	/* Filenames in the module. These must be known statically. */
+	VSet<std::string> filenames;
 
-  /* A map from file descriptors to file descriptions */
-  llvm::IndexedMap<void *> fdToFile;
+	/* Should hold the address of the directory's inode */
+	void *dirInode;
 
-  /* Should hold the address of the directory's inode */
-  void *dirInode;
+	void clear() {
+		inodeTyp = nullptr;
+		fileTyp = nullptr;
+		blockSize = 0;
+		maxFileSize = 0;
+		journalData = JournalDataFS::writeback;
+		delalloc = false;
+		filenames.clear();
+		dirInode = nullptr;
+	}
+};
 
-  /* Maps a filename to the address of the contents of the directory's inode for
-   * said name (the contents should have the address of the file's inode) */
-  NameMap nameToInodeAddr;
+/*
+ * PassModuleInfo -- A struct to be used from LLVM passes where
+ * different kinds of data can be stored. It is different from
+ * ModuleInfo as it does not require the module to have assigned IDs.
+ */
+struct PassModuleInfo {
+
+	PassModuleInfo() = default;
+
+	VariableInfo<llvm::Value *> varInfo;
+	AnnotationInfo<llvm::LoadInst *, llvm::Value *> annotInfo;
+	VSet<std::string> filenames;
 };
 
 /*
  * ModuleInfo -- A struct to pack together all useful information like
- * VariableInfo and FsInfo
+ * VariableInfo and FsInfo for a given module
  */
 struct ModuleInfo {
 
-  VariableInfo varInfo;
-  AnnotationInfo annotInfo;
-  FsInfo fsInfo;
+	ModuleInfo() = delete;
+	ModuleInfo(const llvm::Module &mod);
+
+	void clear();
+
+	/* Collects all IDs for the given module.
+	 * Should be manually called after the module is modified */
+	void collectIDs();
+
+	/* Assumes only statis information have been collected */
+	std::unique_ptr<ModuleInfo> clone(const llvm::Module &mod) const;
+
+	ModuleID idInfo;
+	VariableInfo<ModuleID::ID> varInfo;
+	AnnotationInfo<ModuleID::ID, ModuleID::ID> annotInfo;
+	FsInfo fsInfo;
+
+private:
+	const llvm::Module &mod;
 };
 
 #endif /* __MODULE_INFO_HPP__ */

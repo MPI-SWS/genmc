@@ -24,9 +24,10 @@
 #include "config.h"
 #include <llvm/Pass.h>
 
-struct VariableInfo;
+template<typename K, typename V>
 struct AnnotationInfo;
-struct FsInfo;
+struct PassModuleInfo;
+struct ModuleInfo;
 
 /*
  * Finds all bisimilarity pairs in a function.
@@ -62,7 +63,7 @@ llvm::ModulePass *createIntrinsicLoweringPass(llvm::Module &M);
 /*
  * Collects annotation information for a function's load instructions.
  */
-llvm::FunctionPass *createLoadAnnotationPass(AnnotationInfo &AI);
+llvm::FunctionPass *createLoadAnnotationPass(AnnotationInfo<llvm::LoadInst *, llvm::Value *> &AI);
 
 /*
  * Unrolls a loop N times.
@@ -76,8 +77,9 @@ llvm::Pass *createLoopJumpThreadingPass();
 
 /*
  * Collects naming information about a module's variables and fs calls.
+ * Makes sure the module information is up-to-date before doing so.
  */
-llvm::ModulePass *createMDataCollectionPass(VariableInfo &VI, FsInfo &FI);
+llvm::ModulePass *createMDataCollectionPass(PassModuleInfo *PI);
 
 /*
  * Promotes memcpy() and memset() calls to a series of loads and stores.
@@ -89,7 +91,9 @@ llvm::ModulePass *createPromoteMemIntrinsicPass();
  */
 llvm::Pass *createSpinAssumePass(bool markStarts = false);
 
-/* Eliminates certain form of casts */
+/*
+ * Eliminates certain form of casts
+ */
 llvm::Pass *createEliminateCastsPass();
 
 #endif /* __PASSES_HPP__ */

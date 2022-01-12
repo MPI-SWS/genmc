@@ -1,1 +1,1 @@
--I../tests/correct/data-structures/seqlock-atomic/
+  | -I../tests/correct/data-structures/seqlock-atomic/
