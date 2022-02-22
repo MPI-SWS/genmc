@@ -62,175 +62,84 @@
 # define GET_BOUND_ALLOCA_ALIGN_ARG(val) val
 #endif
 
+using namespace llvm;
+
 void LoopUnrollPass::getAnalysisUsage(llvm::AnalysisUsage &au) const
 {
-	llvm::LoopPass::getAnalysisUsage(au);
+	LoopPass::getAnalysisUsage(au);
 	au.addRequired<DeclareInternalsPass>();
 	au.addPreserved<DeclareInternalsPass>();
 }
 
 /*
-   This function creates a block that only calls the special __VERIFIER_end_loop() function.
-   The Interpreter should drop the execution when such a call is encountered.
-*/
-llvm::BasicBlock *LoopUnrollPass::createLoopDivergeBlock(llvm::Loop *l)
+ * Returns a PHI node the only purpose of which is to serve as the
+ * bound variable for this loop.  It does not set up the arguments for
+ * the PHI node.
+ */
+PHINode *createBoundInit(Loop *l)
 {
-	llvm::Function *parentFun = (*l->block_begin())->getParent();
-	llvm::Function *endLoopFun = parentFun->getParent()->getFunction("__VERIFIER_end_loop");
+	Function *parentFun = (*l->block_begin())->getParent();
+	Type *int32Typ = Type::getInt32Ty(parentFun->getContext());
+
+	PHINode *bound = PHINode::Create(int32Typ, 0, "bound.val", &*l->getHeader()->begin());
+	return bound;
+}
+
+/*
+ * Returns an instruction which decrements the bound variable for this loop (BOUNDVAL).
+ * The returned value should be later checked in order to bound the loop.
+ */
+BinaryOperator *createBoundDecrement(Loop *l, PHINode *boundVal)
+{
+	Function *parentFun = (*l->block_begin())->getParent();
+	Type *int32Typ = Type::getInt32Ty(parentFun->getContext());
+
+	Value *minusOne = ConstantInt::get(int32Typ, -1, true);
+	Instruction *pt = &*l->getHeader()->getFirstInsertionPt();
+	return BinaryOperator::CreateNSW(Instruction::Add, boundVal, minusOne,
+					 LOOP_NAME(l) + ".bound.dec", pt);
+}
+
+void addBoundCmpAndSpinEndBefore(Loop *l, PHINode *val, BinaryOperator *decVal)
+{
+	Function *parentFun = (*l->block_begin())->getParent();
+	Function *endLoopFun = parentFun->getParent()->getFunction("__VERIFIER_kill_thread");
+	Type *int32Typ = Type::getInt32Ty(parentFun->getContext());
+
+
+	Value *zero = ConstantInt::get(int32Typ, 0);
+	Value *cmp = new ICmpInst(decVal, ICmpInst::ICMP_EQ, val, zero,
+				  LOOP_NAME(l) + ".bound.cmp");
 
 	BUG_ON(!endLoopFun);
-
-	llvm::BasicBlock *divergeBlock = llvm::BasicBlock::Create(parentFun->getContext(), "diverge", parentFun);
-	llvm::CallInst::Create(endLoopFun, {}, "", divergeBlock);
-	llvm::BranchInst::Create(divergeBlock, divergeBlock);
-
-	return divergeBlock;
-}
-
-/*
- * Creates an allocation for a variable that will be used for bounding this loop.
- * The location return by the alloca() is initialized with the loop's bound.
- */
-llvm::Value *LoopUnrollPass::createBoundAlloca(llvm::Loop *l)
-{
-	llvm::Function *parentFun = (*l->block_begin())->getParent();
-	llvm::BasicBlock::iterator entryInst;
-
-	/*
-	 * LLVM expects all allocas() to be in the beginning of each function.
-	 * We first locate the position in which this alloca() will be inserted.
-	 */
-	for (entryInst = parentFun->begin()->begin();
-	     llvm::dyn_cast<llvm::AllocaInst>(&*entryInst); ++entryInst)
-		;
-
-	/* Create the alloca()), initialize the memory location, and return it */
-	llvm::Value *loopBound = llvm::ConstantInt::get(llvm::Type::getInt32Ty(parentFun->getContext()),
-							unrollDepth);
-	llvm::Value *alloca = new llvm::AllocaInst(llvm::Type::getInt32Ty(parentFun->getContext()),
-						   GET_BOUND_ALLOCA_DUMMY_ARGS(),
-						   GET_BOUND_ALLOCA_ALIGN_ARG(4),
-						   LOOP_NAME(l) + ".max", &*entryInst);
-	llvm::StoreInst *ptr = new llvm::StoreInst(loopBound, alloca, &*entryInst);
-	return alloca;
-}
-
-/*
- * Returns a basic block the only purpose of which is to initialize the bound variable
- * for this loop to the maximum bound. This block needs to be executed before entering a
- * loop for the first time.
- */
-llvm::BasicBlock *LoopUnrollPass::createBoundInitBlock(llvm::Loop *l, llvm::Value *boundAlloca)
-{
-	llvm::Function *parentFun = (*l->block_begin())->getParent();
-	llvm::BasicBlock *initBlock = llvm::BasicBlock::Create(parentFun->getContext(),
-							       "init." + LOOP_NAME(l) + ".bound",
-							       parentFun);
-
-	llvm::Value *initBound = llvm::ConstantInt::get(llvm::Type::getInt32Ty(parentFun->getContext()),
-							unrollDepth);
-	llvm::StoreInst *ptr = new llvm::StoreInst(initBound, boundAlloca, initBlock);
-	llvm::BranchInst::Create(l->getHeader(), initBlock); /* Branch to loop header */
-
-	return initBlock;
-}
-
-/*
- * Returns a block which decrements the bound variable for this loop (boundAlloca).
- * If the new value of the bound variable is 0, the returned block redirects to a
- * divergence block. The returned block needs to be executed after each iteration of the loop.
- */
-llvm::BasicBlock *LoopUnrollPass::createBoundDecrBlock(llvm::Loop *l, llvm::Value *boundAlloca)
-{
-	llvm::Function *parentFun = (*l->block_begin())->getParent();
-
-	/*
-	 * Create a divergence block for when the loop bound has been reached, and a
-	 * block that decreases the bound counter.
-	 */
-	llvm::BasicBlock *divergeBlock = createLoopDivergeBlock(l);
-	llvm::BasicBlock *boundBlock = llvm::BasicBlock::Create(parentFun->getContext(),
-								"dec." + LOOP_NAME(l) + ".bound",
-								parentFun);
-
-	/*
-	 * The form of boundBlock is the following:
-	 *
-	 * %bound.val = load i32, i32* LOOP_BOUND_VAR
-	 * %dec = add nsw i32 %bound.val, -1
-	 * store i32 %dec, i32* LOOP_BOUND_VAR
-	 * %cmp = icmp eq i32 %dec, 0
-	 * br i1 %cmp, label %diverge, label LOOP_HEAD
-	 */
-	llvm::Type *int32Typ = llvm::Type::getInt32Ty(parentFun->getContext());
-	llvm::Value *zero = llvm::ConstantInt::get(int32Typ, 0);
-	llvm::Value *minusOne = llvm::ConstantInt::get(int32Typ, -1, true);
-
-	llvm::Value *val = new llvm::LoadInst(GET_LOADINST_ARG(boundAlloca) boundAlloca, "bound.val", boundBlock);
-	llvm::Value *newVal = llvm::BinaryOperator::CreateNSW(llvm::Instruction::Add, val, minusOne,
-							      LOOP_NAME(l) + ".bound.dec", boundBlock);
-	llvm::StoreInst *ptr = new llvm::StoreInst(newVal, boundAlloca, boundBlock);
-	llvm::Value *cmp = new llvm::ICmpInst(*boundBlock, llvm::ICmpInst::ICMP_EQ, newVal, zero,
-					      LOOP_NAME(l) + ".bound.cmp");
-	llvm::BranchInst::Create(divergeBlock, l->getHeader(), cmp, boundBlock);
-
-	return boundBlock;
-}
-
-/* Redirects all predecessors of l that fulfill the condition f to the block toBlock. */
-template<typename Func>
-void LoopUnrollPass::redirectLoopPreds(llvm::Loop *l, llvm::BasicBlock *toBlock, Func &&f)
-{
-	llvm::BasicBlock *lh = l->getHeader();
-
-	for (auto bb = pred_begin(lh); bb != pred_end(lh); ++bb) {
-		if (!f(*bb))
-			continue;
-
-		TerminatorInst *ti = (*bb)->getTerminator();
-
-		/* Find the successor of bb that redirects to the header */
-		for (auto i = 0u; i < ti->getNumSuccessors(); i++) {
-			if (*bb != toBlock && ti->getSuccessor(i) == lh)
-				ti->setSuccessor(i, toBlock);
-		}
-
-		/* Fix any PHI nodes that had bb as incoming in the loop header */
-		for (auto it = lh->begin(); auto phi = llvm::dyn_cast<llvm::PHINode>(it); ++it) {
-			for (auto i = 0u; i < phi->getNumIncomingValues(); i++) {
-				llvm::BasicBlock *ib = phi->getIncomingBlock(i);
-				if (ib == *bb)
-					phi->setIncomingBlock(i, toBlock);
-			}
-		}
-
-	}
+	CallInst::Create(endLoopFun, {cmp}, "", decVal);
 	return;
 }
 
-bool LoopUnrollPass::runOnLoop(llvm::Loop *l, llvm::LPPassManager &lpm)
+bool LoopUnrollPass::runOnLoop(Loop *l, LPPassManager &lpm)
 {
-	llvm::Value *boundAlloca = createBoundAlloca(l);
-	llvm::BasicBlock *initBlock = createBoundInitBlock(l, boundAlloca);
-	llvm::BasicBlock *boundBlock = createBoundDecrBlock(l, boundAlloca);
+	if (!shouldUnroll(l))
+		return false;
 
-#ifdef LLVM_GET_ANALYSIS_LOOP_INFO
-	l->addBasicBlockToLoop(boundBlock, lpm.getAnalysis<llvm::LoopInfo>().getBase());
-#else
-	l->addBasicBlockToLoop(boundBlock, lpm.getAnalysis<llvm::LoopInfoWrapperPass>().getLoopInfo());
-#endif
+	PHINode *val = createBoundInit(l);
+	BinaryOperator *dec = createBoundDecrement(l, val);
+	Type *int32Typ = Type::getInt32Ty((*l->block_begin())->getParent()->getContext());
 
-	redirectLoopPreds(l, boundBlock, [&](llvm::BasicBlock *bb){ return l->contains(bb); });
-	redirectLoopPreds(l, initBlock, [&](llvm::BasicBlock *bb){ return !l->contains(bb); });
+	/* Adjust incoming values for the bound variable */
+	for (BasicBlock *bb : predecessors(l->getHeader()))
+		val->addIncoming(l->contains(bb) ? (Value *) dec : (Value *)
+				 ConstantInt::get(int32Typ, unrollDepth), bb);
 
+	/* Finally, compare the bound and block if it reaches zero */
+	addBoundCmpAndSpinEndBefore(l, val, dec);
 	return true;
 }
 
-llvm::Pass *createLoopUnrollPass(int depth)
+Pass *createLoopUnrollPass(int depth, const VSet<std::string> &noUnrollFuns /* = {} */)
 {
-	return new LoopUnrollPass(depth);
+	return new LoopUnrollPass(depth, noUnrollFuns);
 }
 
 char LoopUnrollPass::ID = 42;
-// static llvm::RegisterPass<LoopUnrollPass> P("loop-unroll",
+// static RegisterPass<LoopUnrollPass> P("loop-unroll",
 // 					    "Unrolls all loops at LLVM-IR level.");

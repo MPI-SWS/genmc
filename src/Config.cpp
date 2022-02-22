@@ -37,7 +37,7 @@ static llvm::cl::OptionCategory clDebugging("Debugging Options");
 
 /*** General syntax ***/
 
-llvm::cl::list<std::string>
+static llvm::cl::list<std::string>
 clCFLAGS(llvm::cl::Positional, llvm::cl::ZeroOrMore, llvm::cl::desc("-- [CFLAGS]"));
 
 static llvm::cl::opt<std::string>
@@ -46,7 +46,7 @@ clInputFile(llvm::cl::Positional, llvm::cl::Required, llvm::cl::desc("<input fil
 
 /*** Exploration options ***/
 
-llvm::cl::opt<ModelType>
+static llvm::cl::opt<ModelType>
 clModelType(llvm::cl::values(
 		    clEnumValN(ModelType::rc11, "rc11", "RC11 memory model"),
 		    clEnumValN(ModelType::imm,  "imm",  "IMM memory model"),
@@ -59,7 +59,7 @@ clModelType(llvm::cl::values(
 	    llvm::cl::init(ModelType::rc11),
 	    llvm::cl::desc("Choose model type:"));
 
-llvm::cl::opt<CoherenceType>
+static llvm::cl::opt<CoherenceType>
 clCoherenceType(llvm::cl::values(
 			clEnumValN(CoherenceType::mo, "mo", "Track modification order"),
 			clEnumValN(CoherenceType::wb, "wb", "Calculate writes-before")
@@ -68,20 +68,24 @@ clCoherenceType(llvm::cl::values(
 #endif
 			),
 		llvm::cl::cat(clGeneral),
-		llvm::cl::init(CoherenceType::wb),
+		llvm::cl::init(CoherenceType::mo),
 		llvm::cl::desc("Choose coherence type:"));
 
 static llvm::cl::opt<unsigned int>
 clThreads("nthreads", llvm::cl::cat(clGeneral), llvm::cl::init(1),
 	      llvm::cl::desc("Number of threads to be used in the exploration"));
 
-llvm::cl::opt<bool>
+static llvm::cl::opt<bool>
 clLAPOR("lapor", llvm::cl::cat(clGeneral),
 	llvm::cl::desc("Enable Lock-Aware Partial Order Reduction (LAPOR)"));
 
-llvm::cl::opt<bool>
+static llvm::cl::opt<bool>
 clSymmetryReduction("sr", llvm::cl::cat(clGeneral),
 		    llvm::cl::desc("Enable Symmetry Reduction"));
+
+static llvm::cl::opt<bool>
+clHelper("helper", llvm::cl::cat(clGeneral),
+	 llvm::cl::desc("Enable Helper for CDs verification"));
 
 static llvm::cl::opt<bool>
 clPrintErrorTrace("print-error-trace", llvm::cl::cat(clGeneral),
@@ -115,7 +119,7 @@ clCheckConsPoint("check-consistency-point", llvm::cl::init(ProgramPoint::error),
 #endif
 		    ));
 
-llvm::cl::opt<bool>
+static llvm::cl::opt<bool>
 clCheckLiveness("check-liveness", llvm::cl::cat(clGeneral),
 		llvm::cl::desc("Check for liveness violations"));
 
@@ -181,6 +185,12 @@ clLoopUnroll("unroll", llvm::cl::init(-1), llvm::cl::value_desc("N"),
 	     llvm::cl::cat(clTransformation),
 	     llvm::cl::desc("Unroll loops N times"));
 
+static llvm::cl::list<std::string>
+clNoUnrollFuns("no-unroll", llvm::cl::value_desc("fun_name"),
+	       llvm::cl::cat(clTransformation),
+	       llvm::cl::desc("Do not unroll this function"));
+
+
 static llvm::cl::opt<bool>
 clDisableLoopJumpThreading("disable-loop-jump-threading", llvm::cl::cat(clTransformation),
 			   llvm::cl::desc("Disable loop-jump-threading transformation"));
@@ -200,6 +210,14 @@ static llvm::cl::opt<bool>
 clDisableLoadAnnot("disable-load-annotation", llvm::cl::cat(clTransformation),
 		   llvm::cl::desc("Disable load-annotation transformation"));
 
+static llvm::cl::opt<bool>
+clDisableAssumePropagation("disable-assume-propagation", llvm::cl::cat(clTransformation),
+			   llvm::cl::desc("Disable assume-propagation transformation"));
+
+static llvm::cl::opt<bool>
+clDisableConfirmAnnot("disable-confirmation-annotation", llvm::cl::cat(clTransformation),
+		      llvm::cl::desc("Disable confirmation-annotation transformation"));
+
 
 /*** Debugging options ***/
 
@@ -210,7 +228,7 @@ clProgramEntryFunction("program-entry-function", llvm::cl::init("main"),
 
 static llvm::cl::opt<bool>
 clInputFromBitcodeFile("input-from-bitcode-file", llvm::cl::cat(clDebugging),
-		       llvm::cl::desc("Read LLVM bitcode directly from file"));
+		       llvm::cl::desc("The input file contains LLVM bitcode"));
 
 static llvm::cl::opt<std::string>
 clTransformFile("transform-output", llvm::cl::init(""),	llvm::cl::value_desc("file"),
@@ -244,12 +262,16 @@ static llvm::cl::opt<bool>
 clPrintExecGraphs("print-exec-graphs", llvm::cl::cat(clDebugging),
 		  llvm::cl::desc("Print explored execution graphs"));
 
-static llvm::cl::opt<bool>
-clPrettyPrintExecGraphs("pretty-print-exec-graphs", llvm::cl::cat(clDebugging),
-			llvm::cl::desc("Pretty-print explored execution graphs"));
-
 
 #ifdef ENABLE_GENMC_DEBUG
+static llvm::cl::opt<bool>
+clPrintBlockedExecs("print-blocked-execs", llvm::cl::cat(clDebugging),
+		    llvm::cl::desc("Print blocked execution graphs"));
+
+static llvm::cl::opt<bool>
+clColorAccesses("color-accesses", llvm::cl::cat(clDebugging),
+		llvm::cl::desc("Color accesses depending on revisitability"));
+
 static llvm::cl::opt<bool>
 clValidateExecGraphs("validate-exec-graphs", llvm::cl::cat(clDebugging),
 		     llvm::cl::desc("Validate the execution graphs in each step"));
@@ -307,6 +329,12 @@ void Config::checkConfigOptions() const
 	if (clLAPOR) {
 		ERROR("LAPOR is temporarily disabled.\n");
 	}
+	if (clHelper && clSchedulePolicy == SchedulePolicy::random) {
+		ERROR("Helper cannot be used with -schedule-policy=random.\n");
+	}
+	if (clHelper && clCoherenceType != CoherenceType::mo) {
+		ERROR("Helper can only be used with -mo.\n");
+	}
 
 	/* Check debugging options */
 	if (clSchedulePolicy != SchedulePolicy::random && clPrintRandomScheduleSeed) {
@@ -335,6 +363,7 @@ void Config::saveConfigOptions()
 	threads = clThreads;
 	LAPOR = clLAPOR;
 	symmetryReduction = clSymmetryReduction;
+	helper = clHelper;
 	printErrorTrace = clPrintErrorTrace;
 	checkConsType = clCheckConsType;
 	checkConsPoint = (LAPOR ? ProgramPoint::step : clCheckConsPoint);
@@ -353,11 +382,14 @@ void Config::saveConfigOptions()
 
 	/* Save transformation options */
 	unroll = clLoopUnroll;
+	noUnrollFuns.insert(clNoUnrollFuns.begin(), clNoUnrollFuns.end());
 	loopJumpThreading = !clDisableLoopJumpThreading;
 	castElimination = !clDisableCastElimination;
 	spinAssume = !clDisableSpinAssume;
 	codeCondenser = !clDisableCodeCondenser;
 	loadAnnot = !clDisableLoadAnnot;
+	assumePropagation = !clDisableAssumePropagation;
+	confirmAnnot = !clDisableConfirmAnnot;
 
 	/* Save debugging options */
 	programEntryFun = clProgramEntryFunction;
@@ -366,10 +398,11 @@ void Config::saveConfigOptions()
 	printRandomScheduleSeed = clPrintRandomScheduleSeed;
 	randomScheduleSeed = clRandomScheduleSeed;
 	printExecGraphs = clPrintExecGraphs;
-	prettyPrintExecGraphs = clPrettyPrintExecGraphs;
 	inputFromBitcodeFile = clInputFromBitcodeFile;
 	transformFile = clTransformFile;
 #ifdef ENABLE_GENMC_DEBUG
+	printBlockedExecs = clPrintBlockedExecs;
+	colorAccesses = clColorAccesses;
 	validateExecGraphs = clValidateExecGraphs;
 	countDuplicateExecs = clCountDuplicateExecs;
 	vLevel = clVLevel;
@@ -396,6 +429,7 @@ void Config::getConfigOptions(int argc, char **argv)
 	saveConfigOptions();
 
 #ifdef LLVM_HAS_RESET_COMMANDLINE_PARSER
-	llvm::cl::ResetCommandLineParser();
+	llvm::cl::ResetAllOptionOccurrences();
+	clInputFile.removeArgument();
 #endif
 }

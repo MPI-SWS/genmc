@@ -1,0 +1,21 @@
+Error detected: Liveness violation!
+Event (0, 6) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): TC [forks 1] L.18
+	(0, 2): Wsc (y, 1) L.20
+	(0, 3): LOOP_BEGIN
+	(0, 4): SPIN_START
+	(0, 5): Rsc (x, 0) [INIT] L.21
+	(0, 6): BLOCK [spinloop]
+<0, 1> run:
+	(1, 0): B
+	(1, 1): Rsc (y, 0) [INIT] L.9
+	(1, 2): E
+
+Trace to (0, 6):
+[main] simple0.c: 18: pthread_create(&t, NULL, run, NULL);
+[main] simple0.c: 21: while (!x)
+Non-terminating spinloop: thread 0
+Number of complete executions explored: 1
+Number of blocked executions seen: 2

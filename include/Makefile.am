@@ -10,6 +10,7 @@ nobase_genmc_HEADERS = \
   errno.h \
   fcntl.h \
   genmc.h \
+  genmc_internal.h \
   lkmm.h \
   pthread.h \
   stdatomic.h \

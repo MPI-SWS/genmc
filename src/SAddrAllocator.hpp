@@ -18,7 +18,7 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-#ifndef __SADRR_ALLOCATOR_HPP__
+#ifndef __SADDR_ALLOCATOR_HPP__
 #define __SADDR_ALLOCATOR_HPP__
 
 #include "config.h"

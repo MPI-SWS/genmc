@@ -75,6 +75,11 @@ public:
 	/* Returns true if the clock contains e */
 	bool contains(const Event e) const;
 
+	/* Returns true if there's a hole in E's position */
+	bool hasHole(const Event e) const {
+		return e.thread < holes_.size() && !holes_[e.thread].count(e.index);
+	}
+
 	/* Records that the event in the index of e has not been
 	 * seen in the respective thread */
 	void addHole(const Event e);

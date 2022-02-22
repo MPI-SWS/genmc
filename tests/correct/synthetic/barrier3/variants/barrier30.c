@@ -10,7 +10,7 @@
 pthread_barrier_t barrier;
 atomic_int x;
 
-void *thread_n1()
+void *thread_n1(void *unused)
 {
 	int r = 0;
 	while (!atomic_compare_exchange_strong(&x, &r, 1))
@@ -20,7 +20,7 @@ void *thread_n1()
 	return NULL;
 }
 
-void *thread_n2()
+void *thread_n2(void *unused)
 {
 	pthread_barrier_wait(&barrier);
 	return NULL;

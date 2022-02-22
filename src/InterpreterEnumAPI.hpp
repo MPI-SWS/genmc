@@ -21,6 +21,7 @@
 #ifndef __INTERPRETER_ENUM_API_HPP__
 #define __INTERPRETER_ENUM_API_HPP__
 
+#include <llvm/Support/raw_ostream.h>
 #include <config.h>
 #include <string>
 #include <unordered_map>
@@ -30,10 +31,11 @@ enum class BlockageType {
 	NotBlocked,
 	ThreadJoin,
 	Spinloop,
-	SpinloopEnd,
 	FaiZNESpinloop,
 	LockZNESpinloop,
-	LockOptBlock,
+	HelpedCas,
+	Confirmation,
+	ReadOptBlock,
 	LockNotAcq,
 	LockNotRel,
 	Barrier,
@@ -54,6 +56,7 @@ enum class Storage { ST_Static, ST_Automatic, ST_Heap, ST_StorageLast };
 /* Modeled functions -- (CAUTION: Order matters) */
 enum class InternalFunctions {
 	FN_AssertFail,
+	FN_OptBegin,
 	FN_LoopBegin,
 	FN_SpinStart,
 
@@ -62,18 +65,27 @@ enum class InternalFunctions {
 	FN_LockZNESpinEnd,
 	FN_Assume,
 	/* Assume calls */
-	FN_EndLoop,
+	FN_KillThread,
 	FN_NondetInt,
 	FN_ThreadSelf,
+	FN_AnnotateRead,
+	FN_AnnotateWrite,
+	FN_AnnotateCas,
+	FN_AnnotateFai,
+	FN_HazptrProtect,
+	FN_HazptrClear,
 	FN_NoSideEffectsLast,
 	/* No side effects */
-	FN_AtomicRmwNoRet,
 	FN_ThreadCreate,
 	FN_ThreadJoin,
 	FN_ThreadExit,
 	FN_Malloc,
 	FN_MallocAligned,
+	FN_HazptrAlloc,
+	FN_MallocLast,
 	FN_Free,
+	FN_HazptrFree,
+	FN_HazptrRetire,
 	FN_MutexInit,
 	FN_MutexLock,
 	FN_MutexUnlock,
@@ -142,6 +154,15 @@ inline bool isAssumeFunction(const std::string &name)
 	return code >= InternalFunctions::FN_SpinEnd && code <= InternalFunctions::FN_Assume;
 }
 
+inline bool isAllocFunction(const std::string &name)
+{
+	if (!isInternalFunction(name))
+		return false;
+
+	auto &code = internalFunNames.at(name);
+	return code >= InternalFunctions::FN_Malloc && code <= InternalFunctions::FN_MallocLast;
+}
+
 inline bool isMutexCode(InternalFunctions code)
 {
 	return (code >= InternalFunctions::FN_MutexInit && code <= InternalFunctions::FN_MutexDestroy);
@@ -183,6 +204,20 @@ enum class SystemError {
 	SE_ESPIPE  = 29,
 };
 
+/* Should match our internal definitions */
+
+#define GENMC_ATTR_LOCAL   0x00000001
+#define GENMC_ATTR_FINAL   0x00000002
+
+#define GENMC_KIND_NONVR   0x00010000
+#define GENMC_KIND_HELPED  0x00020000
+#define GENMC_KIND_HELPING 0x00040000
+#define GENMC_KIND_SPECUL  0x00080000
+#define GENMC_KIND_CONFIRM 0x00100000
+
+#define GENMC_ATTR(flags) ((flags) & (0x0000ffff))
+#define GENMC_KIND(flags) ((flags) & (0xffff0000))
+
 /* For compilers that do not have a recent enough lib{std}c++ */
 #ifndef STDLIBCPP_SUPPORTS_ENUM_MAP_KEYS
 struct EnumClassHash {
@@ -198,5 +233,8 @@ struct EnumClassHash {
 
 extern SystemError systemErrorNumber; // just to inform the driver
 extern const std::unordered_map<SystemError, std::string, ENUM_HASH(SystemError)> errorList;
+
+extern llvm::raw_ostream& operator<<(llvm::raw_ostream& rhs,
+				     const BlockageType &b);
 
 #endif /* __INTERPRETER_ENUM_API_HPP__ */

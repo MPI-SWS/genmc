@@ -48,7 +48,7 @@ bool hasSideEffects(Function *F, SmallVector<Function *, 4> &chain,
 	if (F->empty())
 		return !isCleanInternalFunction(F->getName().str());
 
-	for (auto it = inst_iterator(*F), ei = inst_end(*F); it != ei; ++it) {
+	for (auto it = inst_begin(*F), ei = inst_end(*F); it != ei; ++it) {
 		if (!hasSideEffects(&*it))
 			continue;
 
@@ -76,16 +76,36 @@ bool hasSideEffects(Function *F, VSet<Function *> &clean, VSet<Function *> &dirt
 	return hasSideEffects(F, chain, clean, dirty);
 }
 
+bool isAllocating(Function *F)
+{
+	if (!F->getReturnType()->isPointerTy())
+		return false;
+
+	SmallVector<ReturnInst *, 4> rets;
+	std::for_each(inst_begin(*F), inst_end(*F), [&](Instruction &i){ /* transform-if */
+		if (auto *ri = dyn_cast<ReturnInst>(&i))
+			rets.push_back(ri);
+	});
+
+	return std::all_of(rets.begin(), rets.end(), [](const ReturnInst *ri){
+		auto *rv = ri->getReturnValue();
+		return isa<Instruction>(rv) && isAlloc(dyn_cast<Instruction>(rv));
+	});
+}
+
 bool CallInfoCollectionPass::runOnModule(Module &M)
 {
 	VSet<Function *> dirty;
 
 	clean.clear();
+	alloc.clear();
 	for (auto &F : M) {
 		if (hasSideEffects(&F, clean, dirty))
 			dirty.insert(&F);
 		else
 			clean.insert(&F);
+		if (isAllocating(&F))
+			alloc.insert(&F);
 	}
 	return false;
 }

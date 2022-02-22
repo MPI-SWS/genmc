@@ -51,7 +51,7 @@ static void reclaim(unsigned int node)
 	int t = get_thread_num();
 
 	/* Don't reclaim NULL node */
-	//assert(node);
+	assert(node);
 
 	for (i = 0; i < MAX_FREELIST; i++) {
 		/* Should never race with our own thread here */

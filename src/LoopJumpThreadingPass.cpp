@@ -23,6 +23,7 @@
 #include "LLVMUtils.hpp"
 #include "SExprVisitor.hpp"
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/Value.h>
 
 using namespace llvm;
 
@@ -36,14 +37,31 @@ bool inLoopBody(Loop *l, BasicBlock *bb)
 	return l->contains(bb) && bb != l->getHeader();
 }
 
-bool loopBodyUsesHeaderPHIs(Loop *l)
+bool isNonTrivialUser(User *u, PHINode *criticalPHI)
+{
+	auto *p = dyn_cast<PHINode>(u);
+	return !p || std::any_of(p->user_begin(), p->user_end(),
+				 [criticalPHI](User *us){ return us != criticalPHI; });
+}
+
+/*
+ * Returns true if the header PHIs are used in the body in a "harmless" manner.
+ * Only the criticalPHI is allowed to have uses within the body, and these uses
+ * need to be PHI nodes that are in turn used in the criticalPHI: such uses
+ * are OK because if we prove that the header always jumps to the body,
+ * then these uses can be replaced with the initial value.
+ */
+bool loopBodyUsesHeaderPHIsNonTrivially(Loop *l, PHINode *criticalPHI)
 {
 	auto *h = l->getHeader();
 	for (auto iit = h->begin(); auto *phi = dyn_cast<PHINode>(&*iit); ++iit) {
 		for (auto *u : phi->users()) {
-			if (auto *ui = dyn_cast<Instruction>(u))
-				if (inLoopBody(l, ui->getParent()))
-					return true;
+			if (auto *ui = dyn_cast<Instruction>(u)) {
+				if (inLoopBody(l, ui->getParent())) {
+					if (phi != criticalPHI || isNonTrivialUser(u, criticalPHI))
+						return true;
+				}
+			}
 		}
 	}
 	return false;
@@ -96,18 +114,26 @@ bool invertLoop(Loop *l, PHINode *criticalPHI)
 	auto *phbi = dyn_cast<BranchInst>(ph->getTerminator());
 	auto *h = l->getHeader();
 	auto *hbi = dyn_cast<BranchInst>(h->getTerminator());
-	if (!phbi || !hbi)
+	if (!phbi || !hbi) // sanity check
 		return false;
 
-	/* Set preheader's successor to the loop body */
-	auto phJmpIdx = (phbi->getSuccessor(0) == h) ? 0 : 1;
-	auto *b = (inLoopBody(l, hbi->getSuccessor(0))) ? hbi->getSuccessor(0) : hbi->getSuccessor(1);
-	phbi->setSuccessor(phJmpIdx, b);
+	/* If header's Φ nodes are used in the loop body non-trivially, skip...*/
+	if (loopBodyUsesHeaderPHIsNonTrivially(l, criticalPHI))
+		return false;
 
-	// We could invert the loop even if the body was using the header's Φs (as below)
-	// but this does not buy us anything, as we would not get rid of any Φ nodes
-	// (new ones would have to be inserted)
-	//
+	/*
+	 * In principle, we can invert the loop even if the body was using the header's
+	 * Φs (as in the comment below), but this does not buy us anything, as we would not get
+	 * rid of any Φ nodes (new ones would have to be inserted).
+	 *
+	 * Now, however, we have proven that the critical PHI's value remains unchanged
+	 * as long as the loop is executed, so we can replace all uses with the initial value
+	 */
+	replaceUsesWithIf(criticalPHI, criticalPHI->getIncomingValueForBlock(ph), [&](Use &u){
+			auto *us = dyn_cast<Instruction>(u.getUser());
+			return us && inLoopBody(l, us->getParent());
+		});
+
 	// /*
 	//  * Create a new PHI node to the BB of the body the entry jumps to:
 	//  * this is gonnab be the new header
@@ -121,29 +147,28 @@ bool invertLoop(Loop *l, PHINode *criticalPHI)
 	// criticalPHI->replaceAllUsesWith(newPHI);
 	// newPHI->insertBefore(&*b->begin());
 
-	/* Actually change the header */
-	l->moveToHeader(b);
-
 	/* Fix PHI in the old header */
 	h->removePredecessor(ph);
+
+	/* Set preheader's successor to the loop body */
+	auto phJmpIdx = (phbi->getSuccessor(0) == h) ? 0 : 1;
+	auto *b = (inLoopBody(l, hbi->getSuccessor(0))) ? hbi->getSuccessor(0) : hbi->getSuccessor(1);
+	phbi->setSuccessor(phJmpIdx, b);
+
+	/* Actually change the header */
+	l->moveToHeader(b);
 	return true;
 }
 
 bool LoopJumpThreadingPass::runOnLoop(Loop *l, LPPassManager &lpm)
 {
-	bool modified = false;
-
 	/* The whole point is to get rid of Φ-nodes in the header... */
 	if (!isa<PHINode>(*l->getHeader()->begin()))
-		return modified;
-
-	/* If header's Φ nodes are used in the loop body, skip...*/
-	if (loopBodyUsesHeaderPHIs(l))
-		return modified;
+		return false;
 
 	/* If the header has multiple predecessors, skip */
 	if (!l->getLoopPredecessor())
-		return modified;
+		return false;
 
 	/*
 	 * The header needs to have at least one constant incoming
@@ -151,11 +176,11 @@ bool LoopJumpThreadingPass::runOnLoop(Loop *l, LPPassManager &lpm)
 	 */
 	auto *criticalPHI = getPHIConstEntryValueUsedInCond(l);
 	if (!criticalPHI)
-		return modified;
+		return false;
 
 	if (entryAlwaysJumpsToBody(l))
-		modified = invertLoop(l, criticalPHI);
-	return modified;
+		return invertLoop(l, criticalPHI);
+	return false;
 }
 
 Pass *createLoopJumpThreadingPass()

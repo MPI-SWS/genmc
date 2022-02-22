@@ -72,6 +72,7 @@ public:
 		VS_InvalidBInit,
 		VS_InvalidRecoveryCall,
 		VS_InvalidTruncate,
+		VS_Annotation,
 		VS_MixedSize,
 		VS_SystemError,
 	};
@@ -81,12 +82,13 @@ public:
 		Status status;            /* Verification status */
 		unsigned explored;        /* Number of complete executions explored */
 		unsigned exploredBlocked; /* Number of blocked executions explored */
+		unsigned exploredMoot;
 #ifdef ENABLE_GENMC_DEBUG
 		unsigned duplicates;      /* Number of duplicate executions explored */
 #endif
 		std::string message;      /* A message to be printed */
 
-		Result() : status(Status::VS_OK), explored(0), exploredBlocked(0),
+		Result() : status(Status::VS_OK), explored(0), exploredBlocked(0), exploredMoot(0),
 #ifdef ENABLE_GENMC_DEBUG
 			   duplicates(0),
 #endif
@@ -100,6 +102,7 @@ public:
 			}
 			explored += other.explored;
 			exploredBlocked += other.exploredBlocked;
+			exploredMoot += other.exploredMoot;
 #ifdef ENABLE_GENMC_DEBUG
 			duplicates += other.duplicates;
 #endif
@@ -114,14 +117,15 @@ public:
 		LocalQueueT workqueue;
 		std::unique_ptr<llvm::EELocalState> interpState;
 		bool isMootExecution;
-		Event lockToReschedule;
+		Event readToReschedule;
 		std::vector<Event> threadPrios;
 
 		/* FIXME: Ensure that move semantics work properly for std::unordered_map<> */
 		LocalState() = delete;
 		LocalState(std::unique_ptr<ExecutionGraph> g, RevisitSetT &&r,
 			   LocalQueueT &&w, std::unique_ptr<llvm::EELocalState> state,
-			   bool isMootExecution, Event lockToReschedule, const std::vector<Event> &threadPrios);
+			   bool isMootExecution, Event readToReschedule,
+			   const std::vector<Event> &threadPrios);
 
 		~LocalState();
 	};
@@ -210,6 +214,9 @@ public:
 	/* An unlock() operation has been interpreted, nothing for the interpreter */
 	void visitUnlock(Event pos, SAddr addr, ASize size, const EventDeps *deps);
 
+	/* A helping CAS operation has been interpreter, the result is unobservable */
+	void visitHelpingCas(std::unique_ptr<HelpingCasLabel> hLab, const EventDeps *deps);
+
 	/* A function modeling the beginning of the opening of a file.
 	 * The interpreter will get back the file descriptor */
 	SVal visitDskOpen(std::unique_ptr<DskOpenLabel> oLab);
@@ -226,6 +233,11 @@ public:
 	/* A fence has been interpreted, nothing for the interpreter */
 	void visitFence(std::unique_ptr<FenceLabel> fLab, const EventDeps *deps);
 
+	/* A call to __VERIFIER_opt_begin() has been interpreted.
+	 * Returns whether the block should expand */
+	bool
+	visitOptional(std::unique_ptr<OptionalLabel> lab);
+
 	/* A call to __VERIFIER_loop_begin() has been interpreted */
 	void
 	visitLoopBegin(std::unique_ptr<LoopBeginLabel> lab);
@@ -241,6 +253,10 @@ public:
 	void
 	visitLockZNESpinEnd(std::unique_ptr<LockZNESpinEndLabel> lab);
 
+	/* A thread has terminated abnormally */
+	void
+	visitThreadKill(std::unique_ptr<ThreadKillLabel> lab);
+
 	/* Returns an appropriate result for pthread_self() */
 	SVal visitThreadSelf(const EventDeps *deps);
 
@@ -253,6 +269,9 @@ public:
 
 	/* A thread has just finished execution, nothing for the interpreter */
 	void visitThreadFinish(std::unique_ptr<ThreadFinishLabel> eLab);
+
+	/* __VERIFIER_hp_protect() has been called */
+	void visitHpProtect(std::unique_ptr<HpProtectLabel> hpLab, const EventDeps *deps);
 
 	/* Returns an appropriate result for malloc() */
 	SVal visitMalloc(std::unique_ptr<MallocLabel> aLab, const EventDeps *deps,
@@ -360,11 +379,11 @@ private:
 	/*** Worklist-related ***/
 
 	/* Adds an appropriate entry to the worklist */
-	void addToWorklist(std::unique_ptr<WorkItem> item);
+	void addToWorklist(WorkSet::ItemT item);
 
 	/* Fetches the next backtrack option.
 	 * A default-constructed item means that the list is empty */
-	std::unique_ptr<WorkItem> getNextItem();
+	WorkSet::ItemT getNextItem();
 
 	/* Restricts the worklist only to entries that were added before lab */
 	void restrictWorklist(const EventLabel *lab);
@@ -400,11 +419,11 @@ private:
 	void moot() { isMootExecution = true; }
 	void unmoot() { isMootExecution = false; }
 
-	/* Opt: Whether the exploration should try to repair L */
-	bool isRescheduledLock(Event l) const { return lockToReschedule == l; }
+	/* Opt: Whether the exploration should try to repair R */
+	bool isRescheduledRead(Event r) const { return readToReschedule == r; }
 
-	/* Opt: Sets L as a lock to be repaired */
-	void setRescheduledLock(Event l) { lockToReschedule = l; }
+	/* Opt: Sets R as a read to be repaired */
+	void setRescheduledRead(Event r) { readToReschedule = r; }
 
 	/* Resets some options before the beginning of a new execution */
 	void resetExplorationOptions();
@@ -435,8 +454,11 @@ private:
 	 * chosen policy */
 	bool scheduleNormal();
 
-	/* Opt: Tries to reschedule any locks that were added blocked */
-	bool rescheduleLocks();
+	/* Returns whether the current execution is blocked */
+	bool isExecutionBlocked() const;
+
+	/* Opt: Tries to reschedule any reads that were added blocked */
+	bool rescheduleReads();
 
 	/* Resets the prioritization scheme */
 	void resetThreadPrioritization();
@@ -466,6 +488,14 @@ private:
 	 Appropriately calls visitError() and terminates */
 	void checkBIncValidity(const ReadLabel *rLab, const std::vector<Event> &rfs);
 
+	/* Checks whether final annotations are used properly in a program:
+	 * if there are more than one stores annotated as final at the time WLAB
+	 * is added, visitError() is called */
+	void checkFinalAnnotations(const WriteLabel *wLab);
+
+	/* Returns true if MLAB (allocated @ ALAB) is protected by a hazptr */
+	bool isHazptrProtected(const MallocLabel *aLab, const MemAccessLabel *mLab) const;
+
 	/* Checks for memory races (e.g., double free, access freed memory, etc)
 	 * whenever a read/write/free is added, and calls visitError() if a race is found.
 	 * Returns whether a race was found */
@@ -483,7 +513,25 @@ private:
 	const EventLabel *getCurrentLabel() const;
 
 	/* BAM: Tries to optimize barrier-related revisits */
-	bool tryOptimizeBarrierRevisits(const BIncFaiWriteLabel *sLab);
+	bool tryOptimizeBarrierRevisits(const BIncFaiWriteLabel *sLab, std::vector<Event> &loads);
+
+	/* Helper: Optimizes revisits of reads that will lead to a failed speculation */
+	void optimizeUnconfirmedRevisits(const WriteLabel *sLab, std::vector<Event> &loads);
+
+	/* Helper: Optimize the revisit in case SLAB is a RevBlocker */
+	bool tryOptimizeRevBlockerAddition(const WriteLabel *sLab, std::vector<Event> &loads);
+
+	/* Opt: Tries to optimize revisiting from LAB. It may modify
+	 * LOADS, and returns whether we can skip revisiting altogether */
+	bool tryOptimizeRevisits(const WriteLabel *lab, std::vector<Event> &loads);
+
+	/* Constructs a BackwardRevisit representing RLAB <- SLAB */
+	std::unique_ptr<BackwardRevisit>
+	constructBackwardRevisit(const ReadLabel *rLab, const WriteLabel *sLab);
+
+	/* Helper: Checks whether the execution should continue upon SLAB revisited LOADS.
+	 * Returns true if yes, and false (+moot) otherwise  */
+	bool checkRevBlockHELPER(const WriteLabel *sLab, const std::vector<Event> &loads);
 
 	/* Calculates revisit options and pushes them to the worklist.
 	 * Returns true if the current exploration should continue */
@@ -491,15 +539,11 @@ private:
 
 	/* Modifies (but not restricts) the graph when we are revisiting a read.
 	 * Returns true if the resulting graph should be explored. */
-	bool revisitRead(const RevItem &s);
+	bool revisitRead(const ReadRevisit &s);
 
 	/* Adjusts the graph and the worklist according to the backtracking option S.
 	 * Returns true if the resulting graph should be explored */
-	bool restrictAndRevisit(std::unique_ptr<WorkItem> s);
-
-	/* Copies the graph and executes the revisit specified by S.
-	 * Returns the newly created graph */
-	std::unique_ptr<ExecutionGraph> revisitInCopy(const RevItem &s);
+	bool restrictAndRevisit(WorkSet::ItemT s);
 
 	/* If rLab is the read part of an RMW operation that now became
 	 * successful, this function adds the corresponding write part.
@@ -514,24 +558,38 @@ private:
 	/* Removes all labels with stamp >= st from the graph */
 	void restrictGraph(const EventLabel *lab);
 
+	/* Copies the current EG according to BR's view V.
+	 * May modify V but will not execute BR in the copy. */
+	std::unique_ptr<ExecutionGraph>
+	copyGraph(const BackwardRevisit *br, VectorClock *v) const;
+
 	/* Given a list of stores that it is consistent to read-from,
-	 * removes options that violate atomicity, and determines the
-	 * order in which these options should be explored */
-	std::vector<Event>
-	properlyOrderStores(const ReadLabel *lab, const std::vector<Event> &stores);
+	 * filters out options that can be skipped (according to the conf),
+	 * and determines the order in which these options should be explored */
+	void filterOptimizeRfs(const ReadLabel *lab, std::vector<Event> &stores);
 
 	/* Removes rfs from "rfs" until a consistent option for rLab is found,
 	 * if that is dictated by the CLI options */
 	bool ensureConsistentRf(const ReadLabel *rLab, std::vector<Event> &rfs);
+
+	/* Checks whether the addition of WLAB creates an atomicity violation.
+	 * If so, returns false and moots the execution if possible. */
+	bool checkAtomicity(const WriteLabel *wLab);
 
 	/* Makes sure that the current graph is consistent, if that is dictated
 	 * by the CLI options. Since that is not always the case for stores
 	 * (e.g., w/ LAPOR), it returns whether it is the case or not */
 	bool ensureConsistentStore(const WriteLabel *wLab);
 
+	/* Helper: Annotates a store as RevBlocker, if possible */
+	void annotateStoreHELPER(WriteLabel *wLab) const;
+
 	/* Pers: removes _all_ options from "rfs" that make the recovery invalid.
 	 * Sets the rf of rLab to the first valid option in rfs */
 	void filterInvalidRecRfs(const ReadLabel *rLab, std::vector<Event> &rfs);
+
+	/* SAVer: Checks whether a write has any actual memory effects */
+	bool isWriteEffectful(const WriteLabel *wLab);
 
 	/* SAVer: Checks whether the effects of a write are observable */
 	bool isWriteObservable(const WriteLabel *lab);
@@ -544,15 +602,26 @@ private:
 	 * returns true if it is indeed a spinloop */
 	bool areFaiZNEConstraintsSat(const FaiZNESpinEndLabel *lab);
 
+	/* BAM: Filters out unnecessary rfs for LAB when BAM is enabled */
+	void filterConflictingBarriers(const ReadLabel *lab, std::vector<Event> &stores);
+
 	/* Opt: Futher reduces the set of available read-from options for a
-	 * read that is part of a lock() op. Returns the filtered set of RFs  */
-	std::vector<Event> filterAcquiredLocks(const ReadLabel *rLab,
-					       const std::vector<Event> &stores,
-					       const VectorClock &before);
+	 * read that is part of a lock() op  */
+	void filterAcquiredLocks(const ReadLabel *rLab, std::vector<Event> &stores);
+
+	/* Helper: Filters out RFs that will make the CAS fail */
+	void filterConfirmingRfs(const ReadLabel *lab, std::vector<Event> &stores);
+
+	/* Helper: Returns true if there is a speculative read that hasn't been confirmed */
+	bool existsPendingSpeculation(const ReadLabel *lab, const std::vector<Event> &stores);
+
+	/* Helper: Ensures a speculative read will not be added if
+	 * there are other speculative (unconfirmed) reads */
+	void filterUnconfirmedReads(const ReadLabel *lab, std::vector<Event> &stores);
 
 	/* Opt: Tries to in-place revisit a read that is part of a lock.
 	 * Returns true if the optimization succeeded */
-	bool tryToRevisitLock(CasReadLabel *rLab, const WriteLabel *sLab);
+	bool tryRevisitLockInPlace(const BackwardRevisit &r);
 
 	/* Opt: Repairs the reads-from edge of a dangling lock */
 	void repairLock(LockCasReadLabel *lab);
@@ -564,6 +633,15 @@ private:
 	/* Opt: Repairs barriers that may be "dangling" after cutting the graph. */
 	void repairDanglingBarriers();
 
+	/* Opt: Finds the last memory access that is visible to other threads;
+	 * return nullptr if no such access is found */
+	const MemAccessLabel *getPreviousVisibleAccessLabel(Event start) const;
+
+	/* Opt: Checks whether there is no need to explore the other threads
+	 * (e.g., POS \in B and will not be removed in all subsequent subexplorations),
+	 * and if so moots the current execution */
+	void mootExecutionIfFullyBlocked(Event pos);
+
 	/* LKMM: Helper for visiting LKMM fences */
 	void visitFenceLKMM(std::unique_ptr<FenceLabel> fLab, const EventDeps *deps);
 
@@ -573,6 +651,17 @@ private:
 	/* LAPOR: Helper for visiting a lock()/unlock() event */
 	void visitLockLAPOR(std::unique_ptr<LockLabelLAPOR> lab, const EventDeps *deps);
 	void visitUnlockLAPOR(std::unique_ptr<UnlockLabelLAPOR> uLab, const EventDeps *deps);
+
+	/* Helper: Wake up any threads blocked on a helping CAS */
+	void unblockWaitingHelping();
+
+	/* Helper: Returns whether there is a valid helped-CAS which the helping-CAS
+	 * to be added will be helping. (If an invalid helped-CAS exists, this
+	 * method raises an error.) */
+	bool checkHelpingCasCondition(const HelpingCasLabel *lab);
+
+	/* Helper: Checks whether the user annotation about helped/helping CASes seems OK */
+	void checkHelpingCasAnnotation();
 
 	/* SR: Checks whether CANDIDATE is symmetric to THREAD */
 	bool isSymmetricToSR(int candidate, int thread, Event parent,
@@ -594,8 +683,8 @@ private:
 
 	/*** Output-related ***/
 
-	/* Prints statistics when the verification is over */
-	void printResults();
+	/* Returns a view to be used when replaying */
+	View getReplayView() const;
 
 	/* Prints the source-code instructions leading to Event e.
 	 * Assumes that debugging information have already been collected */
@@ -606,15 +695,12 @@ private:
 				 llvm::raw_ostream &ss = llvm::outs());
 
 	/* Returns the name of the variable residing in addr */
-	std::string getVarName(const MemAccessLabel *mLab) const;
+	std::string getVarName(const SAddr &addr) const;
 
 	/* Outputs the full graph.
 	 * If printMetadata is set, it outputs debugging information
 	 * (these should have been collected beforehand) */
 	void printGraph(bool printMetadata = false, llvm::raw_ostream &s = llvm::dbgs());
-
-	/* Outputs the graph in a condensed form */
-	void prettyPrintGraph(llvm::raw_ostream &s = llvm::dbgs());
 
 	/* Outputs the current graph into a file (DOT format),
 	 * and visually marks events e and c (conflicting).
@@ -632,10 +718,12 @@ private:
 	 * Should return the racy event, or INIT if no such event exists */
 	virtual Event findDataRaceForMemAccess(const MemAccessLabel *mLab) = 0;
 
-	/* Returns an approximation of consistent rfs for RLAB */
+	/* Returns an approximation of consistent rfs for RLAB.
+	 * The rfs are ordered according to CO */
 	virtual std::vector<Event> getRfsApproximation(const ReadLabel *rLab);
 
-	/* Returns an approximation of the reads that SLAB can revisit */
+	/* Returns an approximation of the reads that SLAB can revisit.
+	 * The reads are ordered in reverse-addition order */
 	virtual std::vector<Event> getRevisitableApproximation(const WriteLabel *sLab);
 
 	/* Changes the reads-from edge for the specified label.
@@ -690,8 +778,8 @@ private:
 	/* Opt: Whether this execution is moot (locking) */
 	bool isMootExecution;
 
-	/* Opt: Whether a particular lock needs to be repaired during rescheduling */
-	Event lockToReschedule;
+	/* Opt: Whether a particular read needs to be repaired during rescheduling */
+	Event readToReschedule;
 
 	/* Verification result to be returned to caller */
 	Result result;

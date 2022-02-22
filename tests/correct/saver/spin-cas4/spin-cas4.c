@@ -4,7 +4,7 @@
 
 atomic_int x, y;
 
-void *thread_1()
+void *thread_1(void *unused)
 {
 	int r = x;
 	while (!atomic_compare_exchange_strong(&x, &r, 42)) {
@@ -14,7 +14,7 @@ void *thread_1()
 	return NULL;
 }
 
-void *thread_2()
+void *thread_2(void *unused)
 {
 	x = 1;
 	y = 1;

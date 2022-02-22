@@ -22,7 +22,9 @@
 #define __PASSES_HPP__
 
 #include "config.h"
+#include "VSet.hpp"
 #include <llvm/Pass.h>
+#include <string>
 
 template<typename K, typename V>
 struct AnnotationInfo;
@@ -63,12 +65,12 @@ llvm::ModulePass *createIntrinsicLoweringPass(llvm::Module &M);
 /*
  * Collects annotation information for a function's load instructions.
  */
-llvm::FunctionPass *createLoadAnnotationPass(AnnotationInfo<llvm::LoadInst *, llvm::Value *> &AI);
+llvm::FunctionPass *createLoadAnnotationPass(AnnotationInfo<llvm::Instruction *, llvm::Value *> &AI);
 
 /*
- * Unrolls a loop N times.
+ * Unrolls a loop N times, unless the loop is in a function present in NOUNROLLFUNS
  */
-llvm::Pass *createLoopUnrollPass(int depth);
+llvm::Pass *createLoopUnrollPass(int n, const VSet<std::string> &noUnrollFuns = {});
 
 /*
  * Performs jump-threading for some simple classes of loops.
@@ -92,8 +94,48 @@ llvm::ModulePass *createPromoteMemIntrinsicPass();
 llvm::Pass *createSpinAssumePass(bool markStarts = false);
 
 /*
+ * Eliminates certain form of PHIs stemming from CASes
+ */
+llvm::Pass *createEliminateCASPHIsPass();
+
+/*
  * Eliminates certain form of casts
  */
 llvm::Pass *createEliminateCastsPass();
+
+/*
+ * Eliminates GenMC's internal annotations
+ */
+llvm::Pass *createEliminateAnnotationsPass();
+
+/*
+ * Eliminates some unused code that does not affect the verification result
+ */
+llvm::Pass *createEliminateUnusedCodePass();
+
+/*
+ * Collects possible escape points for a given function
+ */
+llvm::Pass *createEscapeCheckerPass();
+
+/*
+ * Annotates confirming reads
+ */
+llvm::FunctionPass *createConfirmationAnnotationPass();
+
+/*
+ * Propagates assume(0)s upwards.
+ */
+llvm::Pass *createPropagateAssumesPass();
+
+/*
+ * Performs some minor simplifications to the CFG
+ */
+llvm::Pass *createLocalSimplifyCFGPass();
+
+/*
+ * Eliminates redundant instructions
+ */
+llvm::Pass *createEliminateRedundantInstPass();
 
 #endif /* __PASSES_HPP__ */

@@ -3,6 +3,7 @@
 
 #include <bits/stat.h>
 #include <unistd.h>
+#include <genmc_internal.h>
 
 /* Flags */
 
@@ -43,14 +44,11 @@
 /* Read, write, and execute by others.  */
 #define S_IRWXO		(S_IRWXG >> 3)
 
-extern int __VERIFIER_openFS (const char *__file, int __oflag, mode_t __mode);
-#define open __VERIFIER_openFS
+#define open(file, oflag, mode) __VERIFIER_openFS(file, oflag, mode)
 
 /* extern int creat (const char *__file, mode_t __mode); */
-extern int __VERIFIER_creatFS (const char *__file, mode_t __mode);
-#define creat __VERIFIER_creatFS
+#define creat(file, mode) __VERIFIER_creatFS(file, mode)
 
-extern int __VERIFIER_renameFS (const char *__old, const char *__new);
-#define rename __VERIFIER_renameFS
+#define rename(old, new) __VERIFIER_renameFS(old, new)
 
 #endif /* __FCNTL_H__ */

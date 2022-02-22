@@ -2,6 +2,7 @@
 #define __STDLIB_H__
 
 #include <stddef.h>
+#include <genmc_internal.h>
 
 void exit(int);
 
@@ -10,13 +11,10 @@ int abs(int);
 int atoi(const char *);
 char *getenv(const char *);
 
-void __VERIFIER_free(void *);
-#define free __VERIFIER_free
+#define free(ptr) __VERIFIER_free(ptr)
 
-void *__VERIFIER_malloc(size_t);
-#define malloc __VERIFIER_malloc
+#define malloc(size) __VERIFIER_malloc(size)
 
-void *__VERIFIER_malloc_aligned(size_t, size_t);
-#define aligned_alloc __VERIFIER_malloc_aligned
+#define aligned_alloc(align, size) __VERIFIER_malloc_aligned(align, size)
 
 #endif /* __STDLIB_H__ */

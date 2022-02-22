@@ -22,25 +22,27 @@
 #define __WORK_SET_HPP__
 
 #include "EventLabel.hpp"
+#include "Revisit.hpp"
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/raw_ostream.h>
 #include <memory>
 #include <vector>
-
-class WorkItem;
 
 /*
  * WorkSet class - Represents the set of work items for one particular event
  */
 class WorkSet {
 
+public:
+	using ItemT = std::unique_ptr<Revisit>;
+
 protected:
-	using WorkSetT = std::vector<std::unique_ptr<WorkItem> >;
+	using WorkSetT = std::vector<ItemT>;
+	using iterator = WorkSetT::iterator;
+	using const_iterator = WorkSetT::const_iterator;
 
 public:
 	/* Iterators */
-	typedef WorkSetT::iterator iterator;
-	typedef WorkSetT::const_iterator const_iterator;
 	iterator begin() { return wset_.begin(); }
 	iterator end()   { return wset_.end(); }
 	const_iterator cbegin() const { return wset_.cbegin(); }
@@ -50,13 +52,13 @@ public:
 	bool empty() const { return wset_.empty(); }
 
 	/* Adds an item to the workset */
-	void add(std::unique_ptr<WorkItem> item) {
+	void add(ItemT item) {
 		wset_.push_back(std::move(item));
 		return;
 	}
 
 	/* Returns the next item to examine for this workset */
-	std::unique_ptr<WorkItem> getNext() {
+	ItemT getNext() {
 		auto i = std::move(wset_.back());
 		wset_.pop_back();
 		return i;
@@ -69,157 +71,5 @@ private:
 	/* The workset of an event */
 	WorkSetT wset_;
 };
-
-
-/*
- * WorkItem class (abstract) - Represents an item belonging to the workset of an event
- */
-class WorkItem {
-
-public:
-	/* LLVM-style RTTI discriminator */
-	enum Kind {
-		WI_RevBegin,
-		WI_FRev,
-		WI_FRevLast,
-		WI_BRev,
-		WI_BRevLast,
-		WI_RevLast,
-		WI_MO,
-		WI_MOLast
-	};
-
-protected:
-	/* Constructors */
-	WorkItem() = delete;
-	WorkItem(Kind k, Event p) : kind(k), pos(p) {}
-
-public:
-	/* Returns the kind of this item */
-	Kind getKind() const { return kind; }
-
-	/* Returns the event for which we are exploring an alternative exploration option */
-	Event getPos() const { return pos; }
-
-	/* Destructor and printing facilities */
-	virtual ~WorkItem() {}
-	friend llvm::raw_ostream& operator<<(llvm::raw_ostream& rhs, const WorkItem &item);
-
-private:
-	Kind kind;
-	Event pos;
-};
-
-llvm::raw_ostream& operator<<(llvm::raw_ostream& rhs, const WorkItem::Kind k);
-
-/*
- * RevItem class (abstract) - Represents the various revisit kinds (forward, backward, etc)
- */
-class RevItem : public WorkItem {
-
-protected:
-	/* Constructors */
-	RevItem() = delete;
-	RevItem(Kind k, Event p, Event r) : WorkItem(k, p), rev(r) {}
-
-public:
-	/* Returns the event performing the revisit */
-	Event getRev() const { return rev; }
-
-	static bool classof(const WorkItem *item) {
-		return item->getKind() >= WI_RevBegin && item->getKind() <= WI_RevLast;
-	}
-
-private:
-	Event rev;
-};
-
-/*
- * FRevItem class - Represents a forward revisit
- */
-class FRevItem : public RevItem {
-
-protected:
-	FRevItem(Kind k, Event p, Event r) : RevItem(k, p, r) {}
-
-public:
-	FRevItem(Event p, Event r) : RevItem(WI_FRev, p, r) {}
-
-	static bool classof(const WorkItem *item) {
-		return item->getKind() >= WI_FRev && item->getKind() <= WI_FRevLast;
-	}
-};
-
-
-/*
- * BRevItem class - Represents a backward revisit
- */
-class BRevItem : public RevItem {
-
-protected:
-	BRevItem(Kind k, Event p, Event r,
-		 std::vector<std::unique_ptr<EventLabel> > &&prefix,
-		 std::vector<std::pair<Event, Event> > &&moPlacings)
-		: RevItem(k, p, r),
-		  prefix(std::move(prefix)),
-		  moPlacings(std::move(moPlacings)) {}
-
-public:
-	BRevItem(Event p, Event r,
-		 std::vector<std::unique_ptr<EventLabel> > &&prefix,
-		 std::vector<std::pair<Event, Event> > &&moPlacings)
-		: BRevItem(WI_BRev, p, r, std::move(prefix), std::move(moPlacings)) {}
-	BRevItem(Event p, Event r)
-		: BRevItem(p, r, {}, {}) {}
-
-	/* Returns (releases) the prefix of the revisiting event */
-	std::vector<std::unique_ptr<EventLabel> > &&getPrefixRel() {
-		return std::move(prefix);
-	}
-
-	/* Returns (but does not release) the prefix of the revisiting event */
-	const std::vector<std::unique_ptr<EventLabel> > &getPrefixNoRel() const {
-		return prefix;
-	}
-
-	/* Returns (releases) the coherence placing in the prefix */
-	std::vector<std::pair<Event, Event> > &&getMOPlacingsRel() {
-		return std::move(moPlacings);
-	}
-
-	static bool classof(const WorkItem *item) {
-		return item->getKind() >= WI_BRev && item->getKind() <= WI_BRevLast;
-	}
-
-private:
-	std::vector<std::unique_ptr<EventLabel> >  prefix;
-	std::vector<std::pair<Event, Event> >  moPlacings;
-};
-
-
-/*
- * MOItem class - Represents an alternative MO position for a store
- * (Used by drivers that track MO only)
- */
-class MOItem : public WorkItem {
-
-protected:
-	MOItem(Kind k, Event p, int moPos) : WorkItem(k, p), moPos(moPos) {}
-
-public:
-	MOItem(Event p, int moPos) : WorkItem(WI_MO, p), moPos(moPos) {}
-
-	/* Returns the new MO position of the event for which
-	 * we are exploring alternative exploration options */
-	int getMOPos() const { return moPos; }
-
-	static bool classof(const WorkItem *item) {
-		return item->getKind() >= WI_MO && item->getKind() <= WI_MOLast;
-	}
-
-private:
-	int moPos;
-};
-
 
 #endif /* __WORK_SET_HPP__ */

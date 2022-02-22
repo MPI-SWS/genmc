@@ -23,12 +23,13 @@
 
 #include "config.h"
 #include "AdjList.hpp"
-#include "Calculator.hpp"
+#include "CoherenceCalculator.hpp"
 #include "DriverGraphEnumAPI.hpp"
 #include "DepInfo.hpp"
 #include "Error.hpp"
 #include "Event.hpp"
 #include "EventLabel.hpp"
+#include "Revisit.hpp"
 #include "VectorClock.hpp"
 #include <llvm/ADT/StringMap.h>
 
@@ -45,7 +46,7 @@ class PersistencyChecker;
  ******************************************************************************/
 
 /*
- * An class representing plain execution graphs. This class offers
+ * A class representing plain execution graphs. This class offers
  * the basic infrastructure all types of graphs should provide (e.g.,
  * calculation of hb-predecessors, psc, etc). More specialized types
  * of graphs can provide extra functionality (e.g., take dependencies
@@ -152,6 +153,9 @@ public:
 	/* Returns the next available stamp (and increases the counter) */
 	unsigned int nextStamp() { return timestamp++; }
 
+	/* Resets the next available stamp to the specified value */
+	void resetStamp(unsigned int val) { timestamp = val; }
+
 	/* Event addition methods should be called from the managing objects,
 	 * so that the relation managing objects are also informed */
 	const ReadLabel *addReadLabelToGraph(std::unique_ptr<ReadLabel> lab,
@@ -180,17 +184,51 @@ public:
 		return const_cast<EventLabel *>(static_cast<const ExecutionGraph&>(*this).getEventLabel(e));
 	}
 
-	/* Returns the label in the previous position of e.
-	 * Does _not_ perform any out-of-bounds checks */
-	const EventLabel *getPreviousLabel(Event e) const { return getEventLabel(e.prev()); }
+	/* Returns a label as a ReadLabel.
+	 * If the passed event is not a read, returns nullptr  */
+	const ReadLabel *getReadLabel(Event e) const {
+		return llvm::dyn_cast<ReadLabel>(getEventLabel(e));
+	}
+	ReadLabel *getReadLabel(Event e) {
+		return const_cast<ReadLabel *>(static_cast<const ExecutionGraph &>(*this).getReadLabel(e));
+	}
+
+	/* Returns a label as a WriteLabel.
+	 * If the passed event is not a write, returns nullptr  */
+	const WriteLabel *getWriteLabel(Event e) const {
+		return llvm::dyn_cast<WriteLabel>(getEventLabel(e));
+	}
+	WriteLabel *getWriteLabel(Event e) {
+		return const_cast<WriteLabel *>(static_cast<const ExecutionGraph &>(*this).getWriteLabel(e));
+	}
+
+	/* Returns the label in the previous position of E.
+	 * Returns nullptr if E is the first event of a thread */
+	const EventLabel *getPreviousLabel(Event e) const {
+		return e.index == 0 ? nullptr : getEventLabel(e.prev());
+	}
+	EventLabel *getPreviousLabel(Event e) {
+		return const_cast<EventLabel *>(static_cast<const ExecutionGraph &>(*this).getPreviousLabel(e));
+	}
 	const EventLabel *getPreviousLabel(const EventLabel *lab) const {
 		return getPreviousLabel(lab->getPos());
 	}
+	EventLabel *getPreviousLabel(EventLabel *lab) {
+		return getPreviousLabel(lab->getPos());
+	}
 
-	/* Returns the label in the next position of e.
-	 * Does _not_ perform any out-of-bounds checks */
-	const EventLabel *getNextLabel(Event e) const { return getEventLabel(e.next()); }
+	/* Returns the label in the next position of E.
+	 * Returns nullptr if E is the last event of a thread */
+	const EventLabel *getNextLabel(Event e) const {
+		return e == getLastThreadEvent(e.thread) ? nullptr : getEventLabel(e.next());
+	}
+	EventLabel *getNextLabel(Event e) {
+		return const_cast<EventLabel *>(static_cast<const ExecutionGraph &>(*this).getNextLabel(e));
+	}
 	const EventLabel *getNextLabel(const EventLabel *lab) const {
+		return getNextLabel(lab->getPos());
+	}
+	EventLabel *getNextLabel(EventLabel *lab) {
 		return getNextLabel(lab->getPos());
 	}
 
@@ -211,8 +249,8 @@ public:
 	}
 
 	/* Returns the first label in the thread tid */
-	const EventLabel *getFirstThreadLabel(int tid) const {
-		return getEventLabel(getFirstThreadEvent(tid));
+	const ThreadStartLabel *getFirstThreadLabel(int tid) const {
+		return llvm::dyn_cast<ThreadStartLabel>(getEventLabel(getFirstThreadEvent(tid)));
 	}
 
 	/* Returns the last event/label in the thread tid */
@@ -255,6 +293,12 @@ public:
 	 * it returns the (non-existing event) at thread size */
 	Event getMatchingRCUUnlockLKMM(Event lock) const;
 
+	/* Helper: Returns the last speculative read in CONF's location that
+	 * is not matched. If no such event exists, returns INIT.
+	 * (If SC is non-null and an SC event is in-between the confirmation,
+	 * SC is set to that event) */
+	Event getMatchingSpeculativeRead(Event conf, Event *sc = nullptr) const;
+
 	/* LAPOR: Returns the last lock that is not matched before "upperLimit".
 	 * If no such event exists, returns INIT */
 	Event getLastThreadUnmatchedLockLAPOR(const Event upperLimit) const;
@@ -274,9 +318,9 @@ public:
 	/* LAPOR: Returns a linear extension of LB */
 	std::vector<Event> getLbOrderingLAPOR() const;
 
-	/* Returns the preceding allocating event for MLAB.
+	/* Returns the allocating event for ADDR.
 	 * Assumes that only one such event may exist */
-	Event getPrecedingMalloc(const MemAccessLabel *mLab) const;
+	Event getMalloc(const SAddr &addr) const;
 
 	/* Given a deallocating event FLAB, returns its allocating
 	 * counterpart (their addresses need to match exactly).
@@ -286,21 +330,17 @@ public:
 	/* Returns pair with all SC accesses and all SC fences */
 	std::pair<std::vector<Event>, std::vector<Event> > getSCs() const;
 
-	/* Given an write label sLab that is part of an RMW, return all
-	 * other RMWs that read from the same write. Of course, there must
-	 * be _at most_ one other RMW reading from the same write (see [Rex] set) */
-	std::vector<Event> getPendingRMWs(const WriteLabel *sLab) const;
+	/* Given a write label sLab that is part of an RMW, returns
+	 * another RMW that reads from the same write. If no such event
+	 * exists, it returns INIT. If there are multiple such events,
+	 * returns the one with the smallest stamp */
+	Event getPendingRMW(const WriteLabel *sLab) const;
 
 	/* Given a revisit RLAB <- WLAB, returns the view of the resulting graph.
 	 * (This function can be abused and also be utilized for returning the view
 	 * of "fictional" revisits, e.g., the view of an event in a maximal path.) */
-	virtual std::unique_ptr<VectorClock> getRevisitView(const ReadLabel *rLab,
-							    const EventLabel *wLab) const;
-	std::unique_ptr<VectorClock> getRevisitView(Event read, Event write) const {
-		auto *rLab = llvm::dyn_cast<ReadLabel>(getEventLabel(read));
-		auto *wLab = llvm::dyn_cast<WriteLabel>(getEventLabel(write));
-		return getRevisitView(rLab, wLab);
-	}
+	virtual std::unique_ptr<VectorClock>
+	getRevisitView(const BackwardRevisit &r) const;
 
 	/* Returns a list of loads that can be revisited */
 	virtual std::vector<Event> getRevisitable(const WriteLabel *sLab) const;
@@ -407,10 +447,18 @@ public:
 	/* Returns true if the graph contains e */
 	bool contains(const Event &e) const {
 		return e.thread >= 0 && e.thread < getNumThreads() &&
-			e.index >= 0 && e.index < getThreadSize(e.thread);
+		        e.index >= 0 && e.index < getThreadSize(e.thread);
 	}
 	bool contains(const EventLabel *lab) const {
 		return contains(lab->getPos());
+	}
+
+	/* Returns true if the graph contains e, and the label is not EMPTY */
+	bool containsNonEmpty(const Event &e) const {
+		return contains(e) && !llvm::isa<EmptyLabel>(getEventLabel(e));
+	}
+	bool containsNonEmpty(const EventLabel *lab) const {
+		return containsNonEmpty(lab->getPos());
 	}
 
 	/* Returns true if the event should be taken into account when
@@ -432,12 +480,23 @@ public:
 	}
 	bool isRMWStore(const Event e) const { return isRMWStore(getEventLabel(e)); }
 
-	/* Opt: Returns whether a lock is optimization-blocked */
-	bool isOptBlockedLock(const EventLabel *lab) const {
-		if (llvm::isa<LockCasReadLabel>(lab) &&
+	/* Returns true if the addition of SLAB violates atomicity in the graph */
+	bool violatesAtomicity(const WriteLabel *sLab){
+		return isRMWStore(sLab) && !getPendingRMW(sLab).isInitializer();
+	}
+
+	/* Helper: Returns true if RLAB is a confirming operation */
+	bool isConfirming(const ReadLabel *rLab) const {
+		return llvm::isa<ConfirmingReadLabel>(rLab) || llvm::isa<ConfirmingCasReadLabel>(rLab);
+	}
+
+	/* Opt: Returns true if LAB is causing the respective thread
+	 * to block due to some optimization */
+	bool isOptBlockedRead(const EventLabel *lab) const {
+		if (llvm::isa<ReadLabel>(lab) &&
 		    getLastThreadEvent(lab->getThread()) == lab->getPos().next()) {
 			auto *bLab = llvm::dyn_cast<BlockLabel>(getNextLabel(lab));
-			return bLab && bLab->getType() == BlockageType::LockOptBlock;
+			return bLab && bLab->getType() == BlockageType::ReadOptBlock;
 		}
 		return false;
 	}
@@ -473,40 +532,42 @@ public:
 	/* Pers: Returns true if the recovery routine is valid */
 	bool isRecoveryValid() const;
 
-	/* Returnes true if the revisit SLAB->RLAB will delete LAB from the graph */
-	bool revisitDeletesEvent(const ReadLabel *rLab, const WriteLabel *sLab,
-				 const EventLabel *lab) const {
-		auto v = getRevisitView(rLab, sLab);
-		return !v->contains(lab->getPos()) && !prefixContainsSameLoc(rLab, sLab, lab);
-	}
-	bool revisitDeletesEvent(const ReadLabel *rLab, const WriteLabel *sLab, Event e) const {
-		return revisitDeletesEvent(rLab, sLab, getEventLabel(e));
+	/* Returnes true if the revisit R will delete LAB from the graph */
+	bool revisitDeletesEvent(const BackwardRevisit &r, const EventLabel *lab) const {
+		auto v = getRevisitView(r);
+		return !v->contains(lab->getPos()) && !prefixContainsSameLoc(r, lab);
 	}
 
 	/* Returns true if ELAB has been revisited by some event that
-	 * will be deleted by the revisit RLAB->WLAB */
-	bool hasBeenRevisitedByDeleted(const ReadLabel *rLab, const WriteLabel *sLab,
-				       const EventLabel *eLab) const;
+	 * will be deleted by the revisit R */
+	bool hasBeenRevisitedByDeleted(const BackwardRevisit &r, const EventLabel *eLab) const;
 
 	/* Returns whether the prefix of SLAB contains LAB's matching lock */
-	bool prefixContainsMatchingLock(const EventLabel *lab, const WriteLabel *sLab) const {
+	bool prefixContainsMatchingLock(const BackwardRevisit &r, const EventLabel *lab) const {
 		if (!llvm::isa<UnlockWriteLabel>(lab))
 			return false;
 		auto l = getMatchingLock(lab->getPos());
-		return !l.isInitializer() && getPrefixView(sLab->getPos()).contains(l);
+		if (l.isInitializer())
+			return false;
+		if (getPrefixView(r.getRev()).contains(l))
+			return true;
+		if (auto *br = llvm::dyn_cast<BackwardRevisitHELPER>(&r))
+			return getPrefixView(br->getMid()).contains(l);
+		return false;
 	}
 
 	/* Returns true if all events to be removed by the revisit
 	 * RLAB <- SLAB form a maximal extension */
-	bool isMaximalExtension(const ReadLabel *rLab, const WriteLabel *sLab) const;
+	bool isMaximalExtension(const BackwardRevisit &r) const;
 
 	/* Returns true if the graph that will be created when sLab revisits rLab
 	 * will be the same as the current one */
-	virtual bool revisitModifiesGraph(const ReadLabel *rLab,
-					  const EventLabel *sLab) const;
+	virtual bool revisitModifiesGraph(const BackwardRevisit &r) const;
 
-	virtual bool prefixContainsSameLoc(const ReadLabel *rLab, const WriteLabel *wLab,
-					   const EventLabel *lab) const;
+	virtual bool prefixContainsSameLoc(const BackwardRevisit &r,
+					   const EventLabel *lab) const {
+		return false;
+	}
 
 
 	/* Debugging methods */
@@ -517,8 +578,6 @@ public:
 	/* Modification order methods */
 
 	void trackCoherenceAtLoc(SAddr addr);
-	const std::vector<Event>& getStoresToLoc(SAddr addr) const;
-	const std::vector<Event>& getStoresToLoc(SAddr addr);
 	std::vector<Event> getCoherentStores(SAddr addr, Event pos);
 	std::pair<int, int> getCoherentPlacings(SAddr addr, Event pos, bool isRMW);
 	std::vector<Event> getCoherentRevisits(const WriteLabel *wLab);
@@ -592,6 +651,10 @@ protected:
 	void setEventLabel(Event e, std::unique_ptr<EventLabel> lab) {
 		events[e.thread][e.index] = std::move(lab);
 	};
+
+	/* Returns the event with the minimum stamp in ES.
+	 * If ES is empty, returns INIT */
+	Event getMinimumStampEvent(const std::vector<Event> &es) const;
 
 	void copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) const;
 

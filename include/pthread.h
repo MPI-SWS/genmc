@@ -27,23 +27,23 @@ extern "C"
 //#include <endian.h>
 /* #include <sched.h> */
 /* #include <time.h> */
+#include <genmc_internal.h>
 
-
-typedef struct { int __private; } pthread_attr_t;
-typedef struct { int __private; } pthread_barrier_t;
-typedef int pthread_barrierattr_t;
+typedef __VERIFIER_attr_t pthread_attr_t;
+typedef __VERIFIER_barrier_t pthread_barrier_t;
+typedef __VERIFIER_barrierattr_t pthread_barrierattr_t;
 /* typedef struct { int __private; } pthread_cond_t; */
 /* typedef long pthread_condattr_t; */
 /* typedef int pthread_key_t; */
-typedef struct { int __private; } pthread_mutex_t;
-typedef long pthread_mutexattr_t;
+typedef __VERIFIER_mutex_t pthread_mutex_t;
+typedef __VERIFIER_mutexattr_t pthread_mutexattr_t;
 /* typedef int pthread_once_t; */
 /* typedef struct { int __private; } pthread_rwlock_t; */
 /* typedef struct { int __private; } pthread_rwlockattr_t; */
 /* typedef struct { int __private; } pthread_spinlock_t; */
-typedef long pthread_t;
+typedef __VERIFIER_thread_t pthread_t;
 
-#define PTHREAD_MUTEX_INITIALIZER { 0 }
+#define PTHREAD_MUTEX_INITIALIZER __VERIFIER_MUTEX_INITIALIZER
 
 /* Detach state.  */
 enum
@@ -137,9 +137,6 @@ enum
 /* 			   const pthread_attr_t *__restrict __attr, */
 /* 			   void *(*__start_routine) (void *), */
 /* 			   void *__restrict __arg); */
-extern int __VERIFIER_thread_create (const pthread_attr_t *__restrict __attr,
-				     void *(*__start_routine) (void *),
-				     void *__restrict __arg);
 #define pthread_create(newthread, attr, start_routine, arg) \
 ({									\
 	*(newthread) = __VERIFIER_thread_create(attr, start_routine, arg); \
@@ -148,14 +145,12 @@ extern int __VERIFIER_thread_create (const pthread_attr_t *__restrict __attr,
 
 /* Terminate calling thread.  */
 /* extern void pthread_exit (void *__retval) __attribute__ ((__noreturn__)); */
-extern void __VERIFIER_thread_exit (void *__retval) __attribute__ ((__noreturn__));
-#define pthread_exit __VERIFIER_thread_exit
+#define pthread_exit(retval) __VERIFIER_thread_exit(retval)
 
 /* Make calling thread wait for termination of the thread TH.  The
    exit status of the thread is stored in *THREAD_RETURN, if THREAD_RETURN
    is not NULL. */
 /* extern int pthread_join (pthread_t __th, void **__thread_return); */
-extern int __VERIFIER_thread_join (pthread_t __th, void **__thread_return);
 #define pthread_join __VERIFIER_thread_join
 
 
@@ -180,11 +175,10 @@ extern int __VERIFIER_thread_join (pthread_t __th, void **__thread_return);
 
 /* Obtain the identifier of the current thread.  */
 /* extern pthread_t pthread_self (void); */
-extern pthread_t __VERIFIER_thread_self (void);
-#define pthread_self __VERIFIER_thread_self
+#define pthread_self() __VERIFIER_thread_self()
 
 /* Compare two thread identifiers.  */
-extern int pthread_equal (pthread_t __thread1, pthread_t __thread2);
+/* extern int pthread_equal (pthread_t __thread1, pthread_t __thread2); */
 
 
 /* /\* Thread attribute handling.  *\/ */
@@ -336,29 +330,23 @@ extern int pthread_equal (pthread_t __thread1, pthread_t __thread2);
 /* Initialize a mutex.  */
 /* extern int pthread_mutex_init (pthread_mutex_t *__mutex, */
 /* 			       const pthread_mutexattr_t *__mutexattr); */
-extern int __VERIFIER_mutex_init (pthread_mutex_t *__mutex,
-				  const pthread_mutexattr_t *__mutexattr);
-#define pthread_mutex_init __VERIFIER_mutex_init
+#define pthread_mutex_init(mutex, attr) __VERIFIER_mutex_init(mutex, attr)
 
 /* Destroy a mutex.  */
 /* extern int pthread_mutex_destroy (pthread_mutex_t *__mutex); */
-extern int __VERIFIER_mutex_destroy (pthread_mutex_t *__mutex);
-#define pthread_mutex_destroy __VERIFIER_mutex_destroy
+#define pthread_mutex_destroy(mutex) __VERIFIER_mutex_destroy(mutex)
 
 /* Try locking a mutex.  */
 /* extern int pthread_mutex_trylock (pthread_mutex_t *__mutex); */
-extern int __VERIFIER_mutex_trylock (pthread_mutex_t *__mutex);
-#define pthread_mutex_trylock __VERIFIER_mutex_trylock
+#define pthread_mutex_trylock(mutex) __VERIFIER_mutex_trylock(mutex)
 
 /* Lock a mutex.  */
 /* extern int pthread_mutex_lock (pthread_mutex_t *__mutex); */
-extern int __VERIFIER_mutex_lock (pthread_mutex_t *__mutex);
-#define pthread_mutex_lock __VERIFIER_mutex_lock
+#define pthread_mutex_lock(mutex) __VERIFIER_mutex_lock(mutex)
 
 /* Unlock a mutex.  */
 /* extern int pthread_mutex_unlock (pthread_mutex_t *__mutex); */
-extern int __VERIFIER_mutex_unlock (pthread_mutex_t *__mutex);
-#define pthread_mutex_unlock __VERIFIER_mutex_unlock
+#define pthread_mutex_unlock(mutex) __VERIFIER_mutex_unlock(mutex)
 
 /* /\* Get the priority ceiling of MUTEX.  *\/ */
 /* extern int pthread_mutex_getprioceiling (const pthread_mutex_t * */
@@ -581,25 +569,19 @@ extern int __VERIFIER_mutex_unlock (pthread_mutex_t *__mutex);
 /* extern int pthread_barrier_init (pthread_barrier_t *__restrict __barrier, */
 /* 				 const pthread_barrierattr_t *__restrict __attr, */
 /* 				 unsigned int __count); */
-extern int __VERIFIER_barrier_init (pthread_barrier_t *__restrict __barrier,
-				    const pthread_barrierattr_t *__restrict __attr,
-				    unsigned int __count);
-#define pthread_barrier_init __VERIFIER_barrier_init
+#define pthread_barrier_init(barrier, attr, count) __VERIFIER_barrier_init(barrier, attr, count)
 
 /* Destroy a previously dynamically initialized barrier BARRIER.  */
 /* extern int pthread_barrier_destroy (pthread_barrier_t *__barrier); */
-extern int __VERIFIER_barrier_destroy (pthread_barrier_t *__barrier);
-#define pthread_barrier_destroy __VERIFIER_barrier_destroy
+#define pthread_barrier_destroy(barrier) __VERIFIER_barrier_destroy(barrier)
 
 /* Wait on barrier BARRIER.  */
 /* extern int pthread_barrier_wait (pthread_barrier_t *__barrier); */
-extern int __VERIFIER_barrier_wait (pthread_barrier_t *__barrier);
-#define pthread_barrier_wait __VERIFIER_barrier_wait
+#define pthread_barrier_wait(barrier) __VERIFIER_barrier_wait(barrier)
 
 /* Destroy a previously dynamically initialized barrier BARRIER.  */
 /* extern int pthread_barrier_destroy (pthread_barrier_t *__barrier); */
-extern int __VERIFIER_barrier_destroy (pthread_barrier_t *__barrier);
-#define pthread_barrier_destroy __VERIFIER_barrier_destroy
+#define pthread_barrier_destroy(barrier) __VERIFIER_barrier_destroy(barrier)
 
 #ifdef __cplusplus
 }

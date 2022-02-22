@@ -3,7 +3,7 @@ Event (0, 1) in graph:
 <-1, 0> main:
 	(0, 0): B
 	(0, 1): Cacq (???, 0) [BOTTOM] L.10
-	(0, 2): BLOCK L.10
+	(0, 2): BLOCK [read-opt] L.10
 
 Trace to (0, 1):
 [main] unalloc-lock0.c: 10: pthread_mutex_lock((pthread_mutex_t *) 0xdeadbeef);

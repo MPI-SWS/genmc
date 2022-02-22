@@ -49,7 +49,7 @@ public:
 	using IRExprUP = std::unique_ptr<SExpr<Value *>>;
 
 	/* Returns the annotation for a load L */
-	IRExprUP annotate(LoadInst *l);
+	IRExprUP annotate(Instruction *l);
 
 	/* Returns the condition under which BB jumps to its first successor.
 	 * If PRED is non-null, assumes that the predecessor of the basic block is PRED

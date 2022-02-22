@@ -113,7 +113,7 @@ for model in rc11 imm lkmm
 do
     for coherence in wb mo
     do
-	for cat in infr litmus saver liveness synthetic data-structures fs lkmm # lapor
+	for cat in infr litmus saver helper liveness synthetic data-structures fs lkmm # lapor
 	do
 	    testdir="${correctdir}/${cat}"
 	    if [[ ("${model}" == "lkmm" && "${cat}" != "lkmm" && "${cat}" != "fs") ||
@@ -125,7 +125,11 @@ do
 	    then
 		continue
 	    fi
-	    check_blocked="" && [[ "${cat}" == "saver" ]] &&
+	    if [[ "${cat}" == "helper" && ("${coherence}" != "mo" || "${GENMCFLAGS}" =~ "policy=random") ]]
+	    then
+		continue
+	    fi
+	    check_blocked="" && [[ "${cat}" == "saver" || "${cat}" == "helper" ]] &&
 		[[ ! "${GENMCFLAGS}" =~ "policy=random" ]] && check_blocked="yes"
 	    source "${DIR}/runcorrect.sh" # the env variables for runcorrect.sh are set
 	    increase_total_time
@@ -138,7 +142,7 @@ header_printed=""
 wrongdir="${DIR}/../tests/wrong"
 for model in rc11 imm
 do
-    for cat in safety liveness infr racy memory locking barriers fs
+    for cat in safety liveness infr racy memory locking barriers helper fs
     do
 	# under IMM, only run safety and liveness tests
 	if test "${model}" = "imm" -a "${cat}" != "safety" -a "${cat}" != "liveness"
@@ -146,17 +150,17 @@ do
 	    continue
 	fi
 	testdir="${wrongdir}/${cat}"
-	if [[ "${cat}" == "liveness" ]]
+	if [[ "${cat}" == "liveness" || "${cat}" == "helper" ]]
 	then
 	    coherence="mo"
 	else
 	    coherence="wb"
 	fi
-	suppress_diff=""
-	if test "${cat}" = "memory" -o "${cat}" = "fs"
-	then
-	    suppress_diff=1
-	fi
+	suppress_diff=1
+	# if test "${cat}" = "memory" -o "${cat}" = "fs"
+	# then
+	#     suppress_diff=1
+	# fi
 	source "${DIR}/runwrong.sh"
 	increase_total_time
     done

@@ -1,5 +1,5 @@
 Error detected: Liveness violation!
-Event (1, 21) in graph:
+Event (2, 8) in graph:
 <-1, 0> main:
 	(0, 0): B
 	(0, 1): TC [forks 1] L.45
@@ -28,6 +28,7 @@ Event (1, 21) in graph:
 	(1, 19): LOOP_BEGIN
 	(1, 20): SPIN_START
 	(1, 21): Rsc (p2, 1) [(2, 4)] L.16
+	(1, 22): BLOCK [spinloop]
 <0, 2> thread_2:
 	(2, 0): B
 	(2, 1): Wsc (p2, 0) L.28
@@ -37,24 +38,27 @@ Event (1, 21) in graph:
 	(2, 5): LOOP_BEGIN
 	(2, 6): SPIN_START
 	(2, 7): Rsc (p1, 1) [(1, 18)] L.31
+	(2, 8): BLOCK [spinloop]
+Coherence:
+x: [ (1, 8) (1, 15) ]
+p1: [ (1, 1) (1, 4) (1, 9) (1, 11) (1, 16) (1, 18) ]
+p2: [ (2, 1) (2, 4) ]
 
-Trace to (1, 21):
+Trace to (2, 8):
 [main] lamport-deadlock0.c: 45: if (pthread_create(&t1, NULL, thread_1, NULL))
-[thread_1] lamport-deadlock0.c: 13: p1 = false;
-[thread_1] lamport-deadlock0.c: 15: p1 = true;
-[main] lamport-deadlock0.c: 45: if (pthread_create(&t1, NULL, thread_1, NULL))
-[thread_2] lamport-deadlock0.c: 28: p2 = false;
-[thread_1] lamport-deadlock0.c: 16: while (p2)
-[thread_1] lamport-deadlock0.c: 19: x = 1;
-[thread_1] lamport-deadlock0.c: 21: p1 = false;
-[thread_1] lamport-deadlock0.c: 15: p1 = true;
-[thread_1] lamport-deadlock0.c: 16: while (p2)
-[thread_1] lamport-deadlock0.c: 19: x = 1;
-[thread_1] lamport-deadlock0.c: 21: p1 = false;
-[thread_1] lamport-deadlock0.c: 15: p1 = true;
 [thread_2] lamport-deadlock0.c: 28: p2 = false;
 [thread_2] lamport-deadlock0.c: 30: p2 = true;
+[thread_1] lamport-deadlock0.c: 13: p1 = false;
+[thread_1] lamport-deadlock0.c: 15: p1 = true;
 [thread_1] lamport-deadlock0.c: 16: while (p2)
-Non-terminating spinloop: thread 1
+[thread_1] lamport-deadlock0.c: 19: x = 1;
+[thread_1] lamport-deadlock0.c: 21: p1 = false;
+[thread_1] lamport-deadlock0.c: 15: p1 = true;
+[thread_1] lamport-deadlock0.c: 16: while (p2)
+[thread_1] lamport-deadlock0.c: 19: x = 1;
+[thread_1] lamport-deadlock0.c: 21: p1 = false;
+[thread_1] lamport-deadlock0.c: 15: p1 = true;
+[thread_2] lamport-deadlock0.c: 31: while (p1)
+Non-terminating spinloop: thread 2
 Number of complete executions explored: 4
 Number of blocked executions seen: 1

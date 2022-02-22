@@ -20,51 +20,11 @@
 
 #include "WorkSet.hpp"
 
-llvm::raw_ostream& operator<<(llvm::raw_ostream& s,  const WorkItem::Kind k)
+llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const WorkSet &wset)
 {
-	switch (k) {
-	case WorkItem::WI_FRev:
-		s << "FR";
-		break;
-	case WorkItem::WI_BRev:
-		s << "BR";
-		break;
-	case WorkItem::WI_MO:
-		s << "MO";
-		break;
-	default:
-		s << "UNKNOWN";
-		break;
-	}
-	return s;
-}
-
-llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const WorkItem &item)
-{
-	switch (item.getKind()) {
-	case WorkItem::WI_FRev: {
-		auto &fi = static_cast<const FRevItem &>(item);
-		s << fi.getKind() << "(" << fi.getPos() << ": " << fi.getRev() << ")";
-		break;
-	}
-	case WorkItem::WI_BRev: {
-		auto &bi = static_cast<const BRevItem &>(item);
-		s << bi.getKind() << "(" << bi.getPos() << ": ["
-		  << bi.getRev() << ", ";
-		for (auto &lab : bi.getPrefixNoRel())
-			s << lab->getPos();
-		s << "]";
-		break;
-	}
-	case WorkItem::WI_MO: {
-		auto &mi = static_cast<const MOItem &>(item);
-		s << mi.getKind() << "(" << mi.getPos() << ": " << mi.getMOPos() << ")";
-		break;
-	}
-
-	default:
-		s << "UNKNOWN";
-		break;
-	}
+	s << "[ ";
+	for (auto it = wset.cbegin(), ie = wset.cend(); it != ie; ++it)
+		s << **it << " ";
+	s << "]";
 	return s;
 }

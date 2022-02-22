@@ -1,0 +1,58 @@
+Error detected: Non-Atomic race!
+Event (1, 15) conflicts with event (2, 2) in graph:
+<-1, 0> main:
+	(0, 0): B
+	(0, 1): TC [forks 1] L.57: cks_example.c
+	(0, 2): TC [forks 2] L.58: cks_example.c
+	(0, 3): TJ L.60: cks_example.c
+<0, 1> reader:
+	(1, 0): B
+	(1, 1): M
+	(1, 2): Rna (seqlock.sequence, 0) [INIT] L.102: ck_pr.h
+	(1, 3): Rna (global.x, 0) [INIT] L.24: cks_example.c
+	(1, 4): Wna (copy.x, 0) L.24: cks_example.c
+	(1, 5): Rna (global.y, 0) [INIT] L.25: cks_example.c
+	(1, 6): Wna (copy.y, 0) L.25: cks_example.c
+	(1, 7): Rna (seqlock.sequence, 0) [INIT] L.102: ck_pr.h
+	(1, 8): Rna (copy.x, 0) [(1, 4)] L.27: cks_example.c
+	(1, 9): Rna (copy.y, 0) [(1, 6)] L.27: cks_example.c
+	(1, 10): Rna (seqlock.sequence, 0) [INIT] L.102: ck_pr.h
+	(1, 11): Rna (global.x, 1) [(2, 4)] L.24: cks_example.c
+	(1, 12): Wna (copy.x, 1) L.24: cks_example.c
+	(1, 13): Rna (global.y, 0) [INIT] L.25: cks_example.c
+	(1, 14): Wna (copy.y, 0) L.25: cks_example.c
+	(1, 15): Rna (seqlock.sequence, 1) [(2, 2)] L.102: ck_pr.h
+<0, 2> writer:
+	(2, 0): B
+	(2, 1): Rna (seqlock.sequence, 0) [INIT] L.99: ck_sequence.h
+	(2, 2): Wna (seqlock.sequence, 1) L.102: ck_pr.h
+	(2, 3): Rna (global.x, 0) [INIT] L.45: cks_example.c
+	(2, 4): Wna (global.x, 1) L.45: cks_example.c
+
+Trace to (1, 15):
+[main] cks_example.c: 57: 
+[reader] ck_pr.h: 102: 
+[reader] cks_example.c: 24: 
+[reader] cks_example.c: 24: 
+[reader] cks_example.c: 25: 
+[reader] cks_example.c: 25: 
+[reader] ck_pr.h: 102: 
+[reader] cks_example.c: 27: 
+[reader] cks_example.c: 27: 
+[reader] ck_pr.h: 102: 
+[main] cks_example.c: 57: 
+[writer] ck_sequence.h: 99: 
+[writer] ck_pr.h: 102: 
+[writer] cks_example.c: 45: 
+[writer] cks_example.c: 45: 
+[reader] cks_example.c: 24: 
+[reader] cks_example.c: 24: 
+[reader] cks_example.c: 25: 
+[reader] cks_example.c: 25: 
+[reader] ck_pr.h: 102: 
+Trace to (2, 2):
+[main] cks_example.c: 57: 
+[writer] ck_sequence.h: 99: 
+[writer] ck_pr.h: 102: 
+Number of complete executions explored: 4
+Number of blocked executions seen: 3

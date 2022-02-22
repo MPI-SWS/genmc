@@ -77,10 +77,15 @@ protected:
 	 * Reports an error if the name is not a constant  */
 	void initializeFilenameEntry(llvm::Value *v);
 
+	/* Check whether the respective information exist */
+	bool hasGlobalInfo(llvm::Value *gv) const { return PI->varInfo.globalInfo[gv].get(); }
+	bool hasLocalInfo(llvm::Value *lv) const { return PI->varInfo.localInfo[lv].get(); }
+	bool hasInternalInfo(const std::string &key) const { return PI->varInfo.internalInfo[key].get(); }
+
 	/* Getters for collected naming info */
-	NameInfo &getGlobalInfo(llvm::Value *gv) { return PI->varInfo.globalInfo[gv]; }
-	NameInfo &getLocalInfo(llvm::Value *lv) { return PI->varInfo.localInfo[lv]; }
-	NameInfo &getInternalInfo(const std::string &key) { return PI->varInfo.internalInfo[key]; }
+	std::shared_ptr<NameInfo> &getGlobalInfo(llvm::Value *gv) { return PI->varInfo.globalInfo[gv]; }
+	std::shared_ptr<NameInfo> &getLocalInfo(llvm::Value *lv) { return PI->varInfo.localInfo[lv]; }
+	std::shared_ptr<NameInfo> &getInternalInfo(const std::string &key) { return PI->varInfo.internalInfo[key]; }
 
 	void collectFilename(const std::string &name) { PI->filenames.insert(name); }
 

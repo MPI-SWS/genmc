@@ -110,11 +110,6 @@ public:
 	WBCalculator(ExecutionGraph &m, bool ooo)
 		: CoherenceCalculator(CC_WritesBefore, m, ooo) {}
 
-	iterator begin() override { return stores_.begin(); };
-	iterator end() override { return stores_.end(); };
-	const_iterator cbegin() const override { return stores_.cbegin(); };
-	const_iterator cend() const override { return stores_.cend(); };
-
 	/* Track coherence at location addr */
 	void
 	trackCoherenceAtLoc(SAddr addr) override;
@@ -135,10 +130,6 @@ public:
 	/* Returns whether STORE is maximal in LOC */
 	bool isCachedCoMaximal(SAddr addr, Event store) override;
 
-	/* Returns a list of stores to a particular memory location */
-	const std::vector<Event>&
-	getStoresToLoc(SAddr addr) const override;
-
 	/* Returns all the stores for which if "read" reads-from,
 	 * coherence is not violated.
 	 * Result is ordered according to coherence maximality */
@@ -150,7 +141,7 @@ public:
 	std::vector<Event>
 	getCoherentRevisits(const WriteLabel *wLab) override;
 
-	bool inMaximalPath(const ReadLabel *rLab, const WriteLabel *wLab) override;
+	bool inMaximalPath(const BackwardRevisit &r) override;
 
 	/* Calculates WB */
 	GlobalRelation calcWb(SAddr addr) const;
@@ -207,10 +198,8 @@ private:
 
 	std::vector<unsigned int> calcRMWLimits(const GlobalRelation &wb) const;
 
-	View getRfOptHbBeforeStores(const std::vector<Event> &stores,
-				    const View &hbBefore);
-	void expandMaximalAndMarkOverwritten(const std::vector<Event> &stores,
-					     View &storeView);
+	View getRfOptHbBeforeStores(SAddr addr, Event e);
+	void expandMaximalAndMarkOverwritten(SAddr addr, View &storeView);
 
 	bool tryOptimizeWBCalculation(SAddr addr, Event read, std::vector<Event> &result);
 
@@ -227,7 +216,7 @@ private:
 	bool isCoherentRf(SAddr addr, Event read, Event store);
 	bool isInitCoherentRf(SAddr addr, Event read);
 
-	bool isCoherentRevisit(const WriteLabel *sLab, Event read);
+	bool isCoherentRevisit(const BackwardRevisit &r);
 
 	const Calculator::GlobalRelation &
 	getOrInsertWbCalc(SAddr addr, const VectorClock &v, Calculator::PerLocRelation &cache);
@@ -235,27 +224,21 @@ private:
 	Event getOrInsertWbMaximal(const ReadLabel *lab, const VectorClock &v,
 				   std::unordered_map<SAddr, Event> &cache);
 
-	bool coherenceSuccRemainInGraph(const ReadLabel *rLab, const WriteLabel *wLab);
+	bool coherenceSuccRemainInGraph(const BackwardRevisit &r);
 
-	Event getMaximalOOO(const ReadLabel *rLab, const WriteLabel *wLab, const ReadLabel *lab);
-	bool wasAddedMaximally(const ReadLabel *rLab, const WriteLabel *wLab,
-			       const EventLabel *lab, std::unordered_map<SAddr, Event> &cache);
-
-	/* Returns true if LAB is co-after any event that would be
-	 * removed by the revisit SLAB->RLAB */
-	bool isCoAfterRemoved(const ReadLabel *rLab, const WriteLabel *sLab,
-			      const EventLabel *lab, Calculator::PerLocRelation &wbs);
+	Event getMaximalOOO(const BackwardRevisit &r, const ReadLabel *lab);
+	bool wasAddedMaximally(const BackwardRevisit &r,
+			       const EventLabel *lab,
+			       std::unordered_map<SAddr, Event> &cache);
 
 	/* Returns true if LAB is rb-before any event that would be part
-	 * of the saved prefix triggered by the revisit SLAB->RLAB  */
-	bool isRbBeforeSavedPrefix(const ReadLabel *rLab, const WriteLabel *sLab,
-				   const EventLabel *lab, Calculator::PerLocRelation &wbs);
+	 * of the saved prefix triggered by the revisit R  */
+	bool isRbBeforeSavedPrefix(const BackwardRevisit &r,
+				   const EventLabel *lab,
+				   Calculator::PerLocRelation &wbs);
 
-	Event getTiebraker(const ReadLabel *revLab, const WriteLabel *wLab, const ReadLabel *lab) const;
-	bool ignoresDeletedStore(const ReadLabel *revLab, const WriteLabel *wLab, const ReadLabel *lab) const;
-
-	typedef std::unordered_map<SAddr, std::vector<Event> > StoresList;
-	StoresList stores_;
+	Event getTiebraker(const BackwardRevisit &r, const ReadLabel *lab) const;
+	bool ignoresDeletedStore(const BackwardRevisit &r, const ReadLabel *lab) const;
 
 	std::unordered_map<SAddr, bool> ordered_;
 
@@ -282,7 +265,7 @@ WBCalculator::calcWbRelation(SAddr addr, GlobalRelation &matrix,
 	auto &g = getGraph();
 
 	bool changed = false;
-	for (auto locIt = stores_.begin(); locIt != stores_.end(); ++locIt) {
+	for (auto locIt = begin(); locIt != end(); ++locIt) {
 		auto &stores = matrix.getElems();
 
 		/* If it is empty, nothing to do */

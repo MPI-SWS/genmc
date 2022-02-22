@@ -22,6 +22,7 @@
 #define __LOOP_UNROLL_PASS_HPP__
 
 #include "config.h"
+#include "VSet.hpp"
 #include <llvm/Pass.h>
 #ifdef LLVM_PASS_GETPASSNAME_IS_STRINGREF
 #include <llvm/ADT/StringRef.h>
@@ -34,19 +35,15 @@ class LoopUnrollPass : public llvm::LoopPass {
 protected:
 	int unrollDepth;
 
-	llvm::Value *createBoundAlloca(llvm::Loop *l);
-	llvm::BasicBlock *createBoundInitBlock(llvm::Loop *l, llvm::Value *boundAlloca);
-	llvm::BasicBlock *createBoundDecrBlock(llvm::Loop *l, llvm::Value *boundAlloca);
-	llvm::BasicBlock *createLoopDivergeBlock(llvm::Loop *l);
-
-	template<typename Func>
-	void redirectLoopPreds(llvm::Loop *l, llvm::BasicBlock *toBlock, Func &&f);
-
 public:
 	static char ID;
 
-	LoopUnrollPass(int depth)
-		: llvm::LoopPass(ID), unrollDepth(depth < 0 ? 0 : depth) {};
+	LoopUnrollPass(int depth, const VSet<std::string> &noUnrollFuns = {})
+		: llvm::LoopPass(ID), unrollDepth(depth < 0 ? 0 : depth), noUnroll(noUnrollFuns) {};
+
+	bool shouldUnroll(llvm::Loop *l) const {
+		return !noUnroll.count((*l->block_begin())->getParent()->getName().str());
+	}
 
 #ifdef LLVM_PASS_GETPASSNAME_IS_STRINGREF
 	virtual llvm::StringRef getPassName() const { return "LoopUnrollPass"; } ;
@@ -55,6 +52,9 @@ public:
 #endif
 	virtual void getAnalysisUsage(llvm::AnalysisUsage &au) const;
 	virtual bool runOnLoop(llvm::Loop *l, llvm::LPPassManager &LPM);
+
+private:
+	VSet<std::string> noUnroll;
 };
 
 #endif /* __LOOP_UNROLL_PASS_HPP__ */

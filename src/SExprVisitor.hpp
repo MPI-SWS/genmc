@@ -99,53 +99,53 @@ public:
 		}
 	}
 
-#define DELEGATE(TO_CLASS)						\
+#define DELEGATE_EXPR(TO_CLASS)						\
 	return static_cast<Subclass<T> *>(this)->			\
 	visit##TO_CLASS(static_cast<TO_CLASS<T>&>(e));
 
-	RetTy visitConcreteExpr(ConcreteExpr<T> &e) { DELEGATE(SExpr); }
-	RetTy visitRegisterExpr(RegisterExpr<T> &e) { DELEGATE(SExpr); }
-	RetTy visitSelectExpr(SelectExpr<T> &e) { DELEGATE(SExpr); }
-	// RetTy visitConcatExpr(ConcatExpr<T> &e) { DELEGATE(SExpr); }
-	// RetTy visitExtractExpr(ExtractExpr<T> &e) { DELEGATE(SExpr); }
-	RetTy visitConjunctionExpr(ConjunctionExpr<T> &e) { DELEGATE(LogicalExpr); }
-	RetTy visitDisjunctionExpr(DisjunctionExpr<T> &e) { DELEGATE(LogicalExpr); }
-	RetTy visitZExtExpr(ZExtExpr<T> &e) { DELEGATE(CastExpr); }
-	RetTy visitSExtExpr(SExtExpr<T> &e) { DELEGATE(CastExpr); }
-	RetTy visitTruncExpr(TruncExpr<T> &e) { DELEGATE(CastExpr); }
-	RetTy visitNotExpr(NotExpr<T> &e) { DELEGATE(SExpr); }
-	RetTy visitAddExpr(AddExpr<T> &e) { DELEGATE(BinaryExpr); }
-	RetTy visitSubExpr(SubExpr<T> &e) { DELEGATE(BinaryExpr); }
-	RetTy visitMulExpr(MulExpr<T> &e) { DELEGATE(BinaryExpr); }
-	RetTy visitUDivExpr(UDivExpr<T> &e) { DELEGATE(BinaryExpr); }
-	RetTy visitSDivExpr(SDivExpr<T> &e) { DELEGATE(BinaryExpr); }
-	RetTy visitURemExpr(URemExpr<T> &e) { DELEGATE(BinaryExpr); }
-	RetTy visitSRemExpr(SRemExpr<T> &e) { DELEGATE(BinaryExpr); }
-	RetTy visitAndExpr(AndExpr<T> &e) { DELEGATE(BinaryExpr); }
-	RetTy visitOrExpr(OrExpr<T> &e) { DELEGATE(BinaryExpr); }
-	RetTy visitXorExpr(XorExpr<T> &e) { DELEGATE(BinaryExpr); }
-	RetTy visitShlExpr(ShlExpr<T> &e) { DELEGATE(BinaryExpr); }
-	RetTy visitLShrExpr(LShrExpr<T> &e) { DELEGATE(BinaryExpr); }
-	RetTy visitAShrExpr(AShrExpr<T> &e) { DELEGATE(BinaryExpr); }
-	RetTy visitEqExpr(EqExpr<T> &e) { DELEGATE(CmpExpr); }
-	RetTy visitNeExpr(NeExpr<T> &e) { DELEGATE(CmpExpr); }
-	RetTy visitUltExpr(UltExpr<T> &e) { DELEGATE(CmpExpr); }
-	RetTy visitUleExpr(UleExpr<T> &e) { DELEGATE(CmpExpr); }
-	RetTy visitUgtExpr(UgtExpr<T> &e) { DELEGATE(CmpExpr); }
-	RetTy visitUgeExpr(UgeExpr<T> &e) { DELEGATE(CmpExpr); }
-	RetTy visitSltExpr(SltExpr<T> &e) { DELEGATE(CmpExpr); }
-	RetTy visitSleExpr(SleExpr<T> &e) { DELEGATE(CmpExpr); }
-	RetTy visitSgtExpr(SgtExpr<T> &e) { DELEGATE(CmpExpr); }
-	RetTy visitSgeExpr(SgeExpr<T> &e) { DELEGATE(CmpExpr); }
+	RetTy visitConcreteExpr(ConcreteExpr<T> &e) { DELEGATE_EXPR(SExpr); }
+	RetTy visitRegisterExpr(RegisterExpr<T> &e) { DELEGATE_EXPR(SExpr); }
+	RetTy visitSelectExpr(SelectExpr<T> &e) { DELEGATE_EXPR(SExpr); }
+	// RetTy visitConcatExpr(ConcatExpr<T> &e) { DELEGATE_EXPR(SExpr); }
+	// RetTy visitExtractExpr(ExtractExpr<T> &e) { DELEGATE_EXPR(SExpr); }
+	RetTy visitConjunctionExpr(ConjunctionExpr<T> &e) { DELEGATE_EXPR(LogicalExpr); }
+	RetTy visitDisjunctionExpr(DisjunctionExpr<T> &e) { DELEGATE_EXPR(LogicalExpr); }
+	RetTy visitZExtExpr(ZExtExpr<T> &e) { DELEGATE_EXPR(CastExpr); }
+	RetTy visitSExtExpr(SExtExpr<T> &e) { DELEGATE_EXPR(CastExpr); }
+	RetTy visitTruncExpr(TruncExpr<T> &e) { DELEGATE_EXPR(CastExpr); }
+	RetTy visitNotExpr(NotExpr<T> &e) { DELEGATE_EXPR(SExpr); }
+	RetTy visitAddExpr(AddExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
+	RetTy visitSubExpr(SubExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
+	RetTy visitMulExpr(MulExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
+	RetTy visitUDivExpr(UDivExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
+	RetTy visitSDivExpr(SDivExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
+	RetTy visitURemExpr(URemExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
+	RetTy visitSRemExpr(SRemExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
+	RetTy visitAndExpr(AndExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
+	RetTy visitOrExpr(OrExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
+	RetTy visitXorExpr(XorExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
+	RetTy visitShlExpr(ShlExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
+	RetTy visitLShrExpr(LShrExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
+	RetTy visitAShrExpr(AShrExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
+	RetTy visitEqExpr(EqExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
+	RetTy visitNeExpr(NeExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
+	RetTy visitUltExpr(UltExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
+	RetTy visitUleExpr(UleExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
+	RetTy visitUgtExpr(UgtExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
+	RetTy visitUgeExpr(UgeExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
+	RetTy visitSltExpr(SltExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
+	RetTy visitSleExpr(SleExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
+	RetTy visitSgtExpr(SgtExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
+	RetTy visitSgeExpr(SgeExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
 
 	/*
 	 * If none of the above matched, propagate to the next level before
 	 * calling the generic visitExpr
 	 */
-	RetTy visitLogicalExpr(LogicalExpr<T> &e) { DELEGATE(SExpr); }
-	RetTy visitCastExpr(CastExpr<T> &e) { DELEGATE(SExpr); }
-	RetTy visitBinaryExpr(BinaryExpr<T> &e) { DELEGATE(SExpr); }
-	RetTy visitCmpExpr(CmpExpr<T> &e) { DELEGATE(SExpr); }
+	RetTy visitLogicalExpr(LogicalExpr<T> &e) { DELEGATE_EXPR(SExpr); }
+	RetTy visitCastExpr(CastExpr<T> &e) { DELEGATE_EXPR(SExpr); }
+	RetTy visitBinaryExpr(BinaryExpr<T> &e) { DELEGATE_EXPR(SExpr); }
+	RetTy visitCmpExpr(CmpExpr<T> &e) { DELEGATE_EXPR(SExpr); }
 
 	/*
 	 * If no one else could handle this particular instruction, we ignore it.

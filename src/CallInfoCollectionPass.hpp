@@ -36,7 +36,11 @@ public:
 
 	CallInfoCollectionPass() : llvm::ModulePass(ID) {}
 
+	/* Returns the set of side-effect-free calls */
 	const CallSet &getCleanCalls() const { return clean; }
+
+	/* Returns the set of (non-builtin) allocating calls */
+	const CallSet &getAllocCalls() const { return alloc; }
 
 	virtual bool runOnModule(llvm::Module &M);
 	void getAnalysisUsage(llvm::AnalysisUsage &au) const;
@@ -45,6 +49,7 @@ public:
 
 private:
 	CallSet clean;
+	CallSet alloc;
 };
 
 #endif /* __CALL_INFO_COLLECTION_PASS_HPP__ */

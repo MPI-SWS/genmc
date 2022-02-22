@@ -38,6 +38,8 @@
 #include "Event.hpp"
 #include "GenMCDriver.hpp"
 #include "Interpreter.h"
+#include "LLVMUtils.hpp"
+#include "SExprVisitor.hpp"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/IntrinsicLowering.h"
@@ -60,69 +62,6 @@ using namespace llvm;
 // static cl::opt<bool> PrintVolatile("interpreter-print-volatile", cl::Hidden,
 //           cl::desc("make the interpreter print every volatile load and store"));
 
-const std::unordered_map<std::string, InternalFunctions> internalFunNames = {
-	{"__VERIFIER_assert_fail", InternalFunctions::FN_AssertFail},
-	{"__VERIFIER_loop_begin", InternalFunctions::FN_LoopBegin},
-	{"__VERIFIER_spin_start", InternalFunctions::FN_SpinStart},
-	{"__VERIFIER_spin_end", InternalFunctions::FN_SpinEnd},
-	{"__VERIFIER_faiZNE_spin_end", InternalFunctions::FN_FaiZNESpinEnd},
-	{"__VERIFIER_lockZNE_spin_end", InternalFunctions::FN_LockZNESpinEnd},
-	{"__VERIFIER_end_loop", InternalFunctions::FN_EndLoop},
-	{"__VERIFIER_assume", InternalFunctions::FN_Assume},
-	{"__VERIFIER_nondet_int", InternalFunctions::FN_NondetInt},
-	{"__VERIFIER_malloc", InternalFunctions::FN_Malloc},
-	{"__VERIFIER_malloc_aligned", InternalFunctions::FN_MallocAligned},
-	{"__VERIFIER_free", InternalFunctions::FN_Free},
-	{"__VERIFIER_thread_self", InternalFunctions::FN_ThreadSelf},
-	{"__VERIFIER_thread_create", InternalFunctions::FN_ThreadCreate},
-	{"__VERIFIER_thread_join", InternalFunctions::FN_ThreadJoin},
-	{"__VERIFIER_thread_exit", InternalFunctions::FN_ThreadExit},
-	{"__VERIFIER_mutex_init", InternalFunctions::FN_MutexInit},
-	{"__VERIFIER_mutex_lock", InternalFunctions::FN_MutexLock},
-	{"__VERIFIER_mutex_unlock", InternalFunctions::FN_MutexUnlock},
-	{"__VERIFIER_mutex_trylock", InternalFunctions::FN_MutexTrylock},
-	{"__VERIFIER_mutex_destroy", InternalFunctions::FN_MutexDestroy},
-	{"__VERIFIER_barrier_init", InternalFunctions::FN_BarrierInit},
-	{"__VERIFIER_barrier_wait", InternalFunctions::FN_BarrierWait},
-	{"__VERIFIER_barrier_destroy", InternalFunctions::FN_BarrierDestroy},
-	{"__VERIFIER_openFS", InternalFunctions::FN_OpenFS},
-	{"__VERIFIER_closeFS", InternalFunctions::FN_CloseFS},
-	{"__VERIFIER_creatFS", InternalFunctions::FN_CreatFS},
-	{"__VERIFIER_renameFS", InternalFunctions::FN_RenameFS},
-	{"__VERIFIER_linkFS", InternalFunctions::FN_LinkFS},
-	{"__VERIFIER_unlinkFS", InternalFunctions::FN_UnlinkFS},
-	{"__VERIFIER_truncateFS", InternalFunctions::FN_TruncateFS},
-	{"__VERIFIER_readFS", InternalFunctions::FN_ReadFS},
-	{"__VERIFIER_preadFS", InternalFunctions::FN_PreadFS},
-	{"__VERIFIER_writeFS", InternalFunctions::FN_WriteFS},
-	{"__VERIFIER_pwriteFS", InternalFunctions::FN_PwriteFS},
-	{"__VERIFIER_fsyncFS", InternalFunctions::FN_FsyncFS},
-	{"__VERIFIER_syncFS", InternalFunctions::FN_SyncFS},
-	{"__VERIFIER_lseekFS", InternalFunctions::FN_LseekFS},
-	{"__VERIFIER_pbarrier", InternalFunctions::FN_PersBarrierFS},
-	{"__VERIFIER_atomicrmw_noret", InternalFunctions::FN_AtomicRmwNoRet},
-	{"__VERIFIER_lkmm_fence", InternalFunctions::FN_SmpFenceLKMM},
-	{"__VERIFIER_rcu_read_lock", InternalFunctions::FN_RCUReadLockLKMM},
-	{"__VERIFIER_rcu_read_unlock", InternalFunctions::FN_RCUReadUnlockLKMM},
-	{"__VERIFIER_synchronize_rcu", InternalFunctions::FN_SynchronizeRCULKMM},
-	/* Some C++ calls */
-	{"_Znwm", InternalFunctions::FN_Malloc},
-	{"_ZdlPv", InternalFunctions::FN_Free},
-};
-
-const std::unordered_map<SystemError, std::string, ENUM_HASH(SystemError)> errorList = {
-	{SystemError::SE_EPERM,  "Operation not permitted"},
-	{SystemError::SE_ENOENT, "No such file or directory"},
-	{SystemError::SE_EIO,    "Input/output error"},
-	{SystemError::SE_EBADF,  "Bad file descriptor"},
-	{SystemError::SE_ENOMEM, "Cannot allocate memory"},
-	{SystemError::SE_EEXIST, "File exists"},
-	{SystemError::SE_EINVAL, "Invalid argument"},
-	{SystemError::SE_EMFILE, "Too many open files"},
-	{SystemError::SE_ENFILE, "Too many open files in system"},
-	{SystemError::SE_EFBIG,  "File too large"},
-};
-SystemError systemErrorNumber;
 
 //===----------------------------------------------------------------------===//
 //                     Various Helper Functions
@@ -183,17 +122,17 @@ SAddr getStaticAllocBegin(const VSet<std::pair<SAddr, SAddr>> &allocMap, SAddr a
 	return it->first;
 }
 
-NameInfo *Interpreter::getVarNameInfo(Value *v, Storage s, AddressSpace spc,
-				      const VariableInfo<ModuleID::ID>::InternalKey &key /* = {} */)
+const NameInfo *Interpreter::getVarNameInfo(Value *v, Storage s, AddressSpace spc,
+					    const VariableInfo<ModuleID::ID>::InternalKey &key /* = {} */)
 {
 	if (spc == AddressSpace::AS_Internal)
-		return &MI->varInfo.internalInfo[key];
+		return MI->varInfo.internalInfo[key].get();
 
 	switch (s) {
 	case Storage::ST_Static:
-		return &MI->varInfo.globalInfo[MI->idInfo.VID[v]];
+		return MI->varInfo.globalInfo[MI->idInfo.VID[v]].get();
 	case Storage::ST_Automatic:
-		return &MI->varInfo.localInfo[MI->idInfo.VID[v]];
+		return MI->varInfo.localInfo[MI->idInfo.VID[v]].get();
 	case Storage::ST_Heap:
 		return nullptr;
 	default:
@@ -213,7 +152,7 @@ std::string Interpreter::getStaticName(SAddr addr) const
 	auto gv = staticNames.at(sBeg);
 	auto gvID = MI->idInfo.VID[gv];
 	BUG_ON(!MI->varInfo.globalInfo.count(gvID));
-	auto &gi = MI->varInfo.globalInfo.at(gvID);
+	auto &gi = *MI->varInfo.globalInfo.at(gvID);
 	return gv->getName().str() + gi.getNameAtOffset(addr - sBeg);
 }
 
@@ -253,6 +192,101 @@ SVal Interpreter::getLocInitVal(SAddr addr, AAccess access)
 	LoadValueFromMemory(result, (llvm::GenericValue *) getStaticAddr(addr),
 			    IntegerType::get(Modules.back()->getContext(), access.getSize().get() * 8));
 	return SVal(access.isSigned() ? result.IntVal.getSExtValue() : result.IntVal.getLimitedValue());
+}
+
+std::unique_ptr<SExpr<unsigned int>> Interpreter::getCurrentAnnotConcretized()
+{
+	auto *l = ECStack().back().CurInst->getPrevNode();
+	auto *annot = getAnnotation(l);
+	if (!annot)
+		return nullptr;
+
+	using Concretizer = SExprConcretizer<AnnotID>;
+	auto &stackVals = ECStack().back().Values;
+	Concretizer::ReplaceMap vMap;
+
+	for (auto &kv : stackVals) {
+		/* (1) Check against NULL due to possibly empty thread parameter list
+		 * (2) Ensure that the load itself will not be concretized */
+		if (kv.first && kv.first != l) {
+			vMap.insert({(MI->idInfo.VID.at(kv.first)),
+					std::make_pair(GV_TO_SVAL(kv.second, kv.first->getType()),
+						       ASize(getTypeSize(kv.first->getType()) * 8))});
+		}
+	}
+	return Concretizer().concretize(annot, vMap);
+}
+
+EventLabel::EventLabelKind
+getReadKind(LoadInst &I)
+{
+	using Kind = EventLabel::EventLabelKind;
+
+	auto *md = I.getMetadata("genmc.attr");
+	if (!md)
+		return Kind::EL_Read;
+
+	auto *op = dyn_cast<ConstantAsMetadata>(md->getOperand(0));
+	BUG_ON(!op);
+
+	auto flags = dyn_cast<ConstantInt>(op->getValue())->getZExtValue();
+	if (GENMC_KIND(flags) == GENMC_KIND_SPECUL)
+		return Kind::EL_SpeculativeRead;
+	else if (GENMC_KIND(flags) == GENMC_KIND_CONFIRM)
+		return Kind::EL_ConfirmingRead;
+	BUG();
+}
+
+constexpr unsigned int switchPair(EventLabel::EventLabelKind a, EventLabel::EventLabelKind b)
+{
+	return (unsigned(a) << 16) + b;
+}
+
+constexpr unsigned int switchPair(std::pair<EventLabel::EventLabelKind, EventLabel::EventLabelKind> p)
+{
+	return switchPair(p.first, p.second);
+}
+
+std::pair<EventLabel::EventLabelKind, EventLabel::EventLabelKind>
+getCasKinds(AtomicCmpXchgInst &I)
+{
+	using Kind = EventLabel::EventLabelKind;
+
+	auto *md = I.getMetadata("genmc.attr");
+	if (!md)
+		return std::make_pair(Kind::EL_CasRead, Kind::EL_CasWrite);
+
+	auto *op = dyn_cast<ConstantAsMetadata>(md->getOperand(0));
+	BUG_ON(!op);
+
+	auto flags = dyn_cast<ConstantInt>(op->getValue())->getZExtValue();
+	if (!GENMC_KIND(flags))
+		return std::make_pair(Kind::EL_CasRead, Kind::EL_CasWrite);
+
+	if (GENMC_KIND(flags) == GENMC_KIND_HELPED)
+		return std::make_pair(Kind::EL_HelpedCasRead, Kind::EL_HelpedCasWrite);
+	else if (GENMC_KIND(flags) == GENMC_KIND_HELPING)
+		return std::make_pair(Kind::EL_HelpingCas, Kind::EL_HelpingCas);
+	BUG_ON(GENMC_KIND(flags) != GENMC_KIND_CONFIRM);
+	return std::make_pair(Kind::EL_ConfirmingCasRead, Kind::EL_ConfirmingCasWrite);
+}
+
+std::pair<EventLabel::EventLabelKind, EventLabel::EventLabelKind>
+getFaiKinds(AtomicRMWInst &I)
+{
+	using Kind = EventLabel::EventLabelKind;
+
+	auto *md = I.getMetadata("genmc.attr");
+	if (!md)
+		return std::make_pair(Kind::EL_FaiRead, Kind::EL_FaiWrite);
+
+	auto *op = dyn_cast<ConstantAsMetadata>(md->getOperand(0));
+	BUG_ON(!op);
+
+	auto flags = dyn_cast<ConstantInt>(op->getValue())->getZExtValue();
+	if (GENMC_KIND(flags) == GENMC_KIND_NONVR)
+		return std::make_pair(Kind::EL_NoRetFaiRead, Kind::EL_NoRetFaiWrite);
+	BUG();
 }
 
 /* Returns the size (in bytes) for a given type */
@@ -1195,13 +1229,12 @@ void Interpreter::exitCalled(GenericValue GV) {
 /// from an invoke.
 ///
 void Interpreter::popStackAndReturnValueToCaller(Type *RetTy,
-                                                 GenericValue Result) {
+                                                 GenericValue Result,
+						 ReturnInst *retI /* = nullptr */) {
   // Keep track of the ret inst to update deps if necessary:
   // We check whether there _was_ an instruction which caused the
   // stack frame to be popped, and that the instruction was a ret inst
-  ReturnInst *retI = nullptr;
-  if (!ECStack().back().CurFunction->isDeclaration())
-    retI = dyn_cast<ReturnInst>(ECStack().back().CurInst->getPrevNode());
+  // (That's why we have an extra parameter.)
 
   // Pop the current stack frame.
   freeAllocas(ECStack().back().Allocas);
@@ -1259,7 +1292,7 @@ void Interpreter::visitReturnInst(ReturnInst &I) {
     Result = getOperandValue(I.getReturnValue(), SF);
   }
 
-  popStackAndReturnValueToCaller(RetTy, Result);
+  popStackAndReturnValueToCaller(RetTy, Result, &I);
 }
 
 void Interpreter::visitUnreachableInst(UnreachableInst &I) {
@@ -1374,7 +1407,7 @@ void Interpreter::visitAllocaInst(AllocaInst &I) {
   auto deps = makeEventDeps(nullptr, nullptr, getCtrlDeps(getCurThr().id),
 			    getAddrPoDeps(getCurThr().id), nullptr);
 
-  NameInfo *info = getVarNameInfo(&I, Storage::ST_Automatic, AddressSpace::AS_User);
+  auto *info = getVarNameInfo(&I, Storage::ST_Automatic, AddressSpace::AS_User);
   SVal result = driver->visitMalloc(MallocLabel::create(nextPos(), MemToAlloc, info, I.getName().str()), &*deps,
 				    I.getAlignment(), Storage::ST_Automatic, AddressSpace::AS_User);
 
@@ -1461,8 +1494,24 @@ void Interpreter::visitLoadInst(LoadInst &I)
 	auto deps = makeEventDeps(getDataDeps(thr.id, I.getPointerOperand()), nullptr,
 				  getCtrlDeps(thr.id), getAddrPoDeps(thr.id), nullptr);
 
+
 	/* ... and then the driver will provide the appropriate value */
-	auto val = driver->visitLoad(ReadLabel::create(I.getOrdering(), nextPos(), ptr, size, atyp), &*deps);
+#define IMPLEMENT_READ_VISIT(__kind)					\
+	case EventLabel::EventLabelKind::EL_ ## __kind: {		\
+		val = driver->visitLoad(__kind ## Label::create(	\
+					I.getOrdering(), nextPos(), ptr,\
+					size, atyp), &*deps);		\
+		break;							\
+	}
+
+	SVal val;
+	switch (getReadKind(I)) {
+		IMPLEMENT_READ_VISIT(Read);
+		IMPLEMENT_READ_VISIT(SpeculativeRead);
+		IMPLEMENT_READ_VISIT(ConfirmingRead);
+	default:
+		BUG();
+	}
 
 	updateDataDeps(thr.id, &I, currPos());
 	updateAddrPoDeps(thr.id, I.getPointerOperand());
@@ -1496,7 +1545,7 @@ void Interpreter::visitStoreInst(StoreInst &I)
 
 	/* Inform the Driver about the newly interpreter store */
 	driver->visitStore(WriteLabel::create(I.getOrdering(), nextPos(), ptr, asize, atyp,
-					      GV_TO_SVAL(val, typ)), &*deps);
+					      GV_TO_SVAL(val, typ), getWriteAttr(I)), &*deps);
 
 	updateAddrPoDeps(getCurThr().id, I.getPointerOperand());
 	return;
@@ -1538,17 +1587,40 @@ void Interpreter::visitAtomicCmpXchgInst(AtomicCmpXchgInst &I)
 				  getCtrlDeps(thr.id), getAddrPoDeps(thr.id),
 				  getDataDeps(thr.id, I.getCompareOperand()));
 
-	auto ret = driver->visitLoad(
-		CasReadLabel::create(I.getSuccessOrdering(), nextPos(), ptr, size, atyp, GV_TO_SVAL(cmpVal, typ),
-				     GV_TO_SVAL(newVal, typ)), &*lDeps);
+#define IMPLEMENT_CAS_VISIT(nameR, nameW)				\
+	case switchPair(EventLabel::EventLabelKind::EL_ ## nameR, EventLabel::EventLabelKind::EL_ ## nameW): { \
+		ret = driver->visitLoad(nameR ## Label::create(	\
+			I.getSuccessOrdering(), nextPos(), ptr,		\
+			size, atyp, GV_TO_SVAL(cmpVal, typ),		\
+			GV_TO_SVAL(newVal, typ), getWriteAttr(I)), &*lDeps); \
+		cmpRes = ret == GV_TO_SVAL(cmpVal, typ);		\
+		if (!getCurThr().isBlocked() && cmpRes) {		\
+			auto sDeps = makeEventDeps(getDataDeps(getCurThr().id, I.getPointerOperand()), \
+						   getDataDeps(getCurThr().id, I.getNewValOperand()), \
+						   getCtrlDeps(getCurThr().id), getAddrPoDeps(thr.id), nullptr); \
+			driver->visitStore(nameW ## Label::create(	\
+				I.getSuccessOrdering(), nextPos(), ptr, size, \
+				atyp, GV_TO_SVAL(newVal, typ), getWriteAttr(I)), &*sDeps); \
+		}							\
+		break;							\
+	}
 
-	auto cmpRes = ret == GV_TO_SVAL(cmpVal, typ);
-	if (!getCurThr().isBlocked() && cmpRes) {
-		auto sDeps = makeEventDeps(getDataDeps(getCurThr().id, I.getPointerOperand()),
-					   getDataDeps(getCurThr().id, I.getNewValOperand()),
-					   getCtrlDeps(getCurThr().id), getAddrPoDeps(thr.id), nullptr);
-		driver->visitStore(CasWriteLabel::create(I.getSuccessOrdering(), nextPos(), ptr, size,
-							 atyp, GV_TO_SVAL(newVal, typ)), &*sDeps);
+	/* Check whether this is some special CAS; in such cases we also need a snapshot */
+	SVal ret, cmpRes;
+	thr.takeSnapshot();
+	switch (switchPair(getCasKinds(I))) {
+		IMPLEMENT_CAS_VISIT(CasRead, CasWrite);
+		IMPLEMENT_CAS_VISIT(HelpedCasRead, HelpedCasWrite);
+		IMPLEMENT_CAS_VISIT(ConfirmingCasRead, ConfirmingCasWrite);
+		case switchPair(EventLabel::EL_HelpingCas, EventLabel::EL_HelpingCas):
+			driver->visitHelpingCas(HelpingCasLabel::create(
+							I.getSuccessOrdering(), nextPos(), ptr,
+							size, atyp, GV_TO_SVAL(cmpVal, typ),
+							GV_TO_SVAL(newVal, typ)),
+						&*lDeps);
+			break;
+	default:
+		BUG();
 	}
 
 	/* After the RMW operation is done, update dependencies and return value.
@@ -1566,7 +1638,7 @@ void Interpreter::visitAtomicCmpXchgInst(AtomicCmpXchgInst &I)
 	return;
 }
 
-SVal Interpreter::executeAtomicRMWOperation(SVal oldVal, SVal val, AtomicRMWInst::BinOp op)
+SVal Interpreter::executeAtomicRMWOperation(SVal oldVal, SVal val, ASize size, AtomicRMWInst::BinOp op)
 {
 	switch (op) {
 	case AtomicRMWInst::Xchg:
@@ -1574,9 +1646,9 @@ SVal Interpreter::executeAtomicRMWOperation(SVal oldVal, SVal val, AtomicRMWInst
 			     "Atomic xchg support is experimental under dependency-tracking models!\n");
 		return val;
 	case AtomicRMWInst::Add:
-		return oldVal + val;
+		return (oldVal + val).signExtendBottom(size.getBits());
 	case AtomicRMWInst::Sub:
-		return oldVal - val;
+		return (oldVal - val).signExtendBottom(size.getBits());
 	case AtomicRMWInst::And:
 		return oldVal & val;
 	case AtomicRMWInst::Nand:
@@ -1616,7 +1688,7 @@ void Interpreter::visitAtomicRMWInst(AtomicRMWInst &I)
 	if (thr.tls.count(ptr)) {
 		GenericValue oldVal = thr.tls[ptr];
 		auto newVal = executeAtomicRMWOperation(GV_TO_SVAL(oldVal, typ),
-							val, I.getOperation());
+							val, size, I.getOperation());
 		thr.tls[ptr] = SVAL_TO_GV(newVal, typ);
 		SetValue(&I, oldVal, SF);
 		return;
@@ -1626,12 +1698,29 @@ void Interpreter::visitAtomicRMWInst(AtomicRMWInst &I)
 				  getDataDeps(thr.id, I.getValOperand()),
 				  getCtrlDeps(thr.id), getAddrPoDeps(thr.id), nullptr);
 
-	auto ret = driver->visitLoad(FaiReadLabel::create(I.getOrdering(), nextPos(), ptr, size,
-							  atyp, I.getOperation(), val), &*deps);
-	auto newVal = executeAtomicRMWOperation(ret, val, I.getOperation());
-	if (!thr.isBlocked())
-		driver->visitStore(FaiWriteLabel::create(I.getOrdering(), nextPos(), ptr, size,
-							 atyp, newVal), &*deps);
+#define IMPLEMENT_FAI_VISIT(nameR, nameW)				\
+	case switchPair(EventLabel::EventLabelKind::EL_ ## nameR, EventLabel::EventLabelKind::EL_ ## nameW): { \
+		ret = driver->visitLoad(nameR ## Label::create(		\
+			I.getOrdering(), nextPos(), ptr, size, atyp, 	\
+			I.getOperation(), val, getWriteAttr(I)), &*deps); \
+		auto newVal = executeAtomicRMWOperation(ret, val, size, I.getOperation()); \
+		if (!getCurThr().isBlocked())				\
+			driver->visitStore(				\
+				nameW ## Label::create(I.getOrdering(), nextPos(), ptr, size, \
+						       atyp, newVal, getWriteAttr(I)), &*deps); \
+		break;							\
+	}
+
+	/* Check whether this is a special FAI */
+	SVal ret;
+	switch (switchPair(getFaiKinds(I))) {
+		IMPLEMENT_FAI_VISIT(FaiRead, FaiWrite);
+		IMPLEMENT_FAI_VISIT(NoRetFaiRead, NoRetFaiWrite);
+	default:
+		BUG();
+	}
+
+
 
 	/* After the RMW operation is done, update dependencies.
 	 * (See comment for CASes to see why we re-acquire refs.) */
@@ -2731,6 +2820,17 @@ void Interpreter::callAssertFail(Function *F, const std::vector<GenericValue> &A
 	driver->visitError(currPos(), errT, err);
 }
 
+void Interpreter::callOptBegin(Function *F, const std::vector<GenericValue> &ArgVals,
+			       const std::unique_ptr<EventDeps> &specialDeps)
+{
+	auto expand = driver->visitOptional(OptionalLabel::create(nextPos()));
+
+	GenericValue result;
+	result.IntVal = APInt(F->getReturnType()->getIntegerBitWidth(), expand, true); // signed
+	returnValueToCaller(F->getReturnType(), result);
+	return;
+}
+
 void Interpreter::callLoopBegin(Function *F, const std::vector<GenericValue> &ArgVals,
 				const std::unique_ptr<EventDeps> &specialDeps)
 {
@@ -2746,8 +2846,9 @@ void Interpreter::callSpinStart(Function *F, const std::vector<GenericValue> &Ar
 void Interpreter::callSpinEnd(Function *F, const std::vector<GenericValue> &ArgVals,
 			      const std::unique_ptr<EventDeps> &specialDeps)
 {
+	/* XXX: If we ever remove EE blocking, account for blocked events in liveness */
 	if (!ArgVals[0].IntVal.getBoolValue())
-		getCurThr().block(BlockageType::Spinloop);
+		driver->visitBlock(BlockLabel::create(nextPos(), BlockageType::Spinloop));
 }
 
 void Interpreter::callFaiZNESpinEnd(Function *F, const std::vector<GenericValue> &ArgVals,
@@ -2762,10 +2863,11 @@ void Interpreter::callLockZNESpinEnd(Function *F, const std::vector<GenericValue
 	driver->visitLockZNESpinEnd(LockZNESpinEndLabel::create(nextPos()));
 }
 
-void Interpreter::callEndLoop(Function *F, const std::vector<GenericValue> &ArgVals,
-			      const std::unique_ptr<EventDeps> &specialDeps)
+void Interpreter::callKillThread(Function *F, const std::vector<GenericValue> &ArgVals,
+				 const std::unique_ptr<EventDeps> &specialDeps)
 {
-	ECStack().clear();
+	if (ArgVals[0].IntVal.getBoolValue())
+		ECStack().clear();
 }
 
 void Interpreter::callAssume(Function *F, const std::vector<GenericValue> &ArgVals,
@@ -3032,7 +3134,7 @@ void Interpreter::callBarrierWait(Function *F, const std::vector<GenericValue> &
 	if (oldVal.getSigned() <= 0 || getCurThr().isBlocked())
 		return;
 
-	auto newVal = executeAtomicRMWOperation(oldVal, SVal(1), AtomicRMWInst::BinOp::Sub);
+	auto newVal = executeAtomicRMWOperation(oldVal, SVal(1), asize, AtomicRMWInst::BinOp::Sub);
 
 	driver->visitStore(BIncFaiWriteLabel::create(AtomicOrdering::AcquireRelease, nextPos(),
 						     barrier, asize, atyp, newVal), &*specialDeps);
@@ -3064,48 +3166,55 @@ void Interpreter::callBarrierDestroy(Function *F, const std::vector<GenericValue
 	return;
 }
 
-void Interpreter::callAtomicRmwNoRet(Function *F, const std::vector<GenericValue> &ArgVals,
-				     const std::unique_ptr<EventDeps> &specialDeps)
+void Interpreter::callHazptrAlloc(Function *F, const std::vector<GenericValue> &ArgVals,
+				  const std::unique_ptr<EventDeps> &specialDeps)
 {
-	GenericValue *ptr = (GenericValue *) GVTOP(ArgVals[0]);
-	GenericValue val = ArgVals[1];
-	GenericValue ord = ArgVals[2];
-	GenericValue binop = ArgVals[3];
-	Type *typ = (*ECStack().back().Caller.arg_begin())->getType()->getPointerElementType();
-	auto size = getTypeSize(typ);
-	auto atyp = TYPE_TO_ATYPE(typ);
-
-	BUG_ON(!typ->isIntegerTy()); /* Make sure that the ugly hack we used to get the type works */
-
-	if (getCurThr().tls.count(ptr)) {
-		GenericValue oldVal = getCurThr().tls[ptr];
-		auto newVal = executeAtomicRMWOperation(GV_TO_SVAL(oldVal, typ),
-							GV_TO_SVAL(val, typ),
-							(llvm::AtomicRMWInst::BinOp)
-							binop.IntVal.getLimitedValue());
-		getCurThr().tls[ptr] = SVAL_TO_GV(newVal, typ);
-		return;
-	}
-
-	/* Dependencies already set */
-
-	/* We have to do an ugly hack to get the ordering correct
-	 * (i.e. match LLVM's AtomicOrdering value), as the C ABI values are
-	 * not the same as the LLVM ones. */
-	auto ret = driver->visitLoad(
-		NoRetFaiReadLabel::create((llvm::AtomicOrdering) (ord.IntVal.getLimitedValue() + 2),
-					  nextPos(), ptr, size, atyp, (llvm::AtomicRMWInst::BinOp)
-					  binop.IntVal.getLimitedValue(), GV_TO_SVAL(val, typ)),
-		&*specialDeps);
-	auto newVal = executeAtomicRMWOperation(ret, GV_TO_SVAL(val, typ), (llvm::AtomicRMWInst::BinOp)
-						binop.IntVal.getLimitedValue());
-	if (!getCurThr().isBlocked())
-		driver->visitStore(
-			NoRetFaiWriteLabel::create((llvm::AtomicOrdering) (ord.IntVal.getLimitedValue() + 2)
-						   /* to match LLVM */, nextPos(), ptr, size, atyp, newVal),
-			&*specialDeps);
-
+	auto deps = makeEventDeps(nullptr, nullptr, getCtrlDeps(getCurThr().id),
+				  getAddrPoDeps(getCurThr().id), nullptr);
+	auto address = driver->visitMalloc(MallocLabel::create(nextPos(), getTypeSize(F->getReturnType())), &*deps,
+					   alignof(std::max_align_t), Storage::ST_Heap, AddressSpace::AS_Internal);
+	returnValueToCaller(F->getReturnType(), SVAL_TO_GV(address, F->getReturnType()));
 	return;
+}
+
+void Interpreter::callHazptrProtect(Function *F, const std::vector<GenericValue> &ArgVals,
+				    const std::unique_ptr<EventDeps> &specialDeps)
+{
+	auto *hp = GVTOP(ArgVals[0]);
+	auto *ptr = GVTOP(ArgVals[1]);
+
+	driver->visitHpProtect(HpProtectLabel::create(nextPos(), hp, ptr), nullptr);
+	return;
+}
+
+void Interpreter::callHazptrClear(Function *F, const std::vector<GenericValue> &ArgVals,
+				  const std::unique_ptr<EventDeps> &specialDeps)
+{
+	auto *typ = Type::getVoidTy(F->getParent()->getContext())->getPointerTo();
+	auto asize = getTypeSize(typ);
+	auto atyp = TYPE_TO_ATYPE(typ);
+	auto *hp = GVTOP(ArgVals[0]);
+
+	/* FIXME: Should this be an internal null? */
+	driver->visitStore(WriteLabel::create(AtomicOrdering::Release, nextPos(), hp, asize, atyp, SVal()),
+			   nullptr);
+	return;
+}
+
+void Interpreter::callHazptrFree(Function *F, const std::vector<GenericValue> &ArgVals,
+				 const std::unique_ptr<EventDeps> &specialDeps)
+{
+	auto deps = makeEventDeps(nullptr, nullptr, getCtrlDeps(getCurThr().id),
+				  getAddrPoDeps(getCurThr().id), nullptr);
+	driver->visitFree(FreeLabel::create(nextPos(), GVTOP(ArgVals[0])), &*deps);
+}
+
+void Interpreter::callHazptrRetire(Function *F, const std::vector<GenericValue> &ArgVals,
+				   const std::unique_ptr<EventDeps> &specialDeps)
+{
+	auto deps = makeEventDeps(nullptr, nullptr, getCtrlDeps(getCurThr().id),
+				  getAddrPoDeps(getCurThr().id), nullptr);
+	driver->visitFree(HpRetireLabel::create(nextPos(), GVTOP(ArgVals[0])), &*deps);
 }
 
 static const std::unordered_map<std::string, SmpFenceType> smpFenceTypes = {
@@ -3546,7 +3655,7 @@ SVal Interpreter::executeCloseFS(SVal fd, Type *intTyp, const std::unique_ptr<Ev
 		FaiReadLabel::create(AtomicOrdering::AcquireRelease, nextPos(),
 				     fileCount, asize, atyp, AtomicRMWInst::Sub, SVal(1)), &*deps);
 
-	auto newVal = executeAtomicRMWOperation(ret, SVal(1), AtomicRMWInst::Sub);
+	auto newVal = executeAtomicRMWOperation(ret, SVal(1), asize, AtomicRMWInst::Sub);
 
 	driver->visitStore(FaiWriteLabel::create(AtomicOrdering::AcquireRelease, nextPos(),
 						 fileCount, asize, atyp, newVal), &*deps);
@@ -4376,12 +4485,13 @@ void Interpreter::callInternalFunction(Function *F, const std::vector<GenericVal
 
 	switch (fCode) {
 		CALL_INTERNAL_FUNCTION(AssertFail);
+		CALL_INTERNAL_FUNCTION(OptBegin);
 		CALL_INTERNAL_FUNCTION(LoopBegin);
 		CALL_INTERNAL_FUNCTION(SpinStart);
 		CALL_INTERNAL_FUNCTION(SpinEnd);
 		CALL_INTERNAL_FUNCTION(FaiZNESpinEnd);
 		CALL_INTERNAL_FUNCTION(LockZNESpinEnd);
-		CALL_INTERNAL_FUNCTION(EndLoop);
+		CALL_INTERNAL_FUNCTION(KillThread);
 		CALL_INTERNAL_FUNCTION(Assume);
 		CALL_INTERNAL_FUNCTION(NondetInt);
 		CALL_INTERNAL_FUNCTION(Malloc);
@@ -4399,6 +4509,11 @@ void Interpreter::callInternalFunction(Function *F, const std::vector<GenericVal
 		CALL_INTERNAL_FUNCTION(BarrierInit);
 		CALL_INTERNAL_FUNCTION(BarrierWait);
 		CALL_INTERNAL_FUNCTION(BarrierDestroy);
+		CALL_INTERNAL_FUNCTION(HazptrAlloc);
+		CALL_INTERNAL_FUNCTION(HazptrProtect);
+		CALL_INTERNAL_FUNCTION(HazptrClear);
+		CALL_INTERNAL_FUNCTION(HazptrFree);
+		CALL_INTERNAL_FUNCTION(HazptrRetire);
 		CALL_INTERNAL_FUNCTION(OpenFS);
 		CALL_INTERNAL_FUNCTION(CreatFS);
 		CALL_INTERNAL_FUNCTION(CloseFS);
@@ -4414,7 +4529,6 @@ void Interpreter::callInternalFunction(Function *F, const std::vector<GenericVal
 		CALL_INTERNAL_FUNCTION(PwriteFS);
 		CALL_INTERNAL_FUNCTION(LseekFS);
 		CALL_INTERNAL_FUNCTION(PersBarrierFS);
-		CALL_INTERNAL_FUNCTION(AtomicRmwNoRet);
 		CALL_INTERNAL_FUNCTION(SmpFenceLKMM);
 		CALL_INTERNAL_FUNCTION(RCUReadLockLKMM);
 		CALL_INTERNAL_FUNCTION(RCUReadUnlockLKMM);
@@ -4538,14 +4652,15 @@ void Interpreter::replayExecutionBefore(const VectorClock &before)
 		currentThread = i;
 		if (thr.threadFun == recoveryRoutine)
 			setProgramState(ProgramState::Recovery);
-		while ((int) thr.globalInstructions < before[i]) {
-			int snap = thr.globalInstructions;
-			ExecutionContext &SF = thr.ECStack.back();
+		/* Make sure to refetch references within the loop (invalidation danger) */
+		while ((int) getCurThr().globalInstructions < before[i]) {
+			int snap = getCurThr().globalInstructions;
+			ExecutionContext &SF = ECStack().back();
 			Instruction &I = *SF.CurInst++;
 			visit(I);
 
 			/* Collect metadata only for global instructions */
-			if (thr.globalInstructions == snap)
+			if (getCurThr().globalInstructions == snap)
 				continue;
 			/* If there are no metadata for this instruction, skip */
 			if (!I.getMetadata("dbg"))
@@ -4554,11 +4669,11 @@ void Interpreter::replayExecutionBefore(const VectorClock &before)
 			/* Store relevant trace information in the appropriate spot */
 			int line = I.getDebugLoc().getLine();
 			std::string file = getFilenameFromMData(I.getMetadata("dbg"));
-			thr.prefixLOC[snap + 1] = std::make_pair(line, file);
+			getCurThr().prefixLOC[snap + 1] = std::make_pair(line, file);
 
 			/* If the instruction maps to more than one events, we have to fill more spots */
-			for (auto i = snap + 2; i <= thr.globalInstructions; i++)
-				thr.prefixLOC[i] = std::make_pair(line, file);
+			for (auto i = snap + 2; i <= getCurThr().globalInstructions; i++)
+				getCurThr().prefixLOC[i] = std::make_pair(line, file);
 		}
 	}
 }

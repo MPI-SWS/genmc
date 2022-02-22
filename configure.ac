@@ -1,9 +1,11 @@
-AC_INIT([GenMC], [0.7], [michalis@mpi-sws.org], [genmc], [https://plv.mpi-sws.org/genmc])
+AC_INIT([GenMC], [0.8], [michalis@mpi-sws.org], [genmc], [https://plv.mpi-sws.org/genmc])
 
 m4_include([m4/ax_llvm.m4])
 m4_include([m4/ax_clang.m4])
 m4_include([m4/ax_git_commit.m4])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
+
+AM_SILENT_RULES([yes])
 
 AC_PROG_CXX
 AC_PROG_RANLIB
@@ -812,6 +814,20 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
   [AC_MSG_RESULT([yes])
    AC_DEFINE([LLVM_HAVE_ELIMINATE_UNREACHABLE_BLOCKS],[1],
    [Define if llvm::EliminateUnreachableBlocks exists])],
+  [AC_MSG_RESULT([no])])
+
+## Check if llvm::handleOperandChange needs a Use argument
+AC_MSG_CHECKING([whether llvm::handleOperandChange needs a Use argument])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <llvm/IR/Value.h>
+#include <llvm/IR/Constant.h>
+]],[[
+  llvm::Constant *C = nullptr;
+  C->handleOperandChange(nullptr, nullptr, nullptr);
+]])],
+  [AC_MSG_RESULT([yes])
+   AC_DEFINE([LLVM_HANDLE_OPERAND_CHANGE_NEEDS_USE],[1],
+   [Define if llvm::handleOperandChange needs a Use argument])],
   [AC_MSG_RESULT([no])])
 
 

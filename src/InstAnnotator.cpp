@@ -28,16 +28,9 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/InstIterator.h>
 #include <llvm/IR/Module.h>
+#include <llvm/Analysis/ValueTracking.h>
 
 using namespace llvm;
-
-#ifdef LLVM_EXECUTIONENGINE_DATALAYOUT_PTR
-# define GET_TYPE_ALLOC_SIZE(M, x)		\
-	(M).getDataLayout()->getTypeAllocSize((x))
-#else
-# define GET_TYPE_ALLOC_SIZE(M, x)		\
-	(M).getDataLayout().getTypeAllocSize((x))
-#endif
 
 void InstAnnotator::reset()
 {
@@ -81,13 +74,19 @@ InstAnnotator::IRExprUP InstAnnotator::generateOperandExpr(Value *op)
 				});
 			BUG_ON(iIt == op->user_end());
 			auto *mod = dyn_cast<Instruction>(*iIt)->getParent()->getParent()->getParent();
-			return ConcreteExpr<Value *>::create(GET_TYPE_ALLOC_SIZE(*mod, op->getType()) * 8, 0);
+			auto &DL = mod->getDataLayout();
+			return ConcreteExpr<Value *>::create(DL.getTypeAllocSizeInBits(op->getType()), 0);
 		}
 		ERROR("Only integer and null constants currently allowed in assume() expressions.\n");
 	}
-	BUG_ON(!isa<Instruction>(op));
-	auto *mod = dyn_cast<Instruction>(op)->getParent()->getParent()->getParent();
-	return RegisterExpr<Value *>::create(GET_TYPE_ALLOC_SIZE(*mod, op->getType()) * 8, getAnnotMapKey(op));
+	BUG_ON(!isa<Instruction>(op) && !isa<Argument>(op));
+	Module *mod = nullptr;
+	if (auto *i = dyn_cast<Instruction>(op))
+		mod = i->getParent()->getParent()->getParent();
+	else if (auto *a = dyn_cast<Argument>(op))
+		mod = a->getParent()->getParent();
+	auto &DL = mod->getDataLayout();
+	return RegisterExpr<Value *>::create(DL.getTypeAllocSizeInBits(op->getType()), getAnnotMapKey(op));
 }
 
 InstAnnotator::IRExprUP InstAnnotator::generateInstExpr(Instruction *curr)
@@ -150,6 +149,21 @@ InstAnnotator::IRExprUP InstAnnotator::generateInstExpr(Instruction *curr)
 		HANDLE_INST(AShr, curr->getType()->getPrimitiveSizeInBits(),
 			    generateOperandExpr(curr->getOperand(0)),
 			    generateOperandExpr(curr->getOperand(1)));
+
+	/* Special case for extracts --- only CAS extracts allowed; */
+	case Instruction::ExtractValue: {
+		auto *extract = dyn_cast<ExtractValueInst>(curr);
+		auto *cas = extractsFromCAS(extract);
+		if (!cas)
+			break;
+		/* Hack: If it extracts the value read, just return a register expr;
+		 * the types won't match but we don't care about that since we won't
+		 * annotate above the CAS anyway */
+		if (*extract->idx_begin() == 0)
+			return generateOperandExpr(cas);
+		return EqExpr<Value *>::create(generateOperandExpr(cas),
+					       generateOperandExpr(cas->getCompareOperand()));
+	}
 
 	case Instruction::ICmp: {
 		llvm::CmpInst *cmpi = llvm::dyn_cast<llvm::CmpInst>(curr);
@@ -288,13 +302,15 @@ void InstAnnotator::annotateDFS(Instruction *curr)
 	return;
 }
 
-InstAnnotator::IRExprUP InstAnnotator::annotate(LoadInst *curr)
+InstAnnotator::IRExprUP InstAnnotator::annotate(Instruction *curr)
 {
-	/* Reset DFS data */
+	/* Reset DFS data + prepare new exploration */
 	reset();
-
 	for (auto &i : instructions(curr->getParent()->getParent()))
 		statusMap[&i] = InstAnnotator::unseen;
+
+	/* The load annotation will be the expression from its successor to the assume */
+	BUG_ON(!isa<LoadInst>(curr) && !isa<AtomicCmpXchgInst>(curr));
 	annotateDFS(curr->getNextNode());
 	return releaseAnnot(curr->getNextNode());
 }
@@ -313,7 +329,8 @@ InstAnnotator::IRExprUP InstAnnotator::annotateBBCond(BasicBlock *bb, BasicBlock
 	/* Propagate jump condition backwards to the beginning of the basic block */
 	setAnnot(bi, generateOperandExpr(bi->getCondition()));
 	for (auto irit = ++bb->rbegin(); irit != bb->rend(); ++irit) {
-		setAnnot(&*irit, propagateAnnotFromSucc(&*irit, irit->getNextNode()));
+		annotMap[&*irit] = irit->mayReadOrWriteMemory() ?
+			ConcreteExpr<Value *>::createFalse() : propagateAnnotFromSucc(&*irit, irit->getNextNode());
 	}
 
 	/* If a predecessor is given substitute Φ values too */

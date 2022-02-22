@@ -542,12 +542,22 @@ void atomic_signal_fence(memory_order m) noexcept;
 
 // #include <__config>
 
-#define _LIBCPP_BEGIN_NAMESPACE_STD namespace std { inline namespace _LIBCPP_ABI_NAMESPACE {
-#define _LIBCPP_END_NAMESPACE_STD  } }
-#define _LIBCPP_INLINE_VISIBILITY __attribute__((visibility("inline")))
-#define _NOEXCEPT noexcept
-#define _LIBCPP_CONSTEXPR constexpr
-#define _LIBCPP_DEFAULT = default;
+#ifndef _LIBCPP_BEGIN_NAMESPACE_STD
+# define _LIBCPP_BEGIN_NAMESPACE_STD namespace std { inline namespace _LIBCPP_ABI_NAMESPACE {
+# define _LIBCPP_END_NAMESPACE_STD  } }
+#endif
+#ifndef _LIBCPP_INLINE_VISIBILITY
+# define _LIBCPP_INLINE_VISIBILITY __attribute__((visibility("inline")))
+#endif
+#ifndef _NOEXCEPT
+# define _NOEXCEPT noexcept
+#endif
+#ifndef _LIBCPP_CONSTEXPR
+# define _LIBCPP_CONSTEXPR constexpr
+#endif
+#ifndef _LIBCPP_DEFAULT
+# define _LIBCPP_DEFAULT = default;
+#endif
 
 #if __has_attribute(diagnose_if) && !defined(_LIBCPP_DISABLE_ADDITIONAL_DIAGNOSTICS)
 #  define _LIBCPP_DIAGNOSE_WARNING(...) \

@@ -41,7 +41,7 @@ DepView& View::update(const DepView &v)
 VectorClock &View::update(const VectorClock &vc)
 {
 	if (auto *v = llvm::dyn_cast<View>(&vc))
-		this->update(*v);
+		return this->update(*v);
 	BUG();
 }
 

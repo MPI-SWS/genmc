@@ -5,7 +5,7 @@
 
 atomic_int x;
 
-void *thread_n()
+void *thread_n(void *unused)
 {
 	int r = 0;
 	while (!atomic_compare_exchange_strong(&x, &r, 1))

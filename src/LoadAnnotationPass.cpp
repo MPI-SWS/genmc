@@ -36,22 +36,19 @@ void LoadAnnotationPass::getAnalysisUsage(llvm::AnalysisUsage &au) const
 	au.setPreservesAll();
 }
 
-/*
- * Helper for getSourceLoads() -- see below
-*/
-void calcSourceLoads(Instruction *i, VSet<PHINode *> phis, std::vector<LoadInst *> &source)
+/* Helper for getSourceLoads() -- see below */
+void calcSourceLoads(Instruction *i, VSet<PHINode *> phis, std::vector<Instruction *> &source)
 {
 	if (!i)
 		return;
 
-	/* Don't go past stores or allocas */
-	if (isa<StoreInst>(i) || isa<AtomicCmpXchgInst>(i) ||
-	    isa<AtomicRMWInst>(i) || isa<AllocaInst>(i))
+	/* Don't go past stores or allocas (CASes are OK) */
+	if (isa<StoreInst>(i) || isa<AtomicRMWInst>(i) || isa<AllocaInst>(i))
 		return;
 
 	/* If we reached a (source) load, collect it */
-	if (auto *li = dyn_cast<LoadInst>(i)) {
-		source.push_back(li);
+	if (isa<LoadInst>(i) || isa<AtomicCmpXchgInst>(i)) {
+		source.push_back(i);
 		return;
 	}
 
@@ -78,21 +75,22 @@ void calcSourceLoads(Instruction *i, VSet<PHINode *> phis, std::vector<LoadInst 
 	return;
 }
 
-std::vector<LoadInst *> LoadAnnotationPass::getSourceLoads(CallInst *assm) const
+std::vector<Instruction *> LoadAnnotationPass::getSourceLoads(CallInst *assm) const
 {
 	VSet<PHINode *> phis;
-	std::vector<LoadInst *> source;
+	std::vector<Instruction *> source;
 
 	if (auto *arg = dyn_cast<Instruction>(assm->getOperand(0)))
 		calcSourceLoads(arg, phis, source);
+	std::sort(source.begin(), source.end());
 	source.erase(std::unique(source.begin(), source.end()), source.end());
 	return source;
 }
 
-std::vector<LoadInst *>
-LoadAnnotationPass::filterAnnotatableFromSource(CallInst *assm, const std::vector<LoadInst *> &source) const
+std::vector<Instruction *>
+LoadAnnotationPass::filterAnnotatableFromSource(CallInst *assm, const std::vector<Instruction *> &source) const
 {
-	std::vector<LoadInst *> result;
+	std::vector<Instruction *> result;
 
 	/* Collect candidates for which the path to the assume is clear */
 	for (auto *li : source) {
@@ -107,11 +105,11 @@ LoadAnnotationPass::filterAnnotatableFromSource(CallInst *assm, const std::vecto
 				}
 				/* we should stop when the load is found */
 				if (assumeFound && !loadFound) {
-					sideEffects |= hasSideEffects(&i);
-					sideEffects |= (isa<LoadInst>(&i) && li != dyn_cast<LoadInst>(&i)) ;
+					sideEffects |= (hasSideEffects(&i) && &i != li); /* also CASes */
+					sideEffects |= (isa<LoadInst>(&i) && &i != li) ;
 				}
 				if (!loadFound) {
-					loadFound |= (dyn_cast<LoadInst>(&i) == li);
+					loadFound |= (&i == li);
 					if (loadFound) {
 						if (!sideEffects)
 							result.push_back(li);
@@ -127,11 +125,11 @@ LoadAnnotationPass::filterAnnotatableFromSource(CallInst *assm, const std::vecto
 	return result;
 }
 
-std::vector<LoadInst *>
+std::vector<Instruction *>
 LoadAnnotationPass::getAnnotatableLoads(CallInst *assm) const
 {
 	if (!isAssumeFunction(getCalledFunOrStripValName(*assm)))
-		return std::vector<LoadInst *>(); /* yet another check... */
+		return std::vector<Instruction *>(); /* yet another check... */
 
 	auto sourceLoads = getSourceLoads(assm);
 	return filterAnnotatableFromSource(assm, sourceLoads);
@@ -154,7 +152,7 @@ bool LoadAnnotationPass::runOnFunction(llvm::Function &F)
 	return false;
 }
 
-FunctionPass *createLoadAnnotationPass(AnnotationInfo<LoadInst *, Value *> &LAI)
+FunctionPass *createLoadAnnotationPass(AnnotationInfo<Instruction *, Value *> &LAI)
 {
 	return new LoadAnnotationPass(LAI);
 }

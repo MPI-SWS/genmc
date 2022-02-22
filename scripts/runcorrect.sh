@@ -178,6 +178,8 @@ runvariants() {
 	fi
 	explored=`echo "${output}" | awk '/explored/ { print $6 }'`
 	blocked=`echo "${output}" | awk '/blocked/ { print $6 }'`
+	explored_failed=""
+	blocked_failed=""
 	time=`echo "${output}" | awk '/time/ { print substr($4, 1, length($4)-1) }'`
 	time="${time}" && [[ -z "${time}" ]] && time=0 # if pattern was NOT found
 	test_time=`echo "${test_time}+${time}" | bc -l`
@@ -218,6 +220,8 @@ runtest() {
                  awk ' { if (match($0, /-DN=[0-9]+/)) print substr($0, RSTART+4, RLENGTH-4) } '`"
 	    expected_blocked="" && [[ -f "${dir}/blocked.${model}.${coherence}.in" ]] &&
 		expected_blocked=`sed "${varNum}q;d" "${dir}/blocked.${model}.${coherence}.in"`
+	    expected_blocked="${expected_blocked}" && [[ -f "${dir}/blocked.${model}.${coherence}.in-${LLVM_VERSION}" ]] &&
+		expected_blocked=`sed "${varNum}q;d" "${dir}/blocked.${model}.${coherence}.in-${LLVM_VERSION}"`
 	    runvariants
 	done 3<"${dir}/args.${model}.${coherence}.in" 4<"${dir}/expected.${model}.${coherence}.in"
     else
@@ -226,6 +230,8 @@ runtest() {
 	expected=`head -n 1 "${dir}/expected.${model}.${coherence}.in"`
 	expected_blocked="" && [[ -f "${dir}/blocked.${model}.${coherence}.in" ]] &&
 	    expected_blocked=`head -n 1 "${dir}/blocked.${model}.${coherence}.in"`
+	expected_blocked=$expected_blocked && [[ -f "${dir}/blocked.${model}.${coherence}.in-${LLVM_VERSION}" ]] &&
+	    expected_blocked=`sed "${varNum}q;d" "${dir}/blocked.${model}.${coherence}.in-${LLVM_VERSION}"`
 	runvariants
     fi
 }

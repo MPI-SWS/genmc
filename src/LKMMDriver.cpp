@@ -29,6 +29,7 @@
 #include "RCUFenceCalculator.hpp"
 #include "XBCalculator.hpp"
 #include "PersistencyChecker.hpp"
+#include "GraphIterators.hpp"
 
 LKMMDriver::LKMMDriver(std::shared_ptr<const Config> conf, std::unique_ptr<llvm::Module> mod,
 		       std::unique_ptr<ModuleInfo> MI)
@@ -98,7 +99,7 @@ DepView LKMMDriver::getDepsAsView(EventLabel *lab, const EventDeps *deps)
 	for (auto &ddep : deps->data)
 		v.update(g.getPPoRfBefore(ddep));
 	/* LKMM only keeps ctrl deps to writes */
-	if (llvm::isa<WriteLabel>(lab)) {
+	if (llvm::isa<CasReadLabel>(lab) || llvm::isa<FaiReadLabel>(lab) || llvm::isa<WriteLabel>(lab)) {
 		for (auto &cdep : deps->ctrl)
 			v.update(g.getPPoRfBefore(cdep));
 	}
@@ -117,10 +118,11 @@ DepView LKMMDriver::calcPPoView(EventLabel *lab, const EventDeps *deps) /* not c
 	auto v = getDepsAsView(lab, deps);
 
 	/* This event does not depend on anything else */
+	DepView wv;
 	Event e = lab->getPos();
-	int oldIdx = v[e.thread];
-	v[e.thread] = e.index;
-	v.addHolesInRange(Event(e.thread, oldIdx + 1), e.index);
+	wv[e.thread] = e.index;
+	wv.addHolesInRange(Event(e.thread, 0), e.index);
+	v.update(wv);
 
 	/* Update based on the views of the acquires of the thread */
 	std::vector<Event> acqs = g.getThreadAcquiresAndFences(e);
@@ -138,6 +140,7 @@ DepView LKMMDriver::calcPPoView(EventLabel *lab, const EventDeps *deps) /* not c
 		}
 		v.update(g.getPPoRfBefore(ev));
 	}
+	v.removeHolesInRange(e, g.getThreadSize(e.thread));
 	return v;
 }
 
@@ -186,12 +189,14 @@ void LKMMDriver::updateReadViewsFromRf(DepView &pporf, View &hb, ReadLabel *lab)
 	const EventLabel *rfLab = g.getEventLabel(lab->getRf());
 
 	if (rfLab->getThread() == lab->getThread() || rfLab->getPos().isInitializer()) {
+		auto rfiDepend = pporf.contains(rfLab->getPos());
 		pporf.update(rfLab->getPPoView()); /* Account for dep; rfi dependencies */
-		pporf.addHole(rfLab->getPos());    /* Make sure we don't depend on rfi */
+		if (!rfiDepend) /* Should we depend on rfi? */
+			pporf.addHole(rfLab->getPos());
 	} else {
 		pporf.update(rfLab->getPPoRfView());
 		for (auto i = 0u; i < lab->getIndex(); i++) {
-			const EventLabel *eLab = g.getEventLabel(Event(lab->getThread(), i));
+			auto *eLab = g.getEventLabel(Event(lab->getThread(), i));
 			if (auto *wLab = llvm::dyn_cast<WriteLabel>(eLab)) {
 				if (wLab->getAddr() == lab->getAddr())
 					pporf.update(wLab->getPPoRfView());
@@ -282,8 +287,7 @@ void LKMMDriver::calcWriteMsgView(WriteLabel *lab)
 
 	if (lab->isAtLeastRelease())
 		msg = lab->getHbView();
-	else if (lab->getOrdering() == llvm::AtomicOrdering::Monotonic ||
-		 lab->getOrdering() == llvm::AtomicOrdering::Acquire)
+	else if (lab->isAtMostAcquire())
 		msg = g.getEventLabel(
 			g.getLastThreadReleaseAtLoc(lab->getPos(), lab->getAddr()))->getHbView();
 	lab->setMsgView(std::move(msg));
@@ -327,9 +331,8 @@ void LKMMDriver::calcFenceRelRfPoBefore(Event last, View &v)
 		if (!llvm::isa<ReadLabel>(lab))
 			continue;
 		auto *rLab = static_cast<const ReadLabel *>(lab);
-		if (rLab->getOrdering() == llvm::AtomicOrdering::Monotonic ||
-		    rLab->getOrdering() == llvm::AtomicOrdering::Release) {
-			const EventLabel *rfLab = g.getEventLabel(rLab->getRf());
+		if (rLab->isAtMostRelease()) {
+			auto *rfLab = g.getEventLabel(rLab->getRf());
 			if (auto *wLab = llvm::dyn_cast<WriteLabel>(rfLab))
 				v.update(wLab->getMsgView());
 		}
@@ -452,10 +455,14 @@ void LKMMDriver::updateLabelViews(EventLabel *lab, const EventDeps *deps)
 	switch (lab->getKind()) {
 	case EventLabel::EL_Read:
 	case EventLabel::EL_BWaitRead:
+	case EventLabel::EL_SpeculativeRead:
+	case EventLabel::EL_ConfirmingRead:
 	case EventLabel::EL_DskRead:
 	case EventLabel::EL_CasRead:
 	case EventLabel::EL_LockCasRead:
 	case EventLabel::EL_TrylockCasRead:
+	case EventLabel::EL_HelpedCasRead:
+	case EventLabel::EL_ConfirmingCasRead:
 	case EventLabel::EL_FaiRead:
 	case EventLabel::EL_NoRetFaiRead:
 	case EventLabel::EL_BIncFaiRead:
@@ -470,6 +477,8 @@ void LKMMDriver::updateLabelViews(EventLabel *lab, const EventDeps *deps)
 	case EventLabel::EL_CasWrite:
 	case EventLabel::EL_LockCasWrite:
 	case EventLabel::EL_TrylockCasWrite:
+	case EventLabel::EL_HelpedCasWrite:
+	case EventLabel::EL_ConfirmingCasWrite:
 	case EventLabel::EL_FaiWrite:
 	case EventLabel::EL_NoRetFaiWrite:
 	case EventLabel::EL_BIncFaiWrite:
@@ -501,19 +510,23 @@ void LKMMDriver::updateLabelViews(EventLabel *lab, const EventDeps *deps)
 		break;
 	case EventLabel::EL_ThreadCreate:
 	case EventLabel::EL_ThreadFinish:
+	case EventLabel::EL_Optional:
 	case EventLabel::EL_LoopBegin:
 	case EventLabel::EL_SpinStart:
 	case EventLabel::EL_FaiZNESpinEnd:
 	case EventLabel::EL_LockZNESpinEnd:
 	case EventLabel::EL_Malloc:
 	case EventLabel::EL_Free:
-	case EventLabel::EL_UnlockLabelLAPOR:
+	case EventLabel::EL_HpRetire:
+	case EventLabel::EL_UnlockLAPOR:
 	case EventLabel::EL_RCULockLKMM:
 	case EventLabel::EL_RCUUnlockLKMM:
 	case EventLabel::EL_DskOpen:
+	case EventLabel::EL_HelpingCas:
+	case EventLabel::EL_HpProtect:
 		calcBasicViews(lab, deps);
 		break;
-	case EventLabel::EL_LockLabelLAPOR: /* special case */
+	case EventLabel::EL_LockLAPOR: /* special case */
 		BUG(); // calcLockLAPORViews(llvm::dyn_cast<LockLabelLAPOR>(lab, deps));
 		break;
 	default:
@@ -561,7 +574,6 @@ std::vector<Event> LKMMDriver::findPotentialRacesForNewLoad(const ReadLabel *rLa
 {
 	const auto &g = getGraph();
 	const View &before = g.getPreviousNonEmptyLabel(rLab)->getHbView();
-	const auto &stores = g.getStoresToLoc(rLab->getAddr());
 	std::vector<Event> potential;
 
 	/* If there are not any events hb-before the read, there is nothing to do */
@@ -569,7 +581,7 @@ std::vector<Event> LKMMDriver::findPotentialRacesForNewLoad(const ReadLabel *rLa
 		return potential;
 
 	/* Check for events that race with the current load */
-	for (auto &s : stores) {
+	for (const auto &s : stores(g, rLab->getAddr())) {
 		if (before.contains(s))
 			continue;
 

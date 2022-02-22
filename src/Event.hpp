@@ -60,6 +60,24 @@ struct Event {
 	inline bool operator>(const Event &e) const {
 		return (index > e.index) || (index == e.index && thread > e.thread);
 	}
+	inline Event& operator++() {
+		++index;
+		return *this;
+	}
+	inline Event operator++(int) {
+		auto tmp = *this;
+		++index;
+		return tmp;
+	}
+	inline Event& operator--() {
+		--index;
+		return *this;
+	}
+	inline Event operator--(int) {
+		auto tmp = *this;
+		--index;
+		return tmp;
+	}
 
 	friend llvm::hash_code hash_value(const Event &e) {
 		return llvm::hash_combine(e.thread, e.index);

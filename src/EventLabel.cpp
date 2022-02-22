@@ -19,56 +19,7 @@
  */
 
 #include "EventLabel.hpp"
-
-EventLabel *EventLabel::castFromDskAccessLabel (const DskAccessLabel *D)
-{
-	EventLabel::EventLabelKind DK = D->getEventLabelKind();
-	switch (DK) {
-	case EventLabel::EventLabelKind::EL_DskRead:
-		return static_cast<DskReadLabel *>(const_cast<DskAccessLabel *>(D));
-	case EventLabel::EventLabelKind::EL_DskWrite:
-		return static_cast<DskWriteLabel *>(const_cast<DskAccessLabel *>(D));
-	case EventLabel::EventLabelKind::EL_DskMdWrite:
-		return static_cast<DskMdWriteLabel *>(const_cast<DskAccessLabel *>(D));
-	case EventLabel::EventLabelKind::EL_DskJnlWrite:
-		return static_cast<DskJnlWriteLabel *>(const_cast<DskAccessLabel *>(D));
-	case EventLabel::EventLabelKind::EL_DskDirWrite:
-		return static_cast<DskDirWriteLabel *>(const_cast<DskAccessLabel *>(D));
-	case EventLabel::EventLabelKind::EL_DskSync:
-		return static_cast<DskSyncLabel *>(const_cast<DskAccessLabel *>(D));
-	case EventLabel::EventLabelKind::EL_DskFsync:
-		return static_cast<DskFsyncLabel *>(const_cast<DskAccessLabel *>(D));
-	case EventLabel::EventLabelKind::EL_DskPbarrier:
-		return static_cast<DskPbarrierLabel *>(const_cast<DskAccessLabel *>(D));
-	default:
-		BUG();
-	}
-}
-
-DskAccessLabel *EventLabel::castToDskAccessLabel(const EventLabel *E)
-{
-	EventLabel::EventLabelKind EK = E->getKind();
-	switch (EK) {
-	case EventLabel::EventLabelKind::EL_DskRead:
-		return static_cast<DskReadLabel *>(const_cast<EventLabel *>(E));
-	case EventLabel::EventLabelKind::EL_DskWrite:
-		return static_cast<DskWriteLabel *>(const_cast<EventLabel *>(E));
-	case EventLabel::EventLabelKind::EL_DskMdWrite:
-		return static_cast<DskMdWriteLabel *>(const_cast<EventLabel *>(E));
-	case EventLabel::EventLabelKind::EL_DskJnlWrite:
-		return static_cast<DskJnlWriteLabel *>(const_cast<EventLabel *>(E));
-	case EventLabel::EventLabelKind::EL_DskDirWrite:
-		return static_cast<DskDirWriteLabel *>(const_cast<EventLabel *>(E));
-	case EventLabel::EventLabelKind::EL_DskSync:
-		return static_cast<DskSyncLabel *>(const_cast<EventLabel *>(E));
-	case EventLabel::EventLabelKind::EL_DskFsync:
-		return static_cast<DskFsyncLabel *>(const_cast<EventLabel *>(E));
-	case EventLabel::EventLabelKind::EL_DskPbarrier:
-		return static_cast<DskPbarrierLabel *>(const_cast<EventLabel *>(E));
-	default:
-		BUG();
-	}
-}
+#include "LabelVisitor.hpp"
 
 llvm::raw_ostream& operator<<(llvm::raw_ostream& s,
 			      const EventLabel::EventLabelKind k)
@@ -79,6 +30,12 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s,
 		break;
 	case EventLabel::EL_Block:
 		s << "BLOCK";
+		break;
+	case EventLabel::EL_ThreadKill:
+		s << "KILL";
+		break;
+	case EventLabel::EL_Optional:
+		s << "OPTIONAL";
 		break;
 	case EventLabel::EL_LoopBegin:
 		s << "LOOP_BEGIN";
@@ -92,21 +49,36 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s,
 		break;
 	case EventLabel::EL_Read:
 	case EventLabel::EL_BWaitRead:
+	case EventLabel::EL_SpeculativeRead:
+	case EventLabel::EL_ConfirmingRead:
 		s << "R";
 		break;
 	case EventLabel::EL_FaiRead:
 	case EventLabel::EL_BIncFaiRead:
+	case EventLabel::EL_NoRetFaiRead:
+		s << "UR";
+		break;
 	case EventLabel::EL_FaiWrite:
 	case EventLabel::EL_BIncFaiWrite:
-		s << "U";
+	case EventLabel::EL_NoRetFaiWrite:
+		s << "UW";
 		break;
 	case EventLabel::EL_CasRead:
 	case EventLabel::EL_LockCasRead:
 	case EventLabel::EL_TrylockCasRead:
+	case EventLabel::EL_HelpedCasRead:
+	case EventLabel::EL_ConfirmingCasRead:
+		s << "CR";
+		break;
 	case EventLabel::EL_CasWrite:
 	case EventLabel::EL_LockCasWrite:
 	case EventLabel::EL_TrylockCasWrite:
-		s << "C";
+	case EventLabel::EL_HelpedCasWrite:
+	case EventLabel::EL_ConfirmingCasWrite:
+		s << "CW";
+		break;
+	case EventLabel::EL_HelpingCas:
+		s << "HELPING_CAS";
 		break;
 	case EventLabel::EL_Write:
 	case EventLabel::EL_BInitWrite:
@@ -119,31 +91,37 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s,
 		s << "F";
 		break;
 	case EventLabel::EL_ThreadCreate:
-		s << "TC";
+		s << "THREAD_CREATE";
 		break;
 	case EventLabel::EL_ThreadJoin:
-		s << "TJ";
+		s << "THREAD_JOIN";
 		break;
 	case EventLabel::EL_ThreadStart:
-		s << "B";
+		s << "THREAD_START";
 		break;
 	case EventLabel::EL_ThreadFinish:
-		s << "E";
+		s << "THREAD_END";
 		break;
 	case EventLabel::EL_Malloc:
-		s << "M";
+		s << "MALLOC";
 		break;
 	case EventLabel::EL_Free:
-		s << "D";
+		s << "FREE";
 		break;
-	case EventLabel::EL_LockLabelLAPOR:
-		s << "LL";
+	case EventLabel::EL_HpRetire:
+		s << "HP_RETIRE";
 		break;
-	case EventLabel::EL_UnlockLabelLAPOR:
-		s << "LU";
+	case EventLabel::EL_HpProtect:
+		s << "HP_PROTECT";
+		break;
+	case EventLabel::EL_LockLAPOR:
+		s << "LAPOR_LOCK";
+		break;
+	case EventLabel::EL_UnlockLAPOR:
+		s << "LAPOR_UNLOCK";
 		break;
 	case EventLabel::EL_DskOpen:
-		s << "FO";
+		s << "FOPEN";
 		break;
 	case EventLabel::EL_DskRead:
 		s << "DR";
@@ -155,24 +133,26 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s,
 		s << "DW";
 		break;
 	case EventLabel::EL_DskFsync:
-		s << "DF";
+		s << "FSYNC";
 		break;
 	case EventLabel::EL_DskSync:
-		s << "DS";
+		s << "SYNC";
 		break;
 	case EventLabel::EL_DskPbarrier:
-		s << "PB";
+		s << "PERSISTENCY_BARRIER";
 		break;
 	case EventLabel::EL_RCULockLKMM:
-		s << "RL";
+		s << "RCU_LOCK";
 		break;
 	case EventLabel::EL_RCUUnlockLKMM:
-		s << "RU";
+		s << "RCU_UNLOCK";
 		break;
 	case EventLabel::EL_RCUSyncLKMM:
-		s << "GP";
+		s << "RCU_SYNC";
 		break;
 	default:
+		PRINT_BUGREPORT_INFO_ONCE("print-label-type",
+					  "Cannot print label type");
 		s << "UNKNOWN";
 		break;
 	}
@@ -189,7 +169,9 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const llvm::AtomicOrdering o
 	case llvm::AtomicOrdering::Release   : return s << "rel";
 	case llvm::AtomicOrdering::AcquireRelease : return s << "ar";
 	case llvm::AtomicOrdering::SequentiallyConsistent : return s << "sc";
-	default : return s;
+	default:
+		PRINT_BUGREPORT_INFO_ONCE("print-ordering-type", "Cannot print ordering");
+		return s;
 	}
 	return s;
 }
@@ -204,88 +186,14 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const SmpFenceType t)
 	case SmpFenceType::MBAA: return s << "aa";
 	case SmpFenceType::MBAS: return s << "as";
 	case SmpFenceType::MBAUL: return s << "aul";
-	default : BUG();
+	default:
+		PRINT_BUGREPORT_INFO_ONCE("print-fence-type", "Cannot print fence type");
 	}
 	return s;
 }
 
-#define PRINT_RF(s, e)				\
-do {					        \
-	if (e.isInitializer())			\
-		s << "INIT";			\
-	else					\
-		s << e;				\
-} while (0)
-
 llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const EventLabel &lab)
 {
-	s << lab.getPos() << ": ";
-
-	switch (lab.getKind()) {
-	case EventLabel::EL_Read:
-	case EventLabel::EL_FaiRead:
-	case EventLabel::EL_BIncFaiRead:
-	case EventLabel::EL_BWaitRead:
-	case EventLabel::EL_CasRead:
-	case EventLabel::EL_LockCasRead:
-	case EventLabel::EL_TrylockCasRead: {
-		auto &rLab = static_cast<const ReadLabel&>(lab);
-		s << rLab.getKind() << rLab.getOrdering() << " [";
-		PRINT_RF(s, rLab.getRf());
-		s << "]";
-		break;
-	}
-	case EventLabel::EL_DskRead: {
-		auto &rLab = static_cast<const DskReadLabel&>(lab);
-		s << rLab.getKind() << " [";
-		PRINT_RF(s, rLab.getRf());
-		s << "]";
-		break;
-	}
-
-	case EventLabel::EL_Write:
-	case EventLabel::EL_FaiWrite:
-	case EventLabel::EL_BIncFaiWrite:
-	case EventLabel::EL_CasWrite:
-	case EventLabel::EL_LockCasWrite:
-	case EventLabel::EL_TrylockCasWrite: {
-		auto &wLab = static_cast<const WriteLabel&>(lab);
-		s << wLab.getKind() << wLab.getOrdering() << " "
-		  << wLab.getVal();
-		break;
-	}
-	case EventLabel::EL_DskWrite: {
-		auto &wLab = static_cast<const DskWriteLabel&>(lab);
-		s << wLab.getKind() << " " << wLab.getVal();
-		break;
-	}
-
-	case EventLabel::EL_Fence: {
-		auto &fLab = static_cast<const FenceLabel&>(lab);
-		s << fLab.getKind() << fLab.getOrdering();
-		break;
-	}
-	case EventLabel::EL_SmpFenceLKMM: {
-		auto &fLab = static_cast<const SmpFenceLabelLKMM&>(lab);
-		s << fLab.getKind() << fLab.getType();
-		break;
-	}
-	case EventLabel::EL_ThreadCreate: {
-		auto &cLab = static_cast<const ThreadCreateLabel&>(lab);
-		s << cLab.getKind() << " [forks " << cLab.getChildId() << "]";
-		break;
-	}
-
-	case EventLabel::EL_DskOpen: {
-		auto &bLab = static_cast<const DskOpenLabel&>(lab);
-		s << bLab.getKind() << " (";
-		s << bLab.getFileName() << ", ";
-		s << bLab.getFd() << ")";
-		break;
-	}
-	default:
-		s << lab.getKind();
-		break;
-	}
+	s << LabelPrinter().toString(lab);
 	return s;
 }

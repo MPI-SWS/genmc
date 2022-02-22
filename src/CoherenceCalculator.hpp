@@ -27,6 +27,7 @@
 #include <llvm/Support/raw_ostream.h>
 #include <vector>
 
+class BackwardRevisit;
 class ExecutionGraph;
 
 /*******************************************************************************
@@ -49,6 +50,18 @@ public:
 		CC_WritesBefore
 	};
 
+	using StoreList = std::vector<Event>;
+	using LocMap = std::unordered_map<SAddr, StoreList>;
+
+	using iterator = LocMap::iterator;
+	using const_iterator = LocMap::const_iterator;
+
+	using store_iterator = StoreList::iterator;
+	using const_store_iterator = StoreList::const_iterator;
+
+	using reverse_store_iterator = StoreList::reverse_iterator;
+	using const_reverse_store_iterator = StoreList::const_reverse_iterator;
+
 protected:
 
 	/* Constructor */
@@ -65,27 +78,48 @@ public:
 
 	virtual ~CoherenceCalculator() = default;
 
-	using StoresList = std::unordered_map<SAddr, std::vector<Event>>;
+	iterator begin() { return stores.begin(); }
+	const_iterator begin() const { return stores.begin(); };
+	iterator end() { return stores.end(); }
+	const_iterator end() const { return stores.end(); }
 
-	using iterator = StoresList::iterator;
-	using const_iterator = StoresList::const_iterator;
-	virtual iterator begin() = 0;
-	virtual iterator end() = 0;
-	virtual const_iterator cbegin() const = 0;
-	virtual const_iterator cend() const = 0;
+	store_iterator store_begin(SAddr addr) { return stores[addr].begin(); }
+	const_store_iterator store_begin(SAddr addr) const { return stores.at(addr).begin(); };
+	store_iterator store_end(SAddr addr) { return stores[addr].end(); }
+	const_store_iterator store_end(SAddr addr) const { return stores.at(addr).end(); }
+
+	reverse_store_iterator store_rbegin(SAddr addr) { return stores[addr].rbegin(); }
+	const_reverse_store_iterator store_rbegin(SAddr addr) const { return stores.at(addr).rbegin(); };
+	reverse_store_iterator store_rend(SAddr addr) { return stores[addr].rend(); }
+	const_reverse_store_iterator store_rend(SAddr addr) const { return stores.at(addr).rend(); }
+
+	/* Whether a location is tracked (i.e., we are aware of it) */
+	bool tracksLoc(SAddr addr) const { return stores.count(addr); }
+
+	/* Whether a location is empty */
+	bool isLocEmpty(SAddr addr) const { return store_begin(addr) == store_end(addr); }
+
+	/* Whether a location has more than one store */
+	bool hasMoreThanOneStore(SAddr addr) const {
+		return !isLocEmpty(addr) && ++store_begin(addr) != store_end(addr);
+	}
 
 	/* Track coherence at location addr */
 	virtual void
 	trackCoherenceAtLoc(SAddr addr) = 0;
 
-	/* Returns the range of all the possible (i.e., not violating coherence
-	 * places a store can be inserted without inserting it */
+	/* Returns the range of all the possible (i.e., not violating
+	 * coherence) offsets a store can be inserted */
 	virtual std::pair<int, int>
 	getPossiblePlacings(SAddr addr, Event store, bool isRMW) = 0;
 
-	/* Tracks a store by inserting it into the appropriate offset */
+	/* Adds STORE to ADDR at the offset specified by OFFSET.
+	 * (Use -1 to insert it maximally.) */
 	virtual void
 	addStoreToLoc(SAddr addr, Event store, int offset) = 0;
+
+	/* Adds STORE to ATTR and ensures it will be co-after PRED.
+	 * (Use INIT to insert it minimally.) */
 	virtual void
 	addStoreToLocAfter(SAddr addr, Event store, Event pred) = 0;
 
@@ -97,10 +131,6 @@ public:
 	 * Pre: Cached information for this location exist. */
 	virtual bool
 	isCachedCoMaximal(SAddr addr, Event store) = 0;
-
-	/* Returns a list of stores to a particular memory location */
-	virtual const std::vector<Event>&
-	getStoresToLoc(SAddr addr) const = 0;
 
 	/* Returns all the stores for which if "read" reads-from, coherence
 	 * is not violated */
@@ -114,7 +144,7 @@ public:
 
 	/* Returns whether the path from RLAB to WLAB is maximal */
 	virtual bool
-	inMaximalPath(const ReadLabel *rLab, const WriteLabel *wLab) = 0;
+	inMaximalPath(const BackwardRevisit &r) = 0;
 
 #ifdef ENABLE_GENMC_DEBUG
 	/* Saves the coherence status for all write labels in prefix.
@@ -126,6 +156,7 @@ public:
 #endif
 
 protected:
+	const StoreList &getStoresToLoc(SAddr addr) const { return stores.at(addr); }
 
 	/* Discriminator enum for LLVM-style RTTI */
 	const CoherenceCalculatorKind kind;
@@ -133,6 +164,9 @@ protected:
 	/* Whether the model which we are operating under supports out-of-order
 	 * execution. This enables some extra optimizations, in certain cases. */
 	bool outOfOrder;
+
+	/* Maps loc -> store list */
+	LocMap stores;
 };
 
 #endif /* __COHERENCE_CALCULATOR_HPP__ */

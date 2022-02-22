@@ -76,9 +76,10 @@ DepView IMMDriver::calcPPoView(Event e, const EventDeps *deps) /* not const */
 	auto v = getDepsAsView(deps);
 
 	/* This event does not depend on anything else */
-	int oldIdx = v[e.thread];
-	v[e.thread] = e.index;
-	v.addHolesInRange(Event(e.thread, oldIdx + 1), e.index);
+	DepView wv;
+	wv[e.thread] = e.index;
+	wv.addHolesInRange(Event(e.thread, 0), e.index);
+	v.update(wv);
 
 	/* Update based on the views of the acquires of the thread */
 	auto &g = getGraph();
@@ -132,12 +133,14 @@ void IMMDriver::updateReadViewsFromRf(DepView &pporf, View &hb, const ReadLabel 
 	const EventLabel *rfLab = g.getEventLabel(lab->getRf());
 
 	if (rfLab->getThread() == lab->getThread() || rfLab->getPos().isInitializer()) {
+		auto rfiDepend = pporf.contains(rfLab->getPos());
 		pporf.update(rfLab->getPPoView()); /* Account for dep; rfi dependencies */
-		pporf.addHole(rfLab->getPos());    /* Make sure we don't depend on rfi */
+		if (!rfiDepend) /* Should we depend on rfi? */
+			pporf.addHole(rfLab->getPos());
 	} else {
 		pporf.update(rfLab->getPPoRfView());
 		for (auto i = 0u; i < lab->getIndex(); i++) {
-			const EventLabel *eLab = g.getEventLabel(Event(lab->getThread(), i));
+			auto *eLab = g.getEventLabel(Event(lab->getThread(), i));
 			if (auto *wLab = llvm::dyn_cast<WriteLabel>(eLab)) {
 				if (wLab->getAddr() == lab->getAddr())
 					pporf.update(wLab->getPPoRfView());
@@ -207,8 +210,7 @@ void IMMDriver::calcWriteMsgView(WriteLabel *lab)
 
 	if (lab->isAtLeastRelease())
 		msg = lab->getHbView();
-	else if (lab->getOrdering() == llvm::AtomicOrdering::Monotonic ||
-		 lab->getOrdering() == llvm::AtomicOrdering::Acquire)
+	else if (lab->isAtMostAcquire())
 		msg = g.getEventLabel(
 			g.getLastThreadReleaseAtLoc(lab->getPos(), lab->getAddr()))->getHbView();
 	lab->setMsgView(std::move(msg));
@@ -250,8 +252,7 @@ void IMMDriver::calcFenceRelRfPoBefore(Event last, View &v)
 		if (!llvm::isa<ReadLabel>(lab))
 			continue;
 		auto *rLab = static_cast<const ReadLabel *>(lab);
-		if (rLab->getOrdering() == llvm::AtomicOrdering::Monotonic ||
-		    rLab->getOrdering() == llvm::AtomicOrdering::Release) {
+		if (rLab->isAtMostRelease()) {
 			const EventLabel *rfLab = g.getEventLabel(rLab->getRf());
 			if (auto *wLab = llvm::dyn_cast<WriteLabel>(rfLab))
 				v.update(wLab->getMsgView());
@@ -337,9 +338,14 @@ void IMMDriver::updateLabelViews(EventLabel *lab, const EventDeps *deps)
 	switch (lab->getKind()) {
 	case EventLabel::EL_Read:
 	case EventLabel::EL_BWaitRead:
+	case EventLabel::EL_SpeculativeRead:
+	case EventLabel::EL_ConfirmingRead:
 	case EventLabel::EL_DskRead:
 	case EventLabel::EL_CasRead:
 	case EventLabel::EL_LockCasRead:
+	case EventLabel::EL_TrylockCasRead:
+	case EventLabel::EL_HelpedCasRead:
+	case EventLabel::EL_ConfirmingCasRead:
 	case EventLabel::EL_FaiRead:
 	case EventLabel::EL_BIncFaiRead:
 		calcReadViews(llvm::dyn_cast<ReadLabel>(lab), deps);
@@ -352,6 +358,9 @@ void IMMDriver::updateLabelViews(EventLabel *lab, const EventDeps *deps)
 	case EventLabel::EL_UnlockWrite:
 	case EventLabel::EL_CasWrite:
 	case EventLabel::EL_LockCasWrite:
+	case EventLabel::EL_TrylockCasWrite:
+	case EventLabel::EL_HelpedCasWrite:
+	case EventLabel::EL_ConfirmingCasWrite:
 	case EventLabel::EL_FaiWrite:
 	case EventLabel::EL_BIncFaiWrite:
 	case EventLabel::EL_DskWrite:
@@ -378,17 +387,21 @@ void IMMDriver::updateLabelViews(EventLabel *lab, const EventDeps *deps)
 		break;
 	case EventLabel::EL_ThreadCreate:
 	case EventLabel::EL_ThreadFinish:
+	case EventLabel::EL_Optional:
 	case EventLabel::EL_LoopBegin:
 	case EventLabel::EL_SpinStart:
 	case EventLabel::EL_FaiZNESpinEnd:
 	case EventLabel::EL_LockZNESpinEnd:
 	case EventLabel::EL_Malloc:
 	case EventLabel::EL_Free:
-	case EventLabel::EL_UnlockLabelLAPOR:
+	case EventLabel::EL_HpRetire:
+	case EventLabel::EL_UnlockLAPOR:
 	case EventLabel::EL_DskOpen:
+	case EventLabel::EL_HelpingCas:
+	case EventLabel::EL_HpProtect:
 		calcBasicViews(lab, deps);
 		break;
-	case EventLabel::EL_LockLabelLAPOR: /* special case */
+	case EventLabel::EL_LockLAPOR: /* special case */
 		calcLockLAPORViews(llvm::dyn_cast<LockLabelLAPOR>(lab), deps);
 		break;
 	case EventLabel::EL_SmpFenceLKMM:

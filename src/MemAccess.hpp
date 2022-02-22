@@ -43,7 +43,7 @@ enum class AType {
  ******************************************************************************/
 
 /*
- * Represents the size (in bits) of an atomic memory access
+ * Represents the size (in bytes) of an atomic memory access
  */
 class ASize {
 
@@ -54,10 +54,13 @@ protected:
 public:
 	/* Constructors/destructors */
 	ASize() = delete;
-	ASize(uint64_t s) : size(s) {}
+	ASize(Size s) : size(s) {}
 
-	/* Returns the number of bits this Size occupies */
-	uint64_t get() const { return size; }
+	/* Returns the number of bytes this Size occupies */
+	Size get() const { return size; }
+
+	/* Returns the number of bits this Size occupies x*/
+	Size getBits() const { return size * CHAR_BIT; }
 
 	inline bool operator==(const ASize &s) const {
 		return s.size == size;

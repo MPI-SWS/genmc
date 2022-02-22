@@ -74,14 +74,6 @@ using namespace llvm;
 # define GET_INST_SYNC_SCOPE(i) i->getSynchScope()
 #endif
 
-#ifdef LLVM_EXECUTIONENGINE_DATALAYOUT_PTR
-# define GET_TYPE_ALLOC_SIZE(M, x)		\
-	(M).getDataLayout()->getTypeAllocSize((x))
-#else
-# define GET_TYPE_ALLOC_SIZE(M, x)		\
-	(M).getDataLayout().getTypeAllocSize((x))
-#endif
-
 void EliminateCastsPass::getAnalysisUsage(AnalysisUsage &AU) const
 {
 	AU.addRequired<AssumptionCacheTracker>();
@@ -173,29 +165,20 @@ isEliminableCastPair(const CastInst *CI1, const CastInst *CI2, const DataLayout 
 	return Instruction::CastOps(Res);
 }
 
-/* Returns true BCI's soure is a constant or a zero-indices GEP */
-static bool isConstantOrGEPCast(const BitCastInst *bci)
-{
-	if (isa<Constant>(bci->getOperand(0)))
-	    return true;
-
-	auto *gepi = dyn_cast<GetElementPtrInst>(bci->getOperand(0));
-	return (gepi && gepi->hasAllZeroIndices() && llvm::isa<Constant>(gepi->getPointerOperand()));
-}
-
-/* Returns whether LI loads from a pointer produced by a ptrtoptr cast with source type TYP */
-static Value *isLoadConstCastFromType(const LoadInst *li, const PointerType *typ, const DataLayout &DL)
+static Value *isLoadCastedFromSameSrcType(const LoadInst *li, CastInst &ci)
 {
 	auto *M = li->getModule();
+	auto &DL = M->getDataLayout();
+	auto *typ = dyn_cast<PointerType>(ci.getOperand(0)->getType());
+	BUG_ON(!typ);
 
 	/* We capture two basic cases for now:
-	 * 1) LI loading from a bitcast from const, and
+	 * 1) LI loading from a bitcast (const or not), and
 	 * 2) LI loading from a constexpr */
 	if (auto *lci = dyn_cast<BitCastInst>(li->getPointerOperand())) {
 		auto *srcTy = lci->getSrcTy();
 		auto *dstTy = lci->getDestTy();
-		/* The cast needs come from a constant and preserve the size */
-		if (isConstantOrGEPCast(lci) && srcTy == typ && haveSameSizePointees(srcTy, dstTy, DL))
+		if (srcTy == typ && haveSameSizePointees(srcTy, dstTy, DL))
 			return lci->getOperand(0);
 		return nullptr;
 	}
@@ -213,10 +196,73 @@ static Value *isLoadConstCastFromType(const LoadInst *li, const PointerType *typ
 static void replaceAndMarkDelete(Instruction *toDel, Value *toRepl,
 			  VSet<Instruction *> *deleted = nullptr)
 {
-	toDel->replaceAllUsesWith(toRepl);
+	if (toRepl && toDel->hasNUsesOrMore(1))
+		toDel->replaceAllUsesWith(toRepl);
+	BUG_ON(toDel->hasNUsesOrMore(1));
 	toDel->eraseFromParent();
 	if (deleted)
 		deleted->insert(toDel);
+}
+
+static Instruction *castToType(Value *a, Type *typ, Instruction *insertBefore)
+{
+	if (a->getType()->isPointerTy() && typ->isPointerTy())
+		return new BitCastInst(a, typ, "", insertBefore);
+	if (typ->isPointerTy())
+		return new IntToPtrInst(a, typ, "", insertBefore);
+
+	BUG_ON(!a->getType()->isPointerTy());
+	return new PtrToIntInst(a, typ, "", insertBefore);
+}
+
+static void transformStoredBitcast(CastInst &ci, StoreInst *si, VSet<Instruction *> &deleted)
+{
+	auto *origPTy = dyn_cast<PointerType>(ci.getOperand(0)->getType());
+	BUG_ON(!origPTy);
+
+	/* Case 1: SI's value comes from a load that (a) comes from a similar cast, and
+	 * (b) the load result is only used in SI, then can simply get rid of the load */
+	auto *li = dyn_cast<LoadInst>(si->getValueOperand());
+	Value *lsrc = nullptr;
+	if (li && (lsrc = isLoadCastedFromSameSrcType(li, ci)) && li->hasNUses(1)) {
+		/* If the load came from cast operand, check if we have to delete the cast too */
+		if (auto *lci = dyn_cast<BitCastInst>(li->getPointerOperand()))
+			if (lci->hasNUses(0))
+				replaceAndMarkDelete(lci, nullptr);
+
+		if (auto *clsrc = dyn_cast<Constant>(lsrc)) /* ensure type-compatibility */
+			lsrc = ConstantExpr::getPointerCast(clsrc, origPTy);
+		auto *load = new LoadInst(origPTy->getElementType(), lsrc, li->getName(),
+					  li->isVolatile(), GET_INST_ALIGN(li), li->getOrdering(),
+					  GET_INST_SYNC_SCOPE(li), si);
+		auto *store = new StoreInst(load, ci.getOperand(0), si->isVolatile(), GET_INST_ALIGN(si),
+					    si->getOrdering(), GET_INST_SYNC_SCOPE(si), si);
+
+		replaceAndMarkDelete(si, store);
+		replaceAndMarkDelete(li, load);
+		return;
+	}
+
+	/* Case 2: SI's value comes from a different instruction. It's safe to cast that
+	 * value to CI's source type because, instead of casting the type of the address,
+	 * we will now cast the type of the value (this _has_ to be a pointer type) */
+	auto *cast = castToType(si->getValueOperand(), origPTy->getElementType(), si);
+	auto *store = new StoreInst(cast, ci.getOperand(0), si->isVolatile(), GET_INST_ALIGN(si),
+				    si->getOrdering(), GET_INST_SYNC_SCOPE(si), si);
+	replaceAndMarkDelete(si, store);
+	return;
+}
+
+static void transformLoadedBitcast(CastInst &ci, LoadInst *li, VSet<Instruction *> &deleted)
+{
+
+	auto *load = new LoadInst(dyn_cast<PointerType>(ci.getSrcTy())->getElementType(),
+				  ci.getOperand(0), li->getName(),
+				  li->isVolatile(), GET_INST_ALIGN(li), li->getOrdering(),
+				  GET_INST_SYNC_SCOPE(li), li);
+	auto *cast = castToType(load, li->getType(), li);
+	replaceAndMarkDelete(li, cast, &deleted);
+	return;
 }
 
 /* Performs some common transformations on the cast and deletes it, if necessary.
@@ -259,39 +305,22 @@ static bool commonCastTransforms(CastInst &ci, std::vector<Instruction *> &alias
 	}
 
 	/* Try to eliminate unnecessary casts */
-	if (ci.hasOneUse()) {
-		auto *cusr = *ci.users().begin();
-		auto *si = dyn_cast<StoreInst>(cusr);
-		if (!si || &ci == si->getValueOperand())
-			return false;
-
-		auto *li = dyn_cast<LoadInst>(si->getValueOperand());
-		if (!li)
-			return false;
-
-		auto *origPTy = dyn_cast<PointerType>(ci.getOperand(0)->getType());
-		BUG_ON(!origPTy);
-		auto *lsrc = isLoadConstCastFromType(li, origPTy, DL);
-		if (!lsrc)
-			return false;
-
-		/* If the load came from cast operand, mark it as an alias before we delete */
-		if (auto *lci = dyn_cast<BitCastInst>(li->getPointerOperand()))
-			if (lci->hasNUses(0))
-				replaceAndMarkDelete(lci, nullptr);
-
-		auto *load = new LoadInst(origPTy->getElementType(), lsrc, li->getName(),
-					  li->isVolatile(), GET_INST_ALIGN(li), li->getOrdering(),
-					  GET_INST_SYNC_SCOPE(li), si);
-		auto *store = new StoreInst(load, ci.getOperand(0), si->isVolatile(), GET_INST_ALIGN(si),
-					    si->getOrdering(), GET_INST_SYNC_SCOPE(si), si);
-
-		replaceAndMarkDelete(si, store);
-		replaceAndMarkDelete(li, load);
-
-		/* At this point, the cast should have no users */
-		BUG_ON(!ci.hasNUses(0));
-		replaceAndMarkDelete(&ci, nullptr, &deleted);
+	if (std::all_of(ci.user_begin(), ci.user_end(), [&](const User *u){
+		return isa<LoadInst>(u) || (isa<StoreInst>(u) &&
+			    &ci != dyn_cast<StoreInst>(u)->getValueOperand());
+	})) {
+		/* We know there is at least one use because otherwise the
+		 * bitcast would have been deleted previously */
+		auto *cusr = *ci.user_begin();
+		/* dyn_cast_or_null<> because we might delete users */
+		if (auto *si = dyn_cast_or_null<StoreInst>(cusr))
+			transformStoredBitcast(ci, si, deleted);
+		else if (auto *li = dyn_cast_or_null<LoadInst>(cusr))
+			transformLoadedBitcast(ci, li, deleted);
+		else
+			BUG();
+		/* We will not transform all users in one go because
+		 * messing with one user might break iterators */
 		return true;
 	}
 	return false;

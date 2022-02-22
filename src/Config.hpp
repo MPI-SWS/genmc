@@ -22,9 +22,10 @@
 #define __CONFIG_HPP__
 
 #include "DriverGraphEnumAPI.hpp"
+#include "VSet.hpp"
 
 #include <string>
-#include <vector>
+
 
 enum class ModelType { rc11, imm, lkmm };
 enum class SchedulePolicy { ltr, wf, random };
@@ -46,6 +47,7 @@ public:
 	unsigned int threads;
 	bool LAPOR;
 	bool symmetryReduction;
+	bool helper;
 	CheckConsType checkConsType;
 	ProgramPoint checkConsPoint;
 	bool checkLiveness;
@@ -65,16 +67,18 @@ public:
 
 	/*** Transformation options ***/
 	int unroll;
+	VSet<std::string> noUnrollFuns;
 	bool castElimination;
 	bool loopJumpThreading;
 	bool spinAssume;
 	bool codeCondenser;
 	bool loadAnnot;
+	bool assumePropagation;
+	bool confirmAnnot;
 
 	/*** Debugging options ***/
 	bool inputFromBitcodeFile;
 	bool printExecGraphs;
-	bool prettyPrintExecGraphs;
 	SchedulePolicy schedulePolicy;
 	std::string randomScheduleSeed;
 	bool printRandomScheduleSeed;
@@ -82,6 +86,8 @@ public:
 	std::string programEntryFun;
 	unsigned int warnOnGraphSize;
 #ifdef ENABLE_GENMC_DEBUG
+	bool printBlockedExecs;
+	bool colorAccesses;
 	bool validateExecGraphs;
 	bool countDuplicateExecs;
 	VerbosityLevel vLevel;

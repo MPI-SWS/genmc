@@ -6,8 +6,28 @@ is released.
 
 ## [Unreleased]
 
-- Documentation (TruSt and spinloop markers)
-- Bug fixes
+## [0.8] - 2022.02.22
+### Added
+
+- Built-in support for hazard pointers
+- Annotations for faster data-structure verification via `-helper` (experimental)
+- `-no-unroll` switch to exclude functions from unrolling
+- Performance optimizations
+
+### Changed
+
+- GenMC now runs under `-mo` by default
+- Enhanced graph and DOT printing
+
+### Removed
+
+- Support for LLVM-{3.8, 4.0}
+
+### Fixes
+
+- Documentation
+- Various bug fixes
+
 
 ## [0.7] - 2022.01.13
 ### Added

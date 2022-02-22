@@ -2,7 +2,6 @@
 #define __UNISTD_H__
 
 #include <errno.h>
-#include <pthread.h>
 #include <stddef.h>
 #include <sys/types.h>
 
@@ -18,30 +17,26 @@
    the current position (if WHENCE is SEEK_CUR),
    or the end of the file (if WHENCE is SEEK_END).
    Return the new file position.  */
-extern __off_t __VERIFIER_lseekFS (int __fd, __off_t __offset, int __whence);
-#define lseek __VERIFIER_lseekFS
+#define lseek(fd, offset, whence) __VERIFIER_lseekFS(fd, offset, whence)
 
 /* Close the file descriptor FD.
 
    This function is a cancellation point and therefore not marked with
    __THROW.  */
-extern int __VERIFIER_closeFS (int __fd);
-#define close __VERIFIER_closeFS
+#define close(fd) __VERIFIER_closeFS(fd)
 
 /* Read NBYTES into BUF from FD.  Return the
    number read, -1 for errors or 0 for EOF.
 
    This function is a cancellation point and therefore not marked with
    __THROW.  */
-extern ssize_t __VERIFIER_readFS (int __fd, void *__buf, size_t __nbytes);
-#define read __VERIFIER_readFS
+#define read(fd, buf, nbytes) __VERIFIER_readFS(fd, buf, nbytes)
 
 /* Write N bytes of BUF to FD.  Return the number written, or -1.
 
    This function is a cancellation point and therefore not marked with
    __THROW.  */
-extern ssize_t __VERIFIER_writeFS (int __fd, const void *__buf, size_t __n);
-#define write __VERIFIER_writeFS
+#define write(fd, buf, n) __VERIFIER_writeFS(fd, buf, n)
 
 /* Read NBYTES into BUF from FD at the given position OFFSET without
    changing the file pointer.  Return the number read, -1 for errors
@@ -49,74 +44,34 @@ extern ssize_t __VERIFIER_writeFS (int __fd, const void *__buf, size_t __n);
 
    This function is a cancellation point and therefore not marked with
    __THROW.  */
-extern ssize_t __VERIFIER_preadFS (int __fd, void *__buf, size_t __nbytes,
-				   __off_t __offset);
-#define pread __VERIFIER_preadFS
+#define pread(fd, buf, nbytes, offset) __VERIFIER_preadFS(fd, buf, nbytes, offset)
 
 /* Write N bytes of BUF to FD at the given position OFFSET without
    changing the file pointer.  Return the number written, or -1.
 
    This function is a cancellation point and therefore not marked with
    __THROW.  */
-extern ssize_t __VERIFIER_pwriteFS (int __fd, const void *__buf, size_t __n,
-				    __off_t __offset);
-#define pwrite __VERIFIER_pwriteFS
+#define pwrite(fd, buf, n, offset) __VERIFIER_pwriteFS(fd, buf, n, offset)
 
 /* Make a link to FROM named TO.  */
-extern int __VERIFIER_linkFS (const char *__from, const char *__to);
-#define link __VERIFIER_linkFS
+#define link(from, to) __VERIFIER_linkFS(from, to)
 
 /* Remove the link NAME.  */
-extern int __VERIFIER_unlinkFS (const char *__name);
-#define unlink __VERIFIER_unlinkFS
+#define unlink(name) __VERIFIER_unlinkFS(name)
 
 /* Make all changes done to FD actually appear on disk.
    This function is a cancellation point and therefore not marked with
    __THROW.  */
-extern int __VERIFIER_fsyncFS (int __fd);
-#define fsync __VERIFIER_fsyncFS
+#define fsync(fd) __VERIFIER_fsyncFS(fd)
 
 /* Make all changes done to all files actually appear on disk.  */
-extern void __VERIFIER_syncFS (void);
-#define sync __VERIFIER_syncFS
+#define sync() __VERIFIER_syncFS()
 
 /* Truncate FILE to LENGTH bytes.  */
-extern int __VERIFIER_truncateFS (const char *__file, __off_t __length);
-#define truncate __VERIFIER_truncateFS
+#define truncate(file, length) __VERIFIER_truncateFS(file, length)
 
-
-/*
- * ******** GENMC RESERVED NAMESPACE ********
- */
-
-#ifndef __CONFIG_GENMC_INODE_DATA_SIZE
-# error "Internal error: inode size not defined!"
+#ifdef __cplusplus
+# error "FS functions temporarily disabled for C++ code!\n"
 #endif
-
-struct __genmc_inode {
-	/* VFS */
-	pthread_mutex_t lock; // setupFsInfo() + interp rely on the layout
-	int i_size; // <-- need to treat this atomically
-
-	/* journaling helpers (embedded avoid indirection) */
-	int i_transaction; // <-- writes protected by the lock above
-
-	/* ext4 disk data (embedded to avoid indirection)
-	 * The implementation can now accommodate only one metadata piece
-	 * due to the current metadata block mapping */
-	int i_disksize; // <-- used as metadata block mapping
-	char data[__CONFIG_GENMC_INODE_DATA_SIZE]; // <-- used as data block mapping
-};
-
-struct __genmc_file {
-	struct inode *inode;
-	unsigned int count; // need to manipulate atomically
-	unsigned int flags; // encompasses f_mode
-	pthread_mutex_t pos_lock;
-	int pos;
-};
-
-struct __genmc_inode __attribute((address_space(42))) __genmc_dir_inode;
-struct __genmc_file __attribute((address_space(42))) __genmc_dummy_file;
 
 #endif /* __UNISTD_H__ */

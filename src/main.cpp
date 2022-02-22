@@ -23,25 +23,25 @@
 #include "DriverFactory.hpp"
 #include "Error.hpp"
 #include "LLVMModule.hpp"
-#include "clang/CodeGen/CodeGenAction.h"
-#include "clang/Basic/DiagnosticOptions.h"
-#include "clang/Driver/Compilation.h"
-#include "clang/Driver/Driver.h"
-#include "clang/Driver/Tool.h"
-#include "clang/Frontend/CompilerInstance.h"
-#include "clang/Frontend/CompilerInvocation.h"
-#include "clang/Frontend/FrontendDiagnostic.h"
-#include "clang/Frontend/TextDiagnosticPrinter.h"
-#include "llvm/ADT/SmallString.h"
-#include "llvm/ExecutionEngine/ExecutionEngine.h"
-#include "llvm/ExecutionEngine/MCJIT.h"
-#include "llvm/IR/Module.h"
-#include "llvm/Support/FileSystem.h"
-#include "llvm/Support/Host.h"
-#include "llvm/Support/ManagedStatic.h"
-#include "llvm/Support/Path.h"
-#include "llvm/Support/TargetSelect.h"
-#include "llvm/Support/raw_ostream.h"
+#include <clang/CodeGen/CodeGenAction.h>
+#include <clang/Basic/DiagnosticOptions.h>
+#include <clang/Driver/Compilation.h>
+#include <clang/Driver/Driver.h>
+#include <clang/Driver/Tool.h>
+#include <clang/Frontend/CompilerInstance.h>
+#include <clang/Frontend/CompilerInvocation.h>
+#include <clang/Frontend/FrontendDiagnostic.h>
+#include <clang/Frontend/TextDiagnosticPrinter.h>
+#include <llvm/ADT/SmallString.h>
+#include <llvm/ExecutionEngine/ExecutionEngine.h>
+#include <llvm/ExecutionEngine/MCJIT.h>
+#include <llvm/IR/Module.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/Host.h>
+#include <llvm/Support/ManagedStatic.h>
+#include <llvm/Support/Path.h>
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/raw_ostream.h>
 #include <iostream>
 #include <memory>
 
@@ -76,6 +76,34 @@ llvm::opt::ArgStringList filterCC1Args(const llvm::opt::ArgStringList &ccArgs)
 	return newCcArgs;
 }
 
+void printResults(const std::shared_ptr<const Config> &conf,
+		  const std::chrono::high_resolution_clock::time_point &begin,
+		  const GenMCDriver::Result &res)
+{
+	auto end = std::chrono::high_resolution_clock::now();
+	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin);
+
+	if (res.status == GenMCDriver::Status::VS_OK)
+		llvm::outs() << "No errors were detected.\n";
+	else
+		llvm::outs() << res.message;
+
+	llvm::outs() << "Number of complete executions explored: " << res.explored;
+	GENMC_DEBUG(
+		llvm::outs() << ((conf->countDuplicateExecs) ?
+				 " (" + std::to_string(res.duplicates) + " duplicates)" : "");
+		);
+	if (res.exploredBlocked) {
+		llvm::outs() << "\nNumber of blocked executions seen: " << res.exploredBlocked;
+	}
+	if (res.exploredMoot) {
+		llvm::outs() << " (" << res.exploredMoot << " mooted)";
+	}
+	llvm::outs() << "\nTotal wall-clock time: "
+		     << llvm::format("%.2f", elapsed.count() * 1e-3)
+		     << "s\n";
+}
+
 int main(int argc, char **argv)
 {
 	auto begin = std::chrono::high_resolution_clock::now();
@@ -85,12 +113,9 @@ int main(int argc, char **argv)
 	if (conf->inputFromBitcodeFile) {
 		auto ctx = LLVM_MAKE_UNIQUE<llvm::LLVMContext>();
 		auto mod = LLVMModule::parseLLVMModule(conf->inputFile, ctx);
-		BUG(); // FIXME
-		// std::unique_ptr<GenMCDriver> driver =
-		// 	DriverFactory::create(std::move(conf), std::move(mod), start);
-		// driver->run();
-		/* TODO: Check globalContext.destroy() and llvm::shutdown() */
-		return 0;
+		auto res = GenMCDriver::verify(conf, std::move(mod));
+		printResults(conf, begin, res);
+		return res.status == GenMCDriver::Status::VS_OK ? 0 : EVERIFY;
 	}
 
 	void *MainAddr = (void*) (intptr_t) getExecutablePath;
@@ -182,30 +207,8 @@ int main(int argc, char **argv)
 		return ECOMPILE;
 
 	auto res = GenMCDriver::verify(conf, std::move(Act->takeModule()));
-
-	auto end = std::chrono::high_resolution_clock::now();
-	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin);
-
-	if (res.status == GenMCDriver::Status::VS_OK)
-		llvm::outs() << "No errors were detected.\n";
-	else
-		llvm::outs() << res.message;
-
-	llvm::outs() << "Number of complete executions explored: " << res.explored;
-	GENMC_DEBUG(
-		llvm::outs() << ((conf->countDuplicateExecs) ?
-				 " (" + std::to_string(res.duplicates) + " duplicates)" : "");
-	);
-	llvm::outs() << "\n";
-	if (res.exploredBlocked) {
-		llvm::outs() << "Number of blocked executions seen: " << res.exploredBlocked
-			     << "\n";
-	}
-	llvm::outs() << "Total wall-clock time: "
-		     << llvm::format("%.2f", elapsed.count() * 1e-3)
-		     << "s\n";
+	printResults(conf, begin, res);
 
 	/* TODO: Check globalContext.destroy() and llvm::shutdown() */
-
 	return res.status == GenMCDriver::Status::VS_OK ? 0 : EVERIFY;
 }

@@ -22,6 +22,7 @@
 #include "RC11Driver.hpp"
 #include "Interpreter.h"
 #include "ExecutionGraph.hpp"
+#include "GraphIterators.hpp"
 #include "PSCCalculator.hpp"
 #include "PersistencyChecker.hpp"
 
@@ -104,8 +105,7 @@ void RC11Driver::calcWriteMsgView(WriteLabel *lab)
 
 	if (lab->isAtLeastRelease())
 		msg = lab->getHbView();
-	else if (lab->getOrdering() == llvm::AtomicOrdering::Monotonic ||
-		 lab->getOrdering() == llvm::AtomicOrdering::Acquire)
+	else if (lab->isAtMostAcquire())
 		msg = g.getEventLabel(g.getLastThreadReleaseAtLoc(lab->getPos(),
 								  lab->getAddr()))->getHbView();
 	lab->setMsgView(std::move(msg));
@@ -147,8 +147,7 @@ void RC11Driver::calcFenceRelRfPoBefore(Event last, View &v)
 		if (!llvm::isa<ReadLabel>(lab))
 			continue;
 		auto *rLab = static_cast<const ReadLabel *>(lab);
-		if (rLab->getOrdering() == llvm::AtomicOrdering::Monotonic ||
-		    rLab->getOrdering() == llvm::AtomicOrdering::Release) {
+		if (rLab->isAtMostRelease()) {
 			const EventLabel *rfLab = g.getEventLabel(rLab->getRf());
 			if (auto *wLab = llvm::dyn_cast<WriteLabel>(rfLab))
 				v.update(wLab->getMsgView());
@@ -211,9 +210,14 @@ void RC11Driver::updateLabelViews(EventLabel *lab, const EventDeps *deps) /* dep
 	switch (lab->getKind()) {
 	case EventLabel::EL_Read:
 	case EventLabel::EL_BWaitRead:
+	case EventLabel::EL_SpeculativeRead:
+	case EventLabel::EL_ConfirmingRead:
 	case EventLabel::EL_DskRead:
 	case EventLabel::EL_CasRead:
 	case EventLabel::EL_LockCasRead:
+	case EventLabel::EL_TrylockCasRead:
+	case EventLabel::EL_HelpedCasRead:
+	case EventLabel::EL_ConfirmingCasRead:
 	case EventLabel::EL_FaiRead:
 	case EventLabel::EL_BIncFaiRead:
 		calcReadViews(llvm::dyn_cast<ReadLabel>(lab));
@@ -226,6 +230,9 @@ void RC11Driver::updateLabelViews(EventLabel *lab, const EventDeps *deps) /* dep
 	case EventLabel::EL_UnlockWrite:
 	case EventLabel::EL_CasWrite:
 	case EventLabel::EL_LockCasWrite:
+	case EventLabel::EL_TrylockCasWrite:
+	case EventLabel::EL_HelpedCasWrite:
+	case EventLabel::EL_ConfirmingCasWrite:
 	case EventLabel::EL_FaiWrite:
 	case EventLabel::EL_BIncFaiWrite:
 	case EventLabel::EL_DskWrite:
@@ -252,15 +259,19 @@ void RC11Driver::updateLabelViews(EventLabel *lab, const EventDeps *deps) /* dep
 		break;
 	case EventLabel::EL_ThreadCreate:
 	case EventLabel::EL_ThreadFinish:
+	case EventLabel::EL_Optional:
 	case EventLabel::EL_LoopBegin:
 	case EventLabel::EL_SpinStart:
 	case EventLabel::EL_FaiZNESpinEnd:
 	case EventLabel::EL_LockZNESpinEnd:
 	case EventLabel::EL_Malloc:
 	case EventLabel::EL_Free:
-	case EventLabel::EL_LockLabelLAPOR:
-	case EventLabel::EL_UnlockLabelLAPOR:
+	case EventLabel::EL_HpRetire:
+	case EventLabel::EL_LockLAPOR:
+	case EventLabel::EL_UnlockLAPOR:
 	case EventLabel::EL_DskOpen:
+	case EventLabel::EL_HelpingCas:
+	case EventLabel::EL_HpProtect:
 		calcBasicViews(lab);
 		break;
 	case EventLabel::EL_SmpFenceLKMM:
@@ -316,14 +327,13 @@ Event RC11Driver::findRaceForNewLoad(const ReadLabel *rLab)
 {
 	const auto &g = getGraph();
 	const View &before = g.getPreviousNonEmptyLabel(rLab)->getHbView();
-	const auto &stores = g.getStoresToLoc(rLab->getAddr());
 
 	/* If there are not any events hb-before the read, there is nothing to do */
 	if (before.empty())
 		return Event::getInitializer();
 
 	/* Check for events that race with the current load */
-	for (auto &s : stores) {
+	for (const auto &s : stores(g, rLab->getAddr())) {
 		if (before.contains(s))
 			continue;
 

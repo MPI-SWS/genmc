@@ -31,9 +31,9 @@ class LoadAnnotationPass : public FunctionPass {
 
 public:
 	static char ID;
-	AnnotationInfo<LoadInst *, Value *> &LAI;
+	AnnotationInfo<Instruction *, Value *> &LAI;
 
-	LoadAnnotationPass(AnnotationInfo<LoadInst *, Value *> &LAI)
+	LoadAnnotationPass(AnnotationInfo<Instruction *, Value *> &LAI)
 		: FunctionPass(ID), LAI(LAI) {};
 
 	virtual void getAnalysisUsage(AnalysisUsage &AU) const;
@@ -44,18 +44,18 @@ private:
 	 * Returns the source loads of an assume statement, that is,
 	 * loads the result of which is used in the assume.
 	 */
-	std::vector<LoadInst *> getSourceLoads(CallInst *assm) const;
+	std::vector<Instruction *> getSourceLoads(CallInst *assm) const;
 
 	/*
 	 * Given an assume's source loads, returns the annotatable ones.
 	 */
-	std::vector<LoadInst *>
-	filterAnnotatableFromSource(CallInst *assm, const std::vector<LoadInst *> &source) const;
+	std::vector<Instruction *>
+	filterAnnotatableFromSource(CallInst *assm, const std::vector<Instruction *> &source) const;
 
 	/*
 	 * Returns all of ASSM's annotatable loads
 	 */
-	std::vector<LoadInst *>
+	std::vector<Instruction *>
 	getAnnotatableLoads(CallInst *assm) const;
 };
 

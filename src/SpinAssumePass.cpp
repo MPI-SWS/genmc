@@ -25,6 +25,7 @@
 #include "SpinAssumePass.hpp"
 #include "DeclareInternalsPass.hpp"
 #include "CallInfoCollectionPass.hpp"
+#include "EscapeCheckerPass.hpp"
 #include "InterpreterEnumAPI.hpp"
 #include "InstAnnotator.hpp"
 #include "LLVMUtils.hpp"
@@ -48,8 +49,10 @@ using namespace llvm;
 
 #ifdef LLVM_HAVE_POST_DOMINATOR_TREE_WRAPPER_PASS
 # define POSTDOM_PASS PostDominatorTreeWrapperPass
+# define GET_POSTDOM_PASS() getAnalysis<POSTDOM_PASS>().getPostDomTree();
 #else
 # define POSTDOM_PASS PostDominatorTree
+# define GET_POSTDOM_PASS() getAnalysis<POSTDOM_PASS>();
 #endif
 
 #ifdef LLVM_INSERT_PREHEADER_FOR_LOOP_NEEDS_UPDATER
@@ -66,6 +69,7 @@ void SpinAssumePass::getAnalysisUsage(llvm::AnalysisUsage &au) const
 	au.addRequired<POSTDOM_PASS>();
 	au.addRequired<DeclareInternalsPass>();
 	au.addRequired<CallInfoCollectionPass>();
+	au.addRequired<EscapeCheckerPass>();
 	au.setPreservesAll();
 }
 
@@ -130,13 +134,8 @@ bool isPHIRelatedToCASCmp(const PHINode *curr, const SmallVector<const AtomicCmp
 			}))
 				return false;
 		} else if (auto *extract = dyn_cast<ExtractValueInst>(val)) {
-			if (!extract->getType()->isIntegerTy() ||
-			    extract->getNumIndices() > 1 ||
-			    *extract->idx_begin() != 0)
-				return false;
-
-			auto *ecasi = dyn_cast<AtomicCmpXchgInst>(extract->getAggregateOperand());
-			if (!ecasi)
+			auto *ecasi = extractsFromCAS(extract);
+			if (!ecasi || *extract->idx_begin() != 0)
 				return false;
 			if (std::all_of(cass.begin(), cass.end(), [&](const AtomicCmpXchgInst *casi){
 				return !accessSameVariable(ecasi->getPointerOperand(), casi->getPointerOperand()) ||
@@ -174,13 +173,8 @@ bool isPHIRelatedToCASRes(const PHINode *curr, const SmallVector<const AtomicCmp
 				return false;
 			}
 		} else if (auto *extract = dyn_cast<ExtractValueInst>(val)) {
-			if (!extract->getType()->isIntegerTy() ||
-			    extract->getNumIndices() > 1 ||
-			    *extract->idx_begin() != 1)
-				return false;
-
-			auto *ecasi = dyn_cast<AtomicCmpXchgInst>(extract->getAggregateOperand());
-			if (!ecasi)
+			auto *ecasi = extractsFromCAS(extract);
+			if (!ecasi || *extract->idx_begin() != 1)
 				return false;
 			if (std::all_of(cass.begin(), cass.end(), [&](const AtomicCmpXchgInst *casi){
 				return !accessSameVariable(ecasi->getPointerOperand(), casi->getPointerOperand()) ||
@@ -247,13 +241,18 @@ bool areBlockPHIsRelatedToLoopCASs(const BasicBlock *bb, Loop *l)
 }
 
 /*
- * Returns whether extract extracts from a CAS. If a second argument is provided, it is ensured
+ * Returns whether INST extracts from a CAS. If a second argument is provided, it is ensured
  * that the extract extracts from this particular CAS.
  */
-bool isCASExtract(ExtractValueInst *extract, AtomicCmpXchgInst *cas = nullptr)
+bool isCASExtract(Instruction *inst, AtomicCmpXchgInst *cas = nullptr)
 {
+	auto *extract = llvm::dyn_cast_or_null<ExtractValueInst>(inst);
+	if (!extract)
+		return false;
+
 	if (!extract->getType()->isIntegerTy() ||
-	    extract->getNumIndices() > 1)
+	    extract->getNumIndices() > 1 ||
+	    *extract->idx_begin() != 1)
 		return false;
 
 	auto *ecasi = dyn_cast<AtomicCmpXchgInst>(extract->getAggregateOperand());
@@ -270,16 +269,15 @@ bool tryGetCASResultExtracts(const std::vector<AtomicCmpXchgInst *> &cass,
 			     std::vector<ExtractValueInst *> &extracts)
 {
 	for (auto &cas : cass) {
-		auto *candidateExtract = cas->getNextNode()->getNextNode();
-		auto *extract = dyn_cast<ExtractValueInst>(candidateExtract);
-		if (!candidateExtract || !extract)
+		/* Try both subsequent instructions as we might have
+		 * eliminated one of them */
+		if (isCASExtract(cas->getNextNode()->getNextNode(), cas)) {
+			extracts.push_back(llvm::dyn_cast<ExtractValueInst>(cas->getNextNode()->getNextNode()));
+		} else if (isCASExtract(cas->getNextNode(), cas)) {
+			extracts.push_back(llvm::dyn_cast<ExtractValueInst>(cas->getNextNode()));
+		} else {
 			return false;
-
-		if (!isCASExtract(extract, cas))
-			return false;
-		if (*extract->idx_begin() != 1)
-			return false;
-		extracts.push_back(extract);
+		}
 	}
 	return true;
 }
@@ -297,7 +295,8 @@ bool failedCASesLeadToHeader(const std::vector<AtomicCmpXchgInst *> &cass, Basic
 
 	std::vector<ExtractValueInst *> extracts;
 
-	BUG_ON(!tryGetCASResultExtracts(cass, extracts));
+	if (!tryGetCASResultExtracts(cass, extracts))
+		return false;
 
 	std::vector<std::unique_ptr<SExpr<Value *>> > casConditions;
 	for (auto *cas : cass)
@@ -318,9 +317,20 @@ bool failedCASesLeadToHeader(const std::vector<AtomicCmpXchgInst *> &cass, Basic
 	return true;
 }
 
+bool isStoreLocal(StoreInst *si, EscapeInfo &EI, DominatorTree &DT)
+{
+	/* A store is local if it is either marked or writes to dynamic memory */
+	auto attr = getWriteAttr(*si);
+	auto *alloc = EI.writesDynamicMemory(si->getPointerOperand());
+	return (alloc && EI.escapesAfter(alloc, si, DT)) ||
+		!!(attr & WriteAttr::Local);
+}
+
 bool SpinAssumePass::isPathToHeaderEffectFree(BasicBlock *latch, Loop *l, bool &checkDynamically)
 {
 	auto &cleanSet = getAnalysis<CallInfoCollectionPass>().getCleanCalls();
+	auto &EI = getAnalysis<EscapeCheckerPass>().getEscapeInfo();
+	auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
 	auto effects = false;
 	std::vector<AtomicCmpXchgInst *> cass;
 
@@ -329,6 +339,11 @@ bool SpinAssumePass::isPathToHeaderEffectFree(BasicBlock *latch, Loop *l, bool &
 		if (auto *casi = dyn_cast<AtomicCmpXchgInst>(&i)) {
 			cass.push_back(casi);
 			return;
+		}
+		/* Local stores are allowed */
+		if (auto *si = dyn_cast<StoreInst>(&i)) {
+			if (isStoreLocal(si, EI, DT))
+				return;
 		}
 		effects |= hasSideEffects(&i, &cleanSet);
 	});
@@ -340,9 +355,12 @@ bool SpinAssumePass::isPathToHeaderEffectFree(BasicBlock *latch, Loop *l, bool &
 	std::sort(cass.begin(), cass.end());
 	cass.erase(std::unique(cass.begin(), cass.end()), cass.end());
 
-	if (!cass.empty())
-		checkDynamically = !failedCASesLeadToHeader(cass, latch, l, cleanSet);
-	return true;
+	auto casOK = true;
+	if (!cass.empty()) {
+		casOK = failedCASesLeadToHeader(cass, latch, l, cleanSet);
+		checkDynamically |= !casOK;
+	}
+	return casOK;
 }
 
 template<typename F>
@@ -392,7 +410,7 @@ bool SpinAssumePass::isPathToHeaderFAIZNE(BasicBlock *latch, Loop *l, Instructio
 {
 	auto &cleanSet = getAnalysis<CallInfoCollectionPass>().getCleanCalls();
 	auto effects = false;
-	VSet<PHINode *> phis;
+	VSet<AtomicCmpXchgInst *> cass;
 	VSet<AtomicRMWInst *> fais;
 
 	foreachInBackPathTo(latch, l->getHeader(), [&](Instruction &i){
@@ -400,29 +418,42 @@ bool SpinAssumePass::isPathToHeaderFAIZNE(BasicBlock *latch, Loop *l, Instructio
 			fais.insert(faii);
 			return;
 		}
-		if (auto *phi = dyn_cast<PHINode>(&i)) {
-			phis.insert(phi);
+		/* CASes are OK as long as they are before the decrement */
+		if (auto *casi = dyn_cast<AtomicCmpXchgInst>(&i)) {
+			cass.insert(casi);
 			return;
 		}
 		effects |= hasSideEffects(&i, &cleanSet);
 	});
 
-	if (effects || fais.size() != 2 || !phis.empty())
+	if (effects || fais.size() != 2)
 		return false;
 
+	/* Check domination conditions; we need more checks here due to the (unordered) VSet */
 	auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-#ifdef LLVM_HAVE_POST_DOMINATOR_TREE_WRAPPER_PASS
-	auto &PDT = getAnalysis<POSTDOM_PASS>().getPostDomTree();
-#else
-	auto &PDT = getAnalysis<POSTDOM_PASS>();
-#endif
+	auto &PDT = GET_POSTDOM_PASS();
 
-	auto aDomB = dominatesAndPostdominates(fais[0], fais[1], DT, PDT);
-	auto bDomA = dominatesAndPostdominates(fais[1], fais[0], DT, PDT);
-	if (!areCancelingBinops(fais[0], fais[1]) || (!aDomB && !bDomA)) /* due to VSet */
+	AtomicRMWInst *inci = nullptr;
+	AtomicRMWInst *deci = nullptr;
+	if (DT.dominates(fais[0], fais[1]) && PDT.dominates(l->getHeader(), fais[1]->getParent())) {
+		inci = fais[0];
+		deci = fais[1];
+	} else if (DT.dominates(fais[1], fais[0]) && PDT.dominates(l->getHeader(), fais[0]->getParent())) {
+		inci = fais[1];
+		deci = fais[0];
+	}
+	if (!inci || !deci)
+		return false;
+	if (std::any_of(cass.begin(), cass.end(), [&](AtomicCmpXchgInst *casi){
+		return !DT.dominates(casi, deci);
+	}))
 		return false;
 
-	lastEffect = (aDomB) ? fais[1] : fais[0];
+	/* Check cancelation */
+	if (!areCancelingBinops(inci, deci))
+		return false;
+
+	lastEffect = deci;
 	return true;
 }
 
@@ -460,11 +491,7 @@ bool SpinAssumePass::isPathToHeaderLockZNE(BasicBlock *latch, Loop *l, Instructi
 		return false;
 
 	auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-#ifdef LLVM_HAVE_POST_DOMINATOR_TREE_WRAPPER_PASS
-	auto &PDT = getAnalysis<POSTDOM_PASS>().getPostDomTree();
-#else
-	auto &PDT = getAnalysis<POSTDOM_PASS>();
-#endif
+	auto &PDT = GET_POSTDOM_PASS();
 	auto lDomU = dominatesAndPostdominates(locks[0], unlocks[0], DT, PDT);
 	if (!lDomU || !accessSameVariable(*locks[0]->arg_begin(), *unlocks[0]->arg_begin()))
 		return false;
@@ -598,30 +625,30 @@ bool SpinAssumePass::runOnLoop(Loop *l, LPPassManager &lpm)
 	llvm::Instruction *lastZNEEffect = nullptr;
 	for (auto &latch : latches) {
 		if (isPathToHeaderFAIZNE(latch, l, lastZNEEffect)) {
-			spinloop = false;
+			checkDynamically = true;
 			modified = true;
 			addPotentialSpinEndCallBeforeLastFai(latch, header, lastZNEEffect);
 		} else if (isPathToHeaderLockZNE(latch, l, lastZNEEffect)) {
 			/* Check for lockZNE before effect-free paths,
 			 * as locks are function calls too...  */
-			spinloop = false;
+			checkDynamically = true;
 			modified = true;
 			addPotentialSpinEndCallBeforeUnlock(latch, header, lastZNEEffect);
 		} else if (isPathToHeaderEffectFree(latch, l, checkDynamically)) {
 			/* If we have to dynamically validate the loop,
-			 * the spin-end call will be inserted at runtime */
-			if (checkDynamically)
-				spinloop = false;
-			else
-				addSpinEndCallBeforeTerm(latch, header);
+			 * the above check will return false, but the path
+			 * may be checked dynamically */
+			addSpinEndCallBeforeTerm(latch, header);
 			modified = true; /* At the very least, a spin_start is inserted */
 		} else {
 			spinloop = false;
 		}
 	}
+	if (checkDynamically)
+		spinloop = false;
 
 	/* Mark spinloop start if we have to */
-	if (checkDynamically || (spinloop && markStarts)) {
+	if (checkDynamically || (modified && markStarts)) {
 		addSpinStartCall(l);
 		/* DSA also requires us to know when we actually enter the loop;
 		 * mark the beginning anyway to compose with liveness checks and nested loops */
@@ -635,6 +662,7 @@ bool SpinAssumePass::runOnLoop(Loop *l, LPPassManager &lpm)
 	if (!spinloop)
 		return modified;
 
+	removeDisconnectedBlocks(l);
 #ifdef LLVM_HAVE_LOOPINFO_ERASE
 	lpm.getAnalysis<LoopInfoWrapperPass>().getLoopInfo().erase(l);
 	lpm.markLoopAsDeleted(*l);
@@ -643,7 +671,6 @@ bool SpinAssumePass::runOnLoop(Loop *l, LPPassManager &lpm)
 #else
 	lpm.deleteLoopFromQueue(l);
 #endif
-	removeDisconnectedBlocks(l);
 	return modified;
 }
 

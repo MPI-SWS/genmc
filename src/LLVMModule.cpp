@@ -48,6 +48,7 @@
 #include <llvm/Support/Debug.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
 #if defined(HAVE_LLVM_TRANSFORMS_UTILS_H)
@@ -164,23 +165,34 @@ namespace LLVMModule {
 			OptPM.add(createEliminateCastsPass());
 		OptPM.add(llvm::createPromoteMemoryToRegisterPass());
 		OptPM.add(llvm::createDeadArgEliminationPass());
+		OptPM.add(createLocalSimplifyCFGPass());
+		OptPM.add(createEliminateAnnotationsPass());
+		OptPM.add(createEliminateRedundantInstPass());
 
 		modified = OptPM.run(mod);
 
+		BndPM.add(createEliminateCASPHIsPass());
+		BndPM.add(llvm::createJumpThreadingPass());
+		BndPM.add(createEliminateUnusedCodePass());
 		BndPM.add(createBisimilarityCheckerPass());
 		if (conf->codeCondenser && !conf->checkLiveness)
 			BndPM.add(createCodeCondenserPass());
 		if (conf->loopJumpThreading)
 			BndPM.add(createLoopJumpThreadingPass());
 		BndPM.add(createCallInfoCollectionPass());
+		BndPM.add(createEscapeCheckerPass());
 		if (conf->spinAssume)
 			BndPM.add(createSpinAssumePass(conf->checkLiveness));
 		if (conf->unroll >= 0)
-			BndPM.add(createLoopUnrollPass(conf->unroll));
+			BndPM.add(createLoopUnrollPass(conf->unroll, conf->noUnrollFuns));
 
 		modified |= BndPM.run(mod);
 
-		/* Run load-annotation last so that the module is stable */
+		/* Run annotation passes last so that the module is stable */
+		if (conf->assumePropagation)
+			OptPM.add(createPropagateAssumesPass());
+		if (conf->confirmAnnot)
+			OptPM.add(createConfirmationAnnotationPass());
 		if (conf->loadAnnot)
 			OptPM.add(createLoadAnnotationPass(PI.annotInfo));
 		modified |= OptPM.run(mod);

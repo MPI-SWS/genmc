@@ -21,6 +21,7 @@
 #include "PSCCalculator.hpp"
 #include "Error.hpp"
 #include "ExecutionGraph.hpp"
+#include "GraphIterators.hpp"
 #include "WBCalculator.hpp"
 
 std::vector<SAddr> PSCCalculator::getDoubleLocs() const
@@ -298,10 +299,9 @@ void PSCCalculator::addInitEdges(const std::vector<Event> &fcs,
 
 			auto preds = calcSCPreds(fcs, rLab->getPos());
 			auto fencePreds = calcSCFencesPreds(fcs, rLab->getPos());
-			for (auto &w : g.getStoresToLoc(rLab->getAddr())) {
+			for (const auto &w : stores(g, rLab->getAddr())) {
 				/* Can be casted to WriteLabel by construction */
-				auto *wLab = static_cast<const WriteLabel *>(
-					g.getEventLabel(w));
+				auto *wLab = g.getWriteLabel(w);
 				auto wSuccs = calcSCSuccs(fcs, w);
 				matrix.addEdgesFromTo(preds, wSuccs); /* Adds rb-edges */
 				for (auto &r : wLab->getReadersList()) {

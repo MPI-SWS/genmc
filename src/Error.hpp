@@ -45,6 +45,14 @@
 #define BUG_ON(condition) do { if (condition) BUG(); } while (0)
 
 #ifdef ENABLE_GENMC_DEBUG
+# define PRINT_BUGREPORT_INFO_ONCE(id, msg) BUG()
+#else
+# define PRINT_BUGREPORT_INFO_ONCE(id, msg)				\
+	WARN_ONCE(id, msg "!\nPlease submit a bug report to "		\
+		  PACKAGE_BUGREPORT "\n")
+#endif
+
+#ifdef ENABLE_GENMC_DEBUG
 # define GENMC_DEBUG(s) do {			\
 	s					\
 	} while (0)

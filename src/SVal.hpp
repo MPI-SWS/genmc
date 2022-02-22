@@ -25,6 +25,7 @@
 #include "Error.hpp"
 
 #include <cstdint>
+#include <climits>
 
 /*
  * Represents a value to be written to memory. All values are represented as
@@ -37,6 +38,7 @@ public:
 	/* We represent Values using a type that is big-enough
 	 * to accommodate for all the types we are interested in */
 	using Value = uint64_t;
+	static constexpr unsigned width = sizeof(Value) * CHAR_BIT;
 
 public:
 	/* Constructors/destructors */
@@ -60,6 +62,14 @@ public:
 
 	/* Returns a (limited) representation of the Value as a boolean */
 	bool getBool() const { return (!!*this).get(); }
+
+	/* Sign-extends the number in the bottom B bits of X to SVal::width
+	 * Pre: 0 < B <= SVal::width */
+	SVal &signExtendBottom(unsigned b) {
+		BUG_ON(b == 0 || b > width);
+		value = int64_t(get() << (width - b)) >> (width - b);
+		return *this;
+	}
 
 	inline bool operator==(const SVal &v) const {
 		return v.value == value;
@@ -107,6 +117,7 @@ public:
 		n.value = !value;
 		return n;
 	}
+
 	operator bool() const {
 		return !!value;
 	}

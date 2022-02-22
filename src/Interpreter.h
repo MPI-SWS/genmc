@@ -538,7 +538,7 @@ public:
   void replayExecutionBefore(const VectorClock &before);
   SVal getLocInitVal(SAddr addr, AAccess access);
   unsigned int getTypeSize(Type *typ) const;
-  SVal executeAtomicRMWOperation(SVal val1, SVal val2, AtomicRMWInst::BinOp op);
+  SVal executeAtomicRMWOperation(SVal oldVal, SVal val, ASize size, AtomicRMWInst::BinOp op);
 
   // Methods used to execute code:
   // Place a call on the stack
@@ -670,7 +670,7 @@ private:  // Helper functions
   std::vector<GenericValue> translateExternalCallArgs(Function *F,
 						      const std::vector<GenericValue> &Args) const;
   void returnValueToCaller(Type *RetTy, GenericValue Result);
-  void popStackAndReturnValueToCaller(Type *RetTy, GenericValue Result);
+  void popStackAndReturnValueToCaller(Type *RetTy, GenericValue Result, ReturnInst *retI = nullptr);
 
   void handleSystemError(SystemError code, const std::string &msg);
 
@@ -729,13 +729,14 @@ private:  // Helper functions
 			   const std::unique_ptr<EventDeps> &specialDeps)
 
   DECLARE_CUSTOM_OPCODE(AssertFail);
+  DECLARE_CUSTOM_OPCODE(OptBegin);
   DECLARE_CUSTOM_OPCODE(LoopBegin);
   DECLARE_CUSTOM_OPCODE(RecAssertFail);
   DECLARE_CUSTOM_OPCODE(SpinStart);
   DECLARE_CUSTOM_OPCODE(SpinEnd);
   DECLARE_CUSTOM_OPCODE(FaiZNESpinEnd);
   DECLARE_CUSTOM_OPCODE(LockZNESpinEnd);
-  DECLARE_CUSTOM_OPCODE(EndLoop);
+  DECLARE_CUSTOM_OPCODE(KillThread);
   DECLARE_CUSTOM_OPCODE(Assume);
   DECLARE_CUSTOM_OPCODE(NondetInt);
   DECLARE_CUSTOM_OPCODE(Malloc);
@@ -753,6 +754,11 @@ private:  // Helper functions
   DECLARE_CUSTOM_OPCODE(BarrierInit);
   DECLARE_CUSTOM_OPCODE(BarrierWait);
   DECLARE_CUSTOM_OPCODE(BarrierDestroy);
+  DECLARE_CUSTOM_OPCODE(HazptrAlloc);
+  DECLARE_CUSTOM_OPCODE(HazptrProtect);
+  DECLARE_CUSTOM_OPCODE(HazptrClear);
+  DECLARE_CUSTOM_OPCODE(HazptrFree);
+  DECLARE_CUSTOM_OPCODE(HazptrRetire);
   DECLARE_CUSTOM_OPCODE(OpenFS);
   DECLARE_CUSTOM_OPCODE(CreatFS);
   DECLARE_CUSTOM_OPCODE(CloseFS);
@@ -769,7 +775,6 @@ private:  // Helper functions
   DECLARE_CUSTOM_OPCODE(LseekFS);
   DECLARE_CUSTOM_OPCODE(PersBarrierFS);
   DECLARE_CUSTOM_OPCODE(SmpFenceLKMM);
-  DECLARE_CUSTOM_OPCODE(AtomicRmwNoRet);
   DECLARE_CUSTOM_OPCODE(RCUReadLockLKMM);
   DECLARE_CUSTOM_OPCODE(RCUReadUnlockLKMM);
   DECLARE_CUSTOM_OPCODE(SynchronizeRCULKMM);
@@ -855,8 +860,8 @@ private:  // Helper functions
 
   /* Gets naming information for value V (or value with key KEY), if it is
    * an internal variable with no value correspondence */
-  NameInfo *getVarNameInfo(Value *v, Storage s, AddressSpace spc,
-			   const VariableInfo<ModuleID::ID>::InternalKey &key = {});
+  const NameInfo *getVarNameInfo(Value *v, Storage s, AddressSpace spc,
+				 const VariableInfo<ModuleID::ID>::InternalKey &key = {});
 
   /* Pers: Returns the address of the file description referenced by FD */
   void *getFileFromFd(int fd) const;

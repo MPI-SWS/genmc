@@ -20,105 +20,50 @@
 
 #include "MOCalculator.hpp"
 #include "ExecutionGraph.hpp"
-#include "LabelIterator.hpp"
+#include "GraphIterators.hpp"
 #include <vector>
 
-MOCalculator::LocStores::const_iterator
+CoherenceCalculator::const_store_iterator
 MOCalculator::succ_begin(SAddr addr, Event store) const
 {
-	auto &locMO = getModOrderAtLoc(addr);
 	auto offset = getStoreOffset(addr, store);
-	return locMO.begin() + (offset + 1);
+	return store_begin(addr) + (offset + 1);
 }
 
-MOCalculator::LocStores::const_iterator
+CoherenceCalculator::const_store_iterator
 MOCalculator::succ_end(SAddr addr, Event store) const
 {
-	auto &locMO = getModOrderAtLoc(addr);
-	return locMO.end();
+	return store_end(addr);
 }
 
-MOCalculator::LocStores::const_iterator
+CoherenceCalculator::const_store_iterator
 MOCalculator::pred_begin(SAddr addr, Event store) const
 {
-	auto &locMO = getModOrderAtLoc(addr);
-	return locMO.begin();
+	return store_begin(addr);
 }
 
-MOCalculator::LocStores::const_iterator
+CoherenceCalculator::const_store_iterator
 MOCalculator::pred_end(SAddr addr, Event store) const
 {
-	auto &locMO = getModOrderAtLoc(addr);
 	auto offset = getStoreOffset(addr, store);
-	return locMO.begin() + (offset >= 0 ? offset : 0);
+	return store_begin(addr) + (offset >= 0 ? offset : 0);
 }
 
 void MOCalculator::trackCoherenceAtLoc(SAddr addr)
 {
-	mo_[addr];
+	stores[addr];
 }
 
 int MOCalculator::getStoreOffset(SAddr addr, Event e) const
 {
-	BUG_ON(mo_.count(addr) == 0);
+	BUG_ON(stores.count(addr) == 0);
 
 	if (e == Event::getInitializer())
 		return -1;
 
-	auto &locMO = mo_.at(addr);
-	for (auto it = locMO.begin(); it != locMO.end(); ++it) {
-		if (*it == e)
-			return std::distance(locMO.begin(), it);
-	}
-	BUG();
-}
-
-std::vector<Event>
-MOCalculator::getMOBefore(SAddr addr, Event e) const
-{
-	BUG_ON(mo_.count(addr) == 0);
-
-	/* No store is mo-before the INIT */
-	if (e.isInitializer())
-		return std::vector<Event>();
-
-	std::vector<Event> res = { Event::getInitializer() };
-
-	auto &locMO = mo_.at(addr);
-	for (auto it = locMO.begin(); it != locMO.end(); ++it) {
-		if (*it == e)
-			return res;
-		res.push_back(*it);
-	}
-	BUG();
-}
-
-std::vector<Event>
-MOCalculator::getMOAfter(SAddr addr, Event e) const
-{
-	std::vector<Event> res;
-
-	BUG_ON(mo_.count(addr) == 0);
-
-	/* All stores are mo-after INIT */
-	if (e.isInitializer())
-		return mo_.at(addr);
-
-	auto &locMO = mo_.at(addr);
-	for (auto rit = locMO.rbegin(); rit != locMO.rend(); ++rit) {
-		if (*rit == e) {
-			std::reverse(res.begin(), res.end());
-			return res;
-		}
-		res.push_back(*rit);
-	}
-	BUG();
-}
-
-const std::vector<Event>&
-MOCalculator::getModOrderAtLoc(SAddr addr) const
-{
-	return getStoresToLoc(addr);
+	auto oIt = std::find(store_begin(addr), store_end(addr), e);
+	BUG_ON(oIt == store_end(addr));
+	return std::distance(store_begin(addr), oIt);
 }
 
 std::pair<int, int>
@@ -145,7 +90,10 @@ MOCalculator::getPossiblePlacings(SAddr addr, Event store, bool isRMW)
 
 void MOCalculator::addStoreToLoc(SAddr addr, Event store, int offset)
 {
-	mo_[addr].insert(mo_[addr].begin() + offset, store);
+	if (offset == -1)
+		stores[addr].push_back(store);
+	else
+		stores[addr].insert(store_begin(addr) + offset, store);
 }
 
 void MOCalculator::addStoreToLocAfter(SAddr addr, Event store, Event pred)
@@ -156,7 +104,7 @@ void MOCalculator::addStoreToLocAfter(SAddr addr, Event store, Event pred)
 
 bool MOCalculator::isCoMaximal(SAddr addr, Event store)
 {
-	auto &locMO = mo_[addr];
+	auto &locMO = stores[addr];
 	return (store.isInitializer() && locMO.empty()) ||
 	       (!store.isInitializer() && !locMO.empty() && store == locMO.back());
 }
@@ -168,73 +116,54 @@ bool MOCalculator::isCachedCoMaximal(SAddr addr, Event store)
 
 void MOCalculator::changeStoreOffset(SAddr addr, Event store, int newOffset)
 {
-	auto &locMO = mo_[addr];
+	auto &locMO = stores[addr];
 
-	locMO.erase(std::find(locMO.begin(), locMO.end(), store));
-	locMO.insert(locMO.begin() + newOffset, store);
-}
-
-const std::vector<Event>&
-MOCalculator::getStoresToLoc(SAddr addr) const
-{
-	BUG_ON(mo_.count(addr) == 0);
-	return mo_.at(addr);
+	locMO.erase(std::find(store_begin(addr), store_end(addr), store));
+	locMO.insert(store_begin(addr) + newOffset, store);
 }
 
 int MOCalculator::splitLocMOBefore(SAddr addr, Event e)
-
 {
 	const auto &g = getGraph();
-	auto &locMO = getStoresToLoc(addr);
-	auto &before = g.getEventLabel(e.prev())->getHbView();
-
-	for (auto rit = locMO.rbegin(); rit != locMO.rend(); ++rit) {
-		if (before.empty() || !g.isWriteRfBefore(*rit, e.prev()))
-			continue;
-		return std::distance(rit, locMO.rend());
-	}
-	return 0;
+	auto rit = std::find_if(store_rbegin(addr), store_rend(addr), [&](const Event &s){
+		return g.isWriteRfBefore(s, e.prev());
+	});
+	return (rit == store_rend(addr)) ? 0 : std::distance(rit, store_rend(addr));
 }
 
 int MOCalculator::splitLocMOAfterHb(SAddr addr, const Event read)
 {
 	const auto &g = getGraph();
-	auto &locMO = getStoresToLoc(addr);
 
 	auto initRfs = g.getInitRfsAtLoc(addr);
-	for (auto &rf : initRfs) {
-		if (g.getEventLabel(rf)->getHbView().contains(read))
-			return 0;
-	}
+	if (std::any_of(initRfs.begin(), initRfs.end(), [&read,&g](const Event &rf){
+		return g.getEventLabel(rf)->getHbView().contains(read);
+	}))
+		return 0;
 
-	for (auto it = locMO.begin(); it != locMO.end(); ++it) {
-		if (g.isHbOptRfBefore(read, *it)) {
-			if (g.getEventLabel(*it)->getHbView().contains(read))
-				return std::distance(locMO.begin(), it);
-			else
-				return std::distance(locMO.begin(), it) + 1;
-		}
-	}
-	return locMO.size();
+	auto it = std::find_if(store_begin(addr), store_end(addr), [&](const Event &s){
+		return g.isHbOptRfBefore(read, s);
+	});
+	if (it == store_end(addr))
+		return std::distance(store_begin(addr), store_end(addr));
+	return (g.getEventLabel(*it)->getHbView().contains(read)) ?
+		std::distance(store_begin(addr), it) : std::distance(store_begin(addr), it) + 1;
 }
 
 int MOCalculator::splitLocMOAfter(SAddr addr, const Event e)
 {
 	const auto &g = getGraph();
-	auto &locMO = getStoresToLoc(addr);
-
-	for (auto it = locMO.begin(); it != locMO.end(); ++it) {
-		if (g.isHbOptRfBefore(e, *it))
-			return std::distance(locMO.begin(), it);
-	}
-	return locMO.size();
+	auto it = std::find_if(store_begin(addr), store_end(addr), [&](const Event &s){
+		return g.isHbOptRfBefore(e, s);
+	});
+	return (it == store_end(addr)) ? std::distance(store_begin(addr), store_end(addr)) :
+		std::distance(store_begin(addr), it);
 }
 
 std::vector<Event>
 MOCalculator::getCoherentStores(SAddr addr, Event read)
 {
 	auto &g = getGraph();
-	auto &locMO = getStoresToLoc(addr);
 	std::vector<Event> stores;
 
 	/*
@@ -247,7 +176,7 @@ MOCalculator::getCoherentStores(SAddr addr, Event read)
 	if (begO == 0)
 		stores.push_back(Event::getInitializer());
 	else
-		stores.push_back(*(locMO.begin() + begO - 1));
+		stores.push_back(*(store_begin(addr) + begO - 1));
 
 	/*
 	 * If the model supports out-of-order execution we have to also
@@ -255,53 +184,42 @@ MOCalculator::getCoherentStores(SAddr addr, Event read)
 	 * store, or some read that reads from a store.
 	 */
 	auto endO = (supportsOutOfOrder()) ? splitLocMOAfterHb(addr, read) :
-		std::distance(locMO.begin(), locMO.end());
-	stores.insert(stores.end(), locMO.begin() + begO, locMO.begin() + endO);
+		std::distance(store_begin(addr), store_end(addr));
+	stores.insert(stores.end(), store_begin(addr) + begO, store_begin(addr) + endO);
 	return stores;
 }
 
 std::vector<Event>
 MOCalculator::getMOOptRfAfter(const WriteLabel *sLab)
 {
-	auto ls = getMOAfter(sLab->getAddr(), sLab->getPos());
-	std::vector<Event> rfs;
+	std::vector<Event> after;
 
-	/*
-	 * We push the RFs to a different vector in order
-	 * not to invalidate the iterator
-	 */
-	for (auto it = ls.begin(); it != ls.end(); ++it) {
-		const EventLabel *lab = getGraph().getEventLabel(*it);
-		if (auto *wLab = llvm::dyn_cast<WriteLabel>(lab)) {
-			for (auto &l : wLab->getReadersList())
-				rfs.push_back(l);
-		}
-	}
-	std::move(rfs.begin(), rfs.end(), std::back_inserter(ls));
-	return ls;
+	std::for_each(succ_begin(sLab->getAddr(), sLab->getPos()),
+		      succ_end(sLab->getAddr(), sLab->getPos()), [&](const Event &w){
+			      auto *wLab = getGraph().getWriteLabel(w);
+			      after.push_back(wLab->getPos());
+			      after.insert(after.end(), wLab->readers_begin(), wLab->readers_end());
+	});
+	return after;
 }
 
 std::vector<Event>
 MOCalculator::getMOInvOptRfAfter(const WriteLabel *sLab)
 {
-	auto ls = getMOBefore(sLab->getAddr(), sLab->getPos());
-	std::vector<Event> rfs;
+	std::vector<Event> after;
 
-	/* First, we add the rfs of all the mo-before events */
-	for (auto it = ls.begin(); it != ls.end(); ++it) {
-		const EventLabel *lab = getGraph().getEventLabel(*it);
-		if (auto *wLab = llvm::dyn_cast<WriteLabel>(lab)) {
-			for (auto &l : wLab->getReadersList())
-				rfs.push_back(l);
-		}
-	}
-	std::move(rfs.begin(), rfs.end(), std::back_inserter(ls));
+	/* First, add (mo;rf?)-before */
+	std::for_each(pred_begin(sLab->getAddr(), sLab->getPos()),
+		      pred_end(sLab->getAddr(), sLab->getPos()), [&](const Event &w){
+			      auto *wLab = getGraph().getWriteLabel(w);
+			      after.push_back(wLab->getPos());
+			      after.insert(after.end(), wLab->readers_begin(), wLab->readers_end());
+	});
 
 	/* Then, we add the reader list for the initializer */
 	auto initRfs = getGraph().getInitRfsAtLoc(sLab->getAddr());
-	std::move(initRfs.begin(), initRfs.end(), std::back_inserter(ls));
-
-	return ls;
+	after.insert(after.end(), initRfs.begin(), initRfs.end());
+	return after;
 }
 
 std::vector<Event>
@@ -309,10 +227,9 @@ MOCalculator::getCoherentRevisits(const WriteLabel *sLab)
 {
 	const auto &g = getGraph();
 	auto ls = g.getRevisitable(sLab);
-	auto &locMO = getStoresToLoc(sLab->getAddr());
 
 	/* If this store is po- and mo-maximal then we are done */
-	if (!supportsOutOfOrder() && locMO.back() == sLab->getPos())
+	if (!supportsOutOfOrder() && isCoMaximal(sLab->getAddr(), sLab->getPos()))
 		return ls;
 
 	/* First, we have to exclude (mo;rf?;hb?;sb)-after reads */
@@ -368,17 +285,16 @@ MOCalculator::saveCoherenceStatus(const std::vector<std::unique_ptr<EventLabel> 
 
 		BUG_ON(before->contains(lab->getPos()));
 		auto *wLab = static_cast<const WriteLabel *>(lab.get());
-		auto &locMO = getStoresToLoc(wLab->getAddr());
-		auto moPos = std::find(locMO.begin(), locMO.end(), wLab->getPos());
+		auto moPos = std::find(store_begin(wLab->getAddr()), store_end(wLab->getAddr()), wLab->getPos());
 
 		/* This store must definitely be in this location's MO */
-		BUG_ON(moPos == locMO.end());
+		BUG_ON(moPos == store_end(wLab->getAddr()));
 
 		/* We need to find the previous MO store that is in before or
 		 * in the vector for which we are getting the predecessors */
-		decltype(locMO.crbegin()) predPos(moPos);
+		decltype(store_rbegin(wLab->getAddr())) predPos(moPos);
 		auto predFound = false;
-		for (auto rit = predPos; rit != locMO.rend(); ++rit) {
+		for (auto rit = predPos; rit != store_rend(wLab->getAddr()); ++rit) {
 			if (before->contains(*rit) ||
 			    std::find_if(labs.begin(), labs.end(),
 					 [&](const std::unique_ptr<EventLabel> &lab)
@@ -398,48 +314,28 @@ MOCalculator::saveCoherenceStatus(const std::vector<std::unique_ptr<EventLabel> 
 }
 #endif
 
-bool MOCalculator::isCoAfterRemoved(const ReadLabel *rLab, const WriteLabel *sLab,
-				    const EventLabel *lab)
+bool MOCalculator::isCoBeforeSavedPrefix(const BackwardRevisit &r, const EventLabel *lab)
 {
-	auto &g = getGraph();
-	if (!llvm::isa<WriteLabel>(lab) || g.isRMWStore(lab))
-		return false;
-
-
-	auto *wLab = llvm::dyn_cast<WriteLabel>(lab);
-	BUG_ON(!wLab);
-
-	return std::any_of(pred_begin(wLab->getAddr(), wLab->getPos()),
-			   pred_end(wLab->getAddr(), wLab->getPos()), [&](const Event &e){
-				   auto *eLab = g.getEventLabel(e);
-				   return g.revisitDeletesEvent(rLab, sLab, eLab) &&
-					   eLab->getStamp() < wLab->getStamp() &&
-					   eLab->getIndex() > wLab->getPPoRfView()[eLab->getThread()] &&
-					   !(g.isRMWStore(eLab) && eLab->getPos().prev() == rLab->getPos());
-			});
-}
-
-bool MOCalculator::isRbBeforeSavedPrefix(const ReadLabel *revLab, const WriteLabel *wLab,
-					 const EventLabel *lab)
-{
-	auto *rLab = llvm::dyn_cast<ReadLabel>(lab);
-	if (!rLab)
+	auto *mLab = llvm::dyn_cast<MemAccessLabel>(lab);
+	if (!mLab)
 		return false;
 
 	auto &g = getGraph();
-        auto v = g.getRevisitView(revLab, wLab);
-	return any_of(succ_begin(rLab->getAddr(), rLab->getRf()),
-		      succ_end(rLab->getAddr(), rLab->getRf()), [&](const Event &s){
+        auto v = g.getRevisitView(r);
+	auto w = llvm::isa<ReadLabel>(mLab) ? llvm::dyn_cast<ReadLabel>(mLab)->getRf() : mLab->getPos();
+	return any_of(succ_begin(mLab->getAddr(), w),
+		      succ_end(mLab->getAddr(), w), [&](const Event &s){
 			      auto *sLab = g.getEventLabel(s);
-			      return (v->contains(sLab->getPos()) &&
-				      rLab->getIndex() > sLab->getPPoRfView()[rLab->getThread()] &&
-				      sLab->getPos() != wLab->getPos());
+			      return v->contains(sLab->getPos()) &&
+				     mLab->getIndex() > sLab->getPPoRfView()[mLab->getThread()] &&
+				     sLab->getPos() != r.getRev();
 		      });
 }
 
-bool MOCalculator::coherenceSuccRemainInGraph(const ReadLabel *rLab, const WriteLabel *wLab)
+bool MOCalculator::coherenceSuccRemainInGraph(const BackwardRevisit &r)
 {
 	auto &g = getGraph();
+	auto *wLab = g.getWriteLabel(r.getRev());
 	if (g.isRMWStore(wLab))
 		return true;
 
@@ -448,38 +344,35 @@ bool MOCalculator::coherenceSuccRemainInGraph(const ReadLabel *rLab, const Write
 	if (succIt == succE)
 		return true;
 
-	auto *sLab = g.getEventLabel(*succIt);
-	return sLab->getStamp() <= rLab->getStamp() || g.getPrefixView(wLab->getPos()).contains(sLab->getPos());
+	return g.getRevisitView(r)->contains(*succIt);
 }
 
 bool MOCalculator::wasAddedMaximally(const EventLabel *lab)
 {
 	if (auto *mLab = llvm::dyn_cast<MemAccessLabel>(lab))
 		return mLab->wasAddedMax();
+	if (auto *oLab = llvm::dyn_cast<OptionalLabel>(lab))
+		return !oLab->isExpanded();
 	return true;
 }
 
-bool MOCalculator::inMaximalPath(const ReadLabel *rLab, const WriteLabel *wLab)
+bool MOCalculator::inMaximalPath(const BackwardRevisit &r)
 {
-	if (!coherenceSuccRemainInGraph(rLab, wLab))
+	if (!coherenceSuccRemainInGraph(r))
 		return false;
 
 	auto &g = getGraph();
-        auto &v = g.getPrefixView(wLab->getPos());
+        auto v = g.getRevisitView(r);
 
 	for (const auto *lab : labels(g)) {
-		if (lab->getStamp() < rLab->getStamp())
+		if ((lab->getPos() != r.getPos() && v->contains(lab->getPos())) ||
+		    g.prefixContainsSameLoc(r, lab) ||
+		    g.isOptBlockedRead(lab))
 			continue;
-		if (v.contains(lab->getPos()) || g.prefixContainsSameLoc(rLab, wLab, lab) ||
-		    g.isOptBlockedLock(lab)) {
-			if (lab->getPos() != wLab->getPos() && isCoAfterRemoved(rLab, wLab, lab))
-				return false;
-			continue;
-		}
 
-		if (isRbBeforeSavedPrefix(rLab, wLab, lab))
+		if (isCoBeforeSavedPrefix(r, lab))
 			return false;
-		if (g.hasBeenRevisitedByDeleted(rLab, wLab, lab))
+		if (g.hasBeenRevisitedByDeleted(r, lab))
 			return false;
 		if (!wasAddedMaximally(lab))
 			return false;
@@ -493,7 +386,7 @@ void MOCalculator::initCalc()
 	auto &coRelation = gm.getPerLocRelation(ExecutionGraph::RelationId::co);
 
 	coRelation.clear();
-	for (auto locIt = mo_.begin(); locIt != mo_.end(); locIt++) {
+	for (auto locIt = begin(); locIt != end(); locIt++) {
 		coRelation[locIt->first] = GlobalRelation(getStoresToLoc(locIt->first));
 		if (locIt->second.empty())
 			continue;
@@ -509,7 +402,7 @@ Calculator::CalculationResult MOCalculator::doCalc()
 	auto &gm = getGraph();
 	auto &coRelation = gm.getPerLocRelation(ExecutionGraph::RelationId::co);
 
-	for (auto locIt = mo_.begin(); locIt != mo_.end(); locIt++) {
+	for (auto locIt = begin(); locIt != end(); locIt++) {
 		if (!coRelation[locIt->first].isIrreflexive())
 			return Calculator::CalculationResult(false, false);
 	}
@@ -530,7 +423,7 @@ void MOCalculator::removeAfter(const VectorClock &preds)
 		}
 	}
 
-	for (auto it = mo_.begin(); it != mo_.end(); /* empty */) {
+	for (auto it = begin(); it != end(); /* empty */) {
 		it->second.erase(std::remove_if(it->second.begin(), it->second.end(),
 						[&](Event &e)
 						{ return !preds.contains(e); }),
@@ -539,7 +432,7 @@ void MOCalculator::removeAfter(const VectorClock &preds)
 		/* Should we keep this memory location lying around? */
 		if (!keep.count(it->first)) {
 			BUG_ON(!it->second.empty());
-			it = mo_.erase(it);
+			it = stores.erase(it);
 		} else {
 			++it;
 		}
@@ -548,8 +441,8 @@ void MOCalculator::removeAfter(const VectorClock &preds)
 
 bool MOCalculator::locContains(SAddr addr, Event e) const
 {
-	BUG_ON(mo_.count(addr) == 0);
+	BUG_ON(stores.count(addr) == 0);
 	return e == Event::getInitializer() ||
-	       std::any_of(mo_.at(addr).begin(), mo_.at(addr).end(),
-			   [&e](Event s){ return s == e; });
+		std::any_of(store_begin(addr), store_end(addr),
+			    [&e](Event s){ return s == e; });
 }
