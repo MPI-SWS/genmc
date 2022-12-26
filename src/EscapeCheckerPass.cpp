@@ -129,6 +129,12 @@ void EscapeInfo::calculate(llvm::Function &F, const VSet<Function *> &allocFuns,
 					if (!writesDynamicMemory(faii->getPointerOperand()))
 						escapePoints[i].push_back(faii);
 				}
+				/* We also consider loads as escape points if configured to do so
+				 * (e.g., to catch for-loop counters) */
+				if (canLoadsEscape()) {
+					if (auto *li = dyn_cast<LoadInst>(u))
+						escapePoints[i].push_back(li);
+				}
 			}
 		}
 	}
@@ -169,9 +175,11 @@ bool EscapeCheckerPass::runOnFunction(llvm::Function &F)
 	return false;
 }
 
-llvm::Pass *createEscapeCheckerPass()
+llvm::Pass *createEscapeCheckerPass(bool loadsEscape /* = true */)
 {
-	return new EscapeCheckerPass();
+	auto *p = new EscapeCheckerPass();
+	p->setLoadsEscape(loadsEscape);
+	return p;
 }
 
 char EscapeCheckerPass::ID = 42;

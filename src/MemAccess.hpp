@@ -24,6 +24,7 @@
 #include "config.h"
 #include "Error.hpp"
 
+#include <climits>
 #include <cstdint>
 
 /*******************************************************************************

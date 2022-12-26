@@ -21,9 +21,10 @@
 #ifndef __INTRINSIC_LOWERING_PASS_HPP__
 #define __INTRINSIC_LOWERING_PASS_HPP__
 
-#include <llvm/Pass.h>
 #include <llvm/Analysis/LoopPass.h>
 #include <llvm/CodeGen/IntrinsicLowering.h>
+#include <llvm/IR/BasicBlock.h>
+#include <llvm/Pass.h>
 
 class IntrinsicLoweringPass : public llvm::ModulePass {
 

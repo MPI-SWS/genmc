@@ -35,6 +35,7 @@ libgenmc_a_SOURCES = \
   Execution.cpp \
   ExecutionGraph.cpp ExecutionGraph.hpp \
   ExternalFunctions.cpp \
+  FunctionInlinerPass.cpp FunctionInlinerPass.hpp \
   GenMCDriver.cpp GenMCDriver.hpp \
   GraphBuilder.hpp \
   GraphIterators.hpp \
@@ -93,4 +94,4 @@ libgenmc_a_SOURCES = \
 AM_CXXFLAGS = -Wno-unknown-warning-option -DINCLUDE_DIR=\"$(pkgincludedir)/$(pkg)\" -DSRC_INCLUDE_DIR=\"$(abs_top_builddir)/include\"
 bin_PROGRAMS = genmc
 genmc_SOURCES = main.cpp
-genmc_LDADD   = libgenmc.a -lclangCodeGen -lclangFrontend -lclangFrontendTool -lclangDriver -lclangSerialization -lclangParse -lclangSema -lclangStaticAnalyzerFrontend -lclangStaticAnalyzerCheckers -lclangStaticAnalyzerCore -lclangAnalysis -lclangARCMigrate -lclangRewriteFrontend -lclangEdit -lclangAST -lclangASTMatchers -lclangLex -lclangBasic -lpthread
+genmc_LDADD   = libgenmc.a -lpthread

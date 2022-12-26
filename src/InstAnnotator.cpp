@@ -165,6 +165,30 @@ InstAnnotator::IRExprUP InstAnnotator::generateInstExpr(Instruction *curr)
 					       generateOperandExpr(cas->getCompareOperand()));
 	}
 
+	case Instruction::BitCast: {
+		return generateOperandExpr(curr->getOperand(0));
+	}
+
+	case Instruction::PtrToInt:
+	case Instruction::IntToPtr: {
+		auto *castinst = dyn_cast<CastInst>(curr);
+		auto *mod = curr->getParent()->getParent()->getParent();
+		auto &DL = mod->getDataLayout();
+		auto srcSize = DL.getTypeAllocSize(castinst->getSrcTy());
+		auto dstSize = DL.getTypeAllocSize(castinst->getDestTy());
+		if (srcSize > dstSize) {
+			return TruncExpr<Value *>::create(
+				castinst->getDestTy()->getPrimitiveSizeInBits(),
+				generateOperandExpr(castinst->getOperand(0)));
+		} else if (srcSize < dstSize) {
+			return ZExtExpr<Value *>::create(
+				castinst->getDestTy()->getPrimitiveSizeInBits(),
+				generateOperandExpr(castinst->getOperand(0)));
+		} else {
+			return generateOperandExpr(castinst->getOperand(0));
+		}
+	}
+
 	case Instruction::ICmp: {
 		llvm::CmpInst *cmpi = llvm::dyn_cast<llvm::CmpInst>(curr);
 		switch(cmpi->getPredicate()) {

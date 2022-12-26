@@ -29,12 +29,6 @@
 
 using namespace llvm;
 
-#ifdef LLVM_HAS_ATTRIBUTELIST
-# define AttributeList AttributeList
-#else
-# define AttributeList AttributeSet
-#endif
-
 bool declareInternal(Module &M, const std::string &name, Type *retTyp,
 		     const ArrayRef<Type *> &argTyps)
 {

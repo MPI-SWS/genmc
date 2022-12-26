@@ -69,6 +69,7 @@ public:
 	int unroll;
 	VSet<std::string> noUnrollFuns;
 	bool castElimination;
+	bool inlineFunctions;
 	bool loopJumpThreading;
 	bool spinAssume;
 	bool codeCondenser;

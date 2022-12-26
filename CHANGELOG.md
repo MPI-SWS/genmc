@@ -1,10 +1,31 @@
 # Changelog
 
-Notable changes to GenMC will be documented in this file. Note
-that this repository is only updated whenever a new version of GenMC
-is released.
+Notable changes to GenMC will be documented in this file. This
+repository is only updated whenever a new version of GenMC is
+released.
 
 ## [Unreleased]
+
+## [0.9] - 2022.12.26
+### Added
+
+- Better C++ code support
+- Performance optimizations
+- Faster `configure`
+- Support for LLVM-{14, 15}
+
+### Changed
+
+- GenMC now requires a C++14-compliant compiler
+
+### Removed
+
+- Support for LLVM-6.0
+- Dependency on libclang-dev
+
+### Fixes
+
+- Bug fixes
 
 ## [0.8] - 2022.02.22
 ### Added

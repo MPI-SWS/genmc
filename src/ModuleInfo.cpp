@@ -75,7 +75,7 @@ ModuleInfo::ModuleInfo(const llvm::Module &mod) : mod(mod), varInfo(), annotInfo
  */
 std::unique_ptr<ModuleInfo> ModuleInfo::clone(const llvm::Module &mod) const
 {
-	auto info = LLVM_MAKE_UNIQUE<ModuleInfo>(mod);
+	auto info = std::make_unique<ModuleInfo>(mod);
 
 	/* Copy variable information */
 	for (auto &kv : varInfo.globalInfo) {

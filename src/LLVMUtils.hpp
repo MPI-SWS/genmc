@@ -34,7 +34,7 @@
 #include <llvm/IR/CFG.h>
 #include <string>
 
-#ifdef LLVM_HAS_TERMINATORINST
+#if LLVM_VERSION_MAJOR < 8
  typedef llvm::TerminatorInst TerminatorInst;
 #else
  typedef llvm::Instruction TerminatorInst;
@@ -170,22 +170,9 @@ void foreachInBackPathTo(llvm::BasicBlock *from, llvm::BasicBlock *to, F&& fun)
  */
 
 /* Copy portions of LLVM code for older LLVM versions */
-#ifndef LLVM_HAVE_ELIMINATE_UNREACHABLE_BLOCKS
+#if LLVM_VERSION_MAJOR < 9
 
 using namespace llvm;
-
-#ifndef LLVM_HAVE_DF_ITERATOR_DEFAULT_SET
-template <typename NodeRef, unsigned SmallSize=8>
-struct df_iterator_default_set : public SmallPtrSet<NodeRef, SmallSize> {
-  typedef SmallPtrSet<NodeRef, SmallSize>  BaseSet;
-  typedef typename BaseSet::iterator iterator;
-  std::pair<iterator,bool> insert(NodeRef N) { return BaseSet::insert(N) ; }
-  template <typename IterT>
-  void insert(IterT Begin, IterT End) { BaseSet::insert(Begin,End); }
-
-  void completed(NodeRef) { }
-};
-#endif
 
 namespace llvm {
 	class DomTreeUpdater;
@@ -205,7 +192,7 @@ void DeleteDeadBlock(BasicBlock *BB, DomTreeUpdater *DTU = nullptr,
 bool EliminateUnreachableBlocks(Function &F, DomTreeUpdater *DTU = nullptr,
 				bool KeepOneInputPHIs = false);
 
-#endif /* !LLVM_HAVE_ELIMINATE_UNREACHABLE_BLOCKS */
+#endif /* LLVM_VERSION_MAJOR < 9 */
 
 void replaceUsesWithIf(llvm::Value *Old, llvm::Value *New, llvm::function_ref<bool(llvm::Use &U)> ShouldReplace);
 

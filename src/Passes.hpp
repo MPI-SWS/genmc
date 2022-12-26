@@ -116,7 +116,7 @@ llvm::Pass *createEliminateUnusedCodePass();
 /*
  * Collects possible escape points for a given function
  */
-llvm::Pass *createEscapeCheckerPass();
+llvm::Pass *createEscapeCheckerPass(bool loadsEscape = true);
 
 /*
  * Annotates confirming reads
@@ -137,5 +137,10 @@ llvm::Pass *createLocalSimplifyCFGPass();
  * Eliminates redundant instructions
  */
 llvm::Pass *createEliminateRedundantInstPass();
+
+/*
+ * Inlines all functions of a module
+ */
+llvm::ModulePass *createFunctionInlinerPass();
 
 #endif /* __PASSES_HPP__ */

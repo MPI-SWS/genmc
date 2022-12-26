@@ -38,11 +38,7 @@ public:
 
 protected:
 
-#ifdef LLVM_PASS_GETPASSNAME_IS_STRINGREF
-	virtual llvm::StringRef getPassName() const { return "LoopJumpThreadingPass"; } ;
-#else
-	virtual const char *getPassName() const { return "LoopJumpThreadingPass"; } ;
-#endif
+	virtual llvm::StringRef getPassName() const { return "LoopJumpThreadingPass"; }
 	virtual void getAnalysisUsage(llvm::AnalysisUsage &au) const;
 	virtual bool runOnLoop(llvm::Loop *l, llvm::LPPassManager &LPM);
 };

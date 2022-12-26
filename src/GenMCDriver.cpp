@@ -92,7 +92,7 @@ GenMCDriver::LocalState::LocalState(std::unique_ptr<ExecutionGraph> g, RevisitSe
 
 std::unique_ptr<GenMCDriver::LocalState> GenMCDriver::releaseLocalState()
 {
-	return LLVM_MAKE_UNIQUE<GenMCDriver::LocalState>(
+	return std::make_unique<GenMCDriver::LocalState>(
 		std::move(execGraph), std::move(revisitSet), std::move(workqueue),
 		getEE()->releaseLocalState(), isMootExecution, readToReschedule, threadPrios);
 }
@@ -117,7 +117,7 @@ GenMCDriver::SharedState::SharedState(std::unique_ptr<ExecutionGraph> g,
 
 std::unique_ptr<GenMCDriver::SharedState> GenMCDriver::getSharedState()
 {
-	return LLVM_MAKE_UNIQUE<GenMCDriver::SharedState>(
+	return std::make_unique<GenMCDriver::SharedState>(
 		std::move(execGraph), getEE()->getSharedState());
 }
 
@@ -375,7 +375,6 @@ void GenMCDriver::handleExecutionBeginning()
 
 	/* Then, set up thread prioritization and interpreter's state */
 	prioritizeThreads();
-	getEE()->setProgramState(llvm::ProgramState::Main);
 }
 
 void GenMCDriver::handleExecutionInProgress()
@@ -426,7 +425,8 @@ void GenMCDriver::checkHelpingCasAnnotation()
 			      "Unordered store to helping CAS location!\n");
 
 		/* Special case for the initializer (as above) */
-		if (hLab->getExpected() == EE->getLocInitVal(hLab->getAddr(), hLab->getAccess())) {
+		if (hLab->getAddr().isStatic() &&
+		    hLab->getExpected() == EE->getLocInitVal(hLab->getAddr(), hLab->getAccess())) {
 			auto rs = g.collectAllEvents([&](const EventLabel *lab){
 				auto *rLab = llvm::dyn_cast<ReadLabel>(lab);
 				return rLab && rLab->getAddr() == hLab->getAddr();
@@ -514,7 +514,6 @@ void GenMCDriver::handleRecoveryStart()
 	EE->createAddRecoveryThread(tid);
 
 	/* Finally, do all necessary preparations in the interpreter */
-	getEE()->setProgramState(llvm::ProgramState::Recovery);
 	getEE()->setupRecoveryRoutine(tid);
 	return;
 }
@@ -553,7 +552,7 @@ void GenMCDriver::halt(Status status)
 
 GenMCDriver::Result GenMCDriver::verify(std::shared_ptr<const Config> conf, std::unique_ptr<llvm::Module> mod)
 {
-	auto MI = LLVM_MAKE_UNIQUE<ModuleInfo>(*mod);
+	auto MI = std::make_unique<ModuleInfo>(*mod);
 
 	/* Prepare the module for verification */
 	LLVMModule::transformLLVMModule(*mod, *MI, conf);
@@ -736,9 +735,9 @@ void GenMCDriver::explore()
 		EE->reset();
 
 		/* Get main program function and run the program */
-		EE->runStaticConstructorsDestructors(false);
-		EE->runFunctionAsMain(EE->FindFunctionNamed(getConf()->programEntryFun.c_str()), {"prog"}, nullptr);
-		EE->runStaticConstructorsDestructors(true);
+		EE->runAsMain(getConf()->programEntryFun);
+		if (getConf()->persevere)
+			EE->runRecovery();
 
 		auto validExecution = true;
 		do {
@@ -770,6 +769,11 @@ bool GenMCDriver::isExecutionDrivenByGraph()
 bool GenMCDriver::inRecoveryMode() const
 {
 	return getEE()->getProgramState() == llvm::ProgramState::Recovery;
+}
+
+bool GenMCDriver::inReplay() const
+{
+	return getEE()->getExecState() == llvm::ExecutionState::Replay;
 }
 
 const EventLabel *GenMCDriver::getCurrentLabel() const
@@ -843,7 +847,7 @@ SVal GenMCDriver::getReadRetValueAndMaybeBlock(const ReadLabel *rLab)
 	auto res = getReadValue(rLab);
 	if (rLab->getRf().isBottom()) {
 		/* Bottom is an acceptable re-option only @ replay; block anyway */
-		BUG_ON(getEE()->getExecState() != llvm::ExecutionState::Replay);
+		BUG_ON(!inReplay());
 		thr.block(BlockageType::Error);
 	} else if (llvm::isa<BWaitReadLabel>(rLab) &&
 		   res != getBarrierInitValue(rLab->getAddr(), rLab->getAccess())) {
@@ -1514,7 +1518,7 @@ int GenMCDriver::visitThreadCreate(std::unique_ptr<ThreadCreateLabel> tcLab, con
 	/* If the thread does not exist in the graph, make an entry for it */
 	if (cid == (long) g.getNumThreads()) {
 		g.addNewThread();
-		BUG_ON(std::distance(EE->threads_begin(), EE->threads_end()) != g.getNumThreads());
+		BUG_ON(EE->getNumThreads() != g.getNumThreads());
 		auto symm = getConf()->symmetryReduction ?
 			getSymmetricTidSR(cid, lab->getPos(), calledFun, arg) : -1;
 		auto tsLab = ThreadStartLabel::create(Event(cid, 0), lab->getPos(), symm);
@@ -1857,7 +1861,7 @@ SVal GenMCDriver::visitLoad(std::unique_ptr<ReadLabel> rLab, const EventDeps *de
 	std::for_each(stores.begin(), stores.end() - 1, [&](const Event &s){
 		auto status = llvm::isa<MOCalculator>(g.getCoherenceCalculator()) ? false :
 			isCoMaximal(lab->getAddr(), s, true); /* MO messes with the status */
-		addToWorklist(LLVM_MAKE_UNIQUE<ForwardRevisit>(lab->getPos(), s, status));
+		addToWorklist(std::make_unique<ForwardRevisit>(lab->getPos(), s, status));
 	});
 	return retVal;
 }
@@ -1938,7 +1942,7 @@ void GenMCDriver::visitStore(std::unique_ptr<WriteLabel> wLab, const EventDeps *
 
 		/* Push the stack item */
 		if (!inRecoveryMode())
-			addToWorklist(LLVM_MAKE_UNIQUE<WriteRevisit>(
+			addToWorklist(std::make_unique<WriteRevisit>(
 					      lab->getPos(), std::distance(store_begin(g, lab->getAddr()), it)));
 	}
 
@@ -1952,7 +1956,7 @@ void GenMCDriver::visitStore(std::unique_ptr<WriteLabel> wLab, const EventDeps *
 		}
 	);
 
-	if (!inRecoveryMode())
+	if (!inRecoveryMode() && !inReplay())
 		calcRevisits(lab);
 
 	if (!cons)
@@ -2222,7 +2226,7 @@ void GenMCDriver::visitError(Event pos, Status s, const std::string &err /* = ""
 
 	/* If we this is a replay (might happen if one LLVM instruction
 	 * maps to many MC events), do not get into an infinite loop... */
-	if (getEE()->getExecState() == llvm::ExecutionState::Replay)
+	if (inReplay())
 		return;
 
 	/* If the execution that led to the error is not consistent, block */
@@ -2475,7 +2479,7 @@ std::unique_ptr<BackwardRevisit>
 GenMCDriver::constructBackwardRevisit(const ReadLabel *rLab, const WriteLabel *sLab)
 {
 	if (!getConf()->helper)
-		return LLVM_MAKE_UNIQUE<BackwardRevisit>(rLab, sLab);
+		return std::make_unique<BackwardRevisit>(rLab, sLab);
 
 	auto &g = getGraph();
 
@@ -2490,8 +2494,8 @@ GenMCDriver::constructBackwardRevisit(const ReadLabel *rLab, const WriteLabel *s
 	    !g.getPrefixView(pending).contains(rLab->getPos()) &&
 	    rLab->getStamp() < g.getEventLabel(pending)->getStamp() &&
 	    !g.getPrefixView(sLab->getPos()).contains(pending))
-		return LLVM_MAKE_UNIQUE<BackwardRevisitHELPER>(rLab->getPos(), sLab->getPos(), pending);
-	return LLVM_MAKE_UNIQUE<BackwardRevisit>(rLab, sLab);
+		return std::make_unique<BackwardRevisitHELPER>(rLab->getPos(), sLab->getPos(), pending);
+	return std::make_unique<BackwardRevisit>(rLab, sLab);
 }
 
 std::unique_ptr<ExecutionGraph>
@@ -2579,7 +2583,7 @@ bool GenMCDriver::calcRevisits(const WriteLabel *sLab)
 		auto write = sLab->getPos(); /* prefetch since we are gonna change state */
 
 		auto localState = releaseLocalState();
-		auto newState = LLVM_MAKE_UNIQUE<SharedState>(std::move(og), getEE()->getSharedState());
+		auto newState = std::make_unique<SharedState>(std::move(og), getEE()->getSharedState());
 
 		setSharedState(std::move(newState));
 
@@ -2828,7 +2832,7 @@ SVal GenMCDriver::visitDskRead(std::unique_ptr<DskReadLabel> drLab)
 
 	/* Push all the other alternatives choices to the Stack */
 	for (auto it = validStores.begin() + 1; it != validStores.end(); ++it)
-		addToWorklist(LLVM_MAKE_UNIQUE<ForwardRevisit>(lab->getPos(), *it));
+		addToWorklist(std::make_unique<ForwardRevisit>(lab->getPos(), *it));
 	return getDskWriteValue(validStores[0], lab->getAddr(), lab->getAccess());
 }
 
@@ -2942,7 +2946,7 @@ bool GenMCDriver::visitOptional(std::unique_ptr<OptionalLabel> lab)
 	auto *oLab = llvm::dyn_cast<OptionalLabel>(g.addOtherLabelToGraph(std::move(lab)));
 
 	if (oLab->isExpandable())
-		addToWorklist(LLVM_MAKE_UNIQUE<OptionalRevisit>(oLab->getPos()));
+		addToWorklist(std::make_unique<OptionalRevisit>(oLab->getPos()));
 	return false; /* should not be expanded yet */
 }
 
@@ -2983,9 +2987,15 @@ bool GenMCDriver::isWriteObservable(const WriteLabel *wLab)
 	if (mLab == nullptr)
 		return true;
 
-	for (auto j = mLab->getIndex() + 1; j < wLab->getIndex(); j++)
-		if (g.getEventLabel(Event(wLab->getThread(), j))->isAtLeastRelease())
+	for (auto j = mLab->getIndex() + 1; j < wLab->getIndex(); j++) {
+		auto *lab = g.getEventLabel(Event(wLab->getThread(), j));
+		if (lab->isAtLeastRelease())
 			return true;
+		/* The location must not be read (loop counter) */
+		if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab))
+			if (rLab->getAddr() == wLab->getAddr())
+				return true;
+	}
 	return false;
 }
 

@@ -219,7 +219,7 @@ static struct message_metadata *advance(struct message_metadata **queue,
 			next = NULL;
 		} else {
 			next = next_list(head);
-			__VERIFIER_assume(next);
+			__VERIFIER_assume((int) next);
 			/* while (!(next = next_list(head))) */
 			/* 	; */
 		}
@@ -245,7 +245,7 @@ static void remove_from_queue(struct message_metadata **queue,
 	} else {
 		struct message_metadata *next;
 		next = next_list(find);
-		__VERIFIER_assume(next);
+		__VERIFIER_assume((int) next);
 		/* while (!(next = next_list(find))) */
 		/* 	; */
 		if (next) {
@@ -272,7 +272,7 @@ static void remove_from_queue(struct message_metadata **queue,
 							 mo_rel, mo_rlx)) {
 				/* CAS failed, wait for find->next and then go bananas */
 				next = next_list(find);
-				__VERIFIER_assume(next);
+				__VERIFIER_assume((int) next);
 				/* while (!(next = next_list(find))) */
 				/* 	; */
 				prev->next = next;

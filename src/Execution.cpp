@@ -59,6 +59,12 @@ using namespace llvm;
 
 #define DEBUG_TYPE "interpreter"
 
+#if LLVM_VERSION_MAJOR < 11
+# define LLVM_VECTOR_TYPEID_CASES case llvm::Type::VectorTyID:
+# else
+# define LLVM_VECTOR_TYPEID_CASES case llvm::Type::FixedVectorTyID: case llvm::Type::ScalableVectorTyID:
+#endif
+
 // static cl::opt<bool> PrintVolatile("interpreter-print-volatile", cl::Hidden,
 //           cl::desc("make the interpreter print every volatile load and store"));
 
@@ -164,9 +170,9 @@ SAddr Interpreter::getFreshAddr(unsigned int size, int alignment, Storage s, Add
 	BUG_ON(alignment <= 0 || (alignment & (alignment - 1)) != 0);
 	switch (s) {
 	case Storage::ST_Automatic:
-		return alloctor.allocAutomatic(size, alignment, spc == AddressSpace::AS_Internal);
+		return dynState.alloctor.allocAutomatic(size, alignment, spc == AddressSpace::AS_Internal);
 	case Storage::ST_Heap:
-		return alloctor.allocHeap(size, alignment, spc == AddressSpace::AS_Internal);
+		return dynState.alloctor.allocHeap(size, alignment, spc == AddressSpace::AS_Internal);
 	case Storage::ST_Static: /* Cannot ask for fresh static addresses */
 	default:
 		BUG();
@@ -297,14 +303,14 @@ unsigned int Interpreter::getTypeSize(Type *typ) const
 
 void *Interpreter::getFileFromFd(int fd) const
 {
-	if (!fdToFile.inBounds(fd))
+	if (!dynState.fdToFile.inBounds(fd))
 		return nullptr;
-	return fdToFile[fd];
+	return dynState.fdToFile[fd];
 }
 
 void Interpreter::setFdToFile(int fd, void *fileAddr)
 {
-	fdToFile[fd] = fileAddr;
+	dynState.fdToFile[fd] = fileAddr;
 }
 
 void *Interpreter::getDirInode() const
@@ -314,7 +320,7 @@ void *Interpreter::getDirInode() const
 
 void *Interpreter::getInodeAddrFromName(const std::string &filename) const
 {
-	return nameToInodeAddr.at(filename);
+	return dynState.nameToInodeAddr.at(filename);
 }
 
 /* Should match include/pthread.h (or barrier/mutex/thread decls) */
@@ -1217,7 +1223,7 @@ void Interpreter::exitCalled(GenericValue GV) {
     ECStack().pop_back(); /* FIXME: Now assumes the user has properly used it */
   }
   runAtExitHandlers();
-  exit(GV.IntVal.zextOrTrunc(32).getZExtValue());
+  // exit(GV.IntVal.zextOrTrunc(32).getZExtValue());
 }
 
 /// Pop the last stack frame off of ECStack and then copy the result
@@ -1247,7 +1253,10 @@ void Interpreter::popStackAndReturnValueToCaller(Type *RetTy,
   //     memset(&ExitValue.Untyped, 0, sizeof(ExitValue.Untyped));
   //   }
   if (ECStack().empty()) {
-    driver->visitThreadFinish(ThreadFinishLabel::create(nextPos()));
+    if (getCurThr().isMain() && getProgramState() == ProgramState::Main)
+	    runAtExitHandlers();
+    if (getProgramState() != ProgramState::Dtors)
+      driver->visitThreadFinish(ThreadFinishLabel::create(nextPos()));
   } else {
     // If we have a previous stack frame, and we have a previous call,
     // fill in the return value...
@@ -1322,14 +1331,9 @@ void Interpreter::visitSwitchInst(SwitchInst &I) {
   // Check to see if any of the cases match...
   BasicBlock *Dest = nullptr;
   for (SwitchInst::CaseIt i = I.case_begin(), e = I.case_end(); i != e; ++i) {
-#ifdef LLVM_SWITCHINST_CASEIT_NEEDS_DEREF
-    auto &it = *i;
-#else
-    auto &it = i;
-#endif
-    GenericValue CaseVal = getOperandValue(it.getCaseValue(), SF);
+    GenericValue CaseVal = getOperandValue(i->getCaseValue(), SF);
     if (executeICMP_EQ(CondVal, CaseVal, ElTy).IntVal != 0) {
-      Dest = cast<BasicBlock>(it.getCaseSuccessor());
+      Dest = cast<BasicBlock>(i->getCaseSuccessor());
       break;
     }
   }
@@ -1392,7 +1396,7 @@ void Interpreter::SwitchToNewBasicBlock(BasicBlock *Dest, ExecutionContext &SF){
 void Interpreter::visitAllocaInst(AllocaInst &I) {
   ExecutionContext &SF = ECStack().back();
 
-  Type *Ty = I.getType()->getElementType();  // Type to be allocated
+  Type *Ty = I.getAllocatedType();  // Type to be allocated
 
   // Get the number of elements being allocated by the array...
   unsigned NumElements =
@@ -1409,7 +1413,12 @@ void Interpreter::visitAllocaInst(AllocaInst &I) {
 
   auto *info = getVarNameInfo(&I, Storage::ST_Automatic, AddressSpace::AS_User);
   SVal result = driver->visitMalloc(MallocLabel::create(nextPos(), MemToAlloc, info, I.getName().str()), &*deps,
-				    I.getAlignment(), Storage::ST_Automatic, AddressSpace::AS_User);
+#if LLVM_VERSION_MAJOR >= 11
+				    I.getAlign().value(),
+#else
+				    I.getAlignment(),
+#endif
+				    Storage::ST_Automatic, AddressSpace::AS_User);
 
   ECStack().back().Allocas.add((void *) result.get());
 
@@ -1430,11 +1439,7 @@ GenericValue Interpreter::executeGEPOperation(Value *Ptr, gep_type_iterator I,
   uint64_t Total = 0;
   for (; I != E; ++I) {
     updateDataDeps(getCurThr().id, SF.CurInst->getPrevNode(), I.getOperand());
-#ifdef LLVM_NEW_GEP_TYPE_ITERATOR_API
     if (StructType *STy = I.getStructTypeOrNull()) {
-#else
-    if (StructType *STy = dyn_cast<StructType>(*I)) {
-#endif
       const StructLayout *SLO = getDataLayout().getStructLayout(STy);
 
       const ConstantInt *CPU = cast<ConstantInt>(I.getOperand());
@@ -1454,11 +1459,7 @@ GenericValue Interpreter::executeGEPOperation(Value *Ptr, gep_type_iterator I,
         assert(BitWidth == 64 && "Invalid index type for getelementptr");
         Idx = (int64_t)IdxGV.IntVal.getZExtValue();
       }
-#ifdef LLVM_NEW_GEP_TYPE_ITERATOR_API
       Total += getDataLayout().getTypeAllocSize(I.getIndexedType()) * Idx;
-#else
-      Total += getDataLayout().getTypeAllocSize(cast<SequentialType>(*I)->getElementType()) * Idx;
-#endif
     }
   }
 
@@ -1593,7 +1594,7 @@ void Interpreter::visitAtomicCmpXchgInst(AtomicCmpXchgInst &I)
 			I.getSuccessOrdering(), nextPos(), ptr,		\
 			size, atyp, GV_TO_SVAL(cmpVal, typ),		\
 			GV_TO_SVAL(newVal, typ), getWriteAttr(I)), &*lDeps); \
-		cmpRes = ret == GV_TO_SVAL(cmpVal, typ);		\
+		cmpRes = ret == GV_TO_SVAL(cmpVal, typ).signExtendBottom(size * 8); \
 		if (!getCurThr().isBlocked() && cmpRes) {		\
 			auto sDeps = makeEventDeps(getDataDeps(getCurThr().id, I.getPointerOperand()), \
 						   getDataDeps(getCurThr().id, I.getNewValOperand()), \
@@ -1642,7 +1643,7 @@ SVal Interpreter::executeAtomicRMWOperation(SVal oldVal, SVal val, ASize size, A
 {
 	switch (op) {
 	case AtomicRMWInst::Xchg:
-		WARN_ON_ONCE(depTracker != nullptr, "unsupported-xchg-deps",
+		WARN_ON_ONCE(getDepTracker(), "unsupported-xchg-deps",
 			     "Atomic xchg support is experimental under dependency-tracking models!\n");
 		return val;
 	case AtomicRMWInst::Add:
@@ -1830,6 +1831,7 @@ void Interpreter::visitCallInstWrapper(CallInstWrapper CS) {
   GenericValue SRC = getOperandValue(SF.Caller.getCalledOperand(), SF);
   auto specialDeps = updateFunArgDeps(getCurThr().id, (Function *) GVTOP(SRC));
   callFunction((Function*)GVTOP(SRC), ArgVals, specialDeps);
+  updateInternalFunRetDeps(getCurThr().id, (Function *) GVTOP(SRC), &CS);
 }
 
 // auxiliary function for shift operations
@@ -3002,6 +3004,13 @@ void Interpreter::callThreadExit(Function *F, const std::vector<GenericValue> &A
 	popStackAndReturnValueToCaller(Type::getInt8PtrTy(F->getContext()), ArgVals[0]);
 }
 
+void Interpreter::callAtExit(Function *F, const std::vector<GenericValue> &ArgVals,
+			     const std::unique_ptr<EventDeps> &specialDeps)
+{
+	addAtExitHandler((Function*)GVTOP(ArgVals[0]));
+	returnValueToCaller(F->getReturnType(), INT_TO_GV(F->getReturnType(), 0));
+}
+
 void Interpreter::callMutexInit(Function *F, const std::vector<GenericValue> &ArgVals,
 				const std::unique_ptr<EventDeps> &specialDeps)
 {
@@ -3972,7 +3981,7 @@ void Interpreter::callReadFS(Function *F, const std::vector<GenericValue> &ArgVa
 	GenericValue fd = ArgVals[0];
 	GenericValue *buf = (GenericValue *) GVTOP(ArgVals[1]);
 	SVal count = ArgVals[2].IntVal.getLimitedValue();
-	Type *bufElemTyp = F->getFunctionType()->getParamType(1)->getPointerElementType();
+	Type *bufElemTyp = Type::getInt8Ty(F->getContext());
 	Type *intTyp = F->getFunctionType()->getParamType(0);
 	auto asize = getTypeSize(intTyp);
 	auto atyp = TYPE_TO_ATYPE(intTyp);
@@ -4168,7 +4177,7 @@ void Interpreter::callWriteFS(Function *F, const std::vector<GenericValue> &ArgV
 	GenericValue fd = ArgVals[0];
 	GenericValue *buf = (GenericValue *) GVTOP(ArgVals[1]);
 	SVal count = ArgVals[2].IntVal.getLimitedValue();
-	Type *bufElemTyp = F->getFunctionType()->getParamType(1)->getPointerElementType();
+	Type *bufElemTyp = Type::getInt8Ty(F->getContext());
 	Type *intTyp = F->getFunctionType()->getParamType(0);
 	auto asize = getTypeSize(intTyp);
 	auto atyp = TYPE_TO_ATYPE(intTyp);
@@ -4272,7 +4281,7 @@ void Interpreter::callPreadFS(Function *F, const std::vector<GenericValue> &ArgV
 	GenericValue *buf = (GenericValue *) GVTOP(ArgVals[1]);
 	SVal count = ArgVals[2].IntVal.getLimitedValue();
 	SVal offset = ArgVals[3].IntVal.getLimitedValue();
-	Type *bufElemTyp = F->getFunctionType()->getParamType(1)->getPointerElementType();
+	Type *bufElemTyp = Type::getInt8Ty(F->getContext());
 	Type *intTyp = F->getFunctionType()->getParamType(0);
 	Type *retTyp = F->getReturnType();
 
@@ -4313,7 +4322,7 @@ void Interpreter::callPwriteFS(Function *F, const std::vector<GenericValue> &Arg
 	GenericValue *buf = (GenericValue *) GVTOP(ArgVals[1]);
 	SVal count = ArgVals[2].IntVal.getLimitedValue();
 	SVal offset = ArgVals[3].IntVal.getLimitedValue();
-	Type *bufElemTyp = F->getFunctionType()->getParamType(1)->getPointerElementType();
+	Type *bufElemTyp = Type::getInt8Ty(F->getContext());
 	Type *intTyp = F->getFunctionType()->getParamType(0);
 	Type *retTyp = F->getReturnType();
 
@@ -4501,6 +4510,7 @@ void Interpreter::callInternalFunction(Function *F, const std::vector<GenericVal
 		CALL_INTERNAL_FUNCTION(ThreadCreate);
 		CALL_INTERNAL_FUNCTION(ThreadJoin);
 		CALL_INTERNAL_FUNCTION(ThreadExit);
+		CALL_INTERNAL_FUNCTION(AtExit);
 		CALL_INTERNAL_FUNCTION(MutexInit);
 		CALL_INTERNAL_FUNCTION(MutexLock);
 		CALL_INTERNAL_FUNCTION(MutexUnlock);
@@ -4612,11 +4622,7 @@ void Interpreter::callFunction(Function *F, const std::vector<GenericValue> &Arg
 
 std::string getFilenameFromMData(MDNode *node)
 {
-#ifdef LLVM_DILOCATION_IS_MDNODE
 	const llvm::DILocation &loc = static_cast<const llvm::DILocation&>(*node);
-#else
-	llvm::DILocation loc(node);
-#endif
 	llvm::StringRef file = loc.getFilename();
 	llvm::StringRef dir = loc.getDirectory();
 
@@ -4642,14 +4648,15 @@ void Interpreter::replayExecutionBefore(const VectorClock &before)
 	setProgramState(ProgramState::Main);
 
 	/* We have to replay all threads in order to get debug metadata */
-	threads[0].initSF = mainECStack.back();
 	for (auto i = 0u; i < before.size(); i++) {
 		auto &thr = getThrById(i);
-		thr.ECStack.clear();
-		thr.ECStack.push_back(thr.initSF);
+		if (thr.isMain())
+			thr.ECStack = mainECStack;
+		else
+			thr.ECStack = {thr.initSF};
 		thr.prefixLOC.clear();
 		thr.prefixLOC.resize(before[i] + 2); /* Grow since it can be accessed */
-		currentThread = i;
+		scheduleThread(i);
 		if (thr.threadFun == recoveryRoutine)
 			setProgramState(ProgramState::Recovery);
 		/* Make sure to refetch references within the loop (invalidation danger) */
@@ -4672,38 +4679,41 @@ void Interpreter::replayExecutionBefore(const VectorClock &before)
 			getCurThr().prefixLOC[snap + 1] = std::make_pair(line, file);
 
 			/* If the instruction maps to more than one events, we have to fill more spots */
-			for (auto i = snap + 2; i <= getCurThr().globalInstructions; i++)
+			for (auto i = snap + 2; i <= std::min((int) getCurThr().globalInstructions, before[i]); i++)
 				getCurThr().prefixLOC[i] = std::make_pair(line, file);
 		}
 	}
 }
 
-void Interpreter::runRecoveryRoutine()
-{
-	driver->handleRecoveryStart();
-	while (driver->scheduleNext()) {
-		ExecutionContext &SF = ECStack().back();
-		Instruction &I = *SF.CurInst++;
-		visit(I);
-	}
-	driver->handleRecoveryEnd();
-	return;
-}
-
 void Interpreter::run()
 {
-	mainECStack = ECStack();
-
-	driver->handleExecutionBeginning();
 	while (driver->scheduleNext()) {
 		driver->handleExecutionInProgress();
 		llvm::ExecutionContext &SF = ECStack().back();
 		llvm::Instruction &I = *SF.CurInst++;
 		visit(I);
 	}
-	driver->handleFinishedExecution();
-
-	if (checkPersistency)
-		runRecoveryRoutine();
 	return;
+}
+
+int Interpreter::runAsMain(const std::string &main)
+{
+	setupStaticCtorsDtors(true);
+	setupMain(FindFunctionNamed(main), {"prog"}, nullptr);
+	setupStaticCtorsDtors(false);
+
+	mainECStack = ECStack();
+	setProgramState(llvm::ProgramState::Main);
+	driver->handleExecutionBeginning();
+	run();
+	driver->handleFinishedExecution();
+	return dynState.ExitValue.IntVal.getZExtValue();
+}
+
+void Interpreter::runRecovery()
+{
+	setProgramState(llvm::ProgramState::Recovery);
+	driver->handleRecoveryStart();
+	run();
+	driver->handleRecoveryEnd();
 }

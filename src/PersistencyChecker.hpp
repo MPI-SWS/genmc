@@ -49,7 +49,7 @@ public:
 	bool isRecAcyclic();
 
 	std::unique_ptr<PersistencyChecker> clone(ExecutionGraph &g) {
-		return LLVM_MAKE_UNIQUE<PersistencyChecker>(g, blockSize);
+		return std::make_unique<PersistencyChecker>(g, blockSize);
 	}
 
 private:

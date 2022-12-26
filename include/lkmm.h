@@ -192,19 +192,19 @@ typedef atomic64_t  atomic_long_t;
 /* Not using __atomic in all definitions below (but rather _atomic) so
  * as to not clash with the compiler builtins */
 
-#define __VERIFIER_atomicrmw_noret() __VERIFIER_annotate_FAI(GENMC_KIND_NONVR)
-
 /* Non-value-returning atomics */
-#define __VERIFIER_fetch_add_noret(v, i, m) 	\
-do {						\
-	__VERIFIER_atomicrmw_noret();		\
-	atomic_fetch_add_explicit(v, i, m);	\
+#define __VERIFIER_fetch_add_noret(v, i, m) 		\
+do {							\
+	__VERIFIER_annotate_begin(GENMC_KIND_NONVR);	\
+	atomic_fetch_add_explicit(v, i, m);		\
+	__VERIFIER_annotate_end(GENMC_KIND_NONVR);	\
 } while(0)
 
-#define __VERIFIER_fetch_sub_noret(v, i, m) 	\
-do {						\
-	__VERIFIER_atomicrmw_noret();		\
-	atomic_fetch_sub_explicit(v, i, m);	\
+#define __VERIFIER_fetch_sub_noret(v, i, m) 		\
+do {							\
+	__VERIFIER_annotate_begin(GENMC_KIND_NONVR);	\
+	atomic_fetch_sub_explicit(v, i, m);		\
+	__VERIFIER_annotate_end(GENMC_KIND_NONVR);	\
 } while(0)
 
 #define _atomic_add(i, v, m) __VERIFIER_fetch_add_noret(&(v)->counter, i, m)

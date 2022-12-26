@@ -47,15 +47,10 @@
 
 using namespace llvm;
 
-#ifdef LLVM_HAVE_POST_DOMINATOR_TREE_WRAPPER_PASS
-# define POSTDOM_PASS PostDominatorTreeWrapperPass
-# define GET_POSTDOM_PASS() getAnalysis<POSTDOM_PASS>().getPostDomTree();
-#else
-# define POSTDOM_PASS PostDominatorTree
-# define GET_POSTDOM_PASS() getAnalysis<POSTDOM_PASS>();
-#endif
+#define POSTDOM_PASS PostDominatorTreeWrapperPass
+#define GET_POSTDOM_PASS() getAnalysis<POSTDOM_PASS>().getPostDomTree();
 
-#ifdef LLVM_INSERT_PREHEADER_FOR_LOOP_NEEDS_UPDATER
+#if LLVM_VERSION_MAJOR >= 9
 # define INSERT_PREHEADER_FOR_LOOP(L, DT, LI)			\
 	llvm::InsertPreheaderForLoop(L, DT, LI, nullptr, false)
 #else
@@ -215,11 +210,56 @@ bool isPHIRelatedToCASRes(const PHINode *phi, const SmallVector<const AtomicCmpX
 	return isPHIRelatedToCASRes(phi, cass, phiChain, related);
 }
 
+bool isPHIRelatedToLoad(const PHINode *curr,
+			Value *&loadPtr,
+			Optional<AtomicOrdering> &loadOrd,
+			SmallVector<const PHINode *, 4> &phiChain,
+			VSet<const PHINode *> &related)
+{
+	/* Check if we have already decided (or assumed) this phi is good */
+	if (related.count(curr) ||
+	    std::find(phiChain.begin(), phiChain.end(), curr) != phiChain.end())
+		return true;
+
+	for (Value *val : curr->incoming_values()) {
+		val = stripCasts(val);
+		if (auto *li = dyn_cast_or_null<LoadInst>(val)) {
+			if (loadPtr && !accessSameVariable(li->getPointerOperand(), loadPtr))
+				return false;
+			if (loadOrd.hasValue() &&
+			    !areSameLoadOrdering(li->getOrdering(), *loadOrd))
+				return false;
+			loadPtr = li->getPointerOperand();
+			loadOrd = li->getOrdering();
+		} else {
+			auto *phi = dyn_cast<PHINode>(val);
+			if (!phi)
+				return false;
+
+			phiChain.push_back(curr);
+			if(!isPHIRelatedToLoad(phi, loadPtr, loadOrd, phiChain, related))
+				return false;
+			phiChain.pop_back();
+		}
+	}
+	return true;
+}
+
+bool isPHIRelatedToLoad(const PHINode *phi)
+{
+	Value *loadPtr = nullptr;
+	Optional<AtomicOrdering> loadOrd;
+	VSet<const PHINode *> related;
+	SmallVector<const PHINode *, 4> phiChain;
+
+	return isPHIRelatedToLoad(phi, loadPtr, loadOrd, phiChain, related);
+}
+
 /*
- * This function checks whether a PHI node is tied to some CAS operation ('good' PHI).
+ * This function checks whether a PHI node is tied to some load or CAS ('good' PHI).
  * A 'good' PHI node has incoming values that are either 1) PHI nodes that have been
- * deemed 'good', 2) constants and results of CASes, or 3) loads at the same location
- * as some CAS and the compare operands of some CAS.
+ * deemed 'good', 2) constants and results of loads/CASes, or 3) loads at the same
+ * location as some CAS and the compare operands of some CAS.
  * To avoid circles between PHIs, whenever we try to see whether a PHI is good,
  * we keep the current path in <phiChain>; if a node is deemed good and the chain
  * is empty (i.e., it does not depend on another node being deemed good), it is
@@ -230,14 +270,16 @@ bool areBlockPHIsRelatedToLoopCASs(const BasicBlock *bb, Loop *l)
 	SmallVector<const AtomicCmpXchgInst *, 4> cass;
 
 	getLoopCASs(l, cass);
-	if (cass.empty())
-		return false;
-
-	for (auto iit = bb->begin(); auto phi = llvm::dyn_cast<llvm::PHINode>(iit); ++iit) {
-		if (!isPHIRelatedToCASCmp(phi, cass) && !isPHIRelatedToCASRes(phi, cass))
-			return false;
+	if (cass.empty()) {
+		return std::all_of(bb->phis().begin(), bb->phis().end(),
+				   [&](auto &phi){ return isPHIRelatedToLoad(&phi); });
 	}
-	return true;
+
+	return std::all_of(bb->phis().begin(), bb->phis().end(), [&](auto &phi){
+			return isPHIRelatedToCASCmp(&phi, cass) ||
+			       isPHIRelatedToCASRes(&phi, cass) ||
+			       isPHIRelatedToLoad(&phi);
+	});
 }
 
 /*
@@ -481,7 +523,8 @@ bool SpinAssumePass::isPathToHeaderLockZNE(BasicBlock *latch, Loop *l, Instructi
 			}
 		}
 		if (auto *phi = dyn_cast<PHINode>(&i)) {
-			phis.insert(phi);
+			if (phi->getParent() == l->getHeader()) /* PHIs in the body are OK */
+				phis.insert(phi);
 			return;
 		}
 		effects |= hasSideEffects(&i, &cleanSet);
@@ -566,49 +609,6 @@ void addSpinStartCall(Loop *l)
         auto *ci = CallInst::Create(startFun, {}, "", i);
 }
 
-void removeDisconnectedBlocks(Loop *l)
-{
-	bool done;
-
-	while (l) {
-		done = false;
-		while (!done) {
-			done = true;
-			VSet<BasicBlock*> hasPredecessor;
-
-			/*
-			 * We collect blocks with predecessors in l, and we also
-			 * search for BBs without successors in l
-			 */
-			for (auto it = l->block_begin(); done && it != l->block_end(); ++it) {
-				TerminatorInst *T = (*it)->getTerminator();
-				bool hasLoopSuccessor = false;
-
-				for(auto i = 0u; i < T->getNumSuccessors(); ++i) {
-					if(l->contains(T->getSuccessor(i))){
-						hasLoopSuccessor = true;
-						hasPredecessor.insert(T->getSuccessor(i));
-					}
-				}
-
-				if (!hasLoopSuccessor) {
-					done = false;
-					l->removeBlockFromLoop(*it);
-				}
-			}
-
-			/* Find BBs without predecessors in l */
-			for(auto it = l->block_begin(); done && it != l->block_end(); ++it){
-				if(hasPredecessor.count(*it) == 0) {
-					done = false;
-					l->removeBlockFromLoop(*it);
-				}
-			}
-		}
-		l = l->getParentLoop();
-	}
-}
-
 bool SpinAssumePass::runOnLoop(Loop *l, LPPassManager &lpm)
 {
 	auto *header = l->getHeader();
@@ -661,16 +661,7 @@ bool SpinAssumePass::runOnLoop(Loop *l, LPPassManager &lpm)
 	/* If the transformation applied did not apply in all backedges, this is indeed a loop */
 	if (!spinloop)
 		return modified;
-
-	removeDisconnectedBlocks(l);
-#ifdef LLVM_HAVE_LOOPINFO_ERASE
-	lpm.getAnalysis<LoopInfoWrapperPass>().getLoopInfo().erase(l);
-	lpm.markLoopAsDeleted(*l);
-#elif  LLVM_HAVE_LOOPINFO_MARK_AS_REMOVED
-	lpm.getAnalysis<LoopInfoWrapperPass>().getLoopInfo().markAsRemoved(l);
-#else
-	lpm.deleteLoopFromQueue(l);
-#endif
+	/* An actual spinloop: we used to remove it from the loop list but let's keep it */
 	return modified;
 }
 

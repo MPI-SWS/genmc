@@ -43,7 +43,6 @@ void MDataCollectionPass::getAnalysisUsage(llvm::AnalysisUsage &au) const
 	au.setPreservesAll();
 }
 
-#ifdef LLVM_HAS_GLOBALOBJECT_GET_METADATA
 void MDataCollectionPass::collectVarName(Module &M, unsigned int ptr, Type *typ,
 					 DIType *dit, std::string nameBuilder, NameInfo &info)
 {
@@ -109,21 +108,6 @@ void MDataCollectionPass::collectVarName(Module &M, unsigned int ptr, Type *typ,
 	}
 	return;
 }
-#else
-void MDataCollectionPass::collectVarName(unsigned int ptr, unsigned int typeSize,
-					 llvm::Type *typ, std::string nameBuilder, NameInfo &info)
-{
-	if (auto *AT = dyn_cast<ArrayType>(typ)) {
-		unsigned int elemTypeSize = typeSize / AT->getArrayNumElements();
-		for (auto i = 0u, s = 0u; s < typeSize; i++, s += elemTypeSize) {
-			std::string name = nameBuilder + "[" + std::to_string(i) + "]";
-			info.addOffsetInfo(ptr + s, name);
-		}
-	} else {
-		info.addOffsetInfo(ptr, nameBuilder);
-	}
-}
-#endif
 
 void MDataCollectionPass::collectGlobalInfo(GlobalVariable &v, Module &M)
 {
@@ -134,7 +118,6 @@ void MDataCollectionPass::collectGlobalInfo(GlobalVariable &v, Module &M)
 	auto &info = getGlobalInfo(&v);
 	info = std::make_shared<NameInfo>();
 
-#ifdef LLVM_HAS_GLOBALOBJECT_GET_METADATA
 	if (!v.getMetadata("dbg"))
 		return;
 
@@ -144,11 +127,7 @@ void MDataCollectionPass::collectGlobalInfo(GlobalVariable &v, Module &M)
 
 	/* Check whether it is a global pointer */
 	if (auto ditc = dyn_cast<DIType>(dit))
-		collectVarName(M, 0, v.getType()->getElementType(), ditc, "", *info);
-#else
-	auto typeSize = M.getDataLayout().getTypeAllocSize(v.getType()->getElementType());
-	collectVarName(0, typeSize, v.getType()->getElementType(), "", *info);
-#endif
+		collectVarName(M, 0, v.getValueType(), ditc, "", *info);
 	return;
 }
 
@@ -165,20 +144,12 @@ void MDataCollectionPass::collectLocalInfo(DbgDeclareInst *DD, Module &M)
 	auto &info = getLocalInfo(v);
 	info = std::make_shared<NameInfo>();
 
-	auto *vt = dyn_cast<PointerType>(v->getType());
-	BUG_ON(!vt);
-
-#ifdef LLVM_HAS_GLOBALOBJECT_GET_METADATA
 	/* Store alloca's metadata, in case it's used in memcpy */
 	allocaMData[v] = DD->getVariable();
 
 	auto dit = DD->getVariable()->getType();
 	if (auto ditc = dyn_cast<DIType>(dit))
-		collectVarName(M, 0, vt->getElementType(), ditc, "", *info);
-#else
-	auto typeSize = M.getDataLayout().getTypeAllocSize(vt->getElementType());
-	collectVarName(0, typeSize, vt->getElementType(), "", *info);
-#endif
+		collectVarName(M, 0, v->getAllocatedType(), ditc, "", *info);
 	return;
 }
 
@@ -206,18 +177,12 @@ void MDataCollectionPass::collectMemCpyInfo(MemCpyInst *mi, Module &M)
 	 */
 	auto *dst = dyn_cast<AllocaInst>(mi->getDest());
 	BUG_ON(!dst);
-	auto *dstTyp = dyn_cast<PointerType>(dst->getType());
 
-#ifdef LLVM_HAS_GLOBALOBJECT_GET_METADATA
 	if (allocaMData.count(dst) == 0)
 		return; /* We did our best, but couldn't get a name for it... */
 	auto dit = allocaMData[dst]->getType();
 	if (auto ditc = dyn_cast<DIType>(dit))
-		collectVarName(M, 0, dstTyp->getElementType(), ditc, "", *info);
-#else
-	auto typeSize = M.getDataLayout().getTypeAllocSize(dstTyp->getElementType());
-	collectVarName(0, typeSize, dstTyp->getElementType(), "", *info);
-#endif
+		collectVarName(M, 0, dst->getAllocatedType(), ditc, "", *info);
 	return;
 }
 
@@ -284,10 +249,16 @@ bool isSyscallWPathname(CallInst *CI)
 
 void MDataCollectionPass::initializeFilenameEntry(Value *v)
 {
-	if (auto *CE = dyn_cast<ConstantExpr>(v)) {
-		auto filename = dyn_cast<ConstantDataArray>(
-			dyn_cast<GlobalVariable>(CE->getOperand(0))->
-			getInitializer())->getAsCString().str();
+#if LLVM_VERSION_MAJOR < 15
+       if (auto *CE = dyn_cast<ConstantExpr>(v)) {
+               auto filename = dyn_cast<ConstantDataArray>(
+                       dyn_cast<GlobalVariable>(CE->getOperand(0))->
+                       getInitializer())->getAsCString().str();
+#else
+	if (auto *CE = dyn_cast<Constant>(v)) {
+		auto filename = dyn_cast<ConstantDataArray>(CE->getOperand(0))->
+			getAsCString().str();
+#endif
 		collectFilename(filename);
 	} else
 		ERROR("Non-constant expression in filename\n");

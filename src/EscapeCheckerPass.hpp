@@ -43,6 +43,11 @@ class EscapeInfo {
 public:
 	EscapeInfo() = default;
 
+	void setLoadsEscape(bool loadsEscape) { loadsEscape = loadsEscape; }
+
+	/* Whether we consider loads as escape points */
+	bool canLoadsEscape() const { return loadsEscape; }
+
 	/* (Re)-calculates the esacape points for each instruction of F */
 	void calculate(llvm::Function &F, const VSet<llvm::Function *> &allocFuns,
 		       llvm::AliasAnalysis &AA);
@@ -67,6 +72,7 @@ public:
 private:
 	using EPT = std::unordered_map<const llvm::Value *, std::vector<const llvm::Instruction *>>;
 
+	bool loadsEscape = true;
 	EPT escapePoints;
 	VSet<llvm::Instruction *> allocs;
 };
@@ -79,6 +85,8 @@ class EscapeCheckerPass : public llvm::FunctionPass {
 
 public:
 	EscapeCheckerPass() : llvm::FunctionPass(ID) {}
+
+	void setLoadsEscape(bool loadsEscape = true) { EI.setLoadsEscape(loadsEscape); }
 
 	bool runOnFunction(llvm::Function &F) override;
 	void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;

@@ -11,14 +11,14 @@ extern "C"
 /*
  * Blocks the current execution if the argument is false
  */
-void __VERIFIER_assume(int);
+void __VERIFIER_assume(int) __attribute__ ((__nothrow__));
 
 /*
  * Models a limited amount of non-determinism by returning
  * a pseudo-random sequence of integers. This sequence
  * is always the same per execution for each thread
  */
-int __VERIFIER_nondet_int(void);
+int __VERIFIER_nondet_int(void) __attribute__ ((__nothrow__));
 
 /*
  * Marker functions that can be used to mark the
@@ -41,9 +41,9 @@ int __VERIFIER_nondet_int(void);
  * NOTE: These should _not_ be used on top of the
  * automatic spin-assume transformation.
  */
-void __VERIFIER_loop_begin(void);
-void __VERIFIER_spin_start(void);
-void __VERIFIER_spin_end(int);
+void __VERIFIER_loop_begin(void) __attribute__ ((__nothrow__));
+void __VERIFIER_spin_start(void) __attribute__ ((__nothrow__));
+void __VERIFIER_spin_end(int) __attribute__ ((__nothrow__));
 
 /*
  * Marker function that denotes that a store is local.
@@ -52,8 +52,9 @@ void __VERIFIER_spin_end(int);
  */
 #define __VERIFIER_local_write(s)			\
 do {							\
-	__VERIFIER_annotate_write(GENMC_ATTR_LOCAL);	\
+	__VERIFIER_annotate_begin(GENMC_ATTR_LOCAL);	\
 	s;						\
+	__VERIFIER_annotate_end(GENMC_ATTR_LOCAL);	\
 } while (0)
 
 /*
@@ -62,8 +63,9 @@ do {							\
  */
 #define __VERIFIER_final_write(s)			\
 do {							\
-	__VERIFIER_annotate_write(GENMC_ATTR_FINAL);	\
+	__VERIFIER_annotate_begin(GENMC_ATTR_FINAL);	\
 	s;						\
+	__VERIFIER_annotate_end(GENMC_ATTR_FINAL);	\
 } while (0)
 
 /*
@@ -75,13 +77,15 @@ do {							\
  */
 #define __VERIFIER_helped_CAS(c)			\
 do {							\
-	__VERIFIER_annotate_CAS(GENMC_KIND_HELPED);	\
+	__VERIFIER_annotate_begin(GENMC_KIND_HELPED);	\
 	c;						\
+	__VERIFIER_annotate_end(GENMC_KIND_HELPED);	\
 } while (0)
 #define __VERIFIER_helping_CAS(c)			\
 do {							\
-	__VERIFIER_annotate_CAS(GENMC_KIND_HELPING);	\
+	__VERIFIER_annotate_begin(GENMC_KIND_HELPING);	\
 	c;						\
+	__VERIFIER_annotate_end(GENMC_KIND_HELPING);	\
 } while (0)
 
 
@@ -105,24 +109,32 @@ do {							\
  */
 #define __VERIFIER_speculative_read(c)			\
 ({							\
-	__VERIFIER_annotate_read(GENMC_KIND_SPECUL);	\
-	c;						\
+	__VERIFIER_annotate_begin(GENMC_KIND_SPECUL);	\
+	__auto_type __ret = c;				\
+	__VERIFIER_annotate_end(GENMC_KIND_SPECUL);	\
+	__ret;						\
 })
 #define __VERIFIER_confirming_read(c)			\
 ({							\
-	__VERIFIER_annotate_read(GENMC_KIND_CONFIRM);	\
-	c;						\
+	__VERIFIER_annotate_begin(GENMC_KIND_CONFIRM);	\
+	__auto_type __ret = c;				\
+	__VERIFIER_annotate_end(GENMC_KIND_CONFIRM);	\
+	__ret;						\
 })
 #define __VERIFIER_confirming_CAS(c)			\
 ({							\
-	__VERIFIER_annotate_CAS(GENMC_KIND_CONFIRM);	\
-	c;						\
+	__VERIFIER_annotate_begin(GENMC_KIND_CONFIRM);	\
+	__auto_type __ret = c;				\
+	__VERIFIER_annotate_end(GENMC_KIND_CONFIRM);	\
+	__ret;						\
 })
 
 #define __VERIFIER_final_CAS(c)				\
 ({							\
-	__VERIFIER_annotate_CAS(GENMC_ATTR_FINAL);	\
-	c;						\
+	__VERIFIER_annotate_begin(GENMC_ATTR_FINAL);	\
+	__auto_type __ret = c;				\
+	__VERIFIER_annotate_end(GENMC_ATTR_FINAL);	\
+	__ret;						\
 })
 
 
@@ -198,14 +210,14 @@ typedef __VERIFIER_hazptr_t __VERIFIER_hp_t;
  * by the user. This routine will run after each execution,
  * if the checker is run with the respective flags enabled
  */
-void __VERIFIER_recovery_routine(void);
+void __VERIFIER_recovery_routine(void) __attribute__ ((__nothrow__));
 
 /*
  * All the file opeartions before this barrier will
  * have persisted to memory when the recovery routine runs.
  * Should be used only once.
  */
-void __VERIFIER_pbarrier(void);
+void __VERIFIER_pbarrier(void) __attribute__ ((__nothrow__));
 
 #ifdef __cplusplus
 }

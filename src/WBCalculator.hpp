@@ -181,7 +181,7 @@ public:
 
 	/* FIXME: When copying coherence calcs, OOO should be decided based on G */
 	std::unique_ptr<Calculator> clone(ExecutionGraph &g) const override {
-		return LLVM_MAKE_UNIQUE<WBCalculator>(g, outOfOrder);
+		return std::make_unique<WBCalculator>(g, outOfOrder);
 	}
 
 	static bool classof(const CoherenceCalculator *cohTracker) {

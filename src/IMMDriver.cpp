@@ -33,9 +33,9 @@ IMMDriver::IMMDriver(std::shared_ptr<const Config> conf, std::unique_ptr<llvm::M
 	auto &g = getGraph();
 
 	/* IMM requires acyclicity checks for both PSC and AR */
-	g.addCalculator(LLVM_MAKE_UNIQUE<PSCCalculator>(g),
+	g.addCalculator(std::make_unique<PSCCalculator>(g),
 			ExecutionGraph::RelationId::psc, false);
-	g.addCalculator(LLVM_MAKE_UNIQUE<ARCalculator>(g),
+	g.addCalculator(std::make_unique<ARCalculator>(g),
 			ExecutionGraph::RelationId::ar, false);
 	return;
 }

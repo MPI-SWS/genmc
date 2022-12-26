@@ -30,6 +30,12 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/Transforms/Utils/Local.h>
 
+#if LLVM_VERSION_MAJOR < 15
+#define MAY_BE_MEM_DEPENDENT(i) mayBeMemoryDependent(i)
+#else
+#define MAY_BE_MEM_DEPENDENT(i) mayHaveNonDefUseDependency(i)
+#endif
+
 using namespace llvm;
 
 void EliminateUnusedCodePass::getAnalysisUsage(AnalysisUsage &AU) const
@@ -39,7 +45,7 @@ void EliminateUnusedCodePass::getAnalysisUsage(AnalysisUsage &AU) const
 
 bool isEliminable(Instruction *i)
 {
-	return !mayBeMemoryDependent(*i) && !i->isTerminator();
+	return !MAY_BE_MEM_DEPENDENT(*i) && !i->isTerminator();
 }
 
 static bool eliminateUnusedCode(Function &F)

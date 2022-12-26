@@ -24,6 +24,7 @@
 #include "LLVMUtils.hpp"
 #include "InterpreterEnumAPI.hpp"
 
+#include <llvm/Analysis/PostDominators.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/Function.h>
@@ -33,139 +34,119 @@
 
 using namespace llvm;
 
+#define POSTDOM_PASS PostDominatorTreeWrapperPass
+#define GET_POSTDOM_PASS() getAnalysis<POSTDOM_PASS>().getPostDomTree();
+
 void EliminateAnnotationsPass::getAnalysisUsage(AnalysisUsage &AU) const
 {
+	AU.addRequired<DominatorTreeWrapperPass>();
+	AU.addRequired<POSTDOM_PASS>();
 	AU.setPreservesAll();
 }
 
-#define DEFINE_IS_ANNOTATION_FUNCTION(_name)		\
-bool is ## _name ## Annotation(Instruction *i)		\
-{							\
-	auto *ci = llvm::dyn_cast<CallInst>(i);		\
-	if (!ci)					\
-		return false;				\
-							\
-	auto name = getCalledFunOrStripValName(*ci);	\
-	return isInternalFunction(name) &&		\
-	       internalFunNames.at(name) == InternalFunctions::FN_Annotate ## _name; \
-}
-
-DEFINE_IS_ANNOTATION_FUNCTION(Read);
-DEFINE_IS_ANNOTATION_FUNCTION(Write);
-DEFINE_IS_ANNOTATION_FUNCTION(Cas);
-DEFINE_IS_ANNOTATION_FUNCTION(Fai);
-
-bool eliminateCASAnnotation(CallInst *ci, VSet<Instruction *> &toDelete)
+bool isAnnotationBegin(Instruction *i)
 {
+	auto *ci = llvm::dyn_cast<CallInst>(i);
 	if (!ci)
 		return false;
 
-	/* Get the instruction we will be annotating */
-	Instruction *casi = ci;
-	while (casi && !llvm::isa<AtomicCmpXchgInst>(casi))
-		casi = casi->getNextNode();
-	ERROR_ON(!llvm::isa<AtomicCmpXchgInst>(casi), "Misuse of helped/helping CAS annotation!\n");
+	auto name = getCalledFunOrStripValName(*ci);
+	return isInternalFunction(name) &&
+		internalFunNames.at(name) == InternalFunctions::FN_AnnotateBegin;
+}
 
-	/* Gather annotation info */
-	auto *funArg = llvm::dyn_cast<ConstantInt>(&*ci->getOperand(0));
+bool isAnnotationEnd(Instruction *i)
+{
+	auto *ci = llvm::dyn_cast<CallInst>(i);
+	if (!ci)
+		return false;
+
+	auto name = getCalledFunOrStripValName(*ci);
+	return isInternalFunction(name) &&
+		internalFunNames.at(name) == InternalFunctions::FN_AnnotateEnd;
+}
+
+
+uint64_t getAnnotationValue(CallInst *ci)
+{
+	auto *funArg = llvm::dyn_cast<ConstantInt>(ci->getOperand(0));
 	BUG_ON(!funArg);
-	auto casType = funArg->getValue().getLimitedValue();
+	return funArg->getValue().getLimitedValue();
+}
 
-	/* Mark the instruction as "to be deleted" */
-	toDelete.insert(ci);
+bool annotateInstructions(CallInst *begin, CallInst *end)
+{
+	if (!begin || !end)
+		return false;
 
-	/* Annotate the CAS */
-	annotateInstruction(casi, "genmc.attr", casType);
+	auto annotType = getAnnotationValue(begin);
+	auto beginFound = false;
+	auto endFound = false;
+	unsigned opcode = 0; /* no opcode == 0 in LLVM */
+	foreachInBackPathTo(end->getParent(), begin->getParent(), [&](Instruction &i){
+		/* wait until we find the end (e.g., if in same block) */
+		if (!endFound) {
+			endFound |= (dyn_cast<CallInst>(&i) == end);
+			return;
+		}
+		/* check until we find the begin; only deal with atomic insts */
+		if (endFound && !beginFound && i.isAtomic() && !isa<FenceInst>(i)) {
+			if (!opcode)
+				opcode = i.getOpcode();
+			BUG_ON(opcode != i.getOpcode()); /* annotations across paths must match */
+			annotateInstruction(&i, "genmc.attr", annotType);
+		}
+		/* stop when the begin is found; reset vars for next path */
+		if (!beginFound) {
+			beginFound |= (dyn_cast<CallInst>(&i) == begin);
+			if (beginFound)
+				beginFound = endFound = false;
+		}
+	});
 	return true;
 }
 
-bool eliminateFAIAnnotation(CallInst *ci, VSet<Instruction *> &toDelete)
+CallInst *findMatchingEnd(CallInst *begin, const std::vector<CallInst *> &ends,
+			  DominatorTree &DT, PostDominatorTree &PDT)
 {
-	if (!ci)
-		return false;
-
-	/* Get the instruction we will be annotating */
-	Instruction *faii = ci;
-	while (faii && !llvm::isa<AtomicRMWInst>(faii))
-		faii = faii->getNextNode();
-	ERROR_ON(!llvm::isa<AtomicRMWInst>(faii), "Badly annotated FAI!\n");
-
-	/* Gather annotation info */
-	auto *funArg = llvm::dyn_cast<ConstantInt>(&*ci->getOperand(0));
-	BUG_ON(!funArg);
-	auto faiType = funArg->getValue().getLimitedValue();
-
-	/* Mark the instruction as "to be deleted" */
-	toDelete.insert(ci);
-
-	/* Annotate the FAI */
-	annotateInstruction(faii, "genmc.attr", faiType);
-	return false;
-}
-
-bool eliminateReadAnnotation(CallInst *ci, VSet<Instruction *> &toDelete)
-{
-	if (!ci)
-		return false;
-
-	/* Get the instruction we will be annotating */
-	Instruction *li = ci;
-	while (li && (!isa<LoadInst>(li) || !li->isAtomic()))
-		li = li->getNextNode();
-	ERROR_ON(!llvm::isa<LoadInst>(li), "Badly annotated read!\n");
-
-	/* Gather annotation info */
-	auto *funArg = llvm::dyn_cast<ConstantInt>(&*ci->getOperand(0));
-	BUG_ON(!funArg);
-	auto readType = funArg->getValue().getLimitedValue();
-
-	/* Mark the instruction as "to be deleted" */
-	toDelete.insert(ci);
-
-	/* Annotate the read */
-	annotateInstruction(li, "genmc.attr", readType);
-	return false;
-}
-
-bool eliminateWriteAnnotation(CallInst *ci, VSet<Instruction *> &toDelete)
-{
-	if (!ci)
-		return false;
-
-	/* Get the instruction we will be annotating */
-	Instruction *li = ci;
-	while (li && (!isa<StoreInst>(li) || !li->isAtomic()))
-		li = li->getNextNode();
-	ERROR_ON(!li || !llvm::isa<StoreInst>(li), "Badly annotated store!\n");
-
-	/* Gather annotation info */
-	auto *funArg = llvm::dyn_cast<ConstantInt>(&*ci->getOperand(0));
-	BUG_ON(!funArg);
-	auto writeType = funArg->getValue().getLimitedValue();
-
-	/* Mark the instruction as "to be deleted" */
-	toDelete.insert(ci);
-
-	/* Annotate the write */
-	annotateInstruction(li, "genmc.attr", writeType);
-	return false;
+	auto it = std::find_if(ends.begin(), ends.end(), [&](auto *ei){
+		return getAnnotationValue(begin) == getAnnotationValue(ei) &&
+			DT.dominates(begin, ei) &&
+			PDT.dominates(ei->getParent(), begin->getParent()) &&
+			std::none_of(ends.begin(), ends.end(), [&](auto *ei2){
+				return ei != ei2 &&
+					DT.dominates(begin, ei2) &&
+					PDT.dominates(ei2->getParent(), begin->getParent()) &&
+					DT.dominates(ei2, ei);
+			});
+	});
+	BUG_ON(it == ends.end());
+	return *it;
 }
 
 bool EliminateAnnotationsPass::runOnFunction(Function &F)
 {
-	bool changed = false;
+	std::vector<CallInst *> begins, ends;
+
+	std::for_each(inst_begin(F), inst_end(F), [&](auto &i){
+		if (isAnnotationBegin(&i))
+			begins.push_back(dyn_cast<CallInst>(&i));
+		else if (isAnnotationEnd(&i))
+			ends.push_back(dyn_cast<CallInst>(&i));
+	});
+
+	auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+	auto &PDT = GET_POSTDOM_PASS();
 	VSet<Instruction *> toDelete;
 
-	for (auto I = inst_begin(F), E = inst_end(F); I != E; ++I) {
-		if (isCasAnnotation(&*I))
-			changed |= eliminateCASAnnotation(llvm::dyn_cast<CallInst>(&*I), toDelete);
-		else if (isFaiAnnotation(&*I))
-			changed |= eliminateFAIAnnotation(llvm::dyn_cast<CallInst>(&*I), toDelete);
-		else if (isReadAnnotation(&*I))
-			changed |= eliminateReadAnnotation(llvm::dyn_cast<CallInst>(&*I), toDelete);
-		else if (isWriteAnnotation(&*I))
-			changed |= eliminateWriteAnnotation(llvm::dyn_cast<CallInst>(&*I), toDelete);
-	}
+	auto changed = false;
+	std::for_each(begins.begin(), begins.end(), [&](auto *bi){
+		auto *ei = findMatchingEnd(bi, ends, DT, PDT);
+		BUG_ON(!ei);
+		changed |= annotateInstructions(bi, ei);
+		toDelete.insert(bi);
+		toDelete.insert(ei);
+	});
 
 	for (auto *i : toDelete) {
 		i->eraseFromParent();

@@ -44,6 +44,34 @@ bool isNonTrivialUser(User *u, PHINode *criticalPHI)
 				 [criticalPHI](User *us){ return us != criticalPHI; });
 }
 
+bool isCriticalPHIUsedTrivially(Loop *l, PHINode *criticalPHI)
+{
+	return std::none_of(criticalPHI->user_begin(), criticalPHI->user_end(), [&](User *u){
+			auto *p = dyn_cast<Instruction>(u)->getParent();
+			return (inLoopBody(l, p) && isNonTrivialUser(u, criticalPHI)) ||
+				(p == l->getHeader() &&
+				 std::any_of(criticalPHI->incoming_values().begin(),
+					     criticalPHI->incoming_values().end(),
+					     [u](Value *in){ return u == in; }));
+		});
+}
+
+bool areNonCriticalPHIsUsedInBody(Loop *l, PHINode *criticalPHI)
+{
+	for (auto &phi : l->getHeader()->phis()) {
+		if (&phi == criticalPHI)
+			continue;
+		for (auto *u : phi.users()) {
+			auto *ui = dyn_cast<Instruction>(u);
+			if (!ui)
+				continue;
+			if (inLoopBody(l, ui->getParent()))
+				return true;
+		}
+	}
+	return false;
+}
+
 /*
  * Returns true if the header PHIs are used in the body in a "harmless" manner.
  * Only the criticalPHI is allowed to have uses within the body, and these uses
@@ -51,27 +79,18 @@ bool isNonTrivialUser(User *u, PHINode *criticalPHI)
  * are OK because if we prove that the header always jumps to the body,
  * then these uses can be replaced with the initial value.
  */
-bool loopBodyUsesHeaderPHIsNonTrivially(Loop *l, PHINode *criticalPHI)
+bool loopUsesHeaderPHIsTrivially(Loop *l, PHINode *criticalPHI)
 {
-	auto *h = l->getHeader();
-	for (auto iit = h->begin(); auto *phi = dyn_cast<PHINode>(&*iit); ++iit) {
-		for (auto *u : phi->users()) {
-			if (auto *ui = dyn_cast<Instruction>(u)) {
-				if (inLoopBody(l, ui->getParent())) {
-					if (phi != criticalPHI || isNonTrivialUser(u, criticalPHI))
-						return true;
-				}
-			}
-		}
-	}
-	return false;
+	return isCriticalPHIUsedTrivially(l, criticalPHI) &&
+	       !areNonCriticalPHIsUsedInBody(l, criticalPHI);
 }
 
 PHINode *getPHIConstEntryValueUsedInCond(Loop *l)
 {
 	for (auto iit = l->getHeader()->begin(); auto phi = dyn_cast<PHINode>(iit); ++iit) {
 		for (auto &v : phi->incoming_values()) {
-			if (isa<ConstantInt>(v) && phi->getIncomingBlock(v) == l->getLoopPredecessor() &&
+			if (isa<ConstantInt>(v) &&
+			    phi->getIncomingBlock(v) == l->getLoopPredecessor() &&
 			    isDependentOn(l->getHeader()->getTerminator(), phi)) {
 				return phi;
 			}
@@ -96,7 +115,9 @@ bool entryAlwaysJumpsToBody(Loop *l)
 {
 	/* Make sure that the header (conditionally) jumps at the body */
 	auto *h = l->getHeader();
-	if (std::none_of(succ_begin(h), succ_end(h), [&](BasicBlock *bb){ return inLoopBody(l, bb); }))
+	if (std::none_of(succ_begin(h), succ_end(h), [&](BasicBlock *bb){
+		return inLoopBody(l, bb);
+	}))
 		return false;
 
 	/* Get the expression that jumps from the header to the body.. */
@@ -104,7 +125,8 @@ bool entryAlwaysJumpsToBody(Loop *l)
 
 	/* ...and check whether it always evaluates to true */
 	size_t numSeen;
-	auto res = SExprEvaluator<Value *>().evaluate(e.get(), SExprEvaluator<Value *>::VMap(), &numSeen);
+	auto res = SExprEvaluator<Value *>().evaluate(
+		e.get(), SExprEvaluator<Value *>::VMap(), &numSeen);
 	return (numSeen == 0) && res.getBool();
 }
 
@@ -118,7 +140,7 @@ bool invertLoop(Loop *l, PHINode *criticalPHI)
 		return false;
 
 	/* If header's Φ nodes are used in the loop body non-trivially, skip...*/
-	if (loopBodyUsesHeaderPHIsNonTrivially(l, criticalPHI))
+	if (!loopUsesHeaderPHIsTrivially(l, criticalPHI))
 		return false;
 
 	/*
@@ -152,7 +174,8 @@ bool invertLoop(Loop *l, PHINode *criticalPHI)
 
 	/* Set preheader's successor to the loop body */
 	auto phJmpIdx = (phbi->getSuccessor(0) == h) ? 0 : 1;
-	auto *b = (inLoopBody(l, hbi->getSuccessor(0))) ? hbi->getSuccessor(0) : hbi->getSuccessor(1);
+	auto *b = (inLoopBody(l, hbi->getSuccessor(0))) ?
+		hbi->getSuccessor(0) : hbi->getSuccessor(1);
 	phbi->setSuccessor(phJmpIdx, b);
 
 	/* Actually change the header */

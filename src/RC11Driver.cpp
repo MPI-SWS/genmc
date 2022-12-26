@@ -33,7 +33,7 @@ RC11Driver::RC11Driver(std::shared_ptr<const Config> conf, std::unique_ptr<llvm:
 	auto &g = getGraph();
 
 	/* RC11 requires the calculation of PSC */
-	g.addCalculator(LLVM_MAKE_UNIQUE<PSCCalculator>(g),
+	g.addCalculator(std::make_unique<PSCCalculator>(g),
 			ExecutionGraph::RelationId::psc, false);
 	return;
 }

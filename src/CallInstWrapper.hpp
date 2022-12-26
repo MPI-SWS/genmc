@@ -22,10 +22,12 @@
 #define __CALL_INST_WRAPPER_HPP__
 
 #include "config.h"
-#ifdef LLVM_HAS_CALLSITE
+#include <llvm/IR/Instructions.h>
+
+#if LLVM_VERSION_MAJOR < 11
 #include <llvm/IR/CallSite.h>
 #endif
-#include <llvm/IR/Instructions.h>
+
 
 using namespace llvm;
 
@@ -36,7 +38,7 @@ using namespace llvm;
  * boils down to either llvm::CallSite or llvm::CallBase.
  */
 
-#ifdef LLVM_HAS_CALLSITE
+#if LLVM_VERSION_MAJOR < 11
 class CallInstWrapper {
 
 public:

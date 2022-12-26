@@ -46,14 +46,8 @@ public:
 
 protected:
 
-#ifdef LLVM_HAS_GLOBALOBJECT_GET_METADATA
 	void collectVarName(llvm::Module &M, unsigned int ptr, llvm::Type *typ,
 			    llvm::DIType *dit, std::string nameBuilder, NameInfo &names);
-#else
-	void collectVarName(unsigned int ptr, unsigned int typeSize,
-			    llvm::Type *typ, std::string nameBuilder, NameInfo &names);
-
-#endif
 
 	/* Collects name info for a global variable */
 	void collectGlobalInfo(llvm::GlobalVariable &v, llvm::Module &M);

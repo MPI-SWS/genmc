@@ -81,6 +81,9 @@
 #endif
 #endif
 
+#define LLVM_SYS_MUTEX_LOCK_FN lock
+#define LLVM_SYS_MUTEX_UNLOCK_FN unlock
+
 using namespace llvm;
 
 static ManagedStatic<sys::Mutex> FunctionsLock;
@@ -314,11 +317,7 @@ Interpreter::callExternalFunction(Function *F,
   FunctionsLock->LLVM_SYS_MUTEX_UNLOCK_FN();
 
   GenericValue Result;
-#ifdef LLVM_EXECUTIONENGINE_DATALAYOUT_PTR
-  const llvm::DataLayout *DL = getDataLayout();
-#else
   const llvm::DataLayout *DL = &getDataLayout();
-#endif
   if (RawFn != 0 && ffiInvoke(RawFn, F, ArgVals, DL, Result))
     return Result;
 #endif // USE_LIBFFI

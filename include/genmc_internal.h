@@ -65,92 +65,94 @@ struct __VERIFIER_file __genmc __genmc_dummy_file;
 
 /* assert */
 
-extern void __VERIFIER_assert_fail(const char *, const char *, int);
+extern void __VERIFIER_assert_fail(const char *, const char *, int) __attribute__ ((__nothrow__));
 
 
 /* stdlib */
 
-extern void __VERIFIER_free(void *);
+extern void __VERIFIER_free(void *) __attribute__ ((__nothrow__));
 
-extern void *__VERIFIER_malloc(size_t);
+extern void *__VERIFIER_malloc(size_t) __attribute__ ((__nothrow__));
 
-extern void *__VERIFIER_malloc_aligned(size_t, size_t);
+extern void *__VERIFIER_malloc_aligned(size_t, size_t) __attribute__ ((__nothrow__));
+
+extern int __VERIFIER_atexit(void (*func)(void)) __attribute__ ((__nothrow__));
 
 
 /* fcntl */
 
-extern int __VERIFIER_openFS (const char *__file, int __oflag, mode_t __mode);
+extern int __VERIFIER_openFS (const char *__file, int __oflag, mode_t __mode) __attribute__ ((__nothrow__));
 
-extern int __VERIFIER_creatFS (const char *__file, mode_t __mode);
+extern int __VERIFIER_creatFS (const char *__file, mode_t __mode) __attribute__ ((__nothrow__));
 
-extern int __VERIFIER_renameFS (const char *__old, const char *__new);
+extern int __VERIFIER_renameFS (const char *__old, const char *__new) __attribute__ ((__nothrow__));
 
 
 /* unistd */
 
-extern __off_t __VERIFIER_lseekFS (int __fd, __off_t __offset, int __whence);
+extern __off_t __VERIFIER_lseekFS (int __fd, __off_t __offset, int __whence) __attribute__ ((__nothrow__));
 
-extern int __VERIFIER_closeFS (int __fd);
+extern int __VERIFIER_closeFS (int __fd) __attribute__ ((__nothrow__));
 
-extern ssize_t __VERIFIER_readFS (int __fd, void *__buf, size_t __nbytes);
+extern ssize_t __VERIFIER_readFS (int __fd, void *__buf, size_t __nbytes) __attribute__ ((__nothrow__));
 
-extern ssize_t __VERIFIER_writeFS (int __fd, const void *__buf, size_t __n);
+extern ssize_t __VERIFIER_writeFS (int __fd, const void *__buf, size_t __n) __attribute__ ((__nothrow__));
 
 extern ssize_t __VERIFIER_preadFS (int __fd, void *__buf, size_t __nbytes,
-				   __off_t __offset);
+				   __off_t __offset) __attribute__ ((__nothrow__));
 
 extern ssize_t __VERIFIER_pwriteFS (int __fd, const void *__buf, size_t __n,
-				    __off_t __offset);
+				    __off_t __offset) __attribute__ ((__nothrow__));
 
-extern int __VERIFIER_linkFS (const char *__from, const char *__to);
+extern int __VERIFIER_linkFS (const char *__from, const char *__to) __attribute__ ((__nothrow__));
 
-extern int __VERIFIER_unlinkFS (const char *__name);
+extern int __VERIFIER_unlinkFS (const char *__name) __attribute__ ((__nothrow__));
 
-extern int __VERIFIER_fsyncFS (int __fd);
+extern int __VERIFIER_fsyncFS (int __fd) __attribute__ ((__nothrow__));
 
-extern void __VERIFIER_syncFS (void);
+extern void __VERIFIER_syncFS (void) __attribute__ ((__nothrow__));
 
-extern int __VERIFIER_truncateFS (const char *__file, __off_t __length);
+extern int __VERIFIER_truncateFS (const char *__file, __off_t __length) __attribute__ ((__nothrow__));
 
 
 /* Thread functions */
 
 extern int __VERIFIER_thread_create (const __VERIFIER_attr_t *__restrict __attr,
 				     void *(*__start_routine) (void *),
-				     void *__restrict __arg);
+				     void *__restrict __arg) __attribute__ ((__nothrow__));
 
-extern void __VERIFIER_thread_exit (void *__retval) __attribute__ ((__noreturn__));
+extern void __VERIFIER_thread_exit (void *__retval) __attribute__ ((__noreturn__)) __attribute__ ((__nothrow__));
 
-extern int __VERIFIER_thread_join (__VERIFIER_thread_t __th, void **__thread_return);
+extern int __VERIFIER_thread_join (__VERIFIER_thread_t __th, void **__thread_return) __attribute__ ((__nothrow__));
 
-extern __VERIFIER_thread_t __VERIFIER_thread_self (void);
+extern __VERIFIER_thread_t __VERIFIER_thread_self (void) __attribute__ ((__nothrow__));
 
 
 /* Mutex functions */
 
 extern int __VERIFIER_mutex_init (__VERIFIER_mutex_t *__mutex,
-				  const __VERIFIER_mutexattr_t *__mutexattr);
+				  const __VERIFIER_mutexattr_t *__mutexattr) __attribute__ ((__nothrow__));
 
-extern int __VERIFIER_mutex_destroy (__VERIFIER_mutex_t *__mutex);
+extern int __VERIFIER_mutex_destroy (__VERIFIER_mutex_t *__mutex) __attribute__ ((__nothrow__));
 
-extern int __VERIFIER_mutex_trylock (__VERIFIER_mutex_t *__mutex);
+extern int __VERIFIER_mutex_trylock (__VERIFIER_mutex_t *__mutex) __attribute__ ((__nothrow__));
 
-extern int __VERIFIER_mutex_lock (__VERIFIER_mutex_t *__mutex);
+extern int __VERIFIER_mutex_lock (__VERIFIER_mutex_t *__mutex) __attribute__ ((__nothrow__));
 
-extern int __VERIFIER_mutex_unlock (__VERIFIER_mutex_t *__mutex);
+extern int __VERIFIER_mutex_unlock (__VERIFIER_mutex_t *__mutex) __attribute__ ((__nothrow__));
 
 
 /* barrier functions */
 
 extern int __VERIFIER_barrier_init (__VERIFIER_barrier_t *__restrict __barrier,
 				    const __VERIFIER_barrierattr_t *__restrict __attr,
-				    unsigned int __count);
+				    unsigned int __count) __attribute__ ((__nothrow__));
 
-extern int __VERIFIER_barrier_destroy (__VERIFIER_barrier_t *__barrier);
+extern int __VERIFIER_barrier_destroy (__VERIFIER_barrier_t *__barrier) __attribute__ ((__nothrow__));
 
-extern int __VERIFIER_barrier_wait (__VERIFIER_barrier_t *__barrier);
+extern int __VERIFIER_barrier_wait (__VERIFIER_barrier_t *__barrier) __attribute__ ((__nothrow__));
 
-extern int __VERIFIER_barrier_destroy (__VERIFIER_barrier_t *__barrier);
+extern int __VERIFIER_barrier_destroy (__VERIFIER_barrier_t *__barrier) __attribute__ ((__nothrow__));
 
 
 /* Custom opcode implementations */
@@ -167,25 +169,23 @@ extern int __VERIFIER_barrier_destroy (__VERIFIER_barrier_t *__barrier);
 /*
  * Annotate a subsequent instruction with the given mask.
  */
-extern void __VERIFIER_annotate_read(int mask);
-extern void __VERIFIER_annotate_write(int mask);
-extern void __VERIFIER_annotate_CAS(int mask);
-extern void __VERIFIER_annotate_FAI(int mask);
+extern void __VERIFIER_annotate_begin(int mask) __attribute__ ((__nothrow__));
+extern void __VERIFIER_annotate_end(int mask) __attribute__ ((__nothrow__));
 
 /* Marks the beginning of an optional block. */
-extern int __VERIFIER_opt_begin(void);
+extern int __VERIFIER_opt_begin(void) __attribute__ ((__nothrow__));
 
 /* Hazard pointer functions */
-extern __VERIFIER_hazptr_t *__VERIFIER_hazptr_alloc(void);
-extern void __VERIFIER_hazptr_protect(__VERIFIER_hazptr_t *hp, void *p);
-extern void __VERIFIER_hazptr_clear(__VERIFIER_hazptr_t *hp);
-extern void __VERIFIER_hazptr_free(__VERIFIER_hazptr_t *hp);
-extern void __VERIFIER_hazptr_retire(void *p);
+extern __VERIFIER_hazptr_t *__VERIFIER_hazptr_alloc(void)  __attribute__ ((__nothrow__));
+extern void __VERIFIER_hazptr_protect(__VERIFIER_hazptr_t *hp, void *p) __attribute__ ((__nothrow__));
+extern void __VERIFIER_hazptr_clear(__VERIFIER_hazptr_t *hp) __attribute__ ((__nothrow__));
+extern void __VERIFIER_hazptr_free(__VERIFIER_hazptr_t *hp) __attribute__ ((__nothrow__));
+extern void __VERIFIER_hazptr_retire(void *p) __attribute__ ((__nothrow__));
 
 /* RCU functions */
-extern void __VERIFIER_rcu_read_lock(void);
-extern void __VERIFIER_rcu_read_unlock(void);
-extern void __VERIFIER_synchronize_rcu(void);
+extern void __VERIFIER_rcu_read_lock(void) __attribute__ ((__nothrow__));
+extern void __VERIFIER_rcu_read_unlock(void) __attribute__ ((__nothrow__));
+extern void __VERIFIER_synchronize_rcu(void) __attribute__ ((__nothrow__));
 
 #ifdef __cplusplus
 }

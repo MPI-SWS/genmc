@@ -32,31 +32,19 @@
 #endif
 #include <llvm/Transforms/Utils/Cloning.h>
 
-#ifdef LLVM_HAS_TERMINATORINST
+#if LLVM_VERSION_MAJOR < 8
  typedef llvm::TerminatorInst TerminatorInst;
 #else
  typedef llvm::Instruction TerminatorInst;
 #endif
 
-#ifdef LLVM_HAVE_LOOP_GET_NAME
-# define LOOP_NAME(l) (l->getName())
-#else
-# define LOOP_NAME(l) ((*l->block_begin())->getName())
-#endif
-
-#ifdef LLVM_LOADINST_VALUE_ONLY
+#if LLVM_VERSION_MAJOR >= 11
 # define GET_LOADINST_ARG(val)
 #else
 # define GET_LOADINST_ARG(val) (val)->getType()->getPointerElementType(),
 #endif
 
-#ifdef LLVM_ALLOCAINST_TAKES_ADDRSPACE
-# define GET_BOUND_ALLOCA_DUMMY_ARGS() 0, NULL
-#else
-# define GET_BOUND_ALLOCA_DUMMY_ARGS() NULL
-#endif
-
-#ifdef LLVM_HAS_ALIGN
+#if LLVM_VERSION_MAJOR >= 11
 # define GET_BOUND_ALLOCA_ALIGN_ARG(val) llvm::Align(val)
 #else
 # define GET_BOUND_ALLOCA_ALIGN_ARG(val) val
@@ -97,7 +85,7 @@ BinaryOperator *createBoundDecrement(Loop *l, PHINode *boundVal)
 	Value *minusOne = ConstantInt::get(int32Typ, -1, true);
 	Instruction *pt = &*l->getHeader()->getFirstInsertionPt();
 	return BinaryOperator::CreateNSW(Instruction::Add, boundVal, minusOne,
-					 LOOP_NAME(l) + ".bound.dec", pt);
+					 l->getName() + ".bound.dec", pt);
 }
 
 void addBoundCmpAndSpinEndBefore(Loop *l, PHINode *val, BinaryOperator *decVal)
@@ -109,7 +97,7 @@ void addBoundCmpAndSpinEndBefore(Loop *l, PHINode *val, BinaryOperator *decVal)
 
 	Value *zero = ConstantInt::get(int32Typ, 0);
 	Value *cmp = new ICmpInst(decVal, ICmpInst::ICMP_EQ, val, zero,
-				  LOOP_NAME(l) + ".bound.cmp");
+				  l->getName() + ".bound.cmp");
 
 	BUG_ON(!endLoopFun);
 	CallInst::Create(endLoopFun, {cmp}, "", decVal);

@@ -62,7 +62,11 @@ AC_DEFUN([AX_LLVM],
       fi
     fi
 
-    CXXFLAGS="$CXXFLAGS `$LLVMCONFIG --cxxflags`"
+    # Get LLVM flags without the standard (we may want to use a newer one)
+    LLVMCXXFLAGS=`$LLVMCONFIG --cxxflags`
+    LLVMCXXFLAGS=`echo "$LLVMCXXFLAGS" | sed -E 's/-std=[[^[:space:]]]+//g'`
+
+    CXXFLAGS="$CXXFLAGS $LLVMCXXFLAGS"
     LLVMLDFLAGS=`$LLVMCONFIG --ldflags`
     LLVMLIBS=`$LLVMCONFIG --libs`
     SYSLIBS=`$LLVMCONFIG --system-libs 2>/dev/null`

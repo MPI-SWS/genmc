@@ -40,7 +40,7 @@ public:
 	void removeAfter(const VectorClock &preds) override;
 
 	std::unique_ptr<Calculator> clone(ExecutionGraph &g) const override {
-		return LLVM_MAKE_UNIQUE<ARCalculator>(g);
+		return std::make_unique<ARCalculator>(g);
 	}
 
 private:

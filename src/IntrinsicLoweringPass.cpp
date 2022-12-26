@@ -21,7 +21,6 @@
 #include "config.h"
 #include "IntrinsicLoweringPass.hpp"
 #include <llvm/ADT/Twine.h>
-#include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/InstrTypes.h>
@@ -55,7 +54,7 @@ bool IntrinsicLoweringPass::runOnBasicBlock(llvm::BasicBlock &BB, llvm::Module &
 		case llvm::Intrinsic::trap: {
 			/* Lower calls to @llvm.trap to abort() calls */
 			auto FC = M.getOrInsertFunction("abort", llvm::Type::getVoidTy(M.getContext()));
-#ifdef LLVM_GETORINSERTFUNCTION_RET_FUNCTION
+#if LLVM_VERSION_MAJOR < 9
 			if (auto *F = llvm::dyn_cast<llvm::Function>(FC)) {
 #else
 			if (auto *F = llvm::dyn_cast<llvm::Function>(FC.getCallee())) {

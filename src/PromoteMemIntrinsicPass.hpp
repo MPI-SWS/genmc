@@ -35,6 +35,8 @@ public:
 
 	virtual bool runOnModule(llvm::Module &M);
 
+	void getAnalysisUsage(llvm::AnalysisUsage &au) const;
+
 protected:
 	/* Promoters for specific intrinsics */
 	bool tryPromoteMemCpy(llvm::MemCpyInst *MI, llvm::Module &M);

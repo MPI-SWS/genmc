@@ -36,7 +36,7 @@
 #elif defined(HAVE_LLVM_IR_PASSMANAGER_H)
 # include <llvm/IR/PassManager.h>
 #endif
-#if defined(HAVE_LLVM_IR_LEGACYPASSMANAGER_H) && defined(LLVM_PASSMANAGER_TEMPLATE)
+#if defined(HAVE_LLVM_IR_LEGACYPASSMANAGER_H)
 # include <llvm/IR/LegacyPassManager.h>
 #endif
 #include <llvm/IR/LLVMContext.h>
@@ -55,16 +55,12 @@
 #include <llvm/Transforms/Utils.h>
 #endif
 
-#ifdef LLVM_PASSMANAGER_TEMPLATE
-# define PassManager llvm::legacy::PassManager
-#else
-# define PassManager llvm::PassManager
-#endif
+#define PassManager llvm::legacy::PassManager
 
 namespace LLVMModule {
 
 	std::unique_ptr<llvm::Module>
-	parseLLVMModule(std::string &filename, const std::unique_ptr<llvm::LLVMContext> &ctx)
+	parseLLVMModule(const std::string &filename, const std::unique_ptr<llvm::LLVMContext> &ctx)
 	{
 		llvm::SMDiagnostic err;
 
@@ -84,11 +80,7 @@ namespace LLVMModule {
 		std::string str;
 		llvm::raw_string_ostream  stream(str);
 
-#ifdef LLVM_WRITE_BITCODE_TO_FILE_PTR
-		llvm::WriteBitcodeToFile(&*mod, stream);
-#else
 		llvm::WriteBitcodeToFile(*mod, stream);
-#endif
 
 		llvm::StringRef ref(stream.str());
 		std::unique_ptr<llvm::MemoryBuffer> buf(llvm::MemoryBuffer::getMemBuffer(ref));
@@ -159,6 +151,8 @@ namespace LLVMModule {
 		OptPM.add(createDeclareInternalsPass());
 		OptPM.add(createDefineLibcFunsPass());
 		OptPM.add(createMDataCollectionPass(&PI));
+		if (conf->inlineFunctions)
+			OptPM.add(createFunctionInlinerPass());
 		OptPM.add(createPromoteMemIntrinsicPass());
 		OptPM.add(createIntrinsicLoweringPass(mod));
 		if (conf->castElimination)
@@ -206,38 +200,24 @@ namespace LLVMModule {
 	void printLLVMModule(llvm::Module &mod, const std::string &out)
 	{
 		PassManager PM;
-#ifdef LLVM_RAW_FD_OSTREAM_ERR_STR
-		std::string errs;
-#else
 		std::error_code errs;
-#endif
+
 		auto flags =
-#ifdef HAVE_LLVM_SYS_FS_OPENFLAGS_FNONE
+#if LLVM_VERSION_MAJOR < 13
 			llvm::sys::fs::F_None;
 #else
 			llvm::sys::fs::OF_None;
 #endif
 
-#ifdef HAVE_LLVM_SYS_FS_OPENFLAGS
-		auto os = LLVM_MAKE_UNIQUE<llvm::raw_fd_ostream>(out.c_str(), errs, flags);
-#else
-		auto os = LLVM_MAKE_UNIQUE<llvm::raw_fd_ostream>(out.c_str(), errs, 0);
-#endif
+		auto os = std::make_unique<llvm::raw_fd_ostream>(out.c_str(), errs, flags);
 
 		/* TODO: Do we need an exception? If yes, properly handle it */
-#ifdef LLVM_RAW_FD_OSTREAM_ERR_STR
-		if (errs.size()) {
-			WARN("Failed to write transformed module to file "
-			     + out + ": " + errs);
-			return;
-		}
-#else
 		if (errs) {
 			WARN("Failed to write transformed module to file "
 			     + out + ": " + errs.message());
 			return;
 		}
-#endif
+
 		PM.add(llvm::createPrintModulePass(*os));
 		PM.run(mod);
 		return;

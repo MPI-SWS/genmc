@@ -140,7 +140,7 @@ public:
 		remainingTasks_.store(0);
 
 		for (auto i = 0u; i < numWorkers_; i++) {
-			contexts_.push_back(LLVM_MAKE_UNIQUE<llvm::LLVMContext>());
+			contexts_.push_back(std::make_unique<llvm::LLVMContext>());
 			auto newmod = LLVMModule::cloneModule(mod, contexts_.back());
 			auto newMI = MI->clone(*newmod);
 

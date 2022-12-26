@@ -69,7 +69,7 @@ std::unique_ptr<VectorClock>
 DepExecutionGraph::getRevisitView(const BackwardRevisit &r) const
 {
 	auto *rLab = getReadLabel(r.getPos());
-	auto preds = LLVM_MAKE_UNIQUE<DepView>(getDepViewFromStamp(rLab->getStamp()));
+	auto preds = std::make_unique<DepView>(getDepViewFromStamp(rLab->getStamp()));
 
 	updatePredsWithPrefixView(*this, *preds, getWriteLabel(r.getRev())->getPPoRfView());
 	if (auto *br = llvm::dyn_cast<BackwardRevisitHELPER>(&r))
@@ -80,7 +80,7 @@ DepExecutionGraph::getRevisitView(const BackwardRevisit &r) const
 std::unique_ptr<VectorClock> DepExecutionGraph::getPredsView(Event e) const
 {
 	auto stamp = getEventLabel(e)->getStamp();
-	return LLVM_MAKE_UNIQUE<DepView>(getDepViewFromStamp(stamp));
+	return std::make_unique<DepView>(getDepViewFromStamp(stamp));
 }
 
 bool DepExecutionGraph::revisitModifiesGraph(const BackwardRevisit &r) const

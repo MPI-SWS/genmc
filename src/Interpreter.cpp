@@ -42,16 +42,8 @@
 #include "Error.hpp"
 #include "Interpreter.h"
 #include <llvm/CodeGen/IntrinsicLowering.h>
-#if defined(HAVE_LLVM_IR_DERIVEDTYPES_H)
 #include <llvm/IR/DerivedTypes.h>
-#elif defined(HAVE_LLVM_DERIVEDTYPES_H)
-#include <llvm/DerivedTypes.h>
-#endif
-#if defined(HAVE_LLVM_IR_MODULE_H)
 #include <llvm/IR/Module.h>
-#elif defined(HAVE_LLVM_MODULE_H)
-#include <llvm/Module.h>
-#endif
 #include <cstring>
 
 using namespace llvm;
@@ -63,19 +55,6 @@ extern "C" void LLVMLinkInInterpreter() { }
 ExecutionEngine *Interpreter::create(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> MI,
 				     GenMCDriver *driver, const Config *userConf, std::string* ErrStr) {
   // Tell this Module to materialize everything and release the GVMaterializer.
-#ifdef LLVM_MODULE_MATERIALIZE_ALL_PERMANENTLY_ERRORCODE_BOOL
-  if (std::error_code EC = M->materializeAllPermanently()) {
-    if (ErrStr)
-      *ErrStr = EC.message();
-    // We got an error, just return 0
-    return nullptr;
-  }
-#elif defined LLVM_MODULE_MATERIALIZE_ALL_PERMANENTLY_BOOL_STRPTR
-  if (M->MaterializeAllPermanently(ErrStr)){
-    // We got an error, just return 0
-    return nullptr;
-  }
-#elif defined LLVM_MODULE_MATERIALIZE_ALL_LLVM_ERROR
   if (Error Err = M->materializeAll()) {
     std::string Msg;
     handleAllErrors(std::move(Err), [&](ErrorInfoBase &EIB) {
@@ -86,15 +65,6 @@ ExecutionEngine *Interpreter::create(std::unique_ptr<Module> M, std::unique_ptr<
     // We got an error, just return 0
     return nullptr;
   }
-#else
-  if(std::error_code EC = M->materializeAll()){
-    if(ErrStr)
-      *ErrStr = EC.message();
-    // We got an error, just return 0
-    return nullptr;
-  }
-#endif
-
   return new Interpreter(std::move(M), std::move(MI), driver, userConf);
 }
 
@@ -107,38 +77,16 @@ llvm::raw_ostream& llvm::operator<<(llvm::raw_ostream &s, const Thread &thr)
 		 << " " << thr.threadFun->getName().str();
 }
 
-EELocalState::EELocalState(const SAddrAllocator &alloctor,
-			   const std::unique_ptr<DepTracker> &depTr,
-			   const ExecutionState &execState,
-			   const ProgramState &programState,
-			   const llvm::BitVector &fds,
-			   const llvm::IndexedMap<void *> &fdToFile,
-			   const std::unordered_map<std::string, void *> &nameToInodeAddr,
-			   const std::vector<Thread> &ts,
-			   int current)
-	: alloctor(alloctor),
-	  depTracker(depTr ? LLVM_MAKE_UNIQUE<DepTracker>(*depTr) : nullptr),
-	  execState(execState),
-	  programState(programState), fds(fds), fdToFile(fdToFile),
-	  nameToInodeAddr(nameToInodeAddr), threads(ts), currentThread(current) {}
+// EELocalState::EELocalState(const DynamicComponents &dynState) : state(dynState) {}
 
 std::unique_ptr<EELocalState> Interpreter::releaseLocalState()
 {
-	return LLVM_MAKE_UNIQUE<EELocalState>(alloctor, depTracker, execState, programState,
-					      fds, fdToFile, nameToInodeAddr, threads, currentThread);
+	return std::make_unique<EELocalState>(dynState);
 }
 
-void Interpreter::restoreLocalState(std::unique_ptr<EELocalState> state)
+void Interpreter::restoreLocalState(std::unique_ptr<EELocalState> s)
 {
-	alloctor = std::move(state->alloctor);
-	depTracker = std::move(state->depTracker);
-	execState = state->execState;
-	programState = state->programState;
-	fds = std::move(state->fds);
-	fdToFile = std::move(state->fdToFile);
-	nameToInodeAddr = std::move(state->nameToInodeAddr);
-	threads = std::move(state->threads);
-	currentThread = state->currentThread;
+	dynState = std::move(*s);
 }
 
 void Interpreter::resetThread(unsigned int id)
@@ -159,14 +107,15 @@ void Interpreter::reset()
 	 * have been a failed assume on some thread and a join waiting on
 	 * that thread (joins do not empty ECStacks)
 	 */
-	currentThread = 0;
+	dynState.currentThread = 0;
+	dynState.AtExitHandlers.clear();
 	std::for_each(threads_begin(), threads_end(), [this](Thread &thr){ resetThread(thr.id); });
 }
 
 void Interpreter::setupRecoveryRoutine(int tid)
 {
-	BUG_ON(tid >= threads.size());
-	currentThread = tid;
+	BUG_ON(tid >= getNumThreads());
+	dynState.currentThread = tid;
 
 	/* Only fill the stack if a recovery routine actually exists... */
 	ERROR_ON(!recoveryRoutine, "No recovery routine specified!\n");
@@ -181,18 +130,20 @@ void Interpreter::setupRecoveryRoutine(int tid)
 void Interpreter::cleanupRecoveryRoutine(int tid)
 {
 	/* Nothing to do -- yet */
-	currentThread = 0;
+	dynState.currentThread = 0;
 	return;
 }
 
 Thread &Interpreter::addNewThread(Thread &&thread)
 {
-	if (thread.id == threads.size()) {
-	        threads.push_back(std::move(thread));
-		return threads.back();
+	if (thread.id == getNumThreads()) {
+	        dynState.threads.push_back(std::move(thread));
+		return dynState.threads.back();
 	}
-	BUG_ON(threads[thread.id].threadFun != thread.threadFun || threads[thread.id].id != thread.id);
-	return threads[thread.id] = std::move(thread);
+
+	BUG_ON(dynState.threads[thread.id].threadFun != thread.threadFun ||
+	       dynState.threads[thread.id].id != thread.id);
+	return dynState.threads[thread.id] = std::move(thread);
 }
 
 /* Creates an entry for the main() function */
@@ -200,7 +151,7 @@ Thread &Interpreter::createAddMainThread(llvm::Function *F)
 {
 	Thread main(F, 0);
 	main.tls = threadLocalVars;
-	threads.clear(); /* make sure its empty */
+	dynState.threads.clear(); /* make sure its empty */
 	return addNewThread(std::move(main));
 }
 
@@ -221,28 +172,14 @@ Thread &Interpreter::createAddRecoveryThread(int tid)
 	return addNewThread(std::move(rec));
 }
 
-#ifndef LLVM_BITVECTOR_HAS_FIND_FIRST_UNSET
-int my_find_first_unset(const llvm::BitVector &bv)
-{
-	for (auto i = 0u; i < bv.size(); i++)
-		if (bv[i] == 0)
-			return i;
-	return -1;
-}
-#endif /* LLVM_BITVECTOR_HAS_FIND_FIRST_UNSET */
-
 int Interpreter::getFreshFd()
 {
-#ifndef LLVM_BITVECTOR_HAS_FIND_FIRST_UNSET
-	int fd = my_find_first_unset(fds);
-#else
-	int fd = fds.find_first_unset();
-#endif
+	int fd = dynState.fds.find_first_unset();
 
 	/* If no available descriptor found, grow fds and try again */
 	if (fd == -1) {
-		fds.resize(2 * fds.size() + 1);
-		fdToFile.grow(fds.size());
+		dynState.fds.resize(2 * dynState.fds.size() + 1);
+		dynState.fdToFile.grow(dynState.fds.size());
 		return getFreshFd();
 	}
 
@@ -253,15 +190,15 @@ int Interpreter::getFreshFd()
 
 void Interpreter::markFdAsUsed(int fd)
 {
-	fds.set(fd);
+	dynState.fds.set(fd);
 }
 
 void Interpreter::reclaimUnusedFd(int fd)
 {
-	fds.reset(fd);
+	dynState.fds.reset(fd);
 }
 
-#ifdef LLVM_GLOBALVALUE_HAS_GET_ADDRESS_SPACE
+#if LLVM_VERSION_MAJOR >= 8
 # define GET_GV_ADDRESS_SPACE(v) (v).getAddressSpace()
 #else
 # define GET_GV_ADDRESS_SPACE(v)			\
@@ -278,7 +215,7 @@ void Interpreter::collectStaticAddresses(Module *M)
 	for (auto &v : M->getGlobalList()) {
 		char *ptr = static_cast<char *>(GVTOP(getConstantValue(&v)));
 		unsigned int typeSize =
-		        getDataLayout().getTypeAllocSize(v.getType()->getElementType());
+		        getDataLayout().getTypeAllocSize(v.getValueType());
 
 		/* Record whether this is a thread local variable or not */
 		if (v.isThreadLocal()) {
@@ -288,8 +225,8 @@ void Interpreter::collectStaticAddresses(Module *M)
 		}
 
 		/* "Allocate" an address for this global variable... */
-		auto addr = alloctor.allocStatic(typeSize, v.getAlignment(),
-						 GET_GV_ADDRESS_SPACE(v) == 42);
+		auto addr = dynState.alloctor.allocStatic(typeSize, v.getAlignment(),
+							  GET_GV_ADDRESS_SPACE(v) == 42);
 		staticAllocas.insert(std::make_pair(addr, addr + typeSize - 1));
 		staticValueMap[addr] = ptr;
 
@@ -321,7 +258,7 @@ void Interpreter::setupErrorPolicy(Module *M, const Config *userConf)
 		return;
 
 	errnoAddr = GVTOP(getConstantValue(errnoVar));
-	errnoTyp = errnoVar->getType()->getElementType();
+	errnoTyp = errnoVar->getValueType();
 	return;
 }
 
@@ -342,11 +279,11 @@ void Interpreter::setupFsInfo(Module *M, const Config *userConf)
 	if (!inodeVar || !fileVar)
 		return;
 
-	fds = llvm::BitVector(20);
-	fdToFile.grow(fds.size());
+	dynState.fds = llvm::BitVector(20);
+	dynState.fdToFile.grow(dynState.fds.size());
 
-	FI.inodeTyp = dyn_cast<StructType>(inodeVar->getType()->getElementType());
-	FI.fileTyp = dyn_cast<StructType>(fileVar->getType()->getElementType());
+	FI.inodeTyp = dyn_cast<StructType>(inodeVar->getValueType());
+	FI.fileTyp = dyn_cast<StructType>(fileVar->getValueType());
 	BUG_ON(!FI.inodeTyp || !FI.fileTyp);
 
 	/* Initialize the directory's inode -- assume that the first field is int
@@ -362,7 +299,7 @@ void Interpreter::setupFsInfo(Module *M, const Config *userConf)
 	auto *SL = getDataLayout().getStructLayout(FI.inodeTyp);
 	for (auto &fname : FI.filenames) {
 		auto *addr = (char *) FI.dirInode + SL->getElementOffset(4) + count * intPtrSize;
-		nameToInodeAddr[fname] = addr;
+		dynState.nameToInodeAddr[fname] = addr;
 		++count;
 	}
 	return;
@@ -373,10 +310,10 @@ Interpreter::makeEventDeps(const DepInfo *addr, const DepInfo *data,
 			   const DepInfo *ctrl, const DepInfo *addrPo,
 			   const DepInfo *cas)
 {
-	if (!depTracker)
+	if (!getDepTracker())
 		return nullptr;
 
-	auto result = LLVM_MAKE_UNIQUE<EventDeps>();
+	auto result = std::make_unique<EventDeps>();
 
 	if (addr)
 		result->addr = *addr;
@@ -394,7 +331,7 @@ Interpreter::makeEventDeps(const DepInfo *addr, const DepInfo *data,
 std::unique_ptr<EventDeps>
 Interpreter::updateFunArgDeps(unsigned int tid, Function *fun)
 {
-	if (!depTracker)
+	if (!getDepTracker())
 		return nullptr;
 
 	ExecutionContext &SF = ECStack().back();
@@ -429,6 +366,18 @@ Interpreter::updateFunArgDeps(unsigned int tid, Function *fun)
 	return nullptr;
 }
 
+void Interpreter::updateInternalFunRetDeps(unsigned int tid, Function *F, Instruction *CS)
+{
+	auto name = F->getName().str();
+	if (!internalFunNames.count(name))
+		return;
+
+	auto iFunCode = internalFunNames.at(name);
+	if (isAllocFunction(name))
+		updateDataDeps(tid, CS, Event(tid, getThrById(tid).globalInstructions));
+	return;
+}
+
 //===----------------------------------------------------------------------===//
 // Interpreter ctor - Initialize stuff
 //
@@ -436,7 +385,7 @@ Interpreter::Interpreter(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> 
 			 GenMCDriver *driver, const Config *userConf)
 	: ExecutionEngine(std::move(M)), MI(std::move(MI)), driver(driver) {
 
-  memset(&ExitValue.Untyped, 0, sizeof(ExitValue.Untyped));
+  memset(&dynState.ExitValue.Untyped, 0, sizeof(dynState.ExitValue.Untyped));
 
   // Initialize the "backend"
   initializeExecutionEngine();
@@ -450,13 +399,12 @@ Interpreter::Interpreter(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> 
 
   /* Set up a dependency tracker if the model requires it */
   if (userConf->isDepTrackingModel)
-	  depTracker = LLVM_MAKE_UNIQUE<DepTracker>();
+	  dynState.depTracker = std::make_unique<DepTracker>();
 
   /* Set up the system error policy */
   setupErrorPolicy(mod, userConf);
 
   /* Also run a recovery routine if it is required to do so */
-  checkPersistency = userConf->persevere;
   recoveryRoutine = mod->getFunction("__VERIFIER_recovery_routine");
   setupFsInfo(mod, userConf);
 
@@ -472,43 +420,196 @@ Interpreter::~Interpreter() {
 }
 
 void Interpreter::runAtExitHandlers () {
-  while (!AtExitHandlers.empty()) {
-    callFunction(AtExitHandlers.back(), std::vector<GenericValue>(), nullptr);
-    AtExitHandlers.pop_back();
+  auto oldState = getProgramState();
+  setProgramState(ProgramState::Dtors);
+  while (!dynState.AtExitHandlers.empty()) {
+    scheduleThread(0);
+    callFunction(dynState.AtExitHandlers.back(), std::vector<GenericValue>(), nullptr);
+    dynState.AtExitHandlers.pop_back();
     run();
   }
+  setProgramState(oldState);
+}
+
+namespace {
+ class ArgvArray {
+   std::unique_ptr<char[]> Array;
+   std::vector<std::unique_ptr<char[]>> Values;
+ public:
+   /// Turn a vector of strings into a nice argv style array of pointers to null
+   /// terminated strings.
+   void *reset(LLVMContext &C, ExecutionEngine *EE,
+               const std::vector<std::string> &InputArgv);
+ };
+ }  // anonymous namespace
+ void *ArgvArray::reset(LLVMContext &C, ExecutionEngine *EE,
+                        const std::vector<std::string> &InputArgv) {
+   Values.clear();  // Free the old contents.
+   Values.reserve(InputArgv.size());
+   unsigned PtrSize = EE->getDataLayout().getPointerSize();
+   Array = std::make_unique<char[]>((InputArgv.size()+1)*PtrSize);
+
+   // LLVM_DEBUG(dbgs() << "JIT: ARGV = " << (void *)Array.get() << "\n");
+   Type *SBytePtr = Type::getInt8PtrTy(C);
+
+   for (unsigned i = 0; i != InputArgv.size(); ++i) {
+     unsigned Size = InputArgv[i].size()+1;
+     auto Dest = std::make_unique<char[]>(Size);
+     // LLVM_DEBUG(dbgs() << "JIT: ARGV[" << i << "] = " << (void *)Dest.get()
+     //                   << "\n");
+
+     std::copy(InputArgv[i].begin(), InputArgv[i].end(), Dest.get());
+     Dest[Size-1] = 0;
+
+     // Endian safe: Array[i] = (PointerTy)Dest;
+     EE->StoreValueToMemory(PTOGV(Dest.get()),
+                            (GenericValue*)(&Array[i*PtrSize]), SBytePtr);
+     Values.push_back(std::move(Dest));
+   }
+
+   // Null terminate it
+   EE->StoreValueToMemory(PTOGV(nullptr),
+                          (GenericValue*)(&Array[InputArgv.size()*PtrSize]),
+                          SBytePtr);
+   return Array.get();
+ }
+
+void
+Interpreter::setupFunctionCall(Function *F, ArrayRef<GenericValue> ArgValues)
+{
+	// Try extra hard not to pass extra args to a function that isn't
+	// expecting them.  C programmers frequently bend the rules and
+	// declare main() with fewer parameters than it actually gets
+	// passed, and the interpreter barfs if you pass a function more
+	// parameters than it is declared to take. This does not attempt to
+	// take into account gratuitous differences in declared types,
+	// though.
+	std::vector<GenericValue> ActualArgs;
+	const unsigned ArgCount = F->getFunctionType()->getNumParams();
+	for (unsigned i = 0; i < ArgCount; ++i)
+		ActualArgs.push_back(ArgValues[i]);
+
+	callFunction(F, ActualArgs, nullptr);
 }
 
 /// run - Start execution with the specified function and arguments.
 ///
-#ifdef LLVM_EXECUTION_ENGINE_RUN_FUNCTION_VECTOR
-GenericValue
-Interpreter::runFunction(Function *F,
-                         const std::vector<GenericValue> &ArgValues) {
-#else
 GenericValue
 Interpreter::runFunction(Function *F,
                          ArrayRef<GenericValue> ArgValues) {
-#endif
   assert (F && "Function *F was null at entry to run()");
 
-  // Try extra hard not to pass extra args to a function that isn't
-  // expecting them.  C programmers frequently bend the rules and
-  // declare main() with fewer parameters than it actually gets
-  // passed, and the interpreter barfs if you pass a function more
-  // parameters than it is declared to take. This does not attempt to
-  // take into account gratuitous differences in declared types,
-  // though.
-  std::vector<GenericValue> ActualArgs;
-  const unsigned ArgCount = F->getFunctionType()->getNumParams();
-  for (unsigned i = 0; i < ArgCount; ++i)
-    ActualArgs.push_back(ArgValues[i]);
-
   // Set up the function call.
-  callFunction(F, ActualArgs, nullptr);
+  setupFunctionCall(F, ArgValues);
 
   // Start executing the function.
   run();
 
-  return ExitValue;
+  return dynState.ExitValue;
+}
+
+void Interpreter::setupStaticCtorsDtors(Module &module, bool isDtors)
+{
+	StringRef Name(isDtors ? "llvm.global_dtors" : "llvm.global_ctors");
+	GlobalVariable *GV = module.getNamedGlobal(Name);
+
+	// If this global has internal linkage, or if it has a use, then it must be
+	// an old-style (llvmgcc3) static ctor with __main linked in and in use.  If
+	// this is the case, don't execute any of the global ctors, __main will do
+	// it.
+	if (!GV || GV->isDeclaration() || GV->hasLocalLinkage()) return;
+
+	// Should be an array of '{ i32, void ()* }' structs.  The first value is
+	// the init priority, which we ignore.
+	ConstantArray *InitList = dyn_cast<ConstantArray>(GV->getInitializer());
+	if (!InitList)
+		return;
+	for (unsigned i = 0, e = InitList->getNumOperands(); i != e; ++i) {
+		ConstantStruct *CS = dyn_cast<ConstantStruct>(InitList->getOperand(i));
+		if (!CS) continue;
+
+		Constant *FP = CS->getOperand(1);
+		if (FP->isNullValue())
+			continue;  // Found a sentinal value, ignore.
+
+		// Strip off constant expression casts.
+		if (ConstantExpr *CE = dyn_cast<ConstantExpr>(FP))
+			if (CE->isCast())
+				FP = CE->getOperand(0);
+
+		// Setup the ctor/dtor SF and quit
+		if (Function *F = dyn_cast<Function>(FP))
+			setupFunctionCall(F, None);
+
+		// FIXME: It is marginally lame that we just do nothing here if we see an
+		// entry we don't recognize. It might not be unreasonable for the verifier
+		// to not even allow this and just assert here.
+	}
+ }
+
+void Interpreter::setupStaticCtorsDtors(bool isDtors)
+{
+	// Execute global ctors/dtors for each module in the program.
+	for (std::unique_ptr<Module> &M : Modules)
+		setupStaticCtorsDtors(*M, isDtors);
+}
+
+#ifndef NDEBUG
+/// isTargetNullPtr - Return whether the target pointer stored at Loc is null.
+static bool isTargetNullPtr(ExecutionEngine *EE, void *Loc)
+{
+	unsigned PtrSize = EE->getDataLayout().getPointerSize();
+	for (unsigned i = 0; i < PtrSize; ++i)
+		if (*(i + (uint8_t*)Loc))
+			return false;
+	return true;
+}
+#endif
+
+void Interpreter::setupMain(Function *Fn,
+			    const std::vector<std::string> &argv,
+			    const char * const * envp)
+{
+	std::vector<GenericValue> GVArgs;
+	GenericValue GVArgc;
+	GVArgc.IntVal = APInt(32, argv.size());
+
+	// Check main() type
+	unsigned NumArgs = Fn->getFunctionType()->getNumParams();
+	FunctionType *FTy = Fn->getFunctionType();
+	Type* PPInt8Ty = Type::getInt8PtrTy(Fn->getContext())->getPointerTo();
+
+	// Check the argument types.
+	if (NumArgs > 3)
+		report_fatal_error("Invalid number of arguments of main() supplied");
+	if (NumArgs >= 3 && FTy->getParamType(2) != PPInt8Ty)
+		report_fatal_error("Invalid type for third argument of main() supplied");
+	if (NumArgs >= 2 && FTy->getParamType(1) != PPInt8Ty)
+		report_fatal_error("Invalid type for second argument of main() supplied");
+	if (NumArgs >= 1 && !FTy->getParamType(0)->isIntegerTy(32))
+		report_fatal_error("Invalid type for first argument of main() supplied");
+	if (!FTy->getReturnType()->isIntegerTy() &&
+	    !FTy->getReturnType()->isVoidTy())
+		report_fatal_error("Invalid return type of main() supplied");
+
+	ArgvArray CArgv;
+	ArgvArray CEnv;
+	if (NumArgs) {
+		GVArgs.push_back(GVArgc); // Arg #0 = argc.
+		if (NumArgs > 1) {
+			// Arg #1 = argv.
+			GVArgs.push_back(PTOGV(CArgv.reset(Fn->getContext(), this, argv)));
+			assert(!isTargetNullPtr(this, GVTOP(GVArgs[1])) &&
+			       "argv[0] was null after CreateArgv");
+			if (NumArgs > 2) {
+				std::vector<std::string> EnvVars;
+				for (unsigned i = 0; envp[i]; ++i)
+					EnvVars.emplace_back(envp[i]);
+				// Arg #2 = envp.
+				GVArgs.push_back(PTOGV(CEnv.reset(Fn->getContext(), this, EnvVars)));
+			}
+		}
+	}
+
+	setupFunctionCall(Fn, GVArgs);
 }

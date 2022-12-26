@@ -51,9 +51,6 @@ clModelType(llvm::cl::values(
 		    clEnumValN(ModelType::rc11, "rc11", "RC11 memory model"),
 		    clEnumValN(ModelType::imm,  "imm",  "IMM memory model"),
 		    clEnumValN(ModelType::lkmm, "lkmm", "LKMM memory model")
-#ifdef LLVM_CL_VALUES_NEED_SENTINEL
-		    , NULL
-#endif
 		    ),
 	    llvm::cl::cat(clGeneral),
 	    llvm::cl::init(ModelType::rc11),
@@ -63,9 +60,6 @@ static llvm::cl::opt<CoherenceType>
 clCoherenceType(llvm::cl::values(
 			clEnumValN(CoherenceType::mo, "mo", "Track modification order"),
 			clEnumValN(CoherenceType::wb, "wb", "Calculate writes-before")
-#ifdef LLVM_CL_VALUES_NEED_SENTINEL
-			, NULL
-#endif
 			),
 		llvm::cl::cat(clGeneral),
 		llvm::cl::init(CoherenceType::mo),
@@ -102,9 +96,6 @@ clCheckConsType("check-consistency-type", llvm::cl::init(CheckConsType::slow), l
 		llvm::cl::values(
 			clEnumValN(CheckConsType::slow, "slow", "Approximation check"),
 			clEnumValN(CheckConsType::full, "full", "Full checks")
-#ifdef LLVM_CL_VALUES_NEED_SENTINEL
-		    , NULL
-#endif
 		    ));
 
 static llvm::cl::opt<ProgramPoint>
@@ -114,9 +105,6 @@ clCheckConsPoint("check-consistency-point", llvm::cl::init(ProgramPoint::error),
 			 clEnumValN(ProgramPoint::error, "error", "At errors only"),
 			 clEnumValN(ProgramPoint::exec,  "exec",  "At the end of each execution"),
 			 clEnumValN(ProgramPoint::step,  "step",  "At each program step")
-#ifdef LLVM_CL_VALUES_NEED_SENTINEL
-		    , NULL
-#endif
 		    ));
 
 static llvm::cl::opt<bool>
@@ -148,9 +136,6 @@ clCheckPersPoint("check-persistency-point", llvm::cl::init(ProgramPoint::step), 
 			 clEnumValN(ProgramPoint::error, "error", "At errors only"),
 			 clEnumValN(ProgramPoint::exec,  "exec",  "At the end of each execution"),
 			 clEnumValN(ProgramPoint::step,  "step",  "At each program step")
-#ifdef LLVM_CL_VALUES_NEED_SENTINEL
-		    , NULL
-#endif
 		    ));
 
 static llvm::cl::opt<unsigned int>
@@ -168,9 +153,6 @@ clJournalData("journal-data", llvm::cl::cat(clPersistency), llvm::cl::init(Journ
 		      clEnumValN(JournalDataFS::writeback, "writeback", "Data ordering not preserved"),
 		      clEnumValN(JournalDataFS::ordered,   "ordered",   "Data before metadata"),
 		      clEnumValN(JournalDataFS::journal,   "journal",   "Journal data")
-#ifdef LLVM_CL_VALUES_NEED_SENTINEL
-		      , NULL
-#endif
 		      ));
 
 static llvm::cl::opt<bool>
@@ -198,6 +180,11 @@ clDisableLoopJumpThreading("disable-loop-jump-threading", llvm::cl::cat(clTransf
 static llvm::cl::opt<bool>
 clDisableCastElimination("disable-cast-elimination", llvm::cl::cat(clTransformation),
 			   llvm::cl::desc("Disable cast-elimination transformation"));
+
+static llvm::cl::opt<bool>
+clDisableFunctionInliner("disable-function-inliner", llvm::cl::cat(clTransformation),
+			   llvm::cl::desc("Disable function-inlining transformation"));
+
 static llvm::cl::opt<bool>
 clDisableSpinAssume("disable-spin-assume", llvm::cl::cat(clTransformation),
 		    llvm::cl::desc("Disable spin-assume transformation"));
@@ -244,9 +231,6 @@ clSchedulePolicy("schedule-policy", llvm::cl::cat(clDebugging), llvm::cl::init(S
 			 clEnumValN(SchedulePolicy::ltr,     "ltr",      "Left-to-right"),
 			 clEnumValN(SchedulePolicy::wf,      "wf",       "Writes-first (default)"),
 			 clEnumValN(SchedulePolicy::random,  "random",   "Random")
-#ifdef LLVM_CL_VALUES_NEED_SENTINEL
-			 , NULL
-#endif
 			 ));
 
 static llvm::cl::opt<bool>
@@ -288,21 +272,12 @@ clVLevel(llvm::cl::cat(clDebugging), llvm::cl::init(VerbosityLevel::V0),
 		 clEnumValN(VerbosityLevel::V1, "v1", "Print stamps on executions"),
 		 clEnumValN(VerbosityLevel::V2, "v2", "Print restricted executions"),
 		 clEnumValN(VerbosityLevel::V3, "v3", "Print execution after each instruction")
-#ifdef LLVM_CL_VALUES_NEED_SENTINEL
-		 , NULL
-#endif
 		 ));
 #endif /* ENABLE_GENMC_DEBUG */
 
 
-#ifdef LLVM_SETVERSIONPRINTER_NEEDS_ARG
 void printVersion(llvm::raw_ostream &s)
 {
-#else
-void printVersion()
-{
-	auto &s = llvm::outs();
-#endif
 	s << PACKAGE_NAME " (" PACKAGE_URL "):\n"
 	  << "  " PACKAGE_NAME " v" PACKAGE_VERSION
 #ifdef GIT_COMMIT
@@ -385,6 +360,7 @@ void Config::saveConfigOptions()
 	noUnrollFuns.insert(clNoUnrollFuns.begin(), clNoUnrollFuns.end());
 	loopJumpThreading = !clDisableLoopJumpThreading;
 	castElimination = !clDisableCastElimination;
+	inlineFunctions = !clDisableFunctionInliner;
 	spinAssume = !clDisableSpinAssume;
 	codeCondenser = !clDisableCodeCondenser;
 	loadAnnot = !clDisableLoadAnnot;
@@ -418,9 +394,7 @@ void Config::getConfigOptions(int argc, char **argv)
 	llvm::cl::SetVersionPrinter(printVersion);
 
 	/* Hide unrelated LLVM options and parse user configuration */
-#ifdef LLVM_HAS_HIDE_UNRELATED_OPTS
 	llvm::cl::HideUnrelatedOptions(cats);
-#endif
 	llvm::cl::ParseCommandLineOptions(argc, argv, "GenMC -- "
 					  "Model Checking for C programs");
 
@@ -428,8 +402,6 @@ void Config::getConfigOptions(int argc, char **argv)
 	checkConfigOptions();
 	saveConfigOptions();
 
-#ifdef LLVM_HAS_RESET_COMMANDLINE_PARSER
 	llvm::cl::ResetAllOptionOccurrences();
 	clInputFile.removeArgument();
-#endif
 }

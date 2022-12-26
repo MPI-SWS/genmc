@@ -20,6 +20,7 @@
 
 #include "PromoteMemIntrinsicPass.hpp"
 #include "Error.hpp"
+#include "FunctionInlinerPass.hpp"
 #include <llvm/ADT/Twine.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/DebugInfo.h>
@@ -34,12 +35,37 @@
 
 using namespace llvm;
 
+void PromoteMemIntrinsicPass::getAnalysisUsage(llvm::AnalysisUsage &au) const
+{
+	/* Run after the inliner because it might generate new memcpys */
+	// au.addRequired<FunctionInlinerPass>();
+}
+
+bool isPromotableMemIntrinsicOperand(Value *op)
+{
+	// Constant to capture MemSet too
+	return isa<Constant>(op) || isa<AllocaInst>(op) || isa<GetElementPtrInst>(op);
+}
+
+Type *getPromotionGEPType(Value *op)
+{
+	BUG_ON(!isPromotableMemIntrinsicOperand(op));
+	if (auto *v = dyn_cast<GlobalVariable>(op))
+		return v->getValueType();
+	else if (auto *ai = dyn_cast<AllocaInst>(op))
+		return ai->getAllocatedType();
+	else if (auto *gepi = dyn_cast<GetElementPtrInst>(op))
+		return gepi->getResultElementType();
+	else
+		BUG();
+}
+
 void promoteMemCpy(IRBuilder<> &builder, Value *dst, Value *src,
 		   const std::vector<Value *> &args, Type *typ)
 {
-	Value *srcGEP = builder.CreateInBoundsGEP(dyn_cast<PointerType>(src->getType())->getElementType(),
+	Value *srcGEP = builder.CreateInBoundsGEP(getPromotionGEPType(src),
 						  src, args, "memcpy.src.gep");
-	Value *dstGEP = builder.CreateInBoundsGEP(dyn_cast<PointerType>(dst->getType())->getElementType(),
+	Value *dstGEP = builder.CreateInBoundsGEP(getPromotionGEPType(dst),
 						  dst, args, "memcpy.dst.gep");
 	Value *srcLoad = builder.CreateLoad(typ, srcGEP, "memcpy.src.load");
 	Value *dstStore = builder.CreateStore(srcLoad, dstGEP);
@@ -55,7 +81,7 @@ void promoteMemSet(IRBuilder<> &builder, Value *dst, Value *argVal,
 	long int ival = dyn_cast<ConstantInt>(argVal)->getSExtValue();
 	Value *val = Constant::getIntegerValue(typ, APInt(typ->getIntegerBitWidth(), ival));
 
-	Value *dstGEP = builder.CreateInBoundsGEP(dyn_cast<PointerType>(dst->getType())->getElementType(),
+	Value *dstGEP = builder.CreateInBoundsGEP(getPromotionGEPType(dst),
 						  dst, args, "memset.dst.gep");
 	Value *dstStore = builder.CreateStore(val, dstGEP);
 	return;
@@ -124,6 +150,13 @@ bool canPromoteMemIntrinsic(MemIntrinsic *MI)
 	if (auto *MC = dyn_cast<MemCpyInst>(MI))
 		BUG_ON(MC->getSourceAddressSpace() != MC->getDestAddressSpace());
 
+	if (!isPromotableMemIntrinsicOperand(MI->getDest()) ||
+	    (isa<MemCpyInst>(MI) && !isPromotableMemIntrinsicOperand(dyn_cast<MemCpyInst>(MI)->getSource()))) {
+		WARN_ONCE("memintr-dst", "Cannot promote intrinsic due to opaque operand type pointer!" \
+			  "Skipping...\n");
+		return false;
+	}
+
 	/*
 	 * Finally, check whether this is one of the cases we can currently handle
 	 * We produce a warning anyway because, e.g., if a small struct has no atomic
@@ -144,13 +177,13 @@ bool PromoteMemIntrinsicPass::tryPromoteMemCpy(MemCpyInst *MI, Module &M)
 
 	auto *i64Ty = IntegerType::getInt64Ty(MI->getContext());
 	auto *nullInt = Constant::getNullValue(i64Ty);
-	auto *dstTyp = dyn_cast<PointerType>(dst->getType());
+	auto *dstTyp = getPromotionGEPType(dst);
 	BUG_ON(!dstTyp);
 
 	IRBuilder<> builder(MI);
 	std::vector<Value *> args = { nullInt };
 
-	promoteMemIntrinsic(dstTyp->getElementType(), args,
+	promoteMemIntrinsic(dstTyp, args,
 			    [&](Type *typ, const std::vector<Value *> &args)
 			    { promoteMemCpy(builder, dst, src, args, typ); });
 	promoted.push_back(MI);
@@ -167,13 +200,13 @@ bool PromoteMemIntrinsicPass::tryPromoteMemSet(MemSetInst *MS, Module &M)
 
 	auto *i64Ty = IntegerType::getInt64Ty(MS->getContext());
 	auto *nullInt = Constant::getNullValue(i64Ty);
-	auto *dstTyp = dyn_cast<PointerType>(MS->getDest()->getType());
+	auto *dstTyp = getPromotionGEPType(dst);
 	BUG_ON(!dstTyp);
 
 	IRBuilder<> builder(MS);
 	std::vector<Value *> args = { nullInt };
 
-	promoteMemIntrinsic(dstTyp->getElementType(), args,
+	promoteMemIntrinsic(dstTyp, args,
 			    [&](Type *typ, const std::vector<Value *> &args)
 			    { promoteMemSet(builder, dst, val, args, typ); });
 	promoted.push_back(MS);

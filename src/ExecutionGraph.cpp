@@ -835,7 +835,7 @@ std::unique_ptr<VectorClock>
 ExecutionGraph::getRevisitView(const BackwardRevisit &r) const
 {
 	auto *rLab = getReadLabel(r.getPos());
-	auto preds = LLVM_MAKE_UNIQUE<View>(getViewFromStamp(rLab->getStamp()));
+	auto preds = std::make_unique<View>(getViewFromStamp(rLab->getStamp()));
 	preds->update(getWriteLabel(r.getRev())->getPorfView());
 	if (auto *br = llvm::dyn_cast<BackwardRevisitHELPER>(&r))
 		preds->update(getWriteLabel(br->getMid())->getPorfView());
@@ -942,7 +942,7 @@ void ExecutionGraph::populateHbEntries(AdjList<Event, EventHasher> &relation) co
 std::unique_ptr<VectorClock> ExecutionGraph::getPredsView(Event e) const
 {
 	auto stamp = getEventLabel(e)->getStamp();
-	return LLVM_MAKE_UNIQUE<View>(getViewFromStamp(stamp));
+	return std::make_unique<View>(getViewFromStamp(stamp));
 }
 
 #ifdef ENABLE_GENMC_DEBUG

@@ -1,0 +1,6 @@
+// include first so we don't prefix internal functions with std::
+#include <genmc_internal.h>
+
+namespace std {
+#include <stdlib.h>
+};

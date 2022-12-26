@@ -55,12 +55,12 @@ public:
 		switch (co) {
 		case CoherenceType::mo:
 			graph->addCalculator(
-				LLVM_MAKE_UNIQUE<MOCalculator>(*graph, tracksDeps),
+				std::make_unique<MOCalculator>(*graph, tracksDeps),
 				ExecutionGraph::RelationId::co, true, true);
 			break;
 		case CoherenceType::wb:
 			graph->addCalculator(
-				LLVM_MAKE_UNIQUE<WBCalculator>(*graph, tracksDeps),
+				std::make_unique<WBCalculator>(*graph, tracksDeps),
 				ExecutionGraph::RelationId::co, true, true);
 			break;
 		default:
@@ -73,7 +73,7 @@ public:
 	GraphBuilder &withEnabledLAPOR(bool lapor) {
 		if (lapor) {
 			graph->addCalculator(
-				LLVM_MAKE_UNIQUE<LBCalculatorLAPOR>(*graph),
+				std::make_unique<LBCalculatorLAPOR>(*graph),
 				ExecutionGraph::RelationId::lb, true, true);
 		}
 		return *this;
@@ -82,7 +82,7 @@ public:
 	GraphBuilder &withEnabledPersevere(bool pers, unsigned int blockSize) {
 		if (pers) {
 			graph->addPersistencyChecker(
-				LLVM_MAKE_UNIQUE<PersistencyChecker>(*graph, blockSize));
+				std::make_unique<PersistencyChecker>(*graph, blockSize));
 		}
 		return *this;
 	}

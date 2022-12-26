@@ -52,7 +52,7 @@ public:
 	void removeAfter(const VectorClock &preds) override;
 
 	std::unique_ptr<Calculator> clone(ExecutionGraph &g) const override {
-		return LLVM_MAKE_UNIQUE<XBCalculator>(g);
+		return std::make_unique<XBCalculator>(g);
 	}
 
 private:

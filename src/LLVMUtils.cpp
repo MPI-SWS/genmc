@@ -33,7 +33,9 @@ bool areSameLoadOrdering(AtomicOrdering o1, AtomicOrdering o2)
 {
 	return o1 == o2 ||
 	       (o1 == AtomicOrdering::Acquire && o2 == AtomicOrdering::AcquireRelease) ||
-	       (o1 == AtomicOrdering::AcquireRelease && o2 == AtomicOrdering::Acquire);
+	       (o1 == AtomicOrdering::AcquireRelease && o2 == AtomicOrdering::Acquire) ||
+	       (o1 == AtomicOrdering::Monotonic && o2 == AtomicOrdering::Release) ||
+	       (o1 == AtomicOrdering::Release && o2 == AtomicOrdering::Monotonic);
 }
 
 Value *stripCasts(Value *val)
@@ -219,7 +221,7 @@ BasicBlock *tryThreadSuccessor(BranchInst *term, BasicBlock *succ)
 	return nullptr;
 }
 
-#ifndef LLVM_HAVE_ELIMINATE_UNREACHABLE_BLOCKS
+#if LLVM_VERSION_MAJOR < 9
 
 void DetatchDeadBlocks(
 	ArrayRef<BasicBlock *> BBs,
@@ -311,25 +313,8 @@ bool EliminateUnreachableBlocks(Function &F, DomTreeUpdater *DTU /* = nullptr */
 	return !DeadBlocks.empty();
 }
 
-#endif /* !LLVM_HAVE_ELIMINATE_UNREACHABLE_BLOCKS */
+#endif /* LLVM_VERSION_MAJOR < 9 */
 
-#ifdef LLVM_HANDLE_OPERAND_CHANGE_NEEDS_USE
-void replaceUsesWithIf(Value *Old, Value *New,
-		       llvm::function_ref<bool(Use &U)> ShouldReplace)
-{
-    // assert(New && "Value::replaceUsesWithIf(<null>) is invalid!");
-    // assert(New->getType() == getType() &&
-    //        "replaceUses of value with new value of different type!");
-
-	for (auto UI = Old->use_begin(), E = Old->use_end(); UI != E;) {
-		Use &U = *UI;
-		++UI;
-		if (!ShouldReplace(U))
-			continue;
-		U.set(New);
-	}
-}
-#else
 void replaceUsesWithIf(Value *Old, Value *New,
 		       llvm::function_ref<bool(Use &U)> ShouldReplace)
 {
@@ -363,4 +348,3 @@ void replaceUsesWithIf(Value *Old, Value *New,
 		Consts.pop_back_val()->handleOperandChange(Old, New);
 	}
 }
-#endif /* !LLVM_HANDLE_OPERAND_CHANGE_NEEDS_USE */

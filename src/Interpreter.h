@@ -49,29 +49,16 @@
 #include "SVal.hpp"
 #include "View.hpp"
 #include "CallInstWrapper.hpp"
+#include "value_ptr.hpp"
 
 #include <llvm/ADT/BitVector.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/GenericValue.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/DebugInfo.h>
-#if defined(HAVE_LLVM_IR_DATALAYOUT_H)
 #include <llvm/IR/DataLayout.h>
-#elif defined(HAVE_LLVM_DATALAYOUT_H)
-#include <llvm/DataLayout.h>
-#endif
-#if defined(HAVE_LLVM_IR_FUNCTION_H)
 #include <llvm/IR/Function.h>
-#elif defined(HAVE_LLVM_FUNCTION_H)
-#include <llvm/Function.h>
-#endif
-#if defined(HAVE_LLVM_INSTVISITOR_H)
-#include <llvm/InstVisitor.h>
-#elif defined(HAVE_LLVM_IR_INSTVISITOR_H)
 #include <llvm/IR/InstVisitor.h>
-#elif defined(HAVE_LLVM_SUPPORT_INSTVISITOR_H)
-#include <llvm/Support/InstVisitor.h>
-#endif
 #include <llvm/Support/DataTypes.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/raw_ostream.h>
@@ -187,6 +174,8 @@ public:
 	MyRNG rng;
 	std::vector<std::pair<int, std::string> > prefixLOC;
 
+	bool isMain() const { return id == 0; }
+
 	void block(BlockageType t) { blocked = t; }
 	void unblock() { blocked = BlockageType::NotBlocked; }
 	bool isBlocked() const { return blocked != BlockageType::NotBlocked; }
@@ -229,7 +218,9 @@ struct ThreadInfo {
 
 /* Pers: The state of the program -- i.e., part of the program being interpreted */
 enum class ProgramState {
+	Ctors,
 	Main,
+	Dtors,
 	Recovery
 };
 
@@ -239,37 +230,49 @@ enum class ExecutionState {
 	Replay
 };
 
-struct EELocalState {
-	SAddrAllocator alloctor;
-	std::unique_ptr<DepTracker> depTracker;
-	ExecutionState execState;
-	ProgramState programState;
-	llvm::BitVector fds;
-	llvm::IndexedMap<void *> fdToFile;
-	std::unordered_map<std::string, void *> nameToInodeAddr;
+struct DynamicComponents {
+
+	/* Information about threads as well as the currently executing thread */
 	std::vector<Thread> threads;
 	int currentThread = 0;
 
-	EELocalState() = default;
-	EELocalState(const SAddrAllocator &alloctor,
-		     const std::unique_ptr<DepTracker> &depTracker,
-		     const ExecutionState &execState,
-		     const ProgramState &programState,
-		     const llvm::BitVector &fds,
-		     const llvm::IndexedMap<void *> &fdToFile,
-		     const std::unordered_map<std::string, void *> &nameToInodeAddr,
-		     const std::vector<Thread> &ts,
-		     int current);
+	/* A tracker for dynamic allocations */
+	SAddrAllocator alloctor;
+
+	/* Pointer to the dependency tracker */
+	value_ptr<DepTracker, DepTrackerCloner> depTracker = nullptr;
+
+	/* Information about the interpreter's state */
+	ExecutionState execState = ExecutionState::Normal;
+	ProgramState programState = ProgramState::Main; /* Pers */
+
+	/* Pers: A bitvector of available file descriptors */
+	llvm::BitVector fds;
+
+	/* Pers: A map from file descriptors to file descriptions */
+	llvm::IndexedMap<void *> fdToFile;
+
+	/* Pers: Maps a filename to the address of the contents of the directory's inode for
+	 * said name (the contents should have the address of the file's inode) */
+	std::unordered_map<std::string, void *> nameToInodeAddr;
+
+	GenericValue ExitValue;          // The return value of the called function
+
+	// AtExitHandlers - List of functions to call when the program exits,
+	// registered with the atexit() library function.
+	std::vector<Function*> AtExitHandlers;
 };
 
-struct EESharedState {
-	SAddrAllocator alloctor;
-	llvm::BitVector fds;
-	std::vector<ThreadInfo> threadInfos;
+using EELocalState = DynamicComponents;
 
+struct EESharedState {
 	EESharedState() = default;
 	EESharedState(SAddrAllocator alloctor, const llvm::BitVector &fds, std::vector<ThreadInfo> tis)
 		: alloctor(alloctor), fds(fds), threadInfos(tis) {}
+
+	SAddrAllocator alloctor;
+	llvm::BitVector fds;
+	std::vector<ThreadInfo> threadInfos;
 };
 
 
@@ -312,48 +315,17 @@ protected:
   SAddr errnoAddr;
   Type *errnoTyp;
 
-  /* Pers: Whether we should run a recovery procedure after the execution finishes */
-  bool checkPersistency;
-
   /* Pers: The recovery routine to run */
   Function *recoveryRoutine = nullptr;
 
-  /*** Dynamic components (change during verification) ***/
-
-  /* Information about threads as well as the currently executing thread */
-  std::vector<Thread> threads;
-  int currentThread = 0;
-
-  /* A tracker for dynamic allocations */
-  SAddrAllocator alloctor;
-
-  /* Pointer to the dependency tracker */
-  std::unique_ptr<DepTracker> depTracker = nullptr;
-
-  /* Information about the interpreter's state */
-  ExecutionState execState = ExecutionState::Normal;
-  ProgramState programState = ProgramState::Main; /* Pers */
-
-  /* Pers: A bitvector of available file descriptors */
-  llvm::BitVector fds;
-
-  /* Pers: A map from file descriptors to file descriptions */
-  llvm::IndexedMap<void *> fdToFile;
-
-  /* Pers: Maps a filename to the address of the contents of the directory's inode for
-   * said name (the contents should have the address of the file's inode) */
-  std::unordered_map<std::string, void *> nameToInodeAddr;
-
-  // The runtime stack of executing code.  The top of the stack is the current
-  // function record.
+  /* This is not exactly static but is reset to the same value each time*/
   std::vector<ExecutionContext> mainECStack;
 
-  GenericValue ExitValue;          // The return value of the called function
   IntrinsicLowering *IL;
 
-  // AtExitHandlers - List of functions to call when the program exits,
-  // registered with the atexit() library function.
-  std::vector<Function*> AtExitHandlers;
+  /*** Dynamic components (change during verification) ***/
+
+  DynamicComponents dynState;
 
 public:
   explicit Interpreter(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> MI,
@@ -365,11 +337,11 @@ public:
   void restoreLocalState(std::unique_ptr<EELocalState> state);
 
   std::unique_ptr<EESharedState> getSharedState() const {
-	  auto shared = LLVM_MAKE_UNIQUE<EESharedState>();
+	  auto shared = std::make_unique<EESharedState>();
 
-	  shared->alloctor = alloctor;
-	  shared->fds = fds;
-	  for (auto &thr : threads) {
+	  shared->alloctor = dynState.alloctor;
+	  shared->fds = dynState.fds;
+	  for (auto &thr : threads()) {
 		  shared->threadInfos.emplace_back(
 			  thr.id, thr.parentId, MI->idInfo.VID.at(thr.threadFun), thr.threadArg);
 	  }
@@ -388,9 +360,9 @@ public:
 	  return createAddNewThread(calledFun, ti.arg, ti.id, ti.parentId, SF);
   }
   void setSharedState(std::unique_ptr<EESharedState> state) {
-	  alloctor = std::move(state->alloctor);
-	  fds = std::move(state->fds);
-	  threads.clear();
+	  dynState.alloctor = std::move(state->alloctor);
+	  dynState.fds = std::move(state->fds);
+	  dynState.threads.clear();
 	  for (auto &ti : state->threadInfos)
 		  constructAddThreadFromInfo(ti);
   }
@@ -423,19 +395,29 @@ public:
   Thread &createAddRecoveryThread(int tid);
 
   /* Sets-up the specified thread for execution */
-  void scheduleThread(int tid) { currentThread = tid; }
+  void scheduleThread(int tid) { dynState.currentThread = tid; }
 
   /* Returns the currently executing thread */
-  Thread& getCurThr() { return threads[currentThread]; }
-  const Thread &getCurThr() const { return threads.at(currentThread); }
+  Thread& getCurThr() { return dynState.threads[dynState.currentThread]; }
+  const Thread &getCurThr() const { return dynState.threads.at(dynState.currentThread); }
 
   /* Returns the thread with the specified ID (taken from the graph) */
-  Thread& getThrById(int id) { return threads[id]; };
+  Thread& getThrById(int id) { return dynState.threads[id]; };
+  const Thread& getThrById(int id) const { return dynState.threads[id]; };
 
-  std::vector<Thread>::const_iterator threads_begin() const { return threads.begin(); }
-  std::vector<Thread>::const_iterator threads_end() const { return threads.end(); }
-  std::vector<Thread>::iterator threads_begin() { return threads.begin(); }
-  std::vector<Thread>::iterator threads_end() { return threads.end(); }
+  unsigned int getNumThreads() const { return dynState.threads.size(); }
+
+  using thread_iterator = std::vector<Thread>::iterator;
+  using const_thread_iterator = std::vector<Thread>::const_iterator;
+  using thread_range = iterator_range<thread_iterator>;
+  using const_thread_range = iterator_range<const_thread_iterator>;
+
+  const_thread_iterator threads_begin() const { return dynState.threads.begin(); }
+  const_thread_iterator threads_end() const { return dynState.threads.end(); }
+  thread_iterator threads_begin() { return dynState.threads.begin(); }
+  thread_iterator threads_end() { return dynState.threads.end(); }
+  const_thread_range threads() const { return const_thread_range(threads_begin(), threads_end()); }
+  thread_range threads() { return thread_range(threads_begin(), threads_end()); }
 
   /* Returns the stack frame of the currently executing thread */
   std::vector<ExecutionContext> &ECStack() { return getCurThr().ECStack; }
@@ -452,11 +434,9 @@ public:
 	  return Event(thr.id, --thr.globalInstructions);
   };
 
-  /* Set and query interpreter's state */
-  ProgramState getProgramState() const { return programState; }
-  ExecutionState getExecState() const { return execState; }
-  void setProgramState(ProgramState s) { programState = s; }
-  void setExecState(ExecutionState s) { execState = s; }
+  /* Query interpreter's state */
+  ProgramState getProgramState() const { return dynState.programState; }
+  ExecutionState getExecState() const { return dynState.execState; }
 
   /* Annotation information */
 
@@ -545,10 +525,19 @@ public:
   void callFunction(Function *F, const std::vector<GenericValue> &ArgVals,
 		    const std::unique_ptr<EventDeps> &specialDeps);
 
+  /* callFunction() wrappers to be called before running a function */
+  void setupFunctionCall(Function *F, ArrayRef<GenericValue> ArgValues);
+  void setupStaticCtorsDtors(Module &M, bool isDtors);
+  void setupStaticCtorsDtors(bool isDtors);
+  void setupMain(Function *Fn,
+		 const std::vector<std::string> &argv,
+		 const char * const * envp);
+
   void run();                // Execute instructions until nothing left to do
 
-  /* Pers: Run the specified recovery routine */
-  void runRecoveryRoutine();
+  /* run() wrappers */
+  int runAsMain(const std::string &main);
+  void runRecovery();
 
   // Opcode Implementations
   void visitReturnInst(ReturnInst &I);
@@ -581,7 +570,7 @@ public:
   void visitSelectInst(SelectInst &I);
 
   void visitCallInstWrapper(CallInstWrapper CIW);
-#ifdef LLVM_HAS_CALLSITE
+#if LLVM_VERSION_MAJOR < 11
   void visitCallSite(CallSite  CS) { visitCallInstWrapper(CallInstWrapper(CS)); }
 #else
   void visitCallBase(CallBase &CB) { visitCallInstWrapper(CallInstWrapper(CB)); }
@@ -617,7 +606,7 @@ public:
   void exitCalled(GenericValue GV);
 
   void addAtExitHandler(Function *F) {
-    AtExitHandlers.push_back(F);
+    dynState.AtExitHandlers.push_back(F);
   }
 
   GenericValue *getFirstVarArg () {
@@ -722,6 +711,8 @@ private:  // Helper functions
 		      const std::unique_ptr<EventDeps> &deps);
   void executeFsyncFS(void *inode, Type *intTyp);
 
+  void setProgramState(ProgramState s) { dynState.programState = s; }
+  void setExecState(ExecutionState s) { dynState.execState = s; }
 
   /* Custom Opcode Implementations */
 #define DECLARE_CUSTOM_OPCODE(_name)						  \
@@ -746,6 +737,7 @@ private:  // Helper functions
   DECLARE_CUSTOM_OPCODE(ThreadCreate);
   DECLARE_CUSTOM_OPCODE(ThreadJoin);
   DECLARE_CUSTOM_OPCODE(ThreadExit);
+  DECLARE_CUSTOM_OPCODE(AtExit);
   DECLARE_CUSTOM_OPCODE(MutexInit);
   DECLARE_CUSTOM_OPCODE(MutexLock);
   DECLARE_CUSTOM_OPCODE(MutexUnlock);
@@ -803,47 +795,51 @@ private:  // Helper functions
 
   /* Dependency tracking */
 
+  DepTracker *getDepTracker() { return &*dynState.depTracker; }
+  const DepTracker *getDepTracker() const { return &*dynState.depTracker; }
+
   std::unique_ptr<EventDeps>
   makeEventDeps(const DepInfo *addr, const DepInfo *data,
 		const DepInfo *ctrl, const DepInfo *addrPo,
 		const DepInfo *cas);
 
   const DepInfo *getDataDeps(unsigned int tid, Value *i) {
-    return depTracker ? depTracker->getDataDeps(tid, i) : nullptr;
+    return getDepTracker() ? getDepTracker()->getDataDeps(tid, i) : nullptr;
   }
   const DepInfo *getAddrPoDeps(unsigned int tid) {
-    return depTracker ? depTracker->getAddrPoDeps(tid) : nullptr;
+    return getDepTracker() ? getDepTracker()->getAddrPoDeps(tid) : nullptr;
   }
   const DepInfo *getCtrlDeps(unsigned int tid) {
-    return depTracker ? depTracker->getCtrlDeps(tid) : nullptr;
+    return getDepTracker() ? getDepTracker()->getCtrlDeps(tid) : nullptr;
   }
 
   void updateDataDeps(unsigned int tid, Value *dst, Value *src) {
-    if (depTracker)
-      depTracker->updateDataDeps(tid, dst, src);
+    if (getDepTracker())
+      getDepTracker()->updateDataDeps(tid, dst, src);
   }
   void updateDataDeps(unsigned int tid, Value *dst, const DepInfo *e) {
-    if (depTracker)
-      depTracker->updateDataDeps(tid, dst, *e);
+    if (getDepTracker())
+      getDepTracker()->updateDataDeps(tid, dst, *e);
   }
   void updateDataDeps(unsigned int tid, Value *dst, Event e) {
-    if (depTracker)
-      depTracker->updateDataDeps(tid, dst, e);
+    if (getDepTracker())
+      getDepTracker()->updateDataDeps(tid, dst, e);
   }
   void updateAddrPoDeps(unsigned int tid, Value *src) {
-    if (depTracker)
-      depTracker->updateAddrPoDeps(tid, src);
+    if (getDepTracker())
+      getDepTracker()->updateAddrPoDeps(tid, src);
   }
   void updateCtrlDeps(unsigned int tid, Value *src) {
-    if (depTracker)
-      depTracker->updateCtrlDeps(tid, src);
+    if (getDepTracker())
+      getDepTracker()->updateCtrlDeps(tid, src);
   }
 
   std::unique_ptr<EventDeps> updateFunArgDeps(unsigned int tid, Function *F);
+  void updateInternalFunRetDeps(unsigned int tid, Function *F, Instruction *CS);
 
   void clearDeps(unsigned int tid) {
-    if (depTracker)
-      depTracker->clearDeps(tid);
+    if (getDepTracker())
+      getDepTracker()->clearDeps(tid);
   }
 
   /* Update naming information */

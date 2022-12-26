@@ -38,19 +38,19 @@ LKMMDriver::LKMMDriver(std::shared_ptr<const Config> conf, std::unique_ptr<llvm:
 	auto &g = getGraph();
 
 	/* LKMM adds a prop and an xb calculator to the party */
-	g.addCalculator(LLVM_MAKE_UNIQUE<PROPCalculator>(g),
+	g.addCalculator(std::make_unique<PROPCalculator>(g),
 			ExecutionGraph::RelationId::prop, false);
-	g.addCalculator(LLVM_MAKE_UNIQUE<ARCalculatorLKMM>(g),
+	g.addCalculator(std::make_unique<ARCalculatorLKMM>(g),
 			ExecutionGraph::RelationId::ar_lkmm, false);
-	g.addCalculator(LLVM_MAKE_UNIQUE<PBCalculator>(g),
+	g.addCalculator(std::make_unique<PBCalculator>(g),
 			ExecutionGraph::RelationId::pb, false);
-	g.addCalculator(LLVM_MAKE_UNIQUE<RCULinkCalculator>(g),
+	g.addCalculator(std::make_unique<RCULinkCalculator>(g),
 			ExecutionGraph::RelationId::rcu_link, false);
-	g.addCalculator(LLVM_MAKE_UNIQUE<RCUCalculator>(g),
+	g.addCalculator(std::make_unique<RCUCalculator>(g),
 			ExecutionGraph::RelationId::rcu, false);
-	g.addCalculator(LLVM_MAKE_UNIQUE<RCUFenceCalculator>(g),
+	g.addCalculator(std::make_unique<RCUFenceCalculator>(g),
 			ExecutionGraph::RelationId::rcu_fence, false);
-	g.addCalculator(LLVM_MAKE_UNIQUE<XBCalculator>(g),
+	g.addCalculator(std::make_unique<XBCalculator>(g),
 			ExecutionGraph::RelationId::xb, false);
 
 	WARN_ONCE("lkmm-experimental", "LKMM support is still at an experimental stage!\n");

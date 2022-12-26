@@ -21,6 +21,7 @@
 #include "config.h"
 #include "EliminateCastsPass.hpp"
 #include "Error.hpp"
+#include "LLVMUtils.hpp"
 #include "VSet.hpp"
 
 #include <llvm/Analysis/AssumptionCache.h>
@@ -42,13 +43,13 @@
 
 using namespace llvm;
 
-#ifdef LLVM_HAS_ONLYUSEDBYLIFETIMEMARKERSORDROPPABLEINSTS
-# ifdef LLVM_HAS_IS_LIFETIME_START_OR_END
+#if LLVM_VERSION_MAJOR >= 12
+# if LLVM_VERSION_MAJOR > 7
 #  define IS_LIFETIME_START_OR_END(i) (i)->isLifetimeStartOrEnd()
 # else
 #  define IS_LIFETIME_START_OR_END(i) isLifetimeStartOrEnd(i)
 # endif
-# ifdef LLVM_HAS_IS_DROPPABLE
+# if LLVM_VERSION_MAJOR >= 11
 #  define IS_DROPPABLE(i) (i)->isDroppable()
 # else
 #  define IS_DROPPABLE(i) isDroppable(i)
@@ -62,17 +63,13 @@ using namespace llvm;
 # define ONLY_USED_BY_MARKERS_OR_DROPPABLE(i) onlyUsedByLifetimeMarkers(i)
 #endif
 
-#ifdef LLVM_HAS_ALIGN
+#if LLVM_VERSION_MAJOR >= 11
 # define GET_INST_ALIGN(i) i->getAlign()
 #else
 # define GET_INST_ALIGN(i) i->getAlignment()
 #endif
 
-#ifdef LLVM_HAS_GET_SYNC_SCOPE_ID
-# define GET_INST_SYNC_SCOPE(i) i->getSyncScopeID()
-#else
-# define GET_INST_SYNC_SCOPE(i) i->getSynchScope()
-#endif
+#define GET_INST_SYNC_SCOPE(i) i->getSyncScopeID()
 
 void EliminateCastsPass::getAnalysisUsage(AnalysisUsage &AU) const
 {
@@ -80,6 +77,9 @@ void EliminateCastsPass::getAnalysisUsage(AnalysisUsage &AU) const
 	AU.addRequired<DominatorTreeWrapperPass>();
 	AU.setPreservesCFG();
 }
+
+/* Opaque pointers should render this pass obsolete */
+#if LLVM_VERSION_MAJOR <= 14
 
 static bool haveSameSizePointees(const Type *p1, const Type *p2, const DataLayout &DL)
 {
@@ -378,12 +378,104 @@ static bool eliminateCasts(Function &F, DominatorTree &DT, AssumptionCache &AC)
 	}
 	return changed;
 }
+#else /* LLVM_VERSION_MAJOR <= 14 */
+static bool isUserPure(User *u, AllocaInst *ai, const DataLayout &DL,
+		       std::vector<Type *> &useTypes)
+{
+	if (auto *li = dyn_cast<LoadInst>(u)) {
+		useTypes.push_back(li->getType());
+		return !li->isVolatile();
+	} else if (auto *si = dyn_cast<StoreInst>(u)) {
+		useTypes.push_back(si->getValueOperand()->getType());
+		/* Don't allow a store OF the U, only INTO the U */
+		return !si->isVolatile() && si->getValueOperand() != ai;
+	} else if (auto *ii = dyn_cast<IntrinsicInst>(u)) {
+		return IS_LIFETIME_START_OR_END(ii) || IS_DROPPABLE(ii);
+	} else if (auto *gepi = dyn_cast<GetElementPtrInst>(u)) {
+		return gepi->hasAllZeroIndices() && ONLY_USED_BY_MARKERS_OR_DROPPABLE(gepi);
+	} else if (auto *asci = dyn_cast<AddrSpaceCastInst>(u)) {
+		return onlyUsedByLifetimeMarkers(asci);
+	}
+	/* All other cases are not safe*/
+	return false;
+}
+
+static bool isPromotable(AllocaInst *ai)
+{
+	auto &DL = ai->getModule()->getDataLayout();
+	std::vector<Type *> useTypes;
+
+	if (!ai->getAllocatedType()->isIntOrPtrTy() ||
+	    std::any_of(ai->users().begin(), ai->users().end(), [&](User *u){
+				return !isUserPure(u, ai, DL, useTypes); }))
+		return false;
+	return std::all_of(useTypes.begin(), useTypes.end(), [&ai,&DL](auto *typ){
+		return DL.getTypeAllocSize(typ) ==
+			DL.getTypeAllocSize(ai->getAllocatedType()) &&
+			typ->isIntOrPtrTy();
+	});
+}
+
+static bool introduceAllocaCasts(AllocaInst *ai)
+{
+	for (auto *u : ai->users()) {
+		if (auto *li = dyn_cast<LoadInst>(u)) {
+			if (li->getType() == ai->getAllocatedType())
+				continue;
+			auto *prevType = li->getType();
+			li->mutateType(ai->getAllocatedType());
+			auto opc = CastInst::getCastOpcode(li, false, prevType, false);
+			auto *res = CastInst::Create(opc, li, prevType, "",
+						     li->getNextNonDebugInstruction());
+			replaceUsesWithIf(li, res, [&](Use &u){
+				auto *us = dyn_cast<Instruction>(u.getUser());
+				return us && us != res;
+			});
+		} else if (auto *si = dyn_cast<StoreInst>(u)) {
+			if (si->getValueOperand()->getType() == ai->getAllocatedType())
+				continue;
+			auto opc = CastInst::getCastOpcode(
+				si->getValueOperand(), false, ai->getAllocatedType(), false);
+			auto *res = CastInst::Create(opc, si->getValueOperand(),
+						     ai->getAllocatedType(), "", si);
+			si->setOperand(0, res);
+		}
+	}
+	return false;
+}
+
+static bool introduceCasts(Function &F, DominatorTree &DT, AssumptionCache &AC)
+{
+	auto &eBB = F.getEntryBlock();
+	auto modified = false;
+
+	auto changed = true;
+	while (changed) {
+		changed = false;
+		/* Find allocas that are safe to promote (skip terminator) */
+		for (auto it = eBB.begin(), e = --eBB.end(); it != e; ++it) {
+			/* An alloca is promotable if all its users are "pure" */
+			if (auto *ai = dyn_cast<AllocaInst>(it)) {
+				if (isPromotable(ai)) {
+					changed |= introduceAllocaCasts(ai);
+					modified |= changed;
+				}
+			}
+		}
+	}
+	return modified;
+}
+#endif /* LLVM_VERSION_MAJOR <= 14 */
 
 bool EliminateCastsPass::runOnFunction(Function &F)
 {
 	auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
 	auto &AC = getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F);
+#if LLVM_VERSION_MAJOR <= 14
 	return eliminateCasts(F, DT, AC);
+#else
+	return introduceCasts(F, DT, AC);
+#endif
 }
 
 Pass *createEliminateCastsPass()

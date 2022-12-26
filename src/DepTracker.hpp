@@ -89,4 +89,9 @@ private:
 	std::unordered_map<unsigned int, DepInfo> ctrlDeps;
 };
 
+struct DepTrackerCloner {
+	DepTracker *operator()(DepTracker const &x) const { return new DepTracker(x); }
+	// DepTracker *operator()(DepTracker &&x) const { return new DepTracker(std::move(x)); }
+};
+
 #endif /* __DEP_TRACKER_HPP__ */
