@@ -1,1 +1,1 @@
- -unroll=3 | -DN=2 -I../tests/correct/data-structures/mcs_spinlock/
+-disable-ipr -disable-sr  -unroll=3 | -DN=2 -I./tests/correct/data-structures/mcs_spinlock/

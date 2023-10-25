@@ -460,7 +460,7 @@ typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitAShrExpr(AShrExpr<T> &
 	IMPLEMENT_BINOP_NONMEM(>>);
 }
 
-#define IMPLEMENT_CMPOP(op)				\
+#define IMPLEMENT_EQOP(op)				\
 	if (this->visit(e.getKid(0)) op (this->visit(e.getKid(1))))	\
 		return SVal(1);				\
 	return SVal(0);
@@ -468,61 +468,65 @@ typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitAShrExpr(AShrExpr<T> &
 template<typename T>
 typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitEqExpr(EqExpr<T> &e)
 {
-	IMPLEMENT_CMPOP(==);
+	IMPLEMENT_EQOP(==);
 }
 
 template<typename T>
 typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitNeExpr(NeExpr<T> &e)
 {
-	IMPLEMENT_CMPOP(!=);
+	IMPLEMENT_EQOP(!=);
 }
+
+#define IMPLEMENT_CMPOP(op)						\
+	return (this->visit(e.getKid(0)).op(this->visit(e.getKid(1)))) ? \
+	SVal(1) : SVal(0);
 
 template<typename T>
 typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitUltExpr(UltExpr<T> &e)
 {
-	IMPLEMENT_CMPOP(<);
+	IMPLEMENT_CMPOP(ult);
 }
 
 template<typename T>
 typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitUleExpr(UleExpr<T> &e)
 {
-	IMPLEMENT_CMPOP(<=);
+	IMPLEMENT_CMPOP(ule);
 }
 
 template<typename T>
 typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitUgtExpr(UgtExpr<T> &e)
 {
-	IMPLEMENT_CMPOP(>);
+	IMPLEMENT_CMPOP(ugt);
 }
 
 template<typename T>
 typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitUgeExpr(UgeExpr<T> &e)
 {
-	IMPLEMENT_CMPOP(>=);
+	IMPLEMENT_CMPOP(uge);
 }
 
 template<typename T>
 typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitSltExpr(SltExpr<T> &e)
 {
-	IMPLEMENT_CMPOP(<);
+	IMPLEMENT_CMPOP(slt);
 }
 
 template<typename T>
 typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitSleExpr(SleExpr<T> &e)
 {
-	IMPLEMENT_CMPOP(<=);
+	IMPLEMENT_CMPOP(sle);
 }
 
 template<typename T>
 typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitSgtExpr(SgtExpr<T> &e)
 {
-	IMPLEMENT_CMPOP(>);
+	IMPLEMENT_CMPOP(sgt);
 }
 
 template<typename T>
 typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitSgeExpr(SgeExpr<T> &e)
 {
-	IMPLEMENT_CMPOP(>=);
+	IMPLEMENT_CMPOP(sge);
 }
 
 

@@ -20,7 +20,7 @@
 
 # Get binary's full path
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-GenMC="${GenMC:-$DIR/../src/genmc}"
+GenMC="${GenMC:-$DIR/../genmc}"
 
 source "${DIR}/terminal.sh"
 
@@ -109,31 +109,32 @@ initialize_results
 
 # First, run the test cases in the correct/ directory
 correctdir="${DIR}/../tests/correct"
-for model in rc11 imm lkmm
+for model in rc11 imm # rc11 imm lkmm
 do
-    for coherence in wb mo
+    for cat in infr litmus saver ipr sr liveness synthetic data-structures # helper fs lkmm lapor
     do
-	for cat in infr litmus saver helper liveness synthetic data-structures fs lkmm # lapor
-	do
-	    testdir="${correctdir}/${cat}"
-	    if [[ ("${model}" == "lkmm" && "${cat}" != "lkmm" && "${cat}" != "fs") ||
+	testdir="${correctdir}/${cat}"
+	if [[ ("${model}" == "lkmm" && "${cat}" != "lkmm" && "${cat}" != "fs") ||
 		  ("${model}" != "lkmm" && "${cat}" == "lkmm") ]]
-	    then
-		continue
-	    fi
-	    if [[ "${cat}" == "liveness" && "${coherence}" != "mo" ]]
-	    then
-		continue
-	    fi
-	    if [[ "${cat}" == "helper" && ("${coherence}" != "mo" || "${GENMCFLAGS}" =~ "policy=random") ]]
-	    then
-		continue
-	    fi
-	    check_blocked="" && [[ "${cat}" == "saver" || "${cat}" == "helper" ]] &&
-		[[ ! "${GENMCFLAGS}" =~ "policy=random" ]] && check_blocked="yes"
-	    source "${DIR}/runcorrect.sh" # the env variables for runcorrect.sh are set
-	    increase_total_time
-	done
+	then
+	    continue
+	fi
+	if [[ "${cat}" == "helper" && "${GENMCFLAGS}" =~ "policy=arbitrary" ]]
+	then
+	    continue
+	fi
+	if [[ "${model}" == "imm" && "${cat}" == "sr" ]]
+	then
+	    continue
+	fi
+	check_blocked="" && [[ "${cat}" == "saver" || "${cat}" == "helper" ]] &&
+	    [[ (! "${GENMCFLAGS}" =~ "policy=arbitrary") ]] && check_blocked="yes"
+	if [[ "${cat}" == "ipr" && "${model}" != "imm" ]]
+	then
+	    check_blocked="yes"
+	fi
+	source "${DIR}/runcorrect.sh" # the env variables for runcorrect.sh are set
+	increase_total_time
     done
 done
 
@@ -142,7 +143,7 @@ header_printed=""
 wrongdir="${DIR}/../tests/wrong"
 for model in rc11 imm
 do
-    for cat in safety liveness infr racy memory locking barriers helper fs
+    for cat in safety liveness infr racy memory locking barriers helper # fs
     do
 	# under IMM, only run safety and liveness tests
 	if test "${model}" = "imm" -a "${cat}" != "safety" -a "${cat}" != "liveness"

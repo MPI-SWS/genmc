@@ -42,6 +42,7 @@
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Utils/LoopUtils.h>
 
+#include <optional>
 #include <utility>
 #include <unordered_set>
 
@@ -212,7 +213,7 @@ bool isPHIRelatedToCASRes(const PHINode *phi, const SmallVector<const AtomicCmpX
 
 bool isPHIRelatedToLoad(const PHINode *curr,
 			Value *&loadPtr,
-			Optional<AtomicOrdering> &loadOrd,
+			std::optional<AtomicOrdering> &loadOrd,
 			SmallVector<const PHINode *, 4> &phiChain,
 			VSet<const PHINode *> &related)
 {
@@ -226,7 +227,7 @@ bool isPHIRelatedToLoad(const PHINode *curr,
 		if (auto *li = dyn_cast_or_null<LoadInst>(val)) {
 			if (loadPtr && !accessSameVariable(li->getPointerOperand(), loadPtr))
 				return false;
-			if (loadOrd.hasValue() &&
+			if (loadOrd.has_value() &&
 			    !areSameLoadOrdering(li->getOrdering(), *loadOrd))
 				return false;
 			loadPtr = li->getPointerOperand();
@@ -248,7 +249,7 @@ bool isPHIRelatedToLoad(const PHINode *curr,
 bool isPHIRelatedToLoad(const PHINode *phi)
 {
 	Value *loadPtr = nullptr;
-	Optional<AtomicOrdering> loadOrd;
+	std::optional<AtomicOrdering> loadOrd;
 	VSet<const PHINode *> related;
 	SmallVector<const PHINode *, 4> phiChain;
 

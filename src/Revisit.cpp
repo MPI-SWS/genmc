@@ -23,14 +23,20 @@
 llvm::raw_ostream& operator<<(llvm::raw_ostream& s,  const Revisit::Kind k)
 {
 	switch (k) {
-	case Revisit::RV_FRev:
+	case Revisit::RV_FRevRead:
 		s << "FR";
+		break;
+	case Revisit::RV_FRevOpt:
+		s << "OPT";
+		break;
+	case Revisit::RV_FRevMO:
+		s << "MO";
 		break;
 	case Revisit::RV_BRev:
 		s << "BR";
 		break;
-	case Revisit::RV_MO:
-		s << "MO";
+	case Revisit::RV_BRevHelper:
+		s << "BRH";
 		break;
 	default:
 		PRINT_BUGREPORT_INFO_ONCE("print-revisit-type", "Cannot print revisit type");
@@ -43,23 +49,27 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s,  const Revisit::Kind k)
 llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const Revisit &item)
 {
 	switch (item.getKind()) {
-	case Revisit::RV_FRev: {
-		auto &fi = static_cast<const ForwardRevisit &>(item);
+	case Revisit::RV_FRevRead: {
+		auto &fi = static_cast<const ReadForwardRevisit &>(item);
 		s << fi.getKind() << "(" << fi.getPos() << ": " << fi.getRev() << ")";
+		break;
+	}
+	case Revisit::RV_FRevMO: {
+		auto &mi = static_cast<const WriteForwardRevisit &>(item);
+		s << mi.getKind() << "(" << mi.getPos() << ": " << mi.getSucc() << ")";
+		break;
+	}
+	case Revisit::RV_FRevOpt: {
+		auto &mi = static_cast<const OptionalForwardRevisit &>(item);
+		s << mi.getKind() << "(" << mi.getPos() << ")";
 		break;
 	}
 	case Revisit::RV_BRev: {
 		auto &bi = static_cast<const BackwardRevisit &>(item);
 		s << bi.getKind() << "(" << bi.getPos() << ": ["
 		  << bi.getRev() << ", ";
-		for (auto &lab : bi.getPrefixNoRel())
-			s << lab->getPos();
+		s << *bi.getViewNoRel();
 		s << "]";
-		break;
-	}
-	case Revisit::RV_MO: {
-		auto &mi = static_cast<const WriteRevisit &>(item);
-		s << mi.getKind() << "(" << mi.getPos() << ": " << mi.getMOPos() << ")";
 		break;
 	}
 

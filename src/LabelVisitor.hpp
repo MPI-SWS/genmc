@@ -53,6 +53,7 @@ public:
 			VISIT_LABEL(Block);
 			VISIT_LABEL(Optional);
 			VISIT_LABEL(ThreadStart);
+			VISIT_LABEL(Init);
 			VISIT_LABEL(ThreadFinish);
 			VISIT_LABEL(ThreadCreate);
 			VISIT_LABEL(ThreadJoin);
@@ -106,6 +107,7 @@ public:
 			VISIT_LABEL(DskOpen);
 			VISIT_LABEL(RCULock, LKMM);
 			VISIT_LABEL(RCUUnlock, LKMM);
+			VISIT_LABEL(CLFlush);
 		default:
 			BUG();
 		}
@@ -118,6 +120,7 @@ public:
 	void visitEmptyLabel(const EmptyLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 	void visitBlockLabel(const BlockLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 	void visitOptionalLabel(const OptionalLabel &lab) { return DELEGATE_LABEL(EventLabel); }
+	void visitInitLabel(const InitLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 	void visitThreadStartLabel(const ThreadStartLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 	void visitThreadFinishLabel(const ThreadFinishLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 	void visitThreadCreateLabel(const ThreadCreateLabel &lab) { return DELEGATE_LABEL(EventLabel); }
@@ -182,6 +185,7 @@ public:
 	void visitDskOpenLabel(const DskOpenLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 	void visitRCULockLabelLKMM(const RCULockLabelLKMM &lab) { return DELEGATE_LABEL(EventLabel); }
 	void visitRCUUnlockLabelLKMM(const RCUUnlockLabelLKMM &lab) { return DELEGATE_LABEL(EventLabel); }
+	void visitCLFlushLabel(const CLFlushLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 
 	/*
 	 * If none of the above matched, propagate to the next level.
@@ -280,6 +284,11 @@ public:
 		out << lab.getType();
 	}
 
+	void visitCLFlushLabel(const CLFlushLabel &lab) {
+		DELEGATE_LABEL(EventLabel);
+		out << " " << fmtFun(lab.getAddr());
+	}
+
 	void visitThreadCreateLabel(const ThreadCreateLabel &lab) {
 		DELEGATE_LABEL(EventLabel);
 		out << " [thread " << lab.getChildId() << "]";
@@ -336,12 +345,12 @@ public:
 
 	/* Helper to print read RFs */
 	void printRf(const ReadLabel &lab) {
-		if (lab.getRf().isInitializer())
-			out << "[INIT]";
-		else if (lab.getRf().isBottom())
+		if (!lab.getRf())
 			out << "[BOTTOM]";
+		else if (lab.getRf()->getPos().isInitializer())
+			out << "[INIT]";
 		else
-			out << "[" << lab.getRf() << "]";
+			out << "[" << lab.getRf()->getPos() << "]";
 	}
 
 	void visitReadLabel(const ReadLabel &lab) {

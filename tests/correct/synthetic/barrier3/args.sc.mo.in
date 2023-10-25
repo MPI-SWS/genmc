@@ -1,0 +1,4 @@
+                     | -DN=2
+                     | -DN=3
+                     | -DN=4
+-disable-bam | -DN=3

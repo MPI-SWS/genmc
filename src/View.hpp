@@ -49,12 +49,13 @@ public:
 		 view_(EventView(0)) {}
 
 	/* Iterators */
-	typedef int *iterator;
-	typedef const int *const_iterator;
-	iterator begin() { return &((*this)[0]); };
-	iterator end()   { return &((*this)[0]) + size(); }
-	const_iterator cbegin() { return &((*this)[0]); }
-	const_iterator cend()	{ return &((*this)[0]) + size(); }
+	using iterator = int *;
+	using const_iterator = const int *;
+
+	iterator begin() { return &view_[0]; };
+	iterator end()   { return &view_[0] + size(); }
+	const_iterator begin() const { return empty() ? nullptr : &view_[0]; }
+	const_iterator end() const { return empty() ? nullptr :  &view_[0] + size(); }
 
 	/* Returns the size of this view (i.e., number of threads seen) */
 	unsigned int size() const { return view_.size(); }
@@ -62,39 +63,37 @@ public:
 	/* Returns true if this view is empty */
 	bool empty() const { return size() == 0; }
 
+	void clear() override { view_.clear(); }
+
 	/* Returns true if e is contained in the clock */
-	bool contains(const Event e) const { return e.index <= (*this)[e.thread]; }
+	bool contains(const Event e) const {
+		return e.index <= getMax(e.thread);
+	}
 
 	/* Updates the view based on another vector clock. We can
 	 * only update the current view given another View (and not
 	 * some other subclass of VectorClock) */
-	View& update(const View &v);
-	DepView& update(const DepView &dv);
-	VectorClock &update(const VectorClock &vc);
+	View& update(const View &v) override;
+	DepView& update(const DepView &dv) override;
+	VectorClock &update(const VectorClock &vc) override;
 
 	/* Makes the maximum event seen in e's thread equal to e */
-	View& updateIdx(const Event e) {
-		if ((*this)[e.thread] < e.index)
-			(*this)[e.thread] = e.index;
+	View& updateIdx(Event e) override {
+		if (getMax(e.thread) < e.index)
+			setMax(e);
 		return *this;
 	}
 
-	/* Overloaded operators */
-	inline int operator[](int idx) const {
-		if (idx < (int) view_.size())
-			return view_[idx];
-		else
-			return 0;
+	int getMax(int thread) const override {
+		if (thread < (int) view_.size())
+			return view_[thread];
+		return 0;
 	}
-	inline int &operator[](int idx) {
-		view_.grow(idx);
-		return view_[idx];
-	}
-	inline bool operator<=(const View &v) const {
-		for (auto i = 0u; i < this->size(); i++)
-			if ((*this)[i] > v[i])
-				return false;
-		return true;
+
+	void setMax(Event e) override {
+		if (e.thread >= (int) view_.size())
+			view_.grow(e.thread);
+		view_[e.thread] = e.index;
 	}
 
 	void printData(llvm::raw_ostream &s) const;

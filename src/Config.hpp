@@ -21,17 +21,16 @@
 #ifndef __CONFIG_HPP__
 #define __CONFIG_HPP__
 
-#include "DriverGraphEnumAPI.hpp"
+#include "InterpreterEnumAPI.hpp"
+#include "MemoryModel.hpp"
+#include "Verbosity.hpp"
 #include "VSet.hpp"
 
+#include <optional>
 #include <string>
 
-
-enum class ModelType { rc11, imm, lkmm };
-enum class SchedulePolicy { ltr, wf, random };
-#ifdef ENABLE_GENMC_DEBUG
-enum class VerbosityLevel { V0, V1, V2, V3 };
-#endif
+enum class SchedulePolicy { ltr, wf, wfr, arbitrary };
+enum class BoundType { context, round };
 
 struct Config {
 
@@ -42,31 +41,33 @@ public:
 
 	/*** Exploration options ***/
 	ModelType model;
+	bool estimate;
 	bool isDepTrackingModel;
-	CoherenceType coherence;
 	unsigned int threads;
+	std::optional<unsigned int> bound;
+	BoundType boundType;
 	bool LAPOR;
 	bool symmetryReduction;
 	bool helper;
-	CheckConsType checkConsType;
-	ProgramPoint checkConsPoint;
 	bool checkLiveness;
 	bool printErrorTrace;
 	std::string dotFile;
+	bool instructionCaching;
 	bool disableRaceDetection;
 	bool disableBAM;
+	bool ipr;
+	bool lockIpr;
 	bool disableStopOnSystemError;
 
 	/*** Persistency options ***/
 	bool persevere;
-	ProgramPoint checkPersPoint;
 	unsigned int blockSize;
 	unsigned int maxFileSize;
 	JournalDataFS journalData;
 	bool disableDelalloc;
 
 	/*** Transformation options ***/
-	int unroll;
+	std::optional<unsigned> unroll;
 	VSet<std::string> noUnrollFuns;
 	bool castElimination;
 	bool inlineFunctions;
@@ -76,22 +77,30 @@ public:
 	bool loadAnnot;
 	bool assumePropagation;
 	bool confirmAnnot;
+	bool mmDetector;
 
 	/*** Debugging options ***/
+	unsigned int estimationMax;
+	unsigned int estimationMin;
+	unsigned int sdThreshold;
 	bool inputFromBitcodeFile;
 	bool printExecGraphs;
+	bool printBlockedExecs;
 	SchedulePolicy schedulePolicy;
 	std::string randomScheduleSeed;
 	bool printRandomScheduleSeed;
 	std::string transformFile;
 	std::string programEntryFun;
 	unsigned int warnOnGraphSize;
+	VerbosityLevel vLevel;
 #ifdef ENABLE_GENMC_DEBUG
-	bool printBlockedExecs;
+	bool printStamps;
 	bool colorAccesses;
 	bool validateExecGraphs;
 	bool countDuplicateExecs;
-	VerbosityLevel vLevel;
+        bool countMootExecs;
+	bool printEstimationStats;
+	bool boundsHistogram;
 #endif
 
 	/* Parses the CLI options and initialized the respective fields */

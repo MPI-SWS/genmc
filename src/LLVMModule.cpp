@@ -123,6 +123,7 @@ namespace LLVMModule {
 		initializeVariableInfo(MI, PI);
 		initializeAnnotationInfo(MI, PI);
 		initializeFsInfo(MI, PI);
+		MI.determinedMM = PI.determinedMM;
 		return;
 	}
 
@@ -136,17 +137,16 @@ namespace LLVMModule {
 
 		llvm::initializeCore(Registry);
 		llvm::initializeScalarOpts(Registry);
-		llvm::initializeObjCARCOpts(Registry);
 		llvm::initializeVectorization(Registry);
 		llvm::initializeIPO(Registry);
 		llvm::initializeAnalysis(Registry);
-#ifdef HAVE_LLVM_INITIALIZE_IPA
-		llvm::initializeIPA(Registry);
-#endif
 		llvm::initializeTransformUtils(Registry);
 		llvm::initializeInstCombine(Registry);
-		llvm::initializeInstrumentation(Registry);
 		llvm::initializeTarget(Registry);
+#if LLVM_VERSION_MAJOR < 16
+		llvm::initializeObjCARCOpts(Registry);
+		llvm::initializeInstrumentation(Registry);
+#endif
 
 		OptPM.add(createDeclareInternalsPass());
 		OptPM.add(createDefineLibcFunsPass());
@@ -162,6 +162,8 @@ namespace LLVMModule {
 		OptPM.add(createLocalSimplifyCFGPass());
 		OptPM.add(createEliminateAnnotationsPass());
 		OptPM.add(createEliminateRedundantInstPass());
+		if (conf->mmDetector)
+			OptPM.add(createMMDetectorPass(&PI));
 
 		modified = OptPM.run(mod);
 
@@ -177,8 +179,8 @@ namespace LLVMModule {
 		BndPM.add(createEscapeCheckerPass());
 		if (conf->spinAssume)
 			BndPM.add(createSpinAssumePass(conf->checkLiveness));
-		if (conf->unroll >= 0)
-			BndPM.add(createLoopUnrollPass(conf->unroll, conf->noUnrollFuns));
+		if (conf->unroll.has_value())
+			BndPM.add(createLoopUnrollPass(*conf->unroll, conf->noUnrollFuns));
 
 		modified |= BndPM.run(mod);
 

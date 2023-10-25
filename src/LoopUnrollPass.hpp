@@ -33,14 +33,12 @@
 
 class LoopUnrollPass : public llvm::LoopPass {
 
-protected:
-	int unrollDepth;
 
 public:
 	static char ID;
 
-	LoopUnrollPass(int depth, const VSet<std::string> &noUnrollFuns = {})
-		: llvm::LoopPass(ID), unrollDepth(depth < 0 ? 0 : depth), noUnroll(noUnrollFuns) {};
+	LoopUnrollPass(unsigned int depth, const VSet<std::string> &noUnrollFuns = {})
+		: llvm::LoopPass(ID), unrollDepth(depth), noUnroll(noUnrollFuns) {};
 
 	bool shouldUnroll(llvm::Loop *l) const {
 		return !noUnroll.count((*l->block_begin())->getParent()->getName().str());
@@ -51,6 +49,7 @@ public:
 	virtual bool runOnLoop(llvm::Loop *l, llvm::LPPassManager &LPM);
 
 private:
+	unsigned int unrollDepth;
 	VSet<std::string> noUnroll;
 };
 

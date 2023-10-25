@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include <genmc.h>
 
 /*
  * Symmetry reduction cannot be applied for this one, due to memory
@@ -24,9 +25,10 @@ int main()
 {
 	pthread_t t[N];
 
-	for (int i = 0; i < N; i++)
-		if (pthread_create(&t[i], NULL, thread_n, NULL))
-			abort();
+	t[0] = __VERIFIER_spawn(thread_n, NULL);
+	for (int i = 1; i < N; i++) {
+		t[i] = __VERIFIER_spawn_symmetric(thread_n, NULL, t[i-1]);
+	}
 
 	return 0;
 }

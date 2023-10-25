@@ -19,12 +19,12 @@
 # Author: Michalis Kokologiannakis <mixaskok@gmail.com>
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-GenMC="${GenMC:-$DIR/../src/genmc}"
+GenMC="${GenMC:-$DIR/../genmc}"
 
 source "${DIR}/terminal.sh"
 
 model="${model:-rc11}"
-coherence="${coherence:-wb}"
+coherence="${coherence:-mo}"
 testdir="${testdir:-${DIR}/../tests/correct/litmus}"
 
 runtime=0
@@ -140,6 +140,7 @@ print_variant_condensed_results() {
 	((tests_success++))
     fi
 
+    local i
     # replace previous results
     for ((i=0;i<1000;i++)); do printf "\r"; done
 
@@ -170,7 +171,7 @@ runvariants() {
     for t in $dir/variants/*.c $dir/variants/*.cpp
     do
 	vars=$((vars+1))
-	output=`"${GenMC}" ${GENMCFLAGS} "-${model}" "-${coherence}" $genmc_args -- ${CFLAGS} ${clang_args} "${t}" 2>&1`
+	output=`"${GenMC}" ${GENMCFLAGS} "-${model}" -disable-mm-detector $genmc_args -- ${CFLAGS} ${clang_args} "${t}" 2>&1`
 	if test "$?" -ne 0
 	then
 	    failure_output="${output}"
@@ -178,6 +179,9 @@ runvariants() {
 	fi
 	explored=`echo "${output}" | awk '/explored/ { print $6 }'`
 	blocked=`echo "${output}" | awk '/blocked/ { print $6 }'`
+	slacked=`echo "${output}" | awk '/exceeded bound/ { print substr($7, 2) }'`
+	test -z "${slacked}" && slacked=0
+	explored="$((${explored} - ${slacked}))"
 	explored_failed=""
 	blocked_failed=""
 	time=`echo "${output}" | awk '/time/ { print substr($4, 1, length($4)-1) }'`
@@ -185,11 +189,20 @@ runvariants() {
 	test_time=`echo "${test_time}+${time}" | bc -l`
 	runtime=`echo "scale=2; ${runtime}+${time}" | bc -l`
 	expected="${expected:-${explored}}"
+	if test -n "${expected_bound}"
+	then
+            expected="${expected_bound}"
+	fi
 	if test "${expected}" != "${explored}"
 	then
 	    explored_failed="${explored}"
 	    failure_output="${output}"
 	    failure=1
+	fi
+	# Only run the first variants when testing round-robin bounding
+	if test "${bound_type}" = "round"
+	then
+            break
 	fi
     done
     if test -n "${check_blocked}" -a "${blocked}" != "${expected_blocked}"
@@ -211,6 +224,10 @@ runtest() {
     then
 	return
     fi
+    bound_file=""
+    test "${bound_type}" = "context" && bound_file="${dir}/expected.cb.in"
+    test "${bound_type}" = "round" && bound_file="${dir}/expected.rb.in"
+    test ! -f "${bound_file}" -a -n "${bound_type}" && return
     if test -f "${dir}/args.${model}.${coherence}.in"
     then
 	varNum=0
@@ -222,7 +239,18 @@ runtest() {
 		expected_blocked=`sed "${varNum}q;d" "${dir}/blocked.${model}.${coherence}.in"`
 	    expected_blocked="${expected_blocked}" && [[ -f "${dir}/blocked.${model}.${coherence}.in-${LLVM_VERSION}" ]] &&
 		expected_blocked=`sed "${varNum}q;d" "${dir}/blocked.${model}.${coherence}.in-${LLVM_VERSION}"`
-	    runvariants
+            if test -n "${bound_type}"
+            then
+		local i
+		i=0
+		for bound in `sed "${varNum}q;d" "${bound_file}"`
+		do
+                    expected_bound="${bound}" GENMCFLAGS="${GENMCFLAGS} --bound-type=${bound_type} --bound $i" runvariants
+                    i=$((i + 1))
+		done
+            else
+		runvariants
+            fi
 	done 3<"${dir}/args.${model}.${coherence}.in" 4<"${dir}/expected.${model}.${coherence}.in"
     else
 	test_args=""
@@ -232,7 +260,18 @@ runtest() {
 	    expected_blocked=`head -n 1 "${dir}/blocked.${model}.${coherence}.in"`
 	expected_blocked=$expected_blocked && [[ -f "${dir}/blocked.${model}.${coherence}.in-${LLVM_VERSION}" ]] &&
 	    expected_blocked=`sed "${varNum}q;d" "${dir}/blocked.${model}.${coherence}.in-${LLVM_VERSION}"`
-	runvariants
+	if test -n "${bound_type}"
+	then
+            local i
+            i=0
+            for bound in `head -n1 "${bound_file}"`
+            do
+		expected_bound="${bound}" GENMCFLAGS="${GENMCFLAGS} --bound-type=${bound_type} --bound $i" runvariants
+		i=$((i + 1))
+            done
+	else
+            runvariants
+	fi
     fi
 }
 
@@ -249,6 +288,7 @@ do
 		"pord-wr+wr-N-unord"|\
 		"pord-wr+wr-N-join-thr"|\
 		"pord-rd-wr+wr-N-cont")           continue;;
+		"big0"|"barrier2")         test -n "${bound_type}" && continue;;
 	    ${TESTFILTER})                                ;;
 	    *)                                    continue;;
 	esac

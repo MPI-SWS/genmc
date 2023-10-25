@@ -23,6 +23,7 @@
 
 #include "config.h"
 #include "Error.hpp"
+#include "ASize.hpp"
 
 #include <cstdint>
 
@@ -37,7 +38,8 @@
  *     B64: 1 -> static, 0 -> dynamic
  *     B63: 1 -> automatic, 0 -> heap
  *     B62: 1 -> internal, 0 -> user
- *     B0-B61: address
+ *     B61: 1 -> durable, 0 -> volatile
+ *     B0-B60: address
  */
 class SAddr {
 
@@ -45,19 +47,22 @@ public:
 	using Width = uintptr_t;
 
 protected:
+	static constexpr Width wordSize = 3;
 
 	static constexpr Width staticMask = (Width) 1 << 63;
 	static constexpr Width automaticMask = (Width) 1 << 62;
 	static constexpr Width internalMask = (Width) 1 << 61;
-	static constexpr Width storageMask = staticMask | automaticMask | internalMask;
-	static constexpr Width addressMask = internalMask - 1;
+	static constexpr Width durableMask = (Width) 1 << 60;
+	static constexpr Width storageMask = staticMask | automaticMask | internalMask | durableMask;
+	static constexpr Width addressMask = durableMask - 1;
 
-	static constexpr Width limit = internalMask - 1;
+	static constexpr Width limit = addressMask;
 
-	static SAddr create(Width storageMask, Width value, bool internal) {
+	static SAddr create(Width storageMask, Width value, bool durable, bool internal) {
 		BUG_ON(value >= SAddr::limit);
 		Width fresh = 0;
 		fresh |= storageMask;
+		fresh ^= (-(unsigned long)(!!durable) ^ fresh) & durableMask;
 		fresh ^= (-(unsigned long)(!!internal) ^ fresh) & internalMask;
 		fresh |= value;
 		return SAddr(fresh);
@@ -89,7 +94,19 @@ public:
 	bool isHeap() const { return !isAutomatic(); }
 	bool isInternal() const { return addr & internalMask; }
 	bool isUser() const { return !isInternal(); }
+	bool isDurable() const { return addr & durableMask; }
+	bool isVolatile() const { return !isDurable(); }
 	bool isNull() const { return addr == 0; }
+
+	/* Whether two addresses are on the same storage */
+	bool sameStorageAs(const SAddr &a) const {
+		return (addr & storageMask) == (a.addr & storageMask);
+	}
+
+	/* Return an address aligned to the previous word boundary */
+	SAddr align() const {
+		return ((Width) (addr >> wordSize) << wordSize);
+	}
 
 	Width get() const { return addr; }
 
@@ -111,19 +128,29 @@ public:
 	inline bool operator>(const SAddr &a) const {
 		return !(*this <= a);
 	}
-	SAddr operator+(unsigned int num) const {
+	SAddr operator+(const ASize &size) const {
 		SAddr s(*this);
-		s.addr += num;
+		s.addr += size.get();
 		return s;
 	};
-	SAddr operator-(unsigned int num) const {
+	SAddr operator-(const ASize &size) const {
 		SAddr s(*this);
-		s.addr -= num;
+		s.addr -= size.get();
 		return s;
 	};
 	Width operator-(const SAddr &a) const {
 		return this->get() - a.get();
 	};
+	SAddr operator>>(unsigned int num) const {
+		SAddr s(*this);
+		s.addr >>= num;
+		return s;
+	}
+	SAddr operator<<(unsigned int num) const {
+		SAddr s(*this);
+		s.addr <<= num;
+		return s;
+	}
 
 	friend llvm::raw_ostream& operator<<(llvm::raw_ostream& rhs,
 					     const SAddr &addr);

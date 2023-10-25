@@ -34,9 +34,11 @@ const std::unordered_map<std::string, InternalFunctions> internalFunNames = {
 	{"__VERIFIER_nondet_int", InternalFunctions::FN_NondetInt},
 	{"__VERIFIER_malloc", InternalFunctions::FN_Malloc},
 	{"__VERIFIER_malloc_aligned", InternalFunctions::FN_MallocAligned},
+	{"__VERIFIER_palloc", InternalFunctions::FN_PMalloc},
 	{"__VERIFIER_free", InternalFunctions::FN_Free},
 	{"__VERIFIER_thread_self", InternalFunctions::FN_ThreadSelf},
 	{"__VERIFIER_thread_create", InternalFunctions::FN_ThreadCreate},
+	{"__VERIFIER_thread_create_symmetric", InternalFunctions::FN_ThreadCreateSymmetric},
 	{"__VERIFIER_thread_join", InternalFunctions::FN_ThreadJoin},
 	{"__VERIFIER_thread_exit", InternalFunctions::FN_ThreadExit},
 	{"__VERIFIER_atexit", InternalFunctions::FN_AtExit},
@@ -74,25 +76,11 @@ const std::unordered_map<std::string, InternalFunctions> internalFunNames = {
 	{"__VERIFIER_rcu_read_lock", InternalFunctions::FN_RCUReadLockLKMM},
 	{"__VERIFIER_rcu_read_unlock", InternalFunctions::FN_RCUReadUnlockLKMM},
 	{"__VERIFIER_synchronize_rcu", InternalFunctions::FN_SynchronizeRCULKMM},
+	{"__VERIFIER_clflush", InternalFunctions::FN_CLFlush},
 	/* Some C++ calls */
 	{"_Znwm", InternalFunctions::FN_Malloc},
 	{"_ZdlPv", InternalFunctions::FN_Free},
 };
-
-const std::unordered_map<SystemError, std::string, ENUM_HASH(SystemError)> errorList = {
-	{SystemError::SE_EPERM,  "Operation not permitted"},
-	{SystemError::SE_ENOENT, "No such file or directory"},
-	{SystemError::SE_EIO,    "Input/output error"},
-	{SystemError::SE_EBADF,  "Bad file descriptor"},
-	{SystemError::SE_ENOMEM, "Cannot allocate memory"},
-	{SystemError::SE_EEXIST, "File exists"},
-	{SystemError::SE_EINVAL, "Invalid argument"},
-	{SystemError::SE_EMFILE, "Too many open files"},
-	{SystemError::SE_ENFILE, "Too many open files in system"},
-	{SystemError::SE_EFBIG,  "File too large"},
-};
-
-SystemError systemErrorNumber;
 
 llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const BlockageType &b)
 {

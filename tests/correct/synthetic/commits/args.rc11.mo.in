@@ -1,1 +1,1 @@
- -unroll=6 | -DN=2
+-disable-ipr -disable-sr  -unroll=6 | -DN=2

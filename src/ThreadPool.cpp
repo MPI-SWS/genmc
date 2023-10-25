@@ -27,19 +27,20 @@ void ThreadPool::addWorker(unsigned int i, std::unique_ptr<GenMCDriver> d)
 
 	ThreadT t([this](unsigned int i, std::unique_ptr<GenMCDriver> driver){
 		while (true) {
-			auto state = popTask();
+			auto taskUP = popTask();
 
 			/* If the state is empty, nothing left to do */
-			if (!state)
+			if (!taskUP)
 				break;
 
 			/* Prepare the driver and start the exploration */
-			driver->setSharedState(std::move(state));
+			driver->initFromState(std::move(taskUP));
 			driver->run();
 
 			/* If that was the last task, notify everyone */
+			std::lock_guard<std::mutex> lock(stateMtx_);
 			if (decRemainingTasks() == 0) {
-				halt();
+				stateCV_.notify_all();
 				break;
 			}
 		}
@@ -48,43 +49,40 @@ void ThreadPool::addWorker(unsigned int i, std::unique_ptr<GenMCDriver> d)
 
 	results_.push_back(std::move(t.get_future()));
 
-	workers_.push_back(std::thread(std::move(t), i, std::move(d)));
+	workers_.emplace_back(std::move(t), i, std::move(d));
 	pinner_.pin(workers_.back(), i);
-	return;
 }
 
-void ThreadPool::submit(std::unique_ptr<TaskT> t)
+void ThreadPool::submit(ThreadPool::TaskT t)
 {
 	std::lock_guard<std::mutex> lock(stateMtx_);
 	incRemainingTasks();
 	queue_.push(std::move(t));
 	stateCV_.notify_one();
-	return;
 }
 
-std::unique_ptr<ThreadPool::TaskT> ThreadPool::tryPopPoolQueue()
+ThreadPool::TaskT ThreadPool::tryPopPoolQueue()
 {
 	return queue_.tryPop();
 }
 
-std::unique_ptr<ThreadPool::TaskT> ThreadPool::tryStealOtherQueue()
+ThreadPool::TaskT ThreadPool::tryStealOtherQueue()
 {
 	/* TODO: Implement work-stealing */
 	return nullptr;
 }
 
-std::unique_ptr<ThreadPool::TaskT> ThreadPool::popTask()
+ThreadPool::TaskT ThreadPool::popTask()
 {
 	while (true) {
 		if (auto t = tryPopPoolQueue())
 			return t;
-		else if (auto t = tryStealOtherQueue())
+		if (auto t = tryStealOtherQueue())
 			return t;
 
+		std::unique_lock<std::mutex> lock(stateMtx_);
 		if (shouldHalt() || getRemainingTasks() == 0)
 			return nullptr;
-
-		std::unique_lock<std::mutex> lock(stateMtx_);
 		stateCV_.wait(lock);
 	}
 	return nullptr;
@@ -92,7 +90,7 @@ std::unique_ptr<ThreadPool::TaskT> ThreadPool::popTask()
 
 std::vector<std::future<GenMCDriver::Result>> ThreadPool::waitForTasks()
 {
-	while (!shouldHalt() && getRemainingTasks())
+	while (!shouldHalt() && getRemainingTasks() > 0)
 		std::this_thread::yield();
 
 	return std::move(results_);

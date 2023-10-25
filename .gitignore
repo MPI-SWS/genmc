@@ -5,29 +5,20 @@ genmc
 *.bak
 *.backup
 .*.sw[a-z]
+.cache
+.deps
+*.dirstamp
+compile_commands.json
 
-*.aux
-*.bbl
-*.blg
-*.fdb_latexmk
-*.fls
-*.log
-*.toc
-*.xdv
-*.tex
-*.out
+*.gcno
 
-*.ll
-
-*.annot
-*.cmo
-*.cma
-*.cmi
 *.a
 *.o
-*.cmx
-*.cmxs
-*.cmxa
+
+*.ll
+*.out
+
+doc/doxygen
 
 Makefile
 Makefile.in
@@ -45,3 +36,5 @@ depcomp
 install-sh
 missing
 stamp-*
+ylwrap
+test-driver

@@ -23,6 +23,7 @@
 
 #include "config.h"
 #include "Error.hpp"
+#include "ExecutionGraph.hpp"
 #include "DriverFactory.hpp"
 #include "LLVMModule.hpp"
 #include "ThreadPinner.hpp"
@@ -42,11 +43,10 @@
 /* Represents the global workqueue shared among threads. */
 class GlobalWorkQueue {
 
-protected:
-	typedef GenMCDriver::SharedState QueueItemT;
-	typedef std::vector<std::unique_ptr<QueueItemT> > QueueT;
-
 public:
+	using ItemT = std::unique_ptr<GenMCDriver::State>;
+	using QueueT = std::vector<ItemT>;
+
 	/*** Constructors ***/
 
 	GlobalWorkQueue() {}
@@ -61,13 +61,13 @@ public:
 	}
 
 	/* Adds a new item to the queue */
-	void push(std::unique_ptr<QueueItemT> item) {
+	void push(ItemT item) {
 		std::lock_guard<std::mutex> lock(qMutex);
 		queue.push_back(std::move(item));
 	}
 
 	/* Tries to pop an item from the queue */
-	std::unique_ptr<QueueItemT> tryPop() {
+	ItemT tryPop() {
 		std::lock_guard<std::mutex> lock(qMutex);
 		if (queue.empty())
 			return nullptr;
@@ -124,8 +124,9 @@ private:
 class ThreadPool {
 
 public:
-	typedef GenMCDriver::SharedState TaskT;
-	typedef GlobalWorkQueue GlobalQueueT;
+	using GlobalQueueT = GlobalWorkQueue;
+	using TaskT = GlobalQueueT::ItemT;
+
 
 	/*** Constructors ***/
 
@@ -146,7 +147,7 @@ public:
 
 			auto dw = DriverFactory::create(this, conf, std::move(newmod), std::move(newMI));
 			if (i == 0)
-				submit(std::move(dw->getSharedState()));
+				submit(std::move(dw->extractState()));
 			addWorker(i, std::move(dw));
 		}
 	}
@@ -172,7 +173,7 @@ public:
 	/*** Tasks-related ***/
 
 	/* Submits a task to be executed by a worker */
-	void submit(std::unique_ptr<TaskT> task);
+	void submit(TaskT task);
 
 	/* Notify the pool about the addition/completion of a task */
 	unsigned incRemainingTasks() { return ++remainingTasks_; }
@@ -200,13 +201,13 @@ private:
 	void addWorker(unsigned int index, std::unique_ptr<GenMCDriver> driver);
 
 	/* Tries to pop a task from the global queue */
-	std::unique_ptr<TaskT> tryPopPoolQueue();
+	TaskT tryPopPoolQueue();
 
 	/* Tries to steal a task from another thread */
-	std::unique_ptr<TaskT> tryStealOtherQueue();
+	TaskT tryStealOtherQueue();
 
 	/* Pops the next task to be executed by a thread */
-	std::unique_ptr<TaskT> popTask();
+	TaskT popTask();
 
 	std::vector<std::unique_ptr<llvm::LLVMContext>> contexts_;
 

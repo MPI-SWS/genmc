@@ -42,12 +42,12 @@ protected:
 	/* Allocates a fresh address at the specified pool */
 	template <typename F>
 	SAddr allocate(F&& allocFun, SAddr::Width &pool, unsigned int size,
-		       unsigned int alignment, bool isInternal = false) {
+		       unsigned int alignment, bool isDurable = false, bool isInternal = false) {
 		auto offset = alignment - 1;
 		auto oldAddr = pool;
 		pool += (offset + size);
 		return allocFun(((SAddr::Width) oldAddr + offset) & ~(alignment - 1),
-				static_cast<bool&&>(isInternal));
+				static_cast<bool&&>(isDurable), static_cast<bool&&>(isInternal));
 	}
 
 public:
@@ -56,17 +56,17 @@ public:
 	/* Allocating methods */
 	template <typename... Ts>
 	SAddr allocStatic(Ts&&... params) {
-		return allocate(SAddr::createStatic<SAddr::Width, bool>, staticPool,
+		return allocate(SAddr::createStatic<SAddr::Width, bool, bool>, staticPool,
 				std::forward<Ts>(params)...);
 	}
 	template <typename... Ts>
 	SAddr allocAutomatic(Ts&&... params) {
-		return allocate(SAddr::createAutomatic<SAddr::Width, bool>, automaticPool,
+		return allocate(SAddr::createAutomatic<SAddr::Width, bool, bool>, automaticPool,
 				std::forward<Ts>(params)...);
 	}
 	template <typename... Ts>
 	SAddr allocHeap(Ts&&... params) {
-		return allocate(SAddr::createHeap<SAddr::Width, bool>, heapPool,
+		return allocate(SAddr::createHeap<SAddr::Width, bool, bool>, heapPool,
 				std::forward<Ts>(params)...);
 	}
 

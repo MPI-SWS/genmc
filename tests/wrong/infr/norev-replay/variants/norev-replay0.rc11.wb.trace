@@ -1,0 +1,54 @@
+Error detected: Non-Atomic race!
+Event (2, 4) in graph:
+<-1, 0> main:
+	(0, 1): MALLOC  stdlib.h:34
+	(0, 2): Wna (q, 0x10) L.40
+	(0, 3): Rna (q, 0x10) [(0, 2)] L.41
+	(0, 4): Wsc (, 0) L.16
+	(0, 5): Rna (q, 0x10) [(0, 2)] L.42
+	(0, 6): Wsc (, 0) L.16
+	(0, 7): Rna (q, 0x10) [(0, 2)] L.43
+	(0, 8): Wsc (, 0) L.16
+	(0, 9): THREAD_CREATE [thread 1] pthread.h:142
+	(0, 10): THREAD_CREATE [thread 2] pthread.h:142
+	(0, 11): BLOCK [join]
+<0, 1> thread1:
+	(1, 1): MALLOC x
+	(1, 2): Wna (x[0], 1) L.23
+	(1, 3): Rna (x[0], 1) [(1, 2)] L.25
+	(1, 4): Rna (q, 0x10) [(0, 2)] L.25
+	(1, 5): Wna (, 1) L.25
+	(1, 6): Rna (q, 0x10) [(0, 2)] L.26
+	(1, 7): Wrlx (, 0) L.26
+	(1, 8): FREE L.27
+	(1, 9): THREAD_END
+<0, 2> thread2:
+	(2, 1): Rna (q, 0x10) [(0, 2)] L.32
+	(2, 2): Rsc (, 0) [(1, 7)] L.17
+	(2, 3): Rna (q, 0x10) [(0, 2)] L.33
+	(2, 4): Rna (, 0) [BOTTOM] L.33
+Coherence:
+: [ (0, 4): Wsc (HU#24, 0) (0, 8): Wsc (HU#24, 0) (1, 7): Wrlx (HU#24, 0) ]
+
+Trace to (2, 4):
+[main] stdlib.h: 34: return __VERIFIER_malloc(size);
+[main] norev-replay0.c: 40: q = (T*) malloc(sizeof(T));
+[main] norev-replay0.c: 41: STORE(&q->y, 0);
+[main] norev-replay0.c: 16: void     STORE(uint64_t *a, uint64_t v) {barrier();__atomic_store_n(a, v, __ATOMIC_SEQ_CST);}
+[main] norev-replay0.c: 42: STORE(&q->t, 0);
+[main] norev-replay0.c: 16: void     STORE(uint64_t *a, uint64_t v) {barrier();__atomic_store_n(a, v, __ATOMIC_SEQ_CST);}
+[main] norev-replay0.c: 43: STORE(&q->y, 0);
+[main] norev-replay0.c: 16: void     STORE(uint64_t *a, uint64_t v) {barrier();__atomic_store_n(a, v, __ATOMIC_SEQ_CST);}
+[main] pthread.h: 142: (*__newthread) = __VERIFIER_thread_create(__attr, __start_routine, __arg);
+[thread2] norev-replay0.c: 32: LOAD(&q->y);
+[thread1] norev-replay0.c: 23: x[j] = 1UL;
+[thread1] norev-replay0.c: 25: q->r = x[0];
+[thread1] norev-replay0.c: 25: q->r = x[0];
+[thread1] norev-replay0.c: 25: q->r = x[0];
+[thread1] norev-replay0.c: 26: __atomic_store_n(&q->y, 0, __ATOMIC_RELAXED);
+[thread1] norev-replay0.c: 26: __atomic_store_n(&q->y, 0, __ATOMIC_RELAXED);
+[thread2] norev-replay0.c: 17: uint64_t LOAD(uint64_t *a) {barrier();return __atomic_load_n(a, __ATOMIC_SEQ_CST);}
+[thread2] norev-replay0.c: 33: assert(q->r);
+[thread2] norev-replay0.c: 33: assert(q->r);
+Number of complete executions explored: 0
+Number of blocked executions seen: 1

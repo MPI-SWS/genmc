@@ -44,14 +44,15 @@
 #include "DepTracker.hpp"
 #include "MemAccess.hpp"
 #include "ModuleInfo.hpp"
+#include "ThreadInfo.hpp"
 #include "SAddr.hpp"
 #include "SAddrAllocator.hpp"
 #include "SVal.hpp"
 #include "View.hpp"
 #include "CallInstWrapper.hpp"
+#include "VerificationError.hpp"
 #include "value_ptr.hpp"
 
-#include <llvm/ADT/BitVector.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/GenericValue.h>
 #include <llvm/IR/Instructions.h>
@@ -63,6 +64,7 @@
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/raw_ostream.h>
 
+#include <optional>
 #include <random>
 #include <unordered_map>
 #include <unordered_set>
@@ -166,10 +168,11 @@ public:
 	llvm::Function *threadFun;
 	SVal threadArg;
 	std::vector<llvm::ExecutionContext> ECStack;
-	llvm::ExecutionContext initSF;
+	std::vector<llvm::ExecutionContext> initEC;
 	std::unordered_map<const void *, llvm::GenericValue> tls;
 	unsigned int globalInstructions;
 	unsigned int globalInstSnap;
+	BasicBlock::iterator curInstSnap;
 	BlockageType blocked;
 	MyRNG rng;
 	std::vector<std::pair<int, std::string> > prefixLOC;
@@ -184,37 +187,27 @@ public:
 	/* Useful for one-to-many instr->events correspondence */
 	void takeSnapshot()   {
 		globalInstSnap = globalInstructions;
+		curInstSnap = --ECStack.back().CurInst;
+		++ECStack.back().CurInst;
 	}
 	void rollToSnapshot() {
 		globalInstructions = globalInstSnap;
-		--ECStack.back().CurInst;
+		ECStack.back().CurInst = curInstSnap;
 	}
 
 protected:
 	friend class Interpreter;
 
 	Thread(llvm::Function *F, int id)
-		: id(id), parentId(-1), threadFun(F), initSF(), globalInstructions(0),
+		: id(id), parentId(-1), threadFun(F), initEC(), globalInstructions(0),
 		  blocked(BlockageType::NotBlocked), rng(seed) {}
 
 	Thread(llvm::Function *F, SVal arg, int id, int pid, const llvm::ExecutionContext &SF)
 		: id(id), parentId(pid), threadFun(F), threadArg(arg),
-		  initSF(SF), globalInstructions(0), blocked(BlockageType::NotBlocked), rng(seed) {}
+		  initEC({SF}), globalInstructions(0), blocked(BlockageType::NotBlocked), rng(seed) {}
 };
 
 llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const Thread &thr);
-
-struct ThreadInfo {
-	int id;
-	int parentId;
-	unsigned int funId;
-	SVal arg;
-
-	ThreadInfo() = default;
-	ThreadInfo(int id, int parentId, unsigned funId, SVal arg)
-		: id(id), parentId(parentId), funId(funId), arg(arg) {}
-};
-
 
 /* Pers: The state of the program -- i.e., part of the program being interpreted */
 enum class ProgramState {
@@ -236,18 +229,12 @@ struct DynamicComponents {
 	std::vector<Thread> threads;
 	int currentThread = 0;
 
-	/* A tracker for dynamic allocations */
-	SAddrAllocator alloctor;
-
 	/* Pointer to the dependency tracker */
 	value_ptr<DepTracker, DepTrackerCloner> depTracker = nullptr;
 
 	/* Information about the interpreter's state */
 	ExecutionState execState = ExecutionState::Normal;
 	ProgramState programState = ProgramState::Main; /* Pers */
-
-	/* Pers: A bitvector of available file descriptors */
-	llvm::BitVector fds;
 
 	/* Pers: A map from file descriptors to file descriptions */
 	llvm::IndexedMap<void *> fdToFile;
@@ -263,18 +250,7 @@ struct DynamicComponents {
 	std::vector<Function*> AtExitHandlers;
 };
 
-using EELocalState = DynamicComponents;
-
-struct EESharedState {
-	EESharedState() = default;
-	EESharedState(SAddrAllocator alloctor, const llvm::BitVector &fds, std::vector<ThreadInfo> tis)
-		: alloctor(alloctor), fds(fds), threadInfos(tis) {}
-
-	SAddrAllocator alloctor;
-	llvm::BitVector fds;
-	std::vector<ThreadInfo> threadInfos;
-};
-
+using InterpreterState = DynamicComponents;
 
 // Interpreter - This class represents the entirety of the interpreter.
 //
@@ -308,6 +284,8 @@ protected:
   /* (Composition) pointer to the driver */
   GenMCDriver *driver;
 
+  Function *mainFun = nullptr;
+
   /* Whether the driver should be called on system errors */
   bool stopOnSystemErrors;
 
@@ -329,24 +307,12 @@ protected:
 
 public:
   explicit Interpreter(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> MI,
-		       GenMCDriver *driver, const Config *userConf);
+		       GenMCDriver *driver, const Config *userConf, SAddrAllocator &alloctor);
   virtual ~Interpreter();
 
-  /* FIXME: Document and move to .cpp */
-  std::unique_ptr<EELocalState> releaseLocalState();
-  void restoreLocalState(std::unique_ptr<EELocalState> state);
+  std::unique_ptr<InterpreterState> saveState();
+  void restoreState(std::unique_ptr<InterpreterState>);
 
-  std::unique_ptr<EESharedState> getSharedState() const {
-	  auto shared = std::make_unique<EESharedState>();
-
-	  shared->alloctor = dynState.alloctor;
-	  shared->fds = dynState.fds;
-	  for (auto &thr : threads()) {
-		  shared->threadInfos.emplace_back(
-			  thr.id, thr.parentId, MI->idInfo.VID.at(thr.threadFun), thr.threadArg);
-	  }
-	  return shared;
-  }
   Thread &constructAddThreadFromInfo(const ThreadInfo &ti) {
 	  auto *calledFun = dyn_cast<Function>(const_cast<Value *>(MI->idInfo.IDV.at(ti.funId)));
 	  BUG_ON(!calledFun);
@@ -359,13 +325,46 @@ public:
 	  SF.Values[&*calledFun->arg_begin()] = PTR_TO_GV(ti.arg.get());
 	  return createAddNewThread(calledFun, ti.arg, ti.id, ti.parentId, SF);
   }
-  void setSharedState(std::unique_ptr<EESharedState> state) {
-	  dynState.alloctor = std::move(state->alloctor);
-	  dynState.fds = std::move(state->fds);
+  void setExecutionContext(const std::vector<ThreadInfo> &tis) {
 	  dynState.threads.clear();
-	  for (auto &ti : state->threadInfos)
+	  createAddMainThread();
+	  for (auto &ti : tis)
 		  constructAddThreadFromInfo(ti);
   }
+
+#define CALL_DRIVER(method, ...)					\
+	({								\
+		if (getProgramState() != ProgramState::Recovery ||	\
+		    #method != "handleLoad") {				\
+			incPos();					\
+		}							\
+		driver->method(__VA_ARGS__);				\
+	})
+
+#define CALL_DRIVER_RESET_IF_NONE(method, ...)			\
+	({							\
+		incPos();					\
+		auto ret = driver->method(__VA_ARGS__);		\
+		if (!ret.has_value()) {				\
+			decPos();				\
+			--ECStack().back().CurInst;		\
+		} else if (getProgramState() == ProgramState::Recovery && \
+			   #method == "handleLoad") { \
+			decPos();					\
+		}						\
+		ret;						\
+	})
+
+#define CALL_DRIVER_RESET_IF_FALSE(method, ...)			\
+	({							\
+		incPos();					\
+		auto ret = driver->method(__VA_ARGS__);		\
+		if (!ret) {					\
+			decPos();				\
+			--ECStack().back().CurInst;		\
+		}						\
+		ret;						\
+	})
 
   /* Blocks the current execution */
   void block(BlockageType t = BlockageType::Error ) {
@@ -457,18 +456,6 @@ public:
   void *getStaticAddr(SAddr addr) const;
   std::string getStaticName(SAddr addr) const;
 
-  /* Returns a fresh address for a new allocation */
-  SAddr getFreshAddr(unsigned int size, int alignment, Storage s, AddressSpace spc);
-
-  /* Pers: Returns a fresh file descriptor for a new open() call (marks it as in use) */
-  int getFreshFd();
-
-  /* Pers: Marks that the file descriptor fd is in use */
-  void markFdAsUsed(int fd);
-
-  /* Pers: The interpreter reclaims a file descriptor that is no longer in use */
-  void reclaimUnusedFd(int fd);
-
   /// runAtExitHandlers - Run any functions registered by the program's calls to
   /// atexit(3), which we intercept and store in AtExitHandlers.
   ///
@@ -476,9 +463,10 @@ public:
 
   /// create - Create an interpreter ExecutionEngine. This can never fail.
   ///
-  static ExecutionEngine *create(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> MI,
-				 GenMCDriver *driver, const Config *userConf,
-				 std::string *ErrorStr = nullptr);
+  static std::unique_ptr<Interpreter>
+      create(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> MI,
+	     GenMCDriver *driver, const Config *userConf,
+	     SAddrAllocator &alloctor, std::string *ErrorStr = nullptr);
 
   /// run - Start execution with the specified function and arguments.
   ///
@@ -516,7 +504,15 @@ public:
 
   /* Helper functions */
   void replayExecutionBefore(const VectorClock &before);
-  SVal getLocInitVal(SAddr addr, AAccess access);
+
+  SVal getLocInitVal(const AAccess &access) {
+    GenericValue result;
+
+    LoadValueFromMemory(result, (llvm::GenericValue *) getStaticAddr(access.getAddr()),
+			IntegerType::get(Modules.back()->getContext(), access.getSize().get() * 8));
+    return SVal(result.IntVal.getLimitedValue());
+  }
+
   unsigned int getTypeSize(Type *typ) const;
   SVal executeAtomicRMWOperation(SVal oldVal, SVal val, ASize size, AtomicRMWInst::BinOp op);
 
@@ -714,6 +710,9 @@ private:  // Helper functions
   void setProgramState(ProgramState s) { dynState.programState = s; }
   void setExecState(ExecutionState s) { dynState.execState = s; }
 
+  void handleLock(SAddr addr, ASize size, const EventDeps *deps);
+  void handleUnlock(SAddr addr, ASize size, const EventDeps *deps);
+
   /* Custom Opcode Implementations */
 #define DECLARE_CUSTOM_OPCODE(_name)						  \
 	void call ## _name(Function *F, const std::vector<GenericValue> &ArgVals, \
@@ -732,9 +731,11 @@ private:  // Helper functions
   DECLARE_CUSTOM_OPCODE(NondetInt);
   DECLARE_CUSTOM_OPCODE(Malloc);
   DECLARE_CUSTOM_OPCODE(MallocAligned);
+  DECLARE_CUSTOM_OPCODE(PMalloc);
   DECLARE_CUSTOM_OPCODE(Free);
   DECLARE_CUSTOM_OPCODE(ThreadSelf);
   DECLARE_CUSTOM_OPCODE(ThreadCreate);
+  DECLARE_CUSTOM_OPCODE(ThreadCreateSymmetric);
   DECLARE_CUSTOM_OPCODE(ThreadJoin);
   DECLARE_CUSTOM_OPCODE(ThreadExit);
   DECLARE_CUSTOM_OPCODE(AtExit);
@@ -770,6 +771,7 @@ private:  // Helper functions
   DECLARE_CUSTOM_OPCODE(RCUReadLockLKMM);
   DECLARE_CUSTOM_OPCODE(RCUReadUnlockLKMM);
   DECLARE_CUSTOM_OPCODE(SynchronizeRCULKMM);
+  DECLARE_CUSTOM_OPCODE(CLFlush);
 
   void callInternalFunction(Function *F, const std::vector<GenericValue> &ArgVals,
 			    const std::unique_ptr<EventDeps> &deps);
@@ -778,7 +780,7 @@ private:  // Helper functions
 
   /* Collects the addresses (and some naming information) for all variables with
    * static storage. Also calculates the starting address of the allocation pool */
-  void collectStaticAddresses(Module *M);
+  void collectStaticAddresses(SAddrAllocator &alloctor);
 
   /* Sets up how some errors will be reported to the user */
   void setupErrorPolicy(Module *M, const Config *userConf);
@@ -791,7 +793,7 @@ private:  // Helper functions
 
   /* Creates an entry for the main() function. More information are
    * filled from the execution engine when the exploration starts */
-  Thread &createAddMainThread(llvm::Function *F);
+  Thread &createAddMainThread();
 
   /* Dependency tracking */
 
@@ -842,21 +844,9 @@ private:  // Helper functions
       getDepTracker()->clearDeps(tid);
   }
 
-  /* Update naming information */
-
-  void updateUserTypedVarName(char *ptr, unsigned int typeSize, Storage s,
-			      Value *v, const std::string &prefix,
-			      const std::string &internal);
-  void updateUserUntypedVarName(char *ptr, unsigned int typeSize, Storage s,
-				Value *v, const std::string &prefix,
-				const std::string &internal);
-  void updateInternalVarName(char *ptr, unsigned int typeSize, Storage s,
-			     Value *v, const std::string &prefix,
-			     const std::string &internal);
-
   /* Gets naming information for value V (or value with key KEY), if it is
    * an internal variable with no value correspondence */
-  const NameInfo *getVarNameInfo(Value *v, Storage s, AddressSpace spc,
+  const NameInfo *getVarNameInfo(Value *v, StorageDuration sd, AddressSpace spc,
 				 const VariableInfo<ModuleID::ID>::InternalKey &key = {});
 
   /* Pers: Returns the address of the file description referenced by FD */

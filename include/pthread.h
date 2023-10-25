@@ -133,26 +133,34 @@ enum
 /* Create a new thread, starting with execution of START-ROUTINE
    getting passed ARG.  Creation attributed come from ATTR.  The new
    handle is stored in *NEWTHREAD.  */
-/* extern int pthread_create (pthread_t *__restrict __newthread, */
-/* 			   const pthread_attr_t *__restrict __attr, */
-/* 			   void *(*__start_routine) (void *), */
-/* 			   void *__restrict __arg); */
-#define pthread_create(newthread, attr, start_routine, arg) \
-({									\
-	*(newthread) = __VERIFIER_thread_create(attr, start_routine, arg); \
-	0;								\
-})
+__attribute__ ((always_inline)) static inline
+int pthread_create(pthread_t *__restrict __newthread,
+		   const pthread_attr_t *__restrict __attr,
+		   void *(*__start_routine) (void *),
+		   void *__restrict __arg)
+{
+	(*__newthread) = __VERIFIER_thread_create(__attr, __start_routine, __arg);
+	return 0;
+}
 
 /* Terminate calling thread.  */
-/* extern void pthread_exit (void *__retval) __attribute__ ((__noreturn__)); */
-#define pthread_exit(retval) __VERIFIER_thread_exit(retval)
+__attribute__ ((always_inline)) static inline
+void pthread_exit(void *__retval)
+{
+	__VERIFIER_thread_exit(__retval);
+}
 
 /* Make calling thread wait for termination of the thread TH.  The
    exit status of the thread is stored in *THREAD_RETURN, if THREAD_RETURN
    is not NULL. */
-/* extern int pthread_join (pthread_t __th, void **__thread_return); */
-#define pthread_join __VERIFIER_thread_join
-
+__attribute__ ((always_inline)) static inline
+int pthread_join(pthread_t __th, void **__thread_return)
+{
+	void *__retval = __VERIFIER_thread_join(__th);
+	if (__thread_return != NULL)
+		*(__thread_return) = __retval;
+	return 0;
+}
 
 /* #ifdef __USE_GNU */
 /* /\* Check whether thread TH has terminated.  If yes return the status of */
@@ -175,7 +183,11 @@ enum
 
 /* Obtain the identifier of the current thread.  */
 /* extern pthread_t pthread_self (void); */
-#define pthread_self() __VERIFIER_thread_self()
+__attribute__ ((always_inline)) static inline
+pthread_t pthread_self(void)
+{
+	return __VERIFIER_thread_self();
+}
 
 /* Compare two thread identifiers.  */
 /* extern int pthread_equal (pthread_t __thread1, pthread_t __thread2); */
@@ -328,25 +340,44 @@ enum
 /* Mutex handling.  */
 
 /* Initialize a mutex.  */
-/* extern int pthread_mutex_init (pthread_mutex_t *__mutex, */
-/* 			       const pthread_mutexattr_t *__mutexattr); */
-#define pthread_mutex_init(mutex, attr) __VERIFIER_mutex_init(mutex, attr)
+__attribute__ ((always_inline)) static inline
+int pthread_mutex_init(pthread_mutex_t *__mutex,
+		       const pthread_mutexattr_t *__mutexattr)
+{
+	return __VERIFIER_mutex_init(__mutex, __mutexattr);
+}
 
 /* Destroy a mutex.  */
 /* extern int pthread_mutex_destroy (pthread_mutex_t *__mutex); */
-#define pthread_mutex_destroy(mutex) __VERIFIER_mutex_destroy(mutex)
+__attribute__ ((always_inline)) static inline
+int pthread_mutex_destroy(pthread_mutex_t *__mutex)
+{
+	return __VERIFIER_mutex_destroy(__mutex);
+}
 
 /* Try locking a mutex.  */
 /* extern int pthread_mutex_trylock (pthread_mutex_t *__mutex); */
-#define pthread_mutex_trylock(mutex) __VERIFIER_mutex_trylock(mutex)
+__attribute__ ((always_inline)) static inline
+int pthread_mutex_trylock(pthread_mutex_t *__mutex)
+{
+	return __VERIFIER_mutex_trylock(__mutex);
+}
 
 /* Lock a mutex.  */
 /* extern int pthread_mutex_lock (pthread_mutex_t *__mutex); */
-#define pthread_mutex_lock(mutex) __VERIFIER_mutex_lock(mutex)
+__attribute__ ((always_inline)) static inline
+int pthread_mutex_lock(pthread_mutex_t *__mutex)
+{
+	return __VERIFIER_mutex_lock(__mutex);
+}
 
 /* Unlock a mutex.  */
 /* extern int pthread_mutex_unlock (pthread_mutex_t *__mutex); */
-#define pthread_mutex_unlock(mutex) __VERIFIER_mutex_unlock(mutex)
+__attribute__ ((always_inline)) static inline
+int pthread_mutex_unlock(pthread_mutex_t *__mutex)
+{
+	return __VERIFIER_mutex_unlock(__mutex);
+}
 
 /* /\* Get the priority ceiling of MUTEX.  *\/ */
 /* extern int pthread_mutex_getprioceiling (const pthread_mutex_t * */
@@ -566,22 +597,27 @@ enum
 
 /* Initialize BARRIER with the attributes in ATTR.  The barrier is
    opened when COUNT waiters arrived.  */
-/* extern int pthread_barrier_init (pthread_barrier_t *__restrict __barrier, */
-/* 				 const pthread_barrierattr_t *__restrict __attr, */
-/* 				 unsigned int __count); */
-#define pthread_barrier_init(barrier, attr, count) __VERIFIER_barrier_init(barrier, attr, count)
-
-/* Destroy a previously dynamically initialized barrier BARRIER.  */
-/* extern int pthread_barrier_destroy (pthread_barrier_t *__barrier); */
-#define pthread_barrier_destroy(barrier) __VERIFIER_barrier_destroy(barrier)
+__attribute__ ((always_inline)) static inline
+int pthread_barrier_init(pthread_barrier_t *__restrict __barrier,
+			 const pthread_barrierattr_t *__restrict __attr,
+			 unsigned int __count)
+{
+	return __VERIFIER_barrier_init(__barrier, __attr, __count);
+}
 
 /* Wait on barrier BARRIER.  */
-/* extern int pthread_barrier_wait (pthread_barrier_t *__barrier); */
-#define pthread_barrier_wait(barrier) __VERIFIER_barrier_wait(barrier)
+__attribute__ ((always_inline)) static inline
+int pthread_barrier_wait(pthread_barrier_t *__barrier)
+{
+	return __VERIFIER_barrier_wait(__barrier);
+}
 
 /* Destroy a previously dynamically initialized barrier BARRIER.  */
-/* extern int pthread_barrier_destroy (pthread_barrier_t *__barrier); */
-#define pthread_barrier_destroy(barrier) __VERIFIER_barrier_destroy(barrier)
+__attribute__ ((always_inline)) static inline
+int pthread_barrier_destroy(pthread_barrier_t *__barrier)
+{
+	return __VERIFIER_barrier_destroy(__barrier);
+}
 
 #ifdef __cplusplus
 }

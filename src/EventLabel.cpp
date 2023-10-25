@@ -90,6 +90,9 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s,
 	case EventLabel::EL_SmpFenceLKMM:
 		s << "F";
 		break;
+	case EventLabel::EL_CLFlush:
+		s << "CLF";
+		break;
 	case EventLabel::EL_ThreadCreate:
 		s << "THREAD_CREATE";
 		break;
@@ -98,6 +101,9 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s,
 		break;
 	case EventLabel::EL_ThreadStart:
 		s << "THREAD_START";
+		break;
+	case EventLabel::EL_Init:
+		s << "INIT";
 		break;
 	case EventLabel::EL_ThreadFinish:
 		s << "THREAD_END";

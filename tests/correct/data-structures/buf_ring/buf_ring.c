@@ -12,7 +12,9 @@
 /*******************************************************************************
  * config
  ******************************************************************************/
-#define NTHREADS 3
+#ifndef NTHREADS
+# define NTHREADS 3
+#endif
 #define LOOPS 1
 #define BUF_SIZE 8
 #define SPIN_ANNOTATION

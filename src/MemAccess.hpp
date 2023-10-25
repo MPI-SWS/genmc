@@ -23,6 +23,7 @@
 
 #include "config.h"
 #include "Error.hpp"
+#include "SAddr.hpp"
 
 #include <climits>
 #include <cstdint>
@@ -40,68 +41,19 @@ enum class AType {
 
 
 /*******************************************************************************
- **                             ASize Class
- ******************************************************************************/
-
-/*
- * Represents the size (in bytes) of an atomic memory access
- */
-class ASize {
-
-protected:
-	/* We could be a bit more frugal with this, but it should be fine */
-	using Size = uint32_t;
-
-public:
-	/* Constructors/destructors */
-	ASize() = delete;
-	ASize(Size s) : size(s) {}
-
-	/* Returns the number of bytes this Size occupies */
-	Size get() const { return size; }
-
-	/* Returns the number of bits this Size occupies x*/
-	Size getBits() const { return size * CHAR_BIT; }
-
-	inline bool operator==(const ASize &s) const {
-		return s.size == size;
-	}
-	inline bool operator!=(const ASize &s) const {
-		return !(*this == s);
-	}
-	inline bool operator<=(const ASize &s) const {
-		return size <= s.size;
-	}
-	inline bool operator<(const ASize &s) const {
-		return size < s.size;
-	}
-	inline bool operator>=(const ASize &s) const {
-		return !(*this < s);
-	}
-	inline bool operator>(const ASize &s) const {
-		return !(*this <= s);
-	}
-	uint64_t operator()() const { return size; }
-
-	friend llvm::raw_ostream& operator<<(llvm::raw_ostream& rhs,
-					     const ASize &s);
-
-private:
-	/* The actual size */
-	Size size;
-};
-
-
-/*******************************************************************************
  **                             AAccess Class
  ******************************************************************************/
 
+/*
+ * An AAccess comprises an address, a size and a type
+ */
 class AAccess {
 
 public:
 	AAccess() = delete;
-	AAccess(ASize s, AType t) : size(s), type(t) {}
+	AAccess(SAddr a, ASize s, AType t) : addr(a), size(s), type(t) {}
 
+	SAddr getAddr() const { return addr; }
 	ASize getSize() const { return size; }
 	AType getType() const { return type; }
 
@@ -109,7 +61,23 @@ public:
 	bool isUnsigned() const { return getType() == AType::Unsigned; }
 	bool isSigned() const { return getType() == AType::Signed; }
 
+	/* Whether the access contains a given address */
+	bool contains(SAddr a) const {
+		if (!getAddr().sameStorageAs(a))
+			return false;
+		return getAddr() <= a && a < getAddr() + getSize();
+	}
+
+	/* Whether the access overlaps with another access */
+	bool overlaps(const AAccess &other) const {
+		if (!getAddr().sameStorageAs(other.getAddr()))
+			return false;
+		return getAddr() + getSize() > other.getAddr() &&
+			getAddr() < other.getAddr() + other.getSize();
+	}
+
 private:
+	SAddr addr;
 	ASize size;
 	AType type;
 };

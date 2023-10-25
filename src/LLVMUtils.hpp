@@ -162,7 +162,7 @@ template<typename F>
 void foreachInBackPathTo(llvm::BasicBlock *from, llvm::BasicBlock *to, F&& fun)
 {
 	llvm::SmallVector<llvm::BasicBlock *, 4> path;
-	details::foreachInBackPathTo(from, to, path, fun);
+	::details::foreachInBackPathTo(from, to, path, fun);
 }
 
 /*

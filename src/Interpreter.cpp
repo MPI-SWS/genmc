@@ -45,6 +45,7 @@
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Module.h>
 #include <cstring>
+#include <optional>
 
 using namespace llvm;
 
@@ -52,8 +53,10 @@ extern "C" void LLVMLinkInInterpreter() { }
 
 /// create - Create a new interpreter object.  This can never fail.
 ///
-ExecutionEngine *Interpreter::create(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> MI,
-				     GenMCDriver *driver, const Config *userConf, std::string* ErrStr) {
+std::unique_ptr<Interpreter>
+Interpreter::create(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> MI,
+		    GenMCDriver *driver, const Config *userConf,
+		    SAddrAllocator &alloctor, std::string* ErrStr) {
   // Tell this Module to materialize everything and release the GVMaterializer.
   if (Error Err = M->materializeAll()) {
     std::string Msg;
@@ -65,7 +68,7 @@ ExecutionEngine *Interpreter::create(std::unique_ptr<Module> M, std::unique_ptr<
     // We got an error, just return 0
     return nullptr;
   }
-  return new Interpreter(std::move(M), std::move(MI), driver, userConf);
+  return std::make_unique<Interpreter>(std::move(M), std::move(MI), driver, userConf, alloctor);
 }
 
 /* Thread::seed is ODR-used -- we need to provide a definition (C++14) */
@@ -77,14 +80,13 @@ llvm::raw_ostream& llvm::operator<<(llvm::raw_ostream &s, const Thread &thr)
 		 << " " << thr.threadFun->getName().str();
 }
 
-// EELocalState::EELocalState(const DynamicComponents &dynState) : state(dynState) {}
-
-std::unique_ptr<EELocalState> Interpreter::releaseLocalState()
+std::unique_ptr<InterpreterState>
+Interpreter::saveState()
 {
-	return std::make_unique<EELocalState>(dynState);
+	return std::make_unique<InterpreterState>(dynState);
 }
 
-void Interpreter::restoreLocalState(std::unique_ptr<EELocalState> s)
+void Interpreter::restoreState(std::unique_ptr<InterpreterState> s)
 {
 	dynState = std::move(*s);
 }
@@ -122,8 +124,8 @@ void Interpreter::setupRecoveryRoutine(int tid)
 	callFunction(recoveryRoutine, {}, nullptr);
 
 	/* Also set up initSF, if it is the first invocation */
-	if (!getThrById(tid).initSF.CurFunction)
-		getThrById(tid).initSF = ECStack().back();
+	if (getThrById(tid).initEC.empty())
+		getThrById(tid).initEC = ECStack();
 	return;
 }
 
@@ -147,9 +149,9 @@ Thread &Interpreter::addNewThread(Thread &&thread)
 }
 
 /* Creates an entry for the main() function */
-Thread &Interpreter::createAddMainThread(llvm::Function *F)
+Thread &Interpreter::createAddMainThread()
 {
-	Thread main(F, 0);
+	Thread main(mainFun, 0);
 	main.tls = threadLocalVars;
 	dynState.threads.clear(); /* make sure its empty */
 	return addNewThread(std::move(main));
@@ -172,32 +174,6 @@ Thread &Interpreter::createAddRecoveryThread(int tid)
 	return addNewThread(std::move(rec));
 }
 
-int Interpreter::getFreshFd()
-{
-	int fd = dynState.fds.find_first_unset();
-
-	/* If no available descriptor found, grow fds and try again */
-	if (fd == -1) {
-		dynState.fds.resize(2 * dynState.fds.size() + 1);
-		dynState.fdToFile.grow(dynState.fds.size());
-		return getFreshFd();
-	}
-
-	/* Otherwise, mark the file descriptor as used */
-	markFdAsUsed(fd);
-	return fd;
-}
-
-void Interpreter::markFdAsUsed(int fd)
-{
-	dynState.fds.set(fd);
-}
-
-void Interpreter::reclaimUnusedFd(int fd)
-{
-	dynState.fds.reset(fd);
-}
-
 #if LLVM_VERSION_MAJOR >= 8
 # define GET_GV_ADDRESS_SPACE(v) (v).getAddressSpace()
 #else
@@ -208,8 +184,9 @@ void Interpreter::reclaimUnusedFd(int fd)
 })
 #endif
 
-void Interpreter::collectStaticAddresses(Module *M)
+void Interpreter::collectStaticAddresses(SAddrAllocator &alloctor)
 {
+	auto *M = Modules.back().get();
 	std::vector<std::pair<const GlobalVariable *, void *> > toReinitialize;
 
 	for (auto &v : M->getGlobalList()) {
@@ -225,9 +202,10 @@ void Interpreter::collectStaticAddresses(Module *M)
 		}
 
 		/* "Allocate" an address for this global variable... */
-		auto addr = dynState.alloctor.allocStatic(typeSize, v.getAlignment(),
-							  GET_GV_ADDRESS_SPACE(v) == 42);
-		staticAllocas.insert(std::make_pair(addr, addr + typeSize - 1));
+		auto addr = alloctor.allocStatic(typeSize, v.getAlignment(),
+						 v.getSection() == "__genmc_persist",
+						 GET_GV_ADDRESS_SPACE(v) == 42);
+		staticAllocas.insert(std::make_pair(addr, addr + ASize(typeSize - 1)));
 		staticValueMap[addr] = ptr;
 
 		/* ... and use that in the EE instead. Make sure to re-initialize it too;
@@ -264,9 +242,10 @@ void Interpreter::setupErrorPolicy(Module *M, const Config *userConf)
 
 void Interpreter::setupFsInfo(Module *M, const Config *userConf)
 {
-	auto &FI = MI->fsInfo;
+	recoveryRoutine = M->getFunction("__VERIFIER_recovery_routine");
 
 	/* Setup config options first */
+	auto &FI = MI->fsInfo;
 	FI.blockSize = userConf->blockSize;
 	FI.maxFileSize = userConf->maxFileSize;
 	FI.journalData = userConf->journalData;
@@ -278,9 +257,6 @@ void Interpreter::setupFsInfo(Module *M, const Config *userConf)
 	/* unistd.h not included -- not dealing with fs stuff */
 	if (!inodeVar || !fileVar)
 		return;
-
-	dynState.fds = llvm::BitVector(20);
-	dynState.fdToFile.grow(dynState.fds.size());
 
 	FI.inodeTyp = dyn_cast<StructType>(inodeVar->getValueType());
 	FI.fileTyp = dyn_cast<StructType>(fileVar->getValueType());
@@ -382,7 +358,7 @@ void Interpreter::updateInternalFunRetDeps(unsigned int tid, Function *F, Instru
 // Interpreter ctor - Initialize stuff
 //
 Interpreter::Interpreter(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> MI,
-			 GenMCDriver *driver, const Config *userConf)
+			 GenMCDriver *driver, const Config *userConf, SAddrAllocator &alloctor)
 	: ExecutionEngine(std::move(M)), MI(std::move(MI)), driver(driver) {
 
   memset(&dynState.ExitValue.Untyped, 0, sizeof(dynState.ExitValue.Untyped));
@@ -395,24 +371,24 @@ Interpreter::Interpreter(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> 
   IL = new IntrinsicLowering(getDataLayout());
 
   auto mod = Modules.back().get();
-  collectStaticAddresses(mod);
 
   /* Set up a dependency tracker if the model requires it */
   if (userConf->isDepTrackingModel)
 	  dynState.depTracker = std::make_unique<DepTracker>();
 
+  collectStaticAddresses(alloctor);
+
   /* Set up the system error policy */
   setupErrorPolicy(mod, userConf);
 
   /* Also run a recovery routine if it is required to do so */
-  recoveryRoutine = mod->getFunction("__VERIFIER_recovery_routine");
   setupFsInfo(mod, userConf);
 
   /* Setup the interpreter for the exploration */
-  auto mainFun = mod->getFunction(userConf->programEntryFun);
+  mainFun = mod->getFunction(userConf->programEntryFun);
   ERROR_ON(!mainFun, "Could not find program's entry point function!\n");
 
-  createAddMainThread(mainFun);
+  createAddMainThread();
 }
 
 Interpreter::~Interpreter() {
@@ -539,7 +515,13 @@ void Interpreter::setupStaticCtorsDtors(Module &module, bool isDtors)
 
 		// Setup the ctor/dtor SF and quit
 		if (Function *F = dyn_cast<Function>(FP))
-			setupFunctionCall(F, None);
+			setupFunctionCall(F,
+#if LLVM_VERSION_MAJOR >= 16
+					  std::nullopt
+#else
+					  None
+#endif
+				);
 
 		// FIXME: It is marginally lame that we just do nothing here if we see an
 		// entry we don't recognize. It might not be unreasonable for the verifier

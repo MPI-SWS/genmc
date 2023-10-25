@@ -23,6 +23,8 @@
 
 #include "EventLabel.hpp"
 
+class ReadRevisit;
+
 /*
  * Revisit class (abstract) - Represents a revisit operation
  */
@@ -31,15 +33,16 @@ class Revisit {
 public:
 	/* LLVM-style RTTI discriminator */
 	enum Kind {
-		RV_ReadBegin,
 		RV_FRev,
+		RV_FRevRead,
+		RV_FRevMO,
+		RV_FRevOpt,
+		RV_FRevRerun,
 		RV_FRevLast,
 		RV_BRev,
 		RV_BRevHelper,
 		RV_BRevLast,
-		RV_ReadLast,
-		RV_MO,
-		RV_Opt,
+
 	};
 
 protected:
@@ -54,6 +57,10 @@ public:
 	/* Returns the event for which we are exploring an alternative exploration option */
 	Event getPos() const { return pos; }
 
+	static bool classofKind(Kind K) { return true; }
+	static ReadRevisit *castToReadRevisit(const Revisit *);
+	static Revisit *castFromReadRevisit(const ReadRevisit *);
+
 	/* Destructor and printing facilities */
 	virtual ~Revisit() {}
 	friend llvm::raw_ostream& operator<<(llvm::raw_ostream& rhs, const Revisit &item);
@@ -65,44 +72,71 @@ private:
 
 llvm::raw_ostream& operator<<(llvm::raw_ostream& rhs, const Revisit::Kind k);
 
-/*
- * ReadRevisit class (abstract) - Represents various read revisit kinds (forward, backward, etc)
- */
-class ReadRevisit : public Revisit {
+
+/* Multiple hierarchy for read revisits */
+class ReadRevisit {
 
 protected:
-	/* Constructors */
-	ReadRevisit() = delete;
-	ReadRevisit(Kind k, Event p, Event r) : Revisit(k, p), rev(r) {}
+	ReadRevisit(Revisit::Kind k, Event rev)
+		: revisitKind(k), rev(rev) {}
 
 public:
-	/* Returns the event performing the revisit */
 	Event getRev() const { return rev; }
 
-	static bool classof(const Revisit *item) {
-		return item->getKind() >= RV_ReadBegin && item->getKind() <= RV_ReadLast;
+	Revisit::Kind getRevisitKind() const {
+		return revisitKind;
+	}
+	static bool classof(const Revisit *r) {
+		return r->getKind() == Revisit::RV_FRevRead ||
+		       (r->getKind() >= Revisit::RV_BRev && r->getKind() <= Revisit::RV_BRevLast);
 	}
 
 private:
+	Revisit::Kind revisitKind;
+
+	/* The store revisiting the read */
 	Event rev;
 };
 
+
 /*
- * ForwardRevisit class - Represents a forward revisit
+ * ForwardRevisit class (abstract) - Represents a forward revisit
  */
-class ForwardRevisit : public ReadRevisit {
+class ForwardRevisit : public Revisit {
 
 protected:
-	ForwardRevisit(Kind k, Event p, Event r, bool maximal = false)
-		: ReadRevisit(k, p, r), maximal(maximal) {}
+	ForwardRevisit() = delete;
+	ForwardRevisit(Kind k, Event p) : Revisit(k, p) {}
 
 public:
-	ForwardRevisit(Event p, Event r, bool maximal = false) : ForwardRevisit(RV_FRev, p, r, maximal) {}
+	static bool classof(const Revisit *item) {
+		return item->getKind() >= RV_FRev && item->getKind() <= RV_FRevLast;
+	}
+};
+
+
+/*
+ * ReadForwardRevisit class - Forward revisit a read
+ */
+class ReadForwardRevisit : public ForwardRevisit, public ReadRevisit {
+
+public:
+	/* Constructors */
+	ReadForwardRevisit() = delete;
+	ReadForwardRevisit(Event p, Event r, bool m = false)
+		: ForwardRevisit(RV_FRevRead, p), maximal(m),
+		  ReadRevisit(RV_FRevRead, r) {}
 
 	bool isMaximal() const { return maximal; }
 
 	static bool classof(const Revisit *item) {
-		return item->getKind() >= RV_FRev && item->getKind() <= RV_FRevLast;
+		return item->getKind() == RV_FRevRead;
+	}
+	static ReadRevisit *castToReadRevisit(const ReadForwardRevisit *r) {
+		return static_cast<ReadRevisit *>(const_cast<ReadForwardRevisit*>(r));
+	}
+	static ReadForwardRevisit *castFromReadRevisit(const ReadRevisit *r) {
+		return static_cast<ReadForwardRevisit *>(const_cast<ReadRevisit*>(r));
 	}
 
 private:
@@ -111,50 +145,100 @@ private:
 
 
 /*
- * BackwardRevisit class - Represents a backward revisit
+ * WriteForwardRevisit class - Represents an alternative MO position for a store
+ * (Used by drivers that track MO only)
  */
-class BackwardRevisit : public ReadRevisit {
+class WriteForwardRevisit : public ForwardRevisit {
 
 protected:
-	BackwardRevisit(Kind k, Event p, Event r,
-		 std::vector<std::unique_ptr<EventLabel> > &&prefix,
-		 std::vector<std::pair<Event, Event> > &&moPlacings)
-		: ReadRevisit(k, p, r),
-		  prefix(std::move(prefix)),
-		  moPlacings(std::move(moPlacings)) {}
+	WriteForwardRevisit(Kind k, Event p, Event moSucc)
+		: ForwardRevisit(k, p), moSucc(moSucc) {}
 
 public:
-	BackwardRevisit(Event p, Event r,
-		 std::vector<std::unique_ptr<EventLabel> > &&prefix,
-		 std::vector<std::pair<Event, Event> > &&moPlacings)
-		: BackwardRevisit(RV_BRev, p, r, std::move(prefix), std::move(moPlacings)) {}
-	BackwardRevisit(Event p, Event r)
-		: BackwardRevisit(p, r, {}, {}) {}
-	BackwardRevisit(const ReadLabel *rLab, const WriteLabel *wLab)
-		: BackwardRevisit(rLab->getPos(), wLab->getPos()) {}
+	WriteForwardRevisit(Event p, Event moSucc)
+		: WriteForwardRevisit(RV_FRevMO, p, moSucc) {}
+
+	/* Returns the new MO successor of the event for which
+	 * we are exploring alternative exploration options */
+	Event getSucc() const { return moSucc; }
+
+	static bool classof(const Revisit *item) {
+		return item->getKind() == RV_FRevMO;
+	}
+
+private:
+	Event moSucc;
+};
+
+
+/*
+ * OptionalForwardRevisit class - Represents the revisit of an optional block
+ */
+class OptionalForwardRevisit : public ForwardRevisit {
+
+public:
+	OptionalForwardRevisit(Event p) : ForwardRevisit(RV_FRevOpt, p) {}
+
+	static bool classof(const Revisit *item) {
+		return item->getKind() == RV_FRevOpt;
+	}
+};
+
+
+/*
+ * RerunForwardRevisit class - Represents an execution "rerun".
+ * Helpful e.g., when operating under EstimationMode
+ */
+class RerunForwardRevisit : public ForwardRevisit {
+
+public:
+	RerunForwardRevisit() : ForwardRevisit(RV_FRevRerun, Event::getInit()) {}
+
+	static bool classof(const Revisit *item) {
+		return item->getKind() == RV_FRevRerun;
+	}
+};
+
+
+/*
+ * BackwardRevisit class - Represents a backward revisit
+ */
+class BackwardRevisit : public Revisit, public ReadRevisit {
+
+protected:
+	BackwardRevisit(Kind k, Event p, Event r, std::unique_ptr<VectorClock> view)
+		: Revisit(k, p),
+		  view(std::move(view)),
+		  ReadRevisit(k, r) {}
+
+public:
+	BackwardRevisit(Event p, Event r, std::unique_ptr<VectorClock> view)
+		: BackwardRevisit(RV_BRev, p, r, std::move(view)) {}
+	BackwardRevisit(const ReadLabel *rLab, const WriteLabel *wLab, std::unique_ptr<VectorClock> view)
+		: BackwardRevisit(rLab->getPos(), wLab->getPos(), std::move(view)) {}
 
 	/* Returns (releases) the prefix of the revisiting event */
-	std::vector<std::unique_ptr<EventLabel> > &&getPrefixRel() {
-		return std::move(prefix);
+	std::unique_ptr<VectorClock> getViewRel() {
+		return std::move(view);
 	}
 
 	/* Returns (but does not release) the prefix of the revisiting event */
-	const std::vector<std::unique_ptr<EventLabel> > &getPrefixNoRel() const {
-		return prefix;
-	}
-
-	/* Returns (releases) the coherence placing in the prefix */
-	std::vector<std::pair<Event, Event> > &&getMOPlacingsRel() {
-		return std::move(moPlacings);
+	const std::unique_ptr<VectorClock> &getViewNoRel() const {
+		return view;
 	}
 
 	static bool classof(const Revisit *item) {
 		return item->getKind() >= RV_BRev && item->getKind() <= RV_BRevLast;
 	}
+	static ReadRevisit *castToReadRevisit(const BackwardRevisit *r) {
+		return static_cast<ReadRevisit *>(const_cast<BackwardRevisit*>(r));
+	}
+	static BackwardRevisit *castFromReadRevisit(const ReadRevisit *r) {
+		return static_cast<BackwardRevisit *>(const_cast<ReadRevisit*>(r));
+	}
 
 private:
-	std::vector<std::unique_ptr<EventLabel> >  prefix;
-	std::vector<std::pair<Event, Event> >  moPlacings;
+	std::unique_ptr<VectorClock> view;
 };
 
 
@@ -164,10 +248,12 @@ private:
 class BackwardRevisitHELPER : public BackwardRevisit {
 
 public:
-	BackwardRevisitHELPER(Event p, Event r, Event m)
-		: BackwardRevisit(RV_BRevHelper, p, r, {}, {}), mid(m) {}
-	BackwardRevisitHELPER(const ReadLabel *rLab, const WriteLabel *wLab, const WriteLabel *mLab)
-		: BackwardRevisitHELPER(rLab->getPos(), wLab->getPos(), mLab->getPos()) {}
+	BackwardRevisitHELPER(Event p, Event r, std::unique_ptr<VectorClock> view, Event m)
+		: BackwardRevisit(RV_BRevHelper, p, r, std::move(view)), mid(m) {}
+	BackwardRevisitHELPER(const ReadLabel *rLab, const WriteLabel *wLab, std::unique_ptr<VectorClock> view,
+			      const WriteLabel *mLab)
+		: BackwardRevisitHELPER(rLab->getPos(), wLab->getPos(), std::move(view),
+					mLab->getPos()) {}
 
 	/* Returns the intermediate write participating in the revisit */
 	Event getMid() const { return mid; }
@@ -175,47 +261,153 @@ public:
 	static bool classof(const Revisit *item) {
 		return item->getKind() == RV_BRevHelper;
 	}
+	static ReadRevisit *castToReadRevisit(const BackwardRevisitHELPER *r) {
+		return static_cast<ReadRevisit *>(const_cast<BackwardRevisitHELPER*>(r));
+	}
+	static BackwardRevisitHELPER *castFromReadRevisit(const ReadRevisit *r) {
+		return static_cast<BackwardRevisitHELPER *>(const_cast<ReadRevisit*>(r));
+	}
 
 private:
 	Event mid;
 };
 
-/*
- * WriteRevisit class - Represents an alternative MO position for a store
- * (Used by drivers that track MO only)
- */
-class WriteRevisit : public Revisit {
 
-protected:
-	WriteRevisit(Kind k, Event p, int moPos) : Revisit(k, p), moPos(moPos) {}
+/*******************************************************************************
+ **                             Static methods
+ *******************************************************************************/
 
-public:
-	WriteRevisit(Event p, int moPos) : Revisit(RV_MO, p), moPos(moPos) {}
+inline Revisit *Revisit::castFromReadRevisit(const ReadRevisit *r)
+{
+	auto rk = r->getRevisitKind();
+	switch (rk) {
+	case Revisit::Kind::RV_FRevRead:
+		return static_cast<ReadForwardRevisit *>(const_cast<ReadRevisit *>(r));
+	case Revisit::Kind::RV_BRev:
+		return static_cast<BackwardRevisit *>(const_cast<ReadRevisit *>(r));
+	case Revisit::Kind::RV_BRevHelper:
+		return static_cast<BackwardRevisitHELPER *>(const_cast<ReadRevisit *>(r));
+	default:
+		BUG();
+	}
+}
 
-	/* Returns the new MO position of the event for which
-	 * we are exploring alternative exploration options */
-	int getMOPos() const { return moPos; }
+inline ReadRevisit *Revisit::castToReadRevisit(const Revisit *r)
+{
+	auto rk = r->getKind();
+	switch (rk) {
+	case Revisit::Kind::RV_FRevRead:
+		return static_cast<ReadForwardRevisit *>(const_cast<Revisit *>(r));
+	case Revisit::Kind::RV_BRev:
+		return static_cast<BackwardRevisit *>(const_cast<Revisit *>(r));
+	case Revisit::Kind::RV_BRevHelper:
+		return static_cast<BackwardRevisitHELPER *>(const_cast<Revisit *>(r));
+	default:
+		BUG();
+	}
+}
 
-	static bool classof(const Revisit *item) {
-		return item->getKind() == RV_MO;
+
+/*******************************************************************************
+ **                             RTTI helpers
+ *******************************************************************************/
+
+/* Specialization selected when ToTy is not a known subclass of ReadRevisit */
+template <class ToTy,
+	  bool IsKnownSubtype = ::std::is_base_of<ReadRevisit, ToTy>::value>
+struct cast_convert_read_rev {
+	static const ToTy *doit(const ReadRevisit *Val) {
+		return static_cast<const ToTy*>(Revisit::castFromReadRevisit(Val));
 	}
 
-private:
-	int moPos;
-};
-
-
-/*
- * OptionalRevisit class - Represents the revisit of an optional block
- */
-class OptionalRevisit : public Revisit {
-
-public:
-	OptionalRevisit(Event p) : Revisit(RV_Opt, p) {}
-
-	static bool classof(const Revisit *item) {
-		return item->getKind() == RV_Opt;
+	static ToTy *doit(ReadRevisit *Val) {
+		return static_cast<ToTy*>(Revisit::castFromReadRevisit(Val));
 	}
 };
+
+/* Specialization selected when ToTy is a known subclass of ReadRevisit */
+template <class ToTy>
+struct cast_convert_read_rev<ToTy, true> {
+	static const ToTy *doit(const ReadRevisit *Val) {
+		return static_cast<const ToTy*>(Val);
+	}
+
+	static ToTy *doit(ReadRevisit *Val) {
+		return static_cast<ToTy*>(Val);
+	}
+};
+
+namespace llvm {
+
+	/* isa<T>(ReadRevisit *) */
+	template <typename To>
+	struct isa_impl<To, ::ReadRevisit> {
+		static bool doit(const ::ReadRevisit &Val) {
+			return To::classofKind(Val.getRevisitKind());
+		}
+	};
+
+	/* cast<T>(ReadRevisit *) */
+	template<class ToTy>
+	struct cast_convert_val<ToTy,
+				const ::ReadRevisit,const ::ReadRevisit> {
+		static const ToTy &doit(const ::ReadRevisit &Val) {
+			return *::cast_convert_read_rev<ToTy>::doit(&Val);
+		}
+	};
+
+	template<class ToTy>
+	struct cast_convert_val<ToTy, ::ReadRevisit, ::ReadRevisit> {
+		static ToTy &doit(::ReadRevisit &Val) {
+			return *::cast_convert_read_rev<ToTy>::doit(&Val);
+		}
+	};
+
+	template<class ToTy>
+	struct cast_convert_val<ToTy,
+				const ::ReadRevisit*, const ::ReadRevisit*> {
+		static const ToTy *doit(const ::ReadRevisit *Val) {
+			return ::cast_convert_read_rev<ToTy>::doit(Val);
+		}
+	};
+
+	template<class ToTy>
+	struct cast_convert_val<ToTy, ::ReadRevisit*, ::ReadRevisit*> {
+		static ToTy *doit(::ReadRevisit *Val) {
+			return ::cast_convert_read_rev<ToTy>::doit(Val);
+		}
+	};
+
+	/// Implement cast_convert_val for EventLabel -> ReadRevisit conversions.
+	template<class FromTy>
+	struct cast_convert_val< ::ReadRevisit, FromTy, FromTy> {
+		static ::ReadRevisit &doit(const FromTy &Val) {
+			return *FromTy::castToReadRevisit(&Val);
+		}
+	};
+
+	template<class FromTy>
+	struct cast_convert_val< ::ReadRevisit, FromTy*, FromTy*> {
+		static ::ReadRevisit *doit(const FromTy *Val) {
+			return FromTy::castToReadRevisit(Val);
+		}
+	};
+
+	template<class FromTy>
+	struct cast_convert_val< const ::ReadRevisit, FromTy, FromTy> {
+		static const ::ReadRevisit &doit(const FromTy &Val) {
+			return *FromTy::castToReadRevisit(&Val);
+		}
+	};
+
+	template<class FromTy>
+	struct cast_convert_val< const ::ReadRevisit, FromTy*, FromTy*> {
+		static const ::ReadRevisit *doit(const FromTy *Val) {
+			return FromTy::castToReadRevisit(Val);
+		}
+	};
+
+} /* namespace llvm */
+
 
 #endif /* __REVISIT_HPP__ */

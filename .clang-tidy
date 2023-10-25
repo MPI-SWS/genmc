@@ -1,0 +1,26 @@
+Checks: |
+  -*,
+  clang-analyzer-*,
+  clang-diagnostic-*,
+  concurrency-*,
+  cppcoreguidelines-*,
+  llvm-*,
+  -llvmlibc-restrict-system-libc-headers,
+  -llvm-header-guard,
+  misc-*,
+  -misc-non-private-member-variables-in-classes,
+  -misc-no-recursion,
+  -misc-use-anonymous-namespace,
+  readability-*,
+  -readability-braces-around-statements,
+  modernize-*,
+  performance-*,
+CheckOptions:
+- key: readability-function-cognitive-complexity.IgnoreMacros
+  value: true
+- key: readability-identifier-length.IgnoredVariableNames
+  value: 'i|g|e|EE|l|r|s|w|f|b|br|v|hb'
+- key: readability-identifier-length.IgnoredLoopCounterNames
+  value: 'i|j|k|g|e|EE|l|r|s|w|f|b|br|v|hb'
+- key: readability-identifier-length.IgnoredParameterNames
+  value: 'g|e|EE|l|r|s|w|f|b|br|v|hb'

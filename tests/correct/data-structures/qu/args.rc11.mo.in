@@ -1,1 +1,1 @@
--disable-race-detection  | 
+-disable-ipr -disable-sr -disable-race-detection  |

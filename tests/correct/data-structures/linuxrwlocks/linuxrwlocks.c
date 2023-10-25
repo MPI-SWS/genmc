@@ -8,9 +8,9 @@
 # define mo_release memory_order_release
 #endif
 
-#define MAXREADERS 3
-#define MAXWRITERS 3
-#define MAXRDWR 3
+#define MAXREADERS 5
+#define MAXWRITERS 5
+#define MAXRDWR 5
 
 #ifdef CONFIG_RWLOCK_READERS
 #define DEFAULT_READERS (CONFIG_RWLOCK_READERS)

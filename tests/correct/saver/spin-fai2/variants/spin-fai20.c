@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include <genmc.h>
 
 #include "../spin-fai2.c"
 

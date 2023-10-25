@@ -21,6 +21,7 @@
 #include "config.h"
 #include "Config.hpp"
 #include "Error.hpp"
+#include "Logger.hpp"
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
@@ -48,34 +49,50 @@ clInputFile(llvm::cl::Positional, llvm::cl::Required, llvm::cl::desc("<input fil
 
 static llvm::cl::opt<ModelType>
 clModelType(llvm::cl::values(
-		    clEnumValN(ModelType::rc11, "rc11", "RC11 memory model"),
-		    clEnumValN(ModelType::imm,  "imm",  "IMM memory model"),
-		    clEnumValN(ModelType::lkmm, "lkmm", "LKMM memory model")
+		    clEnumValN(ModelType::SC,   "sc",   "SC memory model"),
+		    clEnumValN(ModelType::TSO,  "tso",  "TSO memory model"),
+		    clEnumValN(ModelType::RA,   "ra",   "RA+RLX memory model"),
+		    clEnumValN(ModelType::RC11, "rc11", "RC11 memory model (default)"),
+		    clEnumValN(ModelType::IMM,  "imm",  "IMM memory model")
 		    ),
 	    llvm::cl::cat(clGeneral),
-	    llvm::cl::init(ModelType::rc11),
+	    llvm::cl::init(ModelType::RC11),
 	    llvm::cl::desc("Choose model type:"));
 
-static llvm::cl::opt<CoherenceType>
-clCoherenceType(llvm::cl::values(
-			clEnumValN(CoherenceType::mo, "mo", "Track modification order"),
-			clEnumValN(CoherenceType::wb, "wb", "Calculate writes-before")
-			),
-		llvm::cl::cat(clGeneral),
-		llvm::cl::init(CoherenceType::mo),
-		llvm::cl::desc("Choose coherence type:"));
+static llvm::cl::opt<bool>
+clDisableEstimation("disable-estimation", llvm::cl::cat(clGeneral),
+	llvm::cl::desc("Do not estimate the state-space size before verifying the program"));
 
 static llvm::cl::opt<unsigned int>
 clThreads("nthreads", llvm::cl::cat(clGeneral), llvm::cl::init(1),
 	      llvm::cl::desc("Number of threads to be used in the exploration"));
+
+static llvm::cl::opt<int>
+clBound("bound", llvm::cl::cat(clGeneral),
+		 llvm::cl::init(-1), llvm::cl::value_desc("N"),
+		 llvm::cl::desc("Do not explore executions exceeding given bound"));
+
+static llvm::cl::opt<BoundType>
+clBoundType("bound-type", llvm::cl::cat(clGeneral), llvm::cl::init(BoundType::round),
+	    llvm::cl::desc("Choose type for -bound:"),
+	    llvm::cl::values(
+			     clEnumValN(BoundType::context, "context", "Context bound"),
+			     clEnumValN(BoundType::round,  "round",  "Round-robin bound")
+			     ));
+
+#ifdef ENABLE_GENMC_DEBUG
+static llvm::cl::opt<bool>
+clBoundsHistogram("bounds-histogram", llvm::cl::cat(clDebugging),
+	llvm::cl::desc("Produce bounds histogram"));
+#endif /* ifdef ENABLE_GENMC_DEBUG */
 
 static llvm::cl::opt<bool>
 clLAPOR("lapor", llvm::cl::cat(clGeneral),
 	llvm::cl::desc("Enable Lock-Aware Partial Order Reduction (LAPOR)"));
 
 static llvm::cl::opt<bool>
-clSymmetryReduction("sr", llvm::cl::cat(clGeneral),
-		    llvm::cl::desc("Enable Symmetry Reduction"));
+clDisableSymmetryReduction("disable-sr", llvm::cl::cat(clGeneral),
+			   llvm::cl::desc("Disable symmetry reduction"));
 
 static llvm::cl::opt<bool>
 clHelper("helper", llvm::cl::cat(clGeneral),
@@ -90,26 +107,13 @@ clDotGraphFile("dump-error-graph", llvm::cl::init(""), llvm::cl::value_desc("fil
 	       llvm::cl::cat(clGeneral),
 	       llvm::cl::desc("Dump an error graph to a file (DOT format)"));
 
-static llvm::cl::opt<CheckConsType>
-clCheckConsType("check-consistency-type", llvm::cl::init(CheckConsType::slow), llvm::cl::cat(clGeneral),
-		llvm::cl::desc("Type of (configurable) consistency checks"),
-		llvm::cl::values(
-			clEnumValN(CheckConsType::slow, "slow", "Approximation check"),
-			clEnumValN(CheckConsType::full, "full", "Full checks")
-		    ));
-
-static llvm::cl::opt<ProgramPoint>
-clCheckConsPoint("check-consistency-point", llvm::cl::init(ProgramPoint::error), llvm::cl::cat(clGeneral),
-		 llvm::cl::desc("Points at which consistency is checked"),
-		 llvm::cl::values(
-			 clEnumValN(ProgramPoint::error, "error", "At errors only"),
-			 clEnumValN(ProgramPoint::exec,  "exec",  "At the end of each execution"),
-			 clEnumValN(ProgramPoint::step,  "step",  "At each program step")
-		    ));
-
 static llvm::cl::opt<bool>
 clCheckLiveness("check-liveness", llvm::cl::cat(clGeneral),
 		llvm::cl::desc("Check for liveness violations"));
+
+static llvm::cl::opt<bool>
+clDisableInstructionCaching("disable-instruction-caching", llvm::cl::cat(clGeneral),
+			    llvm::cl::desc("Disable instruction caching (pure stateless exploration)"));
 
 static llvm::cl::opt<bool>
 clDisableRaceDetection("disable-race-detection", llvm::cl::cat(clGeneral),
@@ -118,6 +122,12 @@ clDisableRaceDetection("disable-race-detection", llvm::cl::cat(clGeneral),
 static llvm::cl::opt<bool>
 clDisableBAM("disable-bam", llvm::cl::cat(clGeneral),
 	     llvm::cl::desc("Disable optimized barrier handling (BAM)"));
+static llvm::cl::opt<bool>
+clDisableIPR("disable-ipr", llvm::cl::cat(clGeneral),
+	     llvm::cl::desc("Disable in-place revisiting"));
+static llvm::cl::opt<bool>
+clDisableLockIPR("disable-lock-ipr", llvm::cl::cat(clGeneral),
+	     llvm::cl::desc("Disable in-place revisiting of locks"));
 static llvm::cl::opt<bool>
 clDisableStopOnSystemError("disable-stop-on-system-error", llvm::cl::cat(clGeneral),
 			   llvm::cl::desc("Do not stop verification on system errors"));
@@ -128,15 +138,6 @@ clDisableStopOnSystemError("disable-stop-on-system-error", llvm::cl::cat(clGener
 static llvm::cl::opt<bool>
 clPersevere("persevere", llvm::cl::cat(clPersistency),
 	    llvm::cl::desc("Enable persistency checks (Persevere)"));
-
-static llvm::cl::opt<ProgramPoint>
-clCheckPersPoint("check-persistency-point", llvm::cl::init(ProgramPoint::step), llvm::cl::cat(clPersistency),
-		 llvm::cl::desc("Points at which persistency is checked"),
-		 llvm::cl::values(
-			 clEnumValN(ProgramPoint::error, "error", "At errors only"),
-			 clEnumValN(ProgramPoint::exec,  "exec",  "At the end of each execution"),
-			 clEnumValN(ProgramPoint::step,  "step",  "At each program step")
-		    ));
 
 static llvm::cl::opt<unsigned int>
 clBlockSize("block-size", llvm::cl::cat(clPersistency), llvm::cl::init(2),
@@ -205,8 +206,27 @@ static llvm::cl::opt<bool>
 clDisableConfirmAnnot("disable-confirmation-annotation", llvm::cl::cat(clTransformation),
 		      llvm::cl::desc("Disable confirmation-annotation transformation"));
 
+static llvm::cl::opt<bool>
+clDisableMMDetector("disable-mm-detector", llvm::cl::cat(clTransformation),
+		      llvm::cl::desc("Disable MM detector pass"));
+
 
 /*** Debugging options ***/
+
+static llvm::cl::opt<unsigned int>
+clEstimationMax("estimation-max", llvm::cl::init(1000),
+		llvm::cl::value_desc("N"), llvm::cl::cat(clDebugging),
+		llvm::cl::desc("Number of maximum allotted rounds for state-space estimation"));
+
+static llvm::cl::opt<unsigned int>
+clEstimationMin("estimation-min", llvm::cl::init(10),
+		llvm::cl::value_desc("N"), llvm::cl::cat(clDebugging),
+		llvm::cl::desc("Number of minimum alloted round for state-space estimation"));
+
+static llvm::cl::opt<unsigned int>
+clEstimationSdThreshold("estimation-threshold", llvm::cl::init(10),
+			llvm::cl::value_desc("N"), llvm::cl::cat(clDebugging),
+			llvm::cl::desc("Deviation threshold % under which estimation is deemed good enough"));
 
 static llvm::cl::opt<std::string>
 clProgramEntryFunction("program-entry-function", llvm::cl::init("main"),
@@ -222,35 +242,55 @@ clTransformFile("transform-output", llvm::cl::init(""),	llvm::cl::value_desc("fi
 		llvm::cl::cat(clDebugging),
 		llvm::cl::desc("Output the transformed LLVM code to file"));
 static llvm::cl::opt<unsigned int>
-clWarnOnGraphSize("warn-on-graph-size", llvm::cl::init(42042), llvm::cl::value_desc("N"),
+clWarnOnGraphSize("warn-on-graph-size", llvm::cl::init(1024), llvm::cl::value_desc("N"),
 		  llvm::cl::cat(clDebugging), llvm::cl::desc("Warn about graphs larger than N"));
 llvm::cl::opt<SchedulePolicy>
 clSchedulePolicy("schedule-policy", llvm::cl::cat(clDebugging), llvm::cl::init(SchedulePolicy::wf),
 		 llvm::cl::desc("Choose the scheduling policy:"),
 		 llvm::cl::values(
-			 clEnumValN(SchedulePolicy::ltr,     "ltr",      "Left-to-right"),
-			 clEnumValN(SchedulePolicy::wf,      "wf",       "Writes-first (default)"),
-			 clEnumValN(SchedulePolicy::random,  "random",   "Random")
+			 clEnumValN(SchedulePolicy::ltr,      "ltr",      "Left-to-right"),
+			 clEnumValN(SchedulePolicy::wf,       "wf",       "Writes-first (default)"),
+			 clEnumValN(SchedulePolicy::wfr,      "wfr",      "Writes-first-random"),
+			 clEnumValN(SchedulePolicy::arbitrary,"arbitrary","Arbitrary")
 			 ));
 
 static llvm::cl::opt<bool>
-clPrintRandomScheduleSeed("print-random-schedule-seed", llvm::cl::cat(clDebugging),
-			     llvm::cl::desc("Print the seed used for randomized scheduling"));
+clPrintArbitraryScheduleSeed("print-schedule-seed", llvm::cl::cat(clDebugging),
+			     llvm::cl::desc("Print the seed used for arbitrary scheduling"));
 
 static llvm::cl::opt<std::string>
-clRandomScheduleSeed("random-schedule-seed", llvm::cl::init(""),
+clArbitraryScheduleSeed("schedule-seed", llvm::cl::init(""),
 			llvm::cl::value_desc("seed"), llvm::cl::cat(clDebugging),
-			llvm::cl::desc("Seed to be used for randomized scheduling"));
+			llvm::cl::desc("Seed to be used for arbitrary scheduling"));
 
 static llvm::cl::opt<bool>
 clPrintExecGraphs("print-exec-graphs", llvm::cl::cat(clDebugging),
 		  llvm::cl::desc("Print explored execution graphs"));
 
-
-#ifdef ENABLE_GENMC_DEBUG
 static llvm::cl::opt<bool>
 clPrintBlockedExecs("print-blocked-execs", llvm::cl::cat(clDebugging),
 		    llvm::cl::desc("Print blocked execution graphs"));
+
+llvm::cl::opt<VerbosityLevel>
+clVLevel(llvm::cl::cat(clDebugging), llvm::cl::init(VerbosityLevel::Tip),
+	 llvm::cl::desc("Choose verbosity level:"),
+	 llvm::cl::values(
+		 clEnumValN(VerbosityLevel::Quiet, "v0", "Quiet (no logging)"),
+		 clEnumValN(VerbosityLevel::Error, "v1", "Print errors only"),
+		 clEnumValN(VerbosityLevel::Warning, "v2", "Print warnings"),
+		 clEnumValN(VerbosityLevel::Tip, "v3", "Print tips (default)")
+#ifdef ENABLE_GENMC_DEBUG
+		 ,clEnumValN(VerbosityLevel::Debug1, "v4", "Print revisits considered")
+		 ,clEnumValN(VerbosityLevel::Debug2, "v5", "Print graph after each memory access")
+		 ,clEnumValN(VerbosityLevel::Debug3, "v6", "Print rf options considered")
+#endif /* ifdef ENABLE_GENMC_DEBUG */
+		 ));
+
+
+#ifdef ENABLE_GENMC_DEBUG
+static llvm::cl::opt<bool>
+clPrintStamps("print-stamps", llvm::cl::cat(clDebugging),
+	      llvm::cl::desc("Print stamps in execution graphs"));
 
 static llvm::cl::opt<bool>
 clColorAccesses("color-accesses", llvm::cl::cat(clDebugging),
@@ -264,15 +304,13 @@ static llvm::cl::opt<bool>
 clCountDuplicateExecs("count-duplicate-execs", llvm::cl::cat(clDebugging),
 		      llvm::cl::desc("Count duplicate executions (adds runtime overhead)"));
 
-llvm::cl::opt<VerbosityLevel>
-clVLevel(llvm::cl::cat(clDebugging), llvm::cl::init(VerbosityLevel::V0),
-	 llvm::cl::desc("Choose verbosity level:"),
-	 llvm::cl::values(
-		 clEnumValN(VerbosityLevel::V0, "v0", "No verbosity"),
-		 clEnumValN(VerbosityLevel::V1, "v1", "Print stamps on executions"),
-		 clEnumValN(VerbosityLevel::V2, "v2", "Print restricted executions"),
-		 clEnumValN(VerbosityLevel::V3, "v3", "Print execution after each instruction")
-		 ));
+static llvm::cl::opt<bool>
+clCountMootExecs("count-moot-execs", llvm::cl::cat(clDebugging),
+		 llvm::cl::desc("Count moot executions"));
+
+static llvm::cl::opt<bool>
+clPrintEstimationStats("print-estimation-stats", llvm::cl::cat(clDebugging),
+		 llvm::cl::desc("Prints estimations statistics"));
 #endif /* ENABLE_GENMC_DEBUG */
 
 
@@ -289,34 +327,48 @@ void printVersion(llvm::raw_ostream &s)
 void Config::checkConfigOptions() const
 {
 	/* Check exploration options */
-	if (clLAPOR && clCoherenceType == CoherenceType::mo) {
-		WARN("LAPOR usage with -mo is experimental.\n");
-	}
-	if (clCheckLiveness && clCoherenceType != CoherenceType::mo) {
-		ERROR("-check-liveness can only be used with -mo.\n");
-	}
-	if (clLAPOR && clModelType == ModelType::lkmm) {
-		ERROR("LAPOR usage is temporarily disabled under LKMM.\n");
-	}
-	if (clLAPOR && clCheckConsPoint < ProgramPoint::step) {
-		WARN("LAPOR requires pointwise consistency steps.\n");
-	}
 	if (clLAPOR) {
 		ERROR("LAPOR is temporarily disabled.\n");
 	}
-	if (clHelper && clSchedulePolicy == SchedulePolicy::random) {
-		ERROR("Helper cannot be used with -schedule-policy=random.\n");
+	if (clHelper && clSchedulePolicy == SchedulePolicy::arbitrary) {
+		ERROR("Helper cannot be used with -schedule-policy=arbitrary.\n");
 	}
-	if (clHelper && clCoherenceType != CoherenceType::mo) {
-		ERROR("Helper can only be used with -mo.\n");
+	if (clModelType == ModelType::IMM && (!clDisableIPR || !clDisableSymmetryReduction)) {
+		WARN("In-place revisiting and symmetry reduction have no effect under IMM\n");
+		clDisableSymmetryReduction = true;
+		clDisableIPR = true;
 	}
 
 	/* Check debugging options */
-	if (clSchedulePolicy != SchedulePolicy::random && clPrintRandomScheduleSeed) {
-		WARN("--print-random-schedule-seed used without -schedule-policy=random.\n");
+	if (clSchedulePolicy != SchedulePolicy::arbitrary && clPrintArbitraryScheduleSeed) {
+		WARN("--print-schedule-seed used without -schedule-policy=arbitrary.\n");
 	}
-	if (clSchedulePolicy != SchedulePolicy::random && clRandomScheduleSeed != "") {
-		WARN("--random-schedule-seed used without -schedule-policy=random.\n");
+	if (clSchedulePolicy != SchedulePolicy::arbitrary && !clArbitraryScheduleSeed.empty()) {
+		WARN("--schedule-seed used without -schedule-policy=arbitrary.\n");
+	}
+
+	/* Check bounding options */
+	if (clBound != -1 && clModelType != ModelType::SC) {
+		ERROR("Bounding can only be used with --sc.\n");
+	}
+	GENMC_DEBUG(
+		ERROR_ON(clBound != -1 && clBoundsHistogram,
+			"Bounds histogram cannot be used when bounding.\n");
+	);
+	if (clBound == -1 && clBoundType.getNumOccurrences() > 0) {
+		WARN("--bound-type used without --bound.\n");
+	}
+
+	/* Sanitize bounding options */
+	bool bounding = (clBound != -1);
+	GENMC_DEBUG(bounding |= clBoundsHistogram;);
+	if (bounding &&
+	    (clLAPOR || clHelper || !clDisableBAM || !clDisableSymmetryReduction ||
+	     !clDisableIPR || !clDisableLockIPR || clSchedulePolicy != SchedulePolicy::ltr)) {
+		WARN("LAPOR/Helper/BAM/SR/IPR have no effect when --bound is used. Scheduling defaults to LTR.\n");
+		clLAPOR = clHelper = false;
+		clDisableBAM = clDisableSymmetryReduction = clDisableIPR = clDisableLockIPR = true;
+		clSchedulePolicy = SchedulePolicy::ltr;
 	}
 
 	/* Make sure filename is a regular file */
@@ -333,30 +385,35 @@ void Config::saveConfigOptions()
 	/* Save exploration options */
 	dotFile = clDotGraphFile;
 	model = clModelType;
-	isDepTrackingModel = (model == ModelType::imm || model == ModelType::lkmm);
-	coherence = clCoherenceType;
+	estimate = !clDisableEstimation;
+	estimationMax = clEstimationMax;
+	estimationMin = clEstimationMin;
+	sdThreshold = clEstimationSdThreshold;
+	isDepTrackingModel = (model == ModelType::IMM);
 	threads = clThreads;
+	bound = clBound >= 0 ? std::optional(clBound.getValue()) : std::nullopt;
+	boundType = clBoundType;
 	LAPOR = clLAPOR;
-	symmetryReduction = clSymmetryReduction;
+	symmetryReduction = !clDisableSymmetryReduction;
 	helper = clHelper;
 	printErrorTrace = clPrintErrorTrace;
-	checkConsType = clCheckConsType;
-	checkConsPoint = (LAPOR ? ProgramPoint::step : clCheckConsPoint);
 	checkLiveness = clCheckLiveness;
+	instructionCaching = !clDisableInstructionCaching;
 	disableRaceDetection = clDisableRaceDetection;
 	disableBAM = clDisableBAM;
+	ipr = !clDisableIPR;
+	lockIpr = !clDisableLockIPR;
 	disableStopOnSystemError = clDisableStopOnSystemError;
 
 	/* Save persistency options */
 	persevere = clPersevere;
-	checkPersPoint = clCheckPersPoint;
 	blockSize = clBlockSize;
 	maxFileSize = clMaxFileSize;
 	journalData = clJournalData;
 	disableDelalloc = clDisableDelalloc;
 
 	/* Save transformation options */
-	unroll = clLoopUnroll;
+	unroll = clLoopUnroll >= 0 ? std::optional(clLoopUnroll.getValue()) : std::nullopt;
 	noUnrollFuns.insert(clNoUnrollFuns.begin(), clNoUnrollFuns.end());
 	loopJumpThreading = !clDisableLoopJumpThreading;
 	castElimination = !clDisableCastElimination;
@@ -366,23 +423,30 @@ void Config::saveConfigOptions()
 	loadAnnot = !clDisableLoadAnnot;
 	assumePropagation = !clDisableAssumePropagation;
 	confirmAnnot = !clDisableConfirmAnnot;
+	mmDetector = !clDisableMMDetector;
 
 	/* Save debugging options */
 	programEntryFun = clProgramEntryFunction;
 	warnOnGraphSize = clWarnOnGraphSize;
 	schedulePolicy = clSchedulePolicy;
-	printRandomScheduleSeed = clPrintRandomScheduleSeed;
-	randomScheduleSeed = clRandomScheduleSeed;
+	printRandomScheduleSeed = clPrintArbitraryScheduleSeed;
+	randomScheduleSeed = clArbitraryScheduleSeed;
 	printExecGraphs = clPrintExecGraphs;
+	printBlockedExecs = clPrintBlockedExecs;
 	inputFromBitcodeFile = clInputFromBitcodeFile;
 	transformFile = clTransformFile;
+	vLevel = clVLevel;
 #ifdef ENABLE_GENMC_DEBUG
-	printBlockedExecs = clPrintBlockedExecs;
+	printStamps = clPrintStamps;
 	colorAccesses = clColorAccesses;
 	validateExecGraphs = clValidateExecGraphs;
 	countDuplicateExecs = clCountDuplicateExecs;
-	vLevel = clVLevel;
+	countMootExecs = clCountMootExecs;
+	printEstimationStats = clPrintEstimationStats;
+	boundsHistogram = clBoundsHistogram;
 #endif
+	/* Set (global) log state */
+	logLevel = vLevel;
 }
 
 void Config::getConfigOptions(int argc, char **argv)

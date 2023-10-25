@@ -34,35 +34,17 @@
  */
 class DepExecutionGraph : public ExecutionGraph {
 
-protected:
-	/* Constructor should only be called from the builder */
-	friend class GraphBuilder;
-	DepExecutionGraph(unsigned int warnOnGraphSize = UINT_MAX) : ExecutionGraph(warnOnGraphSize) {}
-
 public:
-	std::vector<Event> getRevisitable(const WriteLabel *sLab) const override;
-
-	std::unique_ptr<VectorClock>
-	getRevisitView(const BackwardRevisit &r) const override;
-
-	const VectorClock& getPrefixView(Event e) const override {
-		return getEventLabel(e)->getPPoRfView();
+	DepExecutionGraph() : ExecutionGraph() {
+		getEventLabel(Event::getInit())->setPrefixView(std::make_unique<DepView>());
 	}
 
-	std::unique_ptr<VectorClock> getPredsView(Event e) const override;
+	std::vector<Event> getRevisitable(const WriteLabel *sLab, const VectorClock &pporf) const override;
 
-	bool revisitModifiesGraph(const BackwardRevisit &r) const override;
+	std::unique_ptr<VectorClock>
+	getViewFromStamp(Stamp) const override;
 
-	bool prefixContainsSameLoc(const BackwardRevisit &r,
-				   const EventLabel *lab) const override;
-
-#ifdef ENABLE_GENMC_DEBUG
-	std::vector<std::unique_ptr<EventLabel> >
-	getPrefixLabelsNotBefore(const WriteLabel *sLab,
-				 const ReadLabel *rLab) const override;
-#endif
-
-	void cutToStamp(unsigned int st) override;
+	void cutToStamp(Stamp st) override;
 
 	std::unique_ptr<ExecutionGraph> getCopyUpTo(const VectorClock &v) const override;
 };

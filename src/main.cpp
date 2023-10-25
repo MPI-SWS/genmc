@@ -24,30 +24,37 @@
 #include "Error.hpp"
 #include "LLVMModule.hpp"
 
-#include <cstdlib>
 #include <chrono>
+#include <cmath>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <numeric>
 #include <set>
+#include <unistd.h>
 
-std::string getOutFilename(const std::shared_ptr<const Config> &conf)
+auto getOutFilename(const std::shared_ptr<const Config> & /*conf*/) -> std::string
 {
-	return "/tmp/__genmc.ll";
+	static char filenameTemplate[] = "/tmp/__genmc.ll.XXXXXX";
+	static bool createdFilename = false;
+
+	if (!createdFilename) {
+		close(mkstemp(filenameTemplate));
+		createdFilename = true;
+	}
+	return {filenameTemplate};
 }
 
-std::string
-buildCompilationArgs(const std::shared_ptr<const Config> &conf)
+auto buildCompilationArgs(const std::shared_ptr<const Config> &conf) -> std::string
 {
 	std::string args;
 
 	args += " -fno-discard-value-names";
-#ifdef HAVE_CLANG_DISABLE_OPTNONE
 	args += " -Xclang";
 	args += " -disable-O0-optnone";
-#endif
 	args += " -g"; /* Compile with -g to get debugging mdata */
-	for (auto &f : conf->cflags)
+	for (const auto &f : conf->cflags)
 		args += " " + f;
 	args += " -I" SRC_INCLUDE_DIR;
 	args += " -I" INCLUDE_DIR;
@@ -60,68 +67,140 @@ buildCompilationArgs(const std::shared_ptr<const Config> &conf)
 	return args;
 }
 
-bool compileInput(const std::shared_ptr<const Config> &conf,
+auto compileInput(const std::shared_ptr<const Config> &conf,
 		  const std::unique_ptr<llvm::LLVMContext> &ctx,
-		  std::unique_ptr<llvm::Module> &module)
+		  std::unique_ptr<llvm::Module> &module) -> bool
 {
-	auto path = CLANGPATH;
+	const auto *path = CLANGPATH;
 	auto command = path + buildCompilationArgs(conf);
-	if (std::system(command.c_str()))
+	if (std::system(command.c_str()) != 0)
 		return false;
 
 	module = LLVMModule::parseLLVMModule(getOutFilename(conf), ctx);
 	return true;
 }
 
-void printResults(const std::shared_ptr<const Config> &conf,
-		  const std::chrono::high_resolution_clock::time_point &begin,
-		  const GenMCDriver::Result &res)
+void transformInput(const std::shared_ptr<Config> &conf,
+                    llvm::Module &module, ModuleInfo &modInfo)
 {
-	auto end = std::chrono::high_resolution_clock::now();
-	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin);
+	LLVMModule::transformLLVMModule(module, modInfo, conf);
+	if (!conf->transformFile.empty())
+		LLVMModule::printLLVMModule(module, conf->transformFile);
 
-	if (res.status == GenMCDriver::Status::VS_OK)
-		llvm::outs() << "No errors were detected.\n";
-	else
-		llvm::outs() << res.message;
+	/* Perhaps override the MM under which verification will take place */
+	if (conf->mmDetector && modInfo.determinedMM.has_value() && isStrongerThan(*modInfo.determinedMM, conf->model)) {
+		conf->model = *modInfo.determinedMM;
+		conf->isDepTrackingModel = (conf->model == ModelType::IMM);
+		LOG(VerbosityLevel::Tip) << "Automatically adjusting memory model to " << conf->model
+					 << ". You can disable this behavior with -disable-mm-detector.\n";
+	}
+}
+
+auto getElapsedSecs(const std::chrono::high_resolution_clock::time_point &begin) -> long double
+{
+	static constexpr long double secToMillFactor = 1e-3L;
+	auto now = std::chrono::high_resolution_clock::now();
+	return std::chrono::duration_cast<std::chrono::milliseconds>(now - begin).count() * secToMillFactor;
+}
+
+void printEstimationResults(const std::shared_ptr<const Config> &conf,
+			    const std::chrono::high_resolution_clock::time_point &begin,
+			    const GenMCDriver::Result &res)
+{
+	llvm::outs() << res.message;
+	llvm::outs() << (res.status == VerificationError::VE_OK ? "*** Estimation complete.\n": "*** Estimation unsuccessful.\n");
+
+        auto mean = std::llround(res.estimationMean);
+        auto sd = std::llround(std::sqrt(res.estimationVariance));
+	auto meanTimeSecs = getElapsedSecs(begin) / (res.explored + res.exploredBlocked);
+        llvm::outs() << "Total executions estimate: " << mean << " (+- " << sd << ")\n";
+        llvm::outs() << "Time to completion estimate: " << llvm::format("%.2Lf", meanTimeSecs * mean) << "s\n";
+        GENMC_DEBUG(
+		if (conf->printEstimationStats)
+			llvm::outs() << "Estimation moot: " << res.exploredMoot << "\n"
+				     << "Estimation blocked: " << res.exploredBlocked << "\n"
+				     << "Estimation complete: " << res.explored << "\n";
+	);
+}
+
+void printVerificationResults(const std::shared_ptr<const Config> &conf,
+			      const std::chrono::high_resolution_clock::time_point &begin,
+			      const GenMCDriver::Result &res)
+{
+	llvm::outs() << res.message;
+	llvm::outs() << (res.status == VerificationError::VE_OK ?
+			 "*** Verification complete. No errors were detected.\n" : "*** Verification unsuccessful.\n");
 
 	llvm::outs() << "Number of complete executions explored: " << res.explored;
 	GENMC_DEBUG(
 		llvm::outs() << ((conf->countDuplicateExecs) ?
 				 " (" + std::to_string(res.duplicates) + " duplicates)" : "");
-		);
-	if (res.exploredBlocked) {
+	);
+	if (res.boundExceeding) {
+		BUG_ON(conf->boundType == BoundType::round);
+		llvm::outs() << " (" + std::to_string(res.boundExceeding) + " exceeded bound)";
+	}
+	if (res.exploredBlocked != 0U) {
 		llvm::outs() << "\nNumber of blocked executions seen: " << res.exploredBlocked;
 	}
-	if (res.exploredMoot) {
-		llvm::outs() << " (" << res.exploredMoot << " mooted)";
-	}
+	GENMC_DEBUG(
+		if (conf->countMootExecs) {
+			llvm::outs() << " (+ " << res.exploredMoot << " mooted)";
+		};
+		if (conf->boundsHistogram) {
+			llvm::outs() << "\nBounds histogram:";
+			auto executions = 0u;
+			for (auto i = 0u; i < res.exploredBounds.size(); i++) {
+				executions += res.exploredBounds[i];
+				llvm::outs() << " " << executions;
+			}
+			if (!executions)
+				llvm::outs() << " 0";
+		}
+	);
 	llvm::outs() << "\nTotal wall-clock time: "
-		     << llvm::format("%.2f", elapsed.count() * 1e-3)
+		     << llvm::format("%.2Lf", getElapsedSecs(begin))
 		     << "s\n";
 }
 
-int main(int argc, char **argv)
+auto main(int argc, char **argv) -> int
 {
 	auto begin = std::chrono::high_resolution_clock::now();
-	auto ctx = std::make_unique<llvm::LLVMContext>();
 	auto conf = std::make_shared<Config>();
 
-	conf->getConfigOptions(argc, argv);
-	if (conf->inputFromBitcodeFile) {
-		auto mod = LLVMModule::parseLLVMModule(conf->inputFile, ctx);
-		auto res = GenMCDriver::verify(conf, std::move(mod));
-		printResults(conf, begin, res);
-		return res.status == GenMCDriver::Status::VS_OK ? 0 : EVERIFY;
+        conf->getConfigOptions(argc, argv);
+
+	llvm::outs() << PACKAGE_NAME " v" PACKAGE_VERSION
+	<< " (LLVM " LLVM_VERSION ")\n"
+	<< "Copyright (C) 2023 MPI-SWS. All rights reserved.\n\n";
+
+	auto ctx = std::make_unique<llvm::LLVMContext>(); // *dtor after module's*
+	std::unique_ptr<llvm::Module> module;
+        if (conf->inputFromBitcodeFile) {
+		module = LLVMModule::parseLLVMModule(conf->inputFile, ctx);
+        } else if (!compileInput(conf, ctx, module)) {
+		return ECOMPILE;
+	}
+	llvm::outs() << "*** Compilation complete.\n";
+
+	/* Perform the necessary transformations */
+	auto modInfo = std::make_unique<ModuleInfo>(*module);
+	transformInput(conf, *module, *modInfo);
+	llvm::outs() << "*** Transformation complete.\n";
+
+	/* Estimate the state space */
+	if (conf->estimate) {
+		LOG(VerbosityLevel::Tip) << "Estimating state-space size. For better performance, you can use --disable-estimation.\n";
+		auto res = GenMCDriver::estimate(conf, module, modInfo);
+		printEstimationResults(conf, begin, res);
+		if (res.status != VerificationError::VE_OK)
+			return EVERIFY;
 	}
 
-	std::unique_ptr<llvm::Module> module;
-	if (!compileInput(conf, ctx, module))
-		return ECOMPILE;
-
-	auto res = GenMCDriver::verify(conf, std::move(module));
-	printResults(conf, begin, res);
+	/* Go ahead and try to verify */
+	auto res = GenMCDriver::verify(conf, std::move(module), std::move(modInfo));
+	printVerificationResults(conf, begin, res);
 
 	/* TODO: Check globalContext.destroy() and llvm::shutdown() */
-	return res.status == GenMCDriver::Status::VS_OK ? 0 : EVERIFY;
+	return res.status == VerificationError::VE_OK ? 0 : EVERIFY;
 }

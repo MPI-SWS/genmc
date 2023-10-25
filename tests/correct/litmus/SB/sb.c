@@ -1,3 +1,5 @@
+#include <genmc.h>
+
 atomic_int x;
 atomic_int y;
 

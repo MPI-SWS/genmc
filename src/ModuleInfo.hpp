@@ -33,6 +33,7 @@
 #include <llvm/IR/Instructions.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -134,6 +135,7 @@ struct PassModuleInfo {
 	VariableInfo<llvm::Value *> varInfo;
 	AnnotationInfo<llvm::Instruction *, llvm::Value *> annotInfo;
 	VSet<std::string> filenames;
+	std::optional<ModelType> determinedMM;
 };
 
 /*
@@ -158,6 +160,7 @@ struct ModuleInfo {
 	VariableInfo<ModuleID::ID> varInfo;
 	AnnotationInfo<ModuleID::ID, ModuleID::ID> annotInfo;
 	FsInfo fsInfo;
+	std::optional<ModelType> determinedMM;
 
 private:
 	const llvm::Module &mod;

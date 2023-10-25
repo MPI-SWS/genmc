@@ -52,8 +52,18 @@ protected:
 	VectorClock(VectorClockKind k) : kind(k) {}
 
 public:
+	virtual ~VectorClock() {};
+
 	/* Returns the kind of this vector clock */
 	VectorClockKind getKind() const { return kind; }
+
+	/* Returns the size of this vector clock */
+	virtual unsigned int size() const = 0;
+
+	/* Returns true if this vector clock is empty */
+	bool empty() const { return size() == 0; }
+
+	virtual void clear() = 0;
 
 	/* Returns true if this clock contains e */
 	virtual bool contains(const Event e) const = 0;
@@ -64,21 +74,16 @@ public:
 	virtual DepView& update(const DepView &v) = 0;
 	virtual VectorClock& update(const VectorClock &v) = 0;
 
-	/* Returns the size of this vector clock. As size, we basically
-	 * define the ID of the maximum thread the clock has seen */
-	virtual unsigned int size() const = 0;
+	/* Ensures event E is included in the clock */
+	virtual VectorClock &updateIdx(Event e) = 0;
 
-	/* Returns true if this vector clock is empty */
-	bool empty() const { return size() == 0; }
+	virtual int getMax(int thread) const = 0;
+	int getMax(Event e) const { return getMax(e.thread); }
 
-	/* Clones a VectorClock (deep copying) */
-	VectorClock *clone() const;
+	virtual void setMax(Event e) = 0;
 
-	virtual ~VectorClock() {};
-
-	/* Returns the ID of the maximum event in thread with ID=idx */
-	virtual int operator[](int idx) const = 0;
-	virtual int &operator[](int idx) = 0;
+	/* Clones a VectorClock */
+	std::unique_ptr<VectorClock> clone() const;
 
 	/* Printing facilities */
 	virtual void printData(llvm::raw_ostream &s) const = 0;
@@ -88,5 +93,12 @@ private:
 	/* The kind of this VectorClock */
 	VectorClockKind kind;
 };
+
+/* Helper cloner class */
+struct VectorClockCloner {
+	VectorClock *operator()(const VectorClock &x) const { return x.clone().release(); }
+	// VectorClock *operator()(VectorClock &&x) const { return new VectorClock(std::move(x)); }
+};
+
 
 #endif /* __VECTOR_CLOCK_HPP__ */

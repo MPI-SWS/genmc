@@ -326,8 +326,7 @@ Interpreter::callExternalFunction(Function *F,
     errs() << "Tried to execute an unknown external function: "
       << *F->getType() << " __main\n";
   else
-    report_fatal_error("Tried to execute an unknown external function: " +
-                       F->getName());
+    ERROR("Tried to execute an unknown external function: " + F->getName());
 #ifndef USE_LIBFFI
   errs() << "Recompiling LLVM with --enable-libffi might help.\n";
 #endif
@@ -541,7 +540,7 @@ static GenericValue lle_X_memset(FunctionType *FT,
 
 static GenericValue lle_X_memcpy(FunctionType *FT,
                                  const std::vector<GenericValue> &Args) {
-  ERROR("Invalid call to memset()!\n");
+  ERROR("Invalid call to memcpy()!\n");
 
   // memcpy(GVTOP(Args[0]), GVTOP(Args[1]),
   //        (size_t)(Args[2].IntVal.getLimitedValue()));

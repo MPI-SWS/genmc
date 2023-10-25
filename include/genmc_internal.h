@@ -117,13 +117,18 @@ extern int __VERIFIER_truncateFS (const char *__file, __off_t __length) __attrib
 
 /* Thread functions */
 
-extern int __VERIFIER_thread_create (const __VERIFIER_attr_t *__restrict __attr,
+extern int __VERIFIER_thread_create (const __VERIFIER_attr_t * __attr,
 				     void *(*__start_routine) (void *),
 				     void *__restrict __arg) __attribute__ ((__nothrow__));
 
+extern int __VERIFIER_thread_create_symmetric (const __VERIFIER_attr_t * __attr,
+					       void *(*__start_routine) (void *),
+					       void *__restrict __arg,
+					       __VERIFIER_thread_t __th) __attribute__ ((__nothrow__));
+
 extern void __VERIFIER_thread_exit (void *__retval) __attribute__ ((__noreturn__)) __attribute__ ((__nothrow__));
 
-extern int __VERIFIER_thread_join (__VERIFIER_thread_t __th, void **__thread_return) __attribute__ ((__nothrow__));
+extern void *__VERIFIER_thread_join (__VERIFIER_thread_t __th) __attribute__ ((__nothrow__));
 
 extern __VERIFIER_thread_t __VERIFIER_thread_self (void) __attribute__ ((__nothrow__));
 

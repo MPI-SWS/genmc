@@ -4,7 +4,40 @@ Notable changes to GenMC will be documented in this file. This
 repository is only updated whenever a new version of GenMC is
 released.
 
+
 ## [Unreleased]
+
+- Documentation
+
+
+## [0.10.0] - 2023.10.25
+### Added
+
+- Support for SC, TSO, RA memory models
+- Symmetry reduction (automatic or via `__VERIFIER_spawn_symmetric`)
+- In-place revisiting (from Awamoche [CAV 2023])
+- Preemption/Round-Robin bounding under SC [TACAS 2023, FMCAD 2023]
+- State-space size estimation before verification begins
+- Performance optimizations
+- Support for LLVM-16
+- Rudimentary doxygen documentation
+
+### Changed
+
+- GenMC now requires a compiler with C++20 support
+
+### Deprecated
+
+- Support for LLVM-{7,8,9}
+
+### Removed
+
+- Support for LKMM, Persevere
+
+### Fixes
+
+- Various bug issues
+
 
 ## [0.9] - 2022.12.26
 ### Added
@@ -26,6 +59,7 @@ released.
 ### Fixes
 
 - Bug fixes
+
 
 ## [0.8] - 2022.02.22
 ### Added
@@ -110,6 +144,7 @@ released.
 - Proper support for `pthread_mutex_init` and `pthread_mutex_destroy`
 - Various bugs
 
+
 ## [0.5.3] - 2020.12.06
 ### Added
 
@@ -122,10 +157,12 @@ released.
 - Documentation fix and update
 - Other minor bugs
 
+
 ## [0.5.2] - 2020.10.08
 ### Added
 
 - Documentation for Persevere, LAPOR
+
 
 ## [0.5.1] - 2020.10.01
 ### Added
@@ -139,6 +176,7 @@ released.
 ### Fixes
 
 - Build fixes for LLVM 10
+
 
 ## [0.5] - 2020.09.23
 ### Added

@@ -21,6 +21,55 @@ void __VERIFIER_assume(int) __attribute__ ((__nothrow__));
 int __VERIFIER_nondet_int(void) __attribute__ ((__nothrow__));
 
 /*
+ * An (opaque) datatype used by GenMC's thread functions,
+ * __VERIFIER_spawn* and __VERIFIER_join (see below).
+ */
+typedef __VERIFIER_thread_t __VERIFIER_thread_t;
+
+/*
+ * Spawns a thread with argument ARG running FUNC.
+ * Returns the spawned thread's TID.
+ */
+__attribute__ ((__nothrow__, always_inline)) static inline
+__VERIFIER_thread_t __VERIFIER_spawn (void *(*__start_routine) (void *),
+				      void *__restrict __arg)
+{
+	return __VERIFIER_thread_create(NULL, __start_routine, __arg);
+}
+
+/*
+ * Spawns a thread with argument ARG running FUNC as symmetric to TH.
+ * Returns the spawned thread's TID.
+ */
+__attribute__ ((__nothrow__, always_inline)) static inline
+__VERIFIER_thread_t __VERIFIER_spawn_symmetric (void *(*__start_routine) (void *),
+						void *__restrict __arg,
+						__VERIFIER_thread_t __th)
+{
+	return __VERIFIER_thread_create_symmetric(NULL, __start_routine, __arg, __th);
+}
+
+/*
+ * Joins thread TH and returns its result.
+ */
+__attribute__ ((always_inline, always_inline)) static inline
+void *__VERIFIER_join (__VERIFIER_thread_t __th)
+{
+	return __VERIFIER_thread_join(__th);
+}
+
+/*
+ * Helper function that joins thread TH, which was spawned as symmetric.
+ * This function merely ensures that the result of the joined thread is
+ * not going to be used.
+ */
+__attribute__ ((always_inline, always_inline)) static inline
+void __VERIFIER_join_symmetric (__VERIFIER_thread_t __th)
+{
+	__VERIFIER_join(__th);
+}
+
+/*
  * Marker functions that can be used to mark the
  * beginning and end of spinloops that are not automatically
  * transformed to assume() statements by GenMC.
@@ -206,9 +255,21 @@ typedef __VERIFIER_hazptr_t __VERIFIER_hp_t;
 	__VERIFIER_hazptr_retire(p)
 
 /*
+ * Specifies that D is going to be allocated in persistent storage
+ * (i.e., the respective variable is going to be durable).
+ */
+#define __VERIFIER_persistent_storage(d)		\
+	__attribute__ ((section ("__genmc_persist"))) d
+
+/*
+ * Dynamically allocates a new variable with durable storage.
+ */
+void *__VERIFIER_palloc(size_t);
+
+/*
  * The signature of a recovery routine to be specified
  * by the user. This routine will run after each execution,
- * if the checker is run with the respective flags enabled
+ * if the checker is run with the respective flags enabled.
  */
 void __VERIFIER_recovery_routine(void) __attribute__ ((__nothrow__));
 

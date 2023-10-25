@@ -20,7 +20,7 @@
 
 #include "Event.hpp"
 
-llvm::raw_ostream& operator<<(llvm::raw_ostream &s, Event e)
+auto operator<<(llvm::raw_ostream &s, Event e) -> llvm::raw_ostream&
 {
 	return s << "(" << e.thread << ", " << e.index << ")";
 }

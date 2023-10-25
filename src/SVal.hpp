@@ -61,7 +61,7 @@ public:
 	}
 
 	/* Returns a (limited) representation of the Value as a boolean */
-	bool getBool() const { return (!!*this).get(); }
+	bool getBool() const { return (!!*this); }
 
 	/* Sign-extends the number in the bottom B bits of X to SVal::width
 	 * Pre: 0 < B <= SVal::width */
@@ -71,24 +71,42 @@ public:
 		return *this;
 	}
 
+	/* Equality operators */
+
 	inline bool operator==(const SVal &v) const {
 		return v.value == value;
 	}
 	inline bool operator!=(const SVal &v) const {
 		return !(*this == v);
 	}
-	inline bool operator<=(const SVal &v) const {
-		return value <= v.value;
-	}
-	inline bool operator<(const SVal &v) const {
-		return value < v.value;
-	}
-	inline bool operator>=(const SVal &v) const {
-		return !(*this < v);
-	}
-	inline bool operator>(const SVal &v) const {
-		return !(*this <= v);
-	}
+
+	/* Comparison operators */
+
+        /* Returns true if *this < v if both are considered unsigned */
+	bool ult(const SVal &v) const { return compare(v) < 0; }
+
+	/* Returns true if *this < v if both are considered signed */
+	bool slt(const SVal &v) const { return compareSigned(v) < 0; }
+
+	/* Returns true if *this <= v when both are considered unsigned */
+	bool ule(const SVal &v) const { return compare(v) <= 0; }
+
+	/* Returns true if *this <= RHS when both are considered signed */
+	bool sle(const SVal &v) const { return compareSigned(v) <= 0; }
+
+	/* Returns true if *this > RHS when both are considered unsigned */
+	bool ugt(const SVal &v) const { return !ule(v); }
+
+	/* Returns true if *this > RHS when both are considered signed */
+	bool sgt(const SVal &v) const { return !sle(v); }
+
+	/* Returns true if *this >= RHS when both are considered unsigned */
+	bool uge(const SVal &v) const { return !ult(v); }
+
+	/* Returns true if *this >= RHS when both are considered signed */
+	bool sge(const SVal &v) const { return !slt(v); }
+
+	/* Binary operators */
 
 #define IMPL_BINOP(_op)				  \
 	SVal operator _op (const SVal &v) const { \
@@ -112,16 +130,13 @@ public:
 	IMPL_BINOP(<<);
 	IMPL_BINOP(>>);
 
-	SVal operator!() const {
-		SVal n(*this);
-		n.value = !value;
-		return n;
+	SVal operator~() const {
+		return SVal(~this->value);
 	}
 
-	operator bool() const {
-		return !!value;
+	explicit operator bool() const {
+		return !!this->value;
 	}
-	uint64_t operator()() const { return value; }
 
 	std::string toString(bool sign = false) const {
 		return sign ? std::to_string(getSigned()) : std::to_string(get());
@@ -131,8 +146,24 @@ public:
 					     const SVal &v);
 
 private:
+	int compare(const SVal& v) const {
+		return this->value < v.value ? -1 : this->value > v.value;
+	}
+
+	int compareSigned(const SVal& v) const {
+		auto lhsSext = getSigned();
+		auto rhsSext = v.getSigned();
+		return lhsSext < rhsSext ? -1 : lhsSext > rhsSext;
+	}
+
 	/* The actual value */
 	Value value;
+};
+
+struct SValUCmp {
+	bool operator()(const SVal &lhs, const SVal &rhs) {
+		return lhs.ult(rhs);
+	}
 };
 
 #endif /* __SVAL_HPP__ */

@@ -21,24 +21,32 @@
 #ifndef __ERROR_HPP__
 #define __ERROR_HPP__
 
+#include "Logger.hpp"
 #include <llvm/Support/Debug.h>
 #include <llvm/Support/Format.h>
 #include <llvm/Support/raw_ostream.h>
-#include <string>
 #include <sstream>
+#include <string>
 #include <vector>
 
-#define WARN_MESSAGE(msg) "WARNING: " << (msg)
-#define ERROR_MESSAGE(msg) "ERROR: " << (msg)
+#define ECOMPILE 5
+#define EGENMC   7
+#define EUSER    17
+#define EVERIFY  42
 
-#define WARN(msg) GenMCError::warn() << WARN_MESSAGE(msg)
-#define WARN_ONCE(id, msg) GenMCError::warnOnce(id) << WARN_MESSAGE(msg)
-#define WARN_ON(condition, msg) GenMCError::warnOn(condition) << WARN_MESSAGE(msg)
-#define WARN_ON_ONCE(condition, id, msg) GenMCError::warnOnOnce(condition, id) << WARN_MESSAGE(msg)
-#define ERROR(msg) ({ GenMCError::warn() << ERROR_MESSAGE(msg); exit(EUSER); })
+#define WARN_ON(condition, msg)			\
+	if (condition) { LOG(VerbosityLevel::Warning) << msg; }
+#define WARN(msg) WARN_ON(true, msg)
+
+#define WARN_ON_ONCE(condition, id, msg)	\
+	if (condition) { LOG_ONCE(id, VerbosityLevel::Warning) << msg; }
+#define WARN_ONCE(id, msg)			\
+	WARN_ON_ONCE(true, id, msg)
+
+#define ERROR(msg) ({ LOG(VerbosityLevel::Error) << msg; exit(EUSER); })
 #define ERROR_ON(condition, msg) ({ if (condition) { ERROR(msg); } })
 #define BUG() do { \
-	llvm::errs() << "BUG: Failure at " << __FILE__ ":" << __LINE__ \
+	LOG(VerbosityLevel::Error) << "BUG: Failure at " << __FILE__ ":" << __LINE__ \
 		     << "/" << __func__ << "()!\n";		       \
 	exit(EGENMC);						       \
 	} while (0)
@@ -60,35 +68,21 @@
 # define GENMC_DEBUG(s) do {} while (0)
 #endif
 
-#define ECOMPILE 5
-#define EGENMC   7
-#define EUSER    17
-#define EVERIFY  42
-
-namespace GenMCError {
-
-	llvm::raw_ostream &warn();
-	llvm::raw_ostream &warnOnce(const std::string &warningID);
-	llvm::raw_ostream &warnOn(bool condition);
-	llvm::raw_ostream &warnOnOnce(bool condition, const std::string &warningID);
-
-}
-
 /* Useful for debugging (naive generalized printing doesn't work for llvm::raw_ostream) */
 template<typename T>
-llvm::raw_ostream& print(llvm::raw_ostream &out, const T &val)
+auto print(llvm::raw_ostream &out, const T &val) -> llvm::raw_ostream&
 {
 	return (out << val);
 }
 
 template<typename T1, typename T2>
-llvm::raw_ostream& print(llvm::raw_ostream &out, const std::pair<T1, T2> &val)
+auto print(llvm::raw_ostream &out, const std::pair<T1, T2> &val) -> llvm::raw_ostream&
 {
 	return (out << "(" << val.first << ", " << val.second << ")");
 }
 
 template <typename Container>
-std::string format(const Container &c)
+auto format(const Container &c) -> std::string
 {
 	std::string str;
 	llvm::raw_string_ostream out(str);
@@ -101,7 +95,7 @@ std::string format(const Container &c)
 }
 
 template <typename T1, typename T2>
-std::string format(const std::pair<T1, T2> &p)
+auto format(const std::pair<T1, T2> &p) -> std::string
 {
 	std::string str;
 	llvm::raw_string_ostream out(str);

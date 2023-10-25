@@ -49,6 +49,8 @@ private:
 
 		unsigned int size() const { return hs_.size(); }
 
+		void clear() { hs_.clear(); }
+
 		inline const Holes& operator[](int idx) const {
 			if (idx < hs_.size())
 				return hs_[idx];
@@ -72,8 +74,34 @@ public:
 	/* Returns true if the clock is empty */
 	bool empty() const { return size() == 0; }
 
+	void clear() override { view_.clear(); holes_.clear(); }
+
 	/* Returns true if the clock contains e */
 	bool contains(const Event e) const;
+
+	DepView &updateIdx(Event e) override {
+		auto old = view_.getMax(e.thread);
+		if (e.index > old) {
+			view_.setMax(e);
+			holes_[e.thread];
+			addHolesInRange(Event(e.thread, old+1), e.index);
+		} else
+			removeHole(e);
+		return *this;
+	}
+
+	int getMax(int thread) const override {	return view_.getMax(thread); }
+
+	void setMax(Event e) override {
+		if (e.thread >= (int) view_.size())
+			holes_[e.thread]; // grow
+		auto old = view_.getMax(e.thread);
+		view_.setMax(e);
+		if (old < e.index)
+			addHolesInRange(Event(e.thread, old+1), e.index);
+		else
+			removeHolesInRange(e, old+1);
+	}
 
 	/* Returns true if there's a hole in E's position */
 	bool hasHole(const Event e) const {
@@ -98,18 +126,9 @@ public:
 
 	/* Updates the view based on another clock. The update is valid
 	 * only if the other clock provided is also a DepView */
-	View& update(const View &v);
-	DepView& update(const DepView &v);
-	VectorClock &update(const VectorClock &vc);
-
-	/* Overloaded operators */
-	inline int operator[](int idx) const {
-		return view_[idx];
-	}
-	inline int &operator[](int idx) {
-		holes_[idx]; /* grow both */
-		return view_[idx];
-	}
+	View& update(const View &v) override;
+	DepView& update(const DepView &v) override;
+	VectorClock &update(const VectorClock &vc) override;
 
 	void printData(llvm::raw_ostream &s) const;
 

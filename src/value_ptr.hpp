@@ -173,7 +173,6 @@ public:
 
 	value_ptr<T, Cloner, Deleter> &operator=(std::nullptr_t) noexcept {
 		ptr().reset();
-		get_cloner() = nullptr;
 		return *this;
 	}
 

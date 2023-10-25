@@ -123,7 +123,7 @@ bool LoopUnrollPass::runOnLoop(Loop *l, LPPassManager &lpm)
 	return true;
 }
 
-Pass *createLoopUnrollPass(int depth, const VSet<std::string> &noUnrollFuns /* = {} */)
+Pass *createLoopUnrollPass(unsigned int depth, const VSet<std::string> &noUnrollFuns /* = {} */)
 {
 	return new LoopUnrollPass(depth, noUnrollFuns);
 }

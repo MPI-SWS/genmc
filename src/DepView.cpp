@@ -23,13 +23,13 @@
 
 bool DepView::contains(const Event e) const
 {
-	return e.thread < view_.size() && e.index <= (*this)[e.thread] &&
-	       e.thread < holes_.size() && !holes_[e.thread].count(e.index);
+	return e.index <= getMax(e.thread) &&
+	       (e.index == 0 || (e.thread < holes_.size() && !holes_[e.thread].count(e.index)));
 }
 
 void DepView::addHole(const Event e)
 {
-	BUG_ON(e.index > (*this)[e.thread]);
+	BUG_ON(e.index > getMax(e.thread));
 	holes_[e.thread].insert(e.index);
 }
 
@@ -67,16 +67,16 @@ DepView& DepView::update(const DepView &v)
 
 	for (auto i = 0u; i < v.size(); i++) {
 		auto isec = holes_[i].intersectWith(v.holes_[i]);
-		if ((*this)[i] < v[i]) {
+		if (getMax(i) < v.getMax(i)) {
 			isec.insert(std::lower_bound(v.holes_[i].begin(),
 						     v.holes_[i].end(),
-						     (*this)[i] + 1),
+						     getMax(i) + 1),
 				    v.holes_[i].end());
-			(*this)[i] = v[i];
+			view_.setMax(Event(i, v.getMax(i)));
 		} else {
 			isec.insert(std::lower_bound(holes_[i].begin(),
 						     holes_[i].end(),
-						     v[i] + 1),
+						     v.getMax(i) + 1),
 				    holes_[i].end());
 			}
 		holes_[i] = std::move(isec);
@@ -95,7 +95,7 @@ void DepView::printData(llvm::raw_ostream &s) const
 {
 	s << "[\n";
 	for (auto i = 0u; i < size(); i++) {
-		s << "\t" << i << ": " << (*this)[i] << " ( ";
+		s << "\t" << i << ": " << getMax(i) << " ( ";
 		for (auto &h : this->holes_[i])
 			s << h << " ";
 		s << ")\n";

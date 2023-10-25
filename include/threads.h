@@ -34,7 +34,8 @@ enum { mtx_plain }; /* Only plain mutexes for now */
 
 enum { thrd_success, thrd_timedout, thrd_busy, thrd_error, thrd_nomem };
 
-static inline int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
+static inline __attribute__ ((always_inline))
+int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 {
 	int res = pthread_create(thr, NULL, (void *(*)(void *)) func, arg);
 	if (res == 0)
@@ -42,12 +43,14 @@ static inline int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 	return res == ENOMEM ? thrd_nomem : thrd_error;
 }
 
-static inline void thrd_exit(int res)
+static inline __attribute__ ((always_inline))
+void thrd_exit(int res)
 {
 	pthread_exit((void *) (long) res);
 }
 
-static inline int thrd_join(thrd_t thr, int *res)
+static inline __attribute__ ((always_inline))
+int thrd_join(thrd_t thr, int *res)
 {
 	void *retval;
 
@@ -58,11 +61,13 @@ static inline int thrd_join(thrd_t thr, int *res)
 	return thrd_success;
 }
 
-static inline void thrd_yield(void)
+static inline __attribute__ ((always_inline))
+void thrd_yield(void)
 {
 }
 
-static inline int mtx_init(mtx_t *mtx, int type)
+static inline __attribute__ ((always_inline))
+int mtx_init(mtx_t *mtx, int type)
 {
 	int res;
 
@@ -70,12 +75,14 @@ static inline int mtx_init(mtx_t *mtx, int type)
 	return res;
 }
 
-static inline void mtx_destroy(mtx_t *mtx)
+static inline __attribute__ ((always_inline))
+void mtx_destroy(mtx_t *mtx)
 {
 	pthread_mutex_destroy(mtx);
 }
 
-static inline int mtx_lock(mtx_t *mtx)
+static inline __attribute__ ((always_inline))
+int mtx_lock(mtx_t *mtx)
 {
 	int res = pthread_mutex_lock(mtx);
 	if (res == EDEADLK)
@@ -83,7 +90,8 @@ static inline int mtx_lock(mtx_t *mtx)
 	return res == 0 ? thrd_success : thrd_error;
 }
 
-static inline int mtx_unlock(mtx_t *mtx)
+static inline __attribute__ ((always_inline))
+int mtx_unlock(mtx_t *mtx)
 {
 	return pthread_mutex_unlock(mtx) == 0 ? thrd_success : thrd_error;
 }

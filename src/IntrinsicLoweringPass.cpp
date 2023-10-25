@@ -41,6 +41,12 @@ bool IntrinsicLoweringPass::runOnBasicBlock(llvm::BasicBlock &BB, llvm::Module &
 		if (!I)
 			continue;
 		switch (I->getIntrinsicID()) {
+#if LLVM_VERSION_MAJOR >= 16
+		/* In case thread-local variables are not accessed directly, make them */
+		case llvm::Intrinsic::threadlocal_address:
+			I->replaceAllUsesWith(I->getOperand(0));
+			break;
+#endif
 		case llvm::Intrinsic::vastart:
 		case llvm::Intrinsic::vaend:
 		case llvm::Intrinsic::vacopy:

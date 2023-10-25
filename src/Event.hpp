@@ -24,67 +24,76 @@
 #include <llvm/ADT/Hashing.h>
 #include <llvm/Support/raw_ostream.h>
 
+#include <compare>
+
+/**
+ * Represents the position of a given label in an execution graph.
+ */
 struct Event {
-	int thread;
-	int index;
+	Event() : thread(DEF_IDX), index(DEF_IDX) {};
 
-	Event() : thread(-17), index(-17) {};
-	Event(int t, int e) : thread(t), index(e) {};
+	/** Constructs an event at the given position */
+	Event(int tid, int idx) : thread(tid), index(idx) {};
 
-	static Event getInitializer() { return Event(0, 0); };
-	static Event getBottom() { return Event(-42, -42); };
+	/** Returns the INIT event */
+	static auto getInit() -> Event { return {0, 0}; };
 
-	bool isInitializer() const { return *this == getInitializer(); };
-	bool isBottom() const { return *this == getBottom(); };
+	/** Returns a BOTTOM event representing an invalid position */
+	static auto getBottom() -> Event { return {BOT_IDX, BOT_IDX}; };
 
-	Event prev() const { return Event(thread, index-1); };
-	Event next() const { return Event(thread, index+1); };
+	/** Returns true is *this == INIT */
+	[[nodiscard]] auto isInitializer() const -> bool { return *this == getInit(); };
 
-	bool isBetween(Event a, Event b) const {
-		if (a.thread != b.thread)
-			return false;
-		if (this->thread != a.thread)
-			return false;
-		return this->index >= a.index && this->index <= b.index;
+	/** Returns true if *this == BOT */
+	[[nodiscard]] auto isBottom() const -> bool { return *this == getBottom(); };
+
+	/** Returns the po-predecessor. No bounds checking is performed. */
+	[[nodiscard]] auto prev() const -> Event { return {thread, index-1}; };
+
+	/** Returns the po-successor. No bounds checking is performed  */
+	[[nodiscard]] auto next() const -> Event { return {thread, index+1}; };
+
+	inline auto operator==(const Event &) const -> bool = default;
+	inline auto operator<=>(const Event &other) const -> std::partial_ordering {
+		return this->thread == other.thread ?
+		       this->index <=> other.index :
+		       std::partial_ordering::unordered;
 	}
 
-	inline bool operator==(const Event &e) const {
-		return e.index == index && e.thread == thread;
-	}
-	inline bool operator!=(const Event &e) const {
-		return !(*this == e);
-	}
-	inline bool operator<(const Event &e) const {
-		return (index < e.index) || (index == e.index && thread < e.thread);
-	}
-	inline bool operator>(const Event &e) const {
-		return (index > e.index) || (index == e.index && thread > e.thread);
-	}
-	inline Event& operator++() {
+	inline auto operator++() -> Event& {
 		++index;
 		return *this;
 	}
-	inline Event operator++(int) {
+	inline auto operator++(int) -> Event {
 		auto tmp = *this;
-		++index;
+		operator++();
 		return tmp;
 	}
-	inline Event& operator--() {
+	inline auto operator--() -> Event& {
 		--index;
 		return *this;
 	}
-	inline Event operator--(int) {
+	inline auto operator--(int) -> Event {
 		auto tmp = *this;
-		--index;
+		operator--();
 		return tmp;
 	}
 
-	friend llvm::hash_code hash_value(const Event &e) {
+	friend auto hash_value(const Event &e) -> llvm::hash_code {
 		return llvm::hash_combine(e.thread, e.index);
-	};
+        };
+
+	int thread;
+        int index;
+
+private:
+	/* Default and bottom events should really be opaque.
+	 * Try to throw out of bounds if used as index. */
+        static constexpr int DEF_IDX = -17;
+        static constexpr int BOT_IDX = -42;
 };
 
-llvm::raw_ostream& operator<<(llvm::raw_ostream &s, Event e);
+auto operator<<(llvm::raw_ostream &s, Event e) -> llvm::raw_ostream&;
 
 struct EventHasher {
 
@@ -93,7 +102,7 @@ struct EventHasher {
 		seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed<<6) + (seed>>2);
 	}
 
-	std::size_t operator()(const Event& e) const {
+	auto operator()(const Event& e) const -> std::size_t {
 		std::size_t hash = 0;
 		hash_combine(hash, e.thread);
 		hash_combine(hash, e.index);

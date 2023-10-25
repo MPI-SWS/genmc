@@ -28,8 +28,8 @@ View& View::update(const View &v)
 
 	auto size = std::max(this->size(), v.size());
 	for (auto i = 0u; i < size; i++)
-		if ((*this)[i] < v[i])
-			(*this)[i] = v[i];
+		if (getMax(i) < v.getMax(i))
+			setMax(Event(i, v.getMax(i)));
 	return *this;
 }
 
@@ -49,6 +49,6 @@ void View::printData(llvm::raw_ostream &s) const
 {
 	s << "[ ";
 	for (auto i = 0u; i < size(); i++)
-		s << i << ":" << (*this)[i] << " ";
+		s << i << ":" << getMax(i) << " ";
 	s << "]";
 }

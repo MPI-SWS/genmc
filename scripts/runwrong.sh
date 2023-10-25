@@ -19,7 +19,7 @@
 # Author: Michalis Kokologiannakis <mixaskok@gmail.com>
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-GenMC="${GenMC:-$DIR/../src/genmc}"
+GenMC="${GenMC:-$DIR/../genmc}"
 
 source "${DIR}/terminal.sh"
 
@@ -160,7 +160,7 @@ runvariants() {
     for t in $dir/variants/*.c $dir/variants/*.cpp
     do
 	vars=$((vars+1))
-	output=`"${GenMC}" "-${model}" "-${coherence}" "${unroll}" -print-error-trace $(echo ${checker_args[@]}) -- ${CFLAGS} ${test_args} ${t} 2>&1`
+	output=`"${GenMC}" "-${model}" -disable-estimation -disable-mm-detector "${unroll}" -print-error-trace $(echo ${checker_args[@]}) -- ${CFLAGS} ${test_args} ${t} 2>&1`
 	status="$?"
 	trace=`echo "${output}" | awk '!/status|Total wall-clock time/ {print $0 }' > tmp.trace`
 	diff_file="${t%.*}.${model}.${coherence}.trace" &&
@@ -178,7 +178,7 @@ runvariants() {
 	    failure=1
 	else
 	    # if no diff was found (or the diff is suppressed), check non-zero status
-	    if test "$status" -eq 0
+	    if test "$status" -ne 42
 	    then
 		failure_status="$status"
 		outcome_failure=1
