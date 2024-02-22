@@ -18,35 +18,32 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-#include "config.h"
+#include "MDataCollectionPass.hpp"
 #include "CallInstWrapper.hpp"
 #include "Error.hpp"
-#include "MDataCollectionPass.hpp"
 #include "LLVMUtils.hpp"
+#include "config.h"
 #include <llvm/ADT/Twine.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/DebugInfo.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/InstIterator.h>
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
-#include <llvm/IR/InstIterator.h>
-#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 
 using namespace llvm;
 
-void MDataCollectionPass::getAnalysisUsage(llvm::AnalysisUsage &au) const
-{
-	au.setPreservesAll();
-}
+void MDataCollectionPass::getAnalysisUsage(llvm::AnalysisUsage &au) const { au.setPreservesAll(); }
 
-void MDataCollectionPass::collectVarName(Module &M, unsigned int ptr, Type *typ,
-					 DIType *dit, std::string nameBuilder, NameInfo &info)
+void MDataCollectionPass::collectVarName(Module &M, unsigned int ptr, Type *typ, DIType *dit,
+					 std::string nameBuilder, NameInfo &info)
 {
-	if(!isa<StructType>(typ) && !isa<ArrayType>(typ) && !isa<VectorType>(typ)) {
+	if (!isa<StructType>(typ) && !isa<ArrayType>(typ) && !isa<VectorType>(typ)) {
 		info.addOffsetInfo(ptr, nameBuilder);
 		return;
 	}
@@ -55,8 +52,9 @@ void MDataCollectionPass::collectVarName(Module &M, unsigned int ptr, Type *typ,
 	if (ArrayType *AT = dyn_cast<ArrayType>(typ)) {
 		auto *newDit = dit;
 		if (auto *dict = dyn_cast<DICompositeType>(dit)) {
-			newDit = (!dict->getBaseType()) ? dict :
-				llvm::dyn_cast<DIType>(dict->getBaseType());
+			newDit = (!dict->getBaseType())
+					 ? dict
+					 : llvm::dyn_cast<DIType>(dict->getBaseType());
 		}
 		auto elemSize = M.getDataLayout().getTypeAllocSize(AT->getElementType());
 		for (auto i = 0u; i < AT->getNumElements(); i++) {
@@ -197,11 +195,11 @@ void MDataCollectionPass::collectInternalInfo(Module &M)
 	 * main()'s return type... */
 	auto *main = M.getFunction("main");
 	if (!main || !main->getReturnType()->isIntegerTy()) {
-		WARN_ONCE("internal-mdata", "Could not get "	\
-			  "naming info for internal variable. "	\
-			  "(Does main() return int?)\n"		\
-			  "Please submit a bug report to "	\
-			  PACKAGE_BUGREPORT "\n");
+		WARN_ONCE("internal-mdata",
+			  "Could not get "
+			  "naming info for internal variable. "
+			  "(Does main() return int?)\n"
+			  "Please submit a bug report to " PACKAGE_BUGREPORT "\n");
 		return;
 	}
 
@@ -250,14 +248,16 @@ bool isSyscallWPathname(CallInst *CI)
 void MDataCollectionPass::initializeFilenameEntry(Value *v)
 {
 #if LLVM_VERSION_MAJOR < 15
-       if (auto *CE = dyn_cast<ConstantExpr>(v)) {
-               auto filename = dyn_cast<ConstantDataArray>(
-                       dyn_cast<GlobalVariable>(CE->getOperand(0))->
-                       getInitializer())->getAsCString().str();
+	if (auto *CE = dyn_cast<ConstantExpr>(v)) {
+		auto filename =
+			dyn_cast<ConstantDataArray>(
+				dyn_cast<GlobalVariable>(CE->getOperand(0))->getInitializer())
+				->getAsCString()
+				.str();
 #else
 	if (auto *CE = dyn_cast<Constant>(v)) {
-		auto filename = dyn_cast<ConstantDataArray>(CE->getOperand(0))->
-			getAsCString().str();
+		auto filename =
+			dyn_cast<ConstantDataArray>(CE->getOperand(0))->getAsCString().str();
 #endif
 		collectFilename(filename);
 	} else
@@ -277,8 +277,7 @@ void MDataCollectionPass::collectFilenameInfo(CallInst *CI, Module &M)
 
 	/* For some syscalls we capture the second argument as well */
 	auto fCode = internalFunNames.at(F->getName().str());
-	if (fCode == InternalFunctions::FN_RenameFS ||
-	    fCode == InternalFunctions::FN_LinkFS) {
+	if (fCode == InternalFunctions::FN_RenameFS || fCode == InternalFunctions::FN_LinkFS) {
 		initializeFilenameEntry(CI->getArgOperand(1));
 	}
 	return;

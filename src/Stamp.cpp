@@ -20,8 +20,8 @@
 
 #include "Stamp.hpp"
 
-llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const Stamp &v)
+auto operator<<(llvm::raw_ostream &rhs, const Stamp &s) -> llvm::raw_ostream &
 {
-	s << v.get();
-	return s;
+	rhs << s.get();
+	return rhs;
 }

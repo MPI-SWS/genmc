@@ -18,9 +18,9 @@
  * Author: Iason Marmanis <imarmanis@mpi-sws.org>
  */
 
+#include "RoundBoundDecider.hpp"
 #include "ExecutionGraph.hpp"
 #include "GraphIterators.hpp"
-#include "RoundBoundDecider.hpp"
 #include "View.hpp"
 
 auto areSCPredsInView(const ExecutionGraph &g, const View &v, Event e) -> bool
@@ -40,12 +40,12 @@ auto areSCPredsInView(const ExecutionGraph &g, const View &v, Event e) -> bool
 
 	auto *sLab = llvm::dyn_cast<WriteLabel>(lab);
 	BUG_ON(!sLab);
-	auto *pLab= g.co_imm_pred(sLab);
+	auto *pLab = g.co_imm_pred(sLab);
 	if (pLab && !v.contains(pLab->getPos()))
 		return false;
 
 	return std::none_of(g.fr_imm_pred_begin(sLab), g.fr_imm_pred_end(sLab),
-				[&](const auto &rLab){ return !v.contains(rLab.getPos()); });
+			    [&](const auto &rLab) { return !v.contains(rLab.getPos()); });
 }
 
 auto RoundBoundDecider::doesExecutionExceedBound(unsigned int bound) const -> bool

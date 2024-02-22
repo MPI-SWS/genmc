@@ -28,7 +28,7 @@ using namespace llvm;
 class ConfirmationAnnotationPass : public FunctionPass {
 
 public:
-	ConfirmationAnnotationPass() : FunctionPass(ID) {};
+	ConfirmationAnnotationPass() : FunctionPass(ID){};
 
 	virtual void getAnalysisUsage(AnalysisUsage &AU) const;
 	virtual bool runOnFunction(Function &F);

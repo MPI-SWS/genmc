@@ -21,8 +21,8 @@
 #ifndef __BISIMILARITY_CHECKER_PASS_HPP__
 #define __BISIMILARITY_CHECKER_PASS_HPP__
 
-#include <llvm/Pass.h>
 #include <llvm/IR/Function.h>
+#include <llvm/Pass.h>
 
 #include <unordered_map>
 
@@ -41,13 +41,14 @@ public:
 	virtual bool runOnFunction(Function &F) override;
 
 	/* Returns all bisimilar points in a given function */
-	const std::vector<BisimilarityPoint> &getFuncBsPoints(Function *F) {
+	const std::vector<BisimilarityPoint> &getFuncBsPoints(Function *F)
+	{
 		return funcBsPoints[F];
 	}
 
 private:
 	/* Bisimilar points for all functions of the module */
-	std::unordered_map<Function *, std::vector<BisimilarityPoint> > funcBsPoints;
+	std::unordered_map<Function *, std::vector<BisimilarityPoint>> funcBsPoints;
 };
 
 #endif /* __BISIMILARITY_CHECKER_PASS_HPP__ */

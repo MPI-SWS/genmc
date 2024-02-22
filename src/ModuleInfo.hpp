@@ -21,12 +21,12 @@
 #ifndef __MODULE_INFO_HPP__
 #define __MODULE_INFO_HPP__
 
-#include "config.h"
 #include "Config.hpp"
 #include "ModuleID.hpp"
 #include "NameInfo.hpp"
 #include "SExpr.hpp"
 #include "VSet.hpp"
+#include "config.h"
 #include <llvm/ADT/BitVector.h>
 #include <llvm/ADT/IndexedMap.h>
 #include <llvm/IR/DerivedTypes.h>
@@ -38,20 +38,18 @@
 #include <unordered_map>
 
 namespace llvm {
-	class Value;
+class Value;
 };
 
 /*
  * Information kept about the module under test by the interpreter.
  */
 
-
 /*
  * VariableInfo struct -- This struct contains source-code level (naming)
  * information for variables.
  */
-template<typename Key>
-struct VariableInfo {
+template <typename Key> struct VariableInfo {
 
 	/* Internal types (not exposed to user programs) for which we might
 	 * want to collect naming information */
@@ -62,7 +60,8 @@ struct VariableInfo {
 	std::unordered_map<ID, std::shared_ptr<NameInfo>> localInfo;
 	std::unordered_map<InternalKey, std::shared_ptr<NameInfo>> internalInfo;
 
-	void clear() {
+	void clear()
+	{
 		globalInfo.clear();
 		localInfo.clear();
 		internalInfo.clear();
@@ -72,8 +71,7 @@ struct VariableInfo {
 /*
  * SAVer: AnnotationInfo struct -- Contains annotations for loads used by assume()s
  */
-template<typename K, typename V>
-struct AnnotationInfo {
+template <typename K, typename V> struct AnnotationInfo {
 
 	using AnnotUM = std::unordered_map<K, std::unique_ptr<SExpr<V>>>;
 
@@ -82,7 +80,6 @@ struct AnnotationInfo {
 	AnnotUM annotMap;
 };
 
-
 /*
  * Pers: FsInfo struct -- Maintains some information regarding the
  * filesystem (e.g., type of inodes, files, etc)
@@ -90,8 +87,10 @@ struct AnnotationInfo {
 struct FsInfo {
 
 	/* Explicitly initialize PODs to be C++11-compatible */
-	FsInfo() : inodeTyp(nullptr), fileTyp(nullptr), blockSize(0), maxFileSize(0),
-		   journalData(JournalDataFS::writeback), delalloc(false), dirInode(nullptr) {}
+	FsInfo()
+		: inodeTyp(nullptr), fileTyp(nullptr), blockSize(0), maxFileSize(0),
+		  journalData(JournalDataFS::writeback), delalloc(false), dirInode(nullptr)
+	{}
 
 	/* Type information */
 	llvm::StructType *inodeTyp;
@@ -111,7 +110,8 @@ struct FsInfo {
 	/* Should hold the address of the directory's inode */
 	void *dirInode;
 
-	void clear() {
+	void clear()
+	{
 		inodeTyp = nullptr;
 		fileTyp = nullptr;
 		blockSize = 0;

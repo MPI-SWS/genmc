@@ -21,12 +21,12 @@
 #ifndef __MDATA_COLLECTION_PASS_HPP__
 #define __MDATA_COLLECTION_PASS_HPP__
 
-#include "NameInfo.hpp"
 #include "ModuleInfo.hpp"
+#include "NameInfo.hpp"
+#include <llvm/Analysis/LoopPass.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Pass.h>
-#include <llvm/Analysis/LoopPass.h>
 
 #include <string>
 #include <unordered_map>
@@ -45,9 +45,8 @@ public:
 	virtual bool runOnModule(llvm::Module &M) override;
 
 protected:
-
-	void collectVarName(llvm::Module &M, unsigned int ptr, llvm::Type *typ,
-			    llvm::DIType *dit, std::string nameBuilder, NameInfo &names);
+	void collectVarName(llvm::Module &M, unsigned int ptr, llvm::Type *typ, llvm::DIType *dit,
+			    std::string nameBuilder, NameInfo &names);
 
 	/* Collects name info for a global variable */
 	void collectGlobalInfo(llvm::GlobalVariable &v, llvm::Module &M);
@@ -74,12 +73,24 @@ protected:
 	/* Check whether the respective information exist */
 	bool hasGlobalInfo(llvm::Value *gv) const { return PI->varInfo.globalInfo[gv].get(); }
 	bool hasLocalInfo(llvm::Value *lv) const { return PI->varInfo.localInfo[lv].get(); }
-	bool hasInternalInfo(const std::string &key) const { return PI->varInfo.internalInfo[key].get(); }
+	bool hasInternalInfo(const std::string &key) const
+	{
+		return PI->varInfo.internalInfo[key].get();
+	}
 
 	/* Getters for collected naming info */
-	std::shared_ptr<NameInfo> &getGlobalInfo(llvm::Value *gv) { return PI->varInfo.globalInfo[gv]; }
-	std::shared_ptr<NameInfo> &getLocalInfo(llvm::Value *lv) { return PI->varInfo.localInfo[lv]; }
-	std::shared_ptr<NameInfo> &getInternalInfo(const std::string &key) { return PI->varInfo.internalInfo[key]; }
+	std::shared_ptr<NameInfo> &getGlobalInfo(llvm::Value *gv)
+	{
+		return PI->varInfo.globalInfo[gv];
+	}
+	std::shared_ptr<NameInfo> &getLocalInfo(llvm::Value *lv)
+	{
+		return PI->varInfo.localInfo[lv];
+	}
+	std::shared_ptr<NameInfo> &getInternalInfo(const std::string &key)
+	{
+		return PI->varInfo.internalInfo[key];
+	}
 
 	void collectFilename(const std::string &name) { PI->filenames.insert(name); }
 

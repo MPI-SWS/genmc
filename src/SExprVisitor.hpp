@@ -45,21 +45,22 @@
  * stored, or decide to keep collections of SExprs.
  */
 
-template<template<typename T> class Subclass, typename T, typename RetTy = void>
+template <template <typename T> class Subclass, typename T, typename RetTy = void>
 class SExprVisitor {
 
 public:
-#define VISIT_EXPR(NAME)						\
-	case SExpr<T>::NAME:						\
-		return static_cast<Subclass<T> *>(this)->		\
-		visit##NAME##Expr(static_cast<NAME##Expr<T>&>(e));
+#define VISIT_EXPR(NAME)                                                                           \
+	case SExpr<T>::NAME:                                                                       \
+		return static_cast<Subclass<T> *>(this)->visit##NAME##Expr(                        \
+			static_cast<NAME##Expr<T> &>(e));
 
 	RetTy visit(SExpr<T> *e) { return visit(*e); }
 	RetTy visit(const std::unique_ptr<SExpr<T>> &e) { return visit(*e); }
 	RetTy visit(const std::shared_ptr<SExpr<T>> &e) { return visit(*e); }
 
-	RetTy visit(SExpr<T> &e) {
-		switch(e.getKind()) {
+	RetTy visit(SExpr<T> &e)
+	{
+		switch (e.getKind()) {
 			VISIT_EXPR(Concrete);
 			VISIT_EXPR(Register);
 			VISIT_EXPR(Select);
@@ -99,9 +100,8 @@ public:
 		}
 	}
 
-#define DELEGATE_EXPR(TO_CLASS)						\
-	return static_cast<Subclass<T> *>(this)->			\
-	visit##TO_CLASS(static_cast<TO_CLASS<T>&>(e));
+#define DELEGATE_EXPR(TO_CLASS)                                                                    \
+	return static_cast<Subclass<T> *>(this)->visit##TO_CLASS(static_cast<TO_CLASS<T> &>(e));
 
 	RetTy visitConcreteExpr(ConcreteExpr<T> &e) { DELEGATE_EXPR(SExpr); }
 	RetTy visitRegisterExpr(RegisterExpr<T> &e) { DELEGATE_EXPR(SExpr); }
@@ -152,9 +152,7 @@ public:
 	 * Note: If a subclass overrides RetTy, this function needs to be overrided too
 	 */
 	RetTy visitSExpr(SExpr<T> &e) { return; }
-
 };
-
 
 /*******************************************************************************
  **                           SExprPrinter Class
@@ -164,11 +162,11 @@ public:
  * Prints an expression to a string.
  */
 
-template<typename T>
-class SExprPrinter : public SExprVisitor<SExprPrinter, T> {
+template <typename T> class SExprPrinter : public SExprVisitor<SExprPrinter, T> {
 
 public:
-	const std::string &toString(SExpr<T> &e) {
+	const std::string &toString(SExpr<T> &e)
+	{
 		this->visit(e);
 		return getOutput();
 	}
@@ -222,7 +220,6 @@ private:
 	std::string output;
 };
 
-
 /*******************************************************************************
  **                           SExprEvaluator Class
  ******************************************************************************/
@@ -233,8 +230,7 @@ private:
  * and that are no registers (these should have been concretized).
  */
 
-template<typename T>
-class SExprEvaluator : public SExprVisitor<SExprEvaluator, T, SVal> {
+template <typename T> class SExprEvaluator : public SExprVisitor<SExprEvaluator, T, SVal> {
 
 public:
 	/*
@@ -245,7 +241,8 @@ public:
 	using VMap = std::unordered_map<T, RetTy>;
 
 	/* BFE: Evaluates the given expression replacing _all_ symbolic variables with v */
-	RetTy evaluate(const SExpr<T> *e, SVal v, size_t *numUnknown = nullptr) {
+	RetTy evaluate(const SExpr<T> *e, SVal v, size_t *numUnknown = nullptr)
+	{
 		bruteForce = true;
 		val = v;
 		unknown.clear();
@@ -258,7 +255,8 @@ public:
 	}
 
 	/* NBFE: Evaluates according to a given mapping */
-	RetTy evaluate(const SExpr<T> *e, const VMap &map, size_t *numUnknown = nullptr) {
+	RetTy evaluate(const SExpr<T> *e, const VMap &map, size_t *numUnknown = nullptr)
+	{
 		valueMapping = &map;
 		auto res = this->visit(const_cast<SExpr<T> *>(e));
 		if (numUnknown)
@@ -305,11 +303,15 @@ public:
 
 private:
 	/* NBFE: Checks whether a symbolic variable has a mapping */
-	bool hasKnownMapping(const T& reg) const { return valueMapping && valueMapping->count(reg); }
+	bool hasKnownMapping(const T &reg) const
+	{
+		return valueMapping && valueMapping->count(reg);
+	}
 
 	/* NBFE: Returns the value of a symbolic variable */
-	RetTy getMappingFor(const T& reg) const {
-		return (hasKnownMapping(reg)) ? valueMapping->at(reg) :	SVal(42);
+	RetTy getMappingFor(const T &reg) const
+	{
+		return (hasKnownMapping(reg)) ? valueMapping->at(reg) : SVal(42);
 	}
 
 	/* BFE: Returns the value we are evaluating with in a brute-force eval */
@@ -336,13 +338,12 @@ private:
  * Replaces all occurrences of a given register with a given expression.
  */
 
-template<typename T>
-class SExprRegSubstitutor : public SExprVisitor<SExprRegSubstitutor, T> {
+template <typename T> class SExprRegSubstitutor : public SExprVisitor<SExprRegSubstitutor, T> {
 
 public:
 	/* Performs the substitution (returns a new expression) */
-	std::unique_ptr<SExpr<T>>
-	substitute(const SExpr<T> *orig, T&& reg, const SExpr<T> *r) {
+	std::unique_ptr<SExpr<T>> substitute(const SExpr<T> *orig, T &&reg, const SExpr<T> *r)
+	{
 		auto e = orig->clone();
 		if (auto *re = llvm::dyn_cast<RegisterExpr<T>>(e.get()))
 			if (re->getRegister() == reg)
@@ -354,7 +355,8 @@ public:
 		return e;
 	}
 
-	void visitSExpr(SExpr<T> &e) {
+	void visitSExpr(SExpr<T> &e)
+	{
 		for (auto i = 0u; i < e.getNumKids(); i++) {
 			this->visit(e.getKid(i));
 			if (auto *re = llvm::dyn_cast<RegisterExpr<T>>(e.getKid(i)))
@@ -364,13 +366,12 @@ public:
 	}
 
 private:
-	const T& getRegToReplace() const { return replaceReg; }
+	const T &getRegToReplace() const { return replaceReg; }
 	const SExpr<T> *getReplaceExpr() const { return replaceExpr; }
 
 	T replaceReg;
 	const SExpr<T> *replaceExpr;
 };
-
 
 /*******************************************************************************
  **                           SExprConcretizer Class
@@ -380,15 +381,14 @@ private:
  * Applies a given mapping "register->values" to a given expression
  */
 
-template<typename T>
-class SExprConcretizer: public SExprVisitor<SExprConcretizer, T> {
+template <typename T> class SExprConcretizer : public SExprVisitor<SExprConcretizer, T> {
 
 public:
 	using ReplaceMap = std::map<T, std::pair<SVal, ASize>>;
 
 	/* Performs the concretization (returns a new expression) */
-	std::unique_ptr<SExpr<T>>
-	concretize(const SExpr<T> *orig, const ReplaceMap &rMap) {
+	std::unique_ptr<SExpr<T>> concretize(const SExpr<T> *orig, const ReplaceMap &rMap)
+	{
 		replaceMap = &rMap;
 		auto e = orig->clone();
 		if (auto *re = llvm::dyn_cast<RegisterExpr<T>>(e.get())) {
@@ -400,24 +400,28 @@ public:
 		return e;
 	}
 
-	void visitSExpr(SExpr<T> &e) {
+	void visitSExpr(SExpr<T> &e)
+	{
 		for (auto i = 0u; i < e.getNumKids(); i++) {
 			this->visit(e.getKid(i));
 			if (auto *re = llvm::dyn_cast<RegisterExpr<T>>(e.getKid(i)))
 				if (shouldReplace(re->getRegister()))
-					e.setKid(i, ConcreteExpr<T>::create(getReplaceValSize(re->getRegister()),
-									    getReplaceVal(re->getRegister())));
+					e.setKid(i, ConcreteExpr<T>::create(
+							    getReplaceValSize(re->getRegister()),
+							    getReplaceVal(re->getRegister())));
 		}
 	}
 
 private:
-	bool shouldReplace(const T& reg) const { return replaceMap->count(reg); }
-	SVal getReplaceVal(const T& reg) const { return replaceMap->at(reg).first; }
-	typename SExpr<T>::Width getReplaceValSize(const T& reg) const { return replaceMap->at(reg).second.get(); }
+	bool shouldReplace(const T &reg) const { return replaceMap->count(reg); }
+	SVal getReplaceVal(const T &reg) const { return replaceMap->at(reg).first; }
+	typename SExpr<T>::Width getReplaceValSize(const T &reg) const
+	{
+		return replaceMap->at(reg).second.get();
+	}
 
 	const ReplaceMap *replaceMap;
 };
-
 
 /*******************************************************************************
  **                           SExprTransformer Class
@@ -427,15 +431,16 @@ private:
  * Given a function F: T -> ModuleID::ID, transforms an SExpr<T> to a SExpr<ModuleID::ID>.
  */
 
-template<typename T>
-class SExprTransformer : public SExprVisitor<SExprTransformer, T, std::unique_ptr<SExpr<ModuleID::ID>>> {
+template <typename T>
+class SExprTransformer
+	: public SExprVisitor<SExprTransformer, T, std::unique_ptr<SExpr<ModuleID::ID>>> {
 
 public:
 	using RetTy = std::unique_ptr<SExpr<ModuleID::ID>>;
 
 	/* Performs the transformation (returns a new expression) */
-	template<typename F>
-	RetTy transform(SExpr<T> *orig, F&& fun) {
+	template <typename F> RetTy transform(SExpr<T> *orig, F &&fun)
+	{
 		transformer = fun;
 		return this->visit(*orig);
 	}

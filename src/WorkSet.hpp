@@ -44,28 +44,30 @@ protected:
 public:
 	/* Iterators */
 	iterator begin() { return wset_.begin(); }
-	iterator end()   { return wset_.end(); }
+	iterator end() { return wset_.end(); }
 	const_iterator cbegin() const { return wset_.cbegin(); }
-	const_iterator cend() const   { return wset_.cend(); }
+	const_iterator cend() const { return wset_.cend(); }
 
 	/* Returns whether this workset is empty */
 	bool empty() const { return wset_.empty(); }
 
 	/* Adds an item to the workset */
-	void add(ItemT item) {
+	void add(ItemT item)
+	{
 		wset_.push_back(std::move(item));
 		return;
 	}
 
 	/* Returns the next item to examine for this workset */
-	ItemT getNext() {
+	ItemT getNext()
+	{
 		auto i = std::move(wset_.back());
 		wset_.pop_back();
 		return i;
 	}
 
 	/* Overloaded operators */
-	friend llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const WorkSet &wset);
+	friend llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const WorkSet &wset);
 
 private:
 	/* The workset of an event */

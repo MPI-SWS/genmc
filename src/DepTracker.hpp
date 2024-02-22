@@ -38,40 +38,39 @@ class DepTracker {
 
 public:
 	/* Returns data dependencies for instruction i in thread tid */
-	const DepInfo *getDataDeps(unsigned int tid, llvm::Value *i) {
-		return &dataDeps[tid][i];
-	};
+	const DepInfo *getDataDeps(unsigned int tid, llvm::Value *i) { return &dataDeps[tid][i]; };
 
 	/* Returns the address dependencies collected so far for tid */
-	const DepInfo *getAddrPoDeps(unsigned int tid) {
-		return &addrPoDeps[tid];
-	};
+	const DepInfo *getAddrPoDeps(unsigned int tid) { return &addrPoDeps[tid]; };
 
 	/* Returns the control dependencies collected so far for tid */
-	const DepInfo *getCtrlDeps(unsigned int tid) {
-		return &ctrlDeps[tid];
-	};
+	const DepInfo *getCtrlDeps(unsigned int tid) { return &ctrlDeps[tid]; };
 
 	/* Updates data dependencies of dst, as it is dependent on src */
-	void updateDataDeps(unsigned int tid, llvm::Value *dst, llvm::Value *src) {
+	void updateDataDeps(unsigned int tid, llvm::Value *dst, llvm::Value *src)
+	{
 		dataDeps[tid][dst].update(dataDeps[tid][src]);
 	};
-	void updateDataDeps(unsigned int tid, llvm::Value *dst, DepInfo e) {
+	void updateDataDeps(unsigned int tid, llvm::Value *dst, DepInfo e)
+	{
 		dataDeps[tid][dst].update(e);
 	};
 
 	/* Adds the dependencies from src to the address dependencies */
-	void updateAddrPoDeps(unsigned int tid, llvm::Value *src) {
+	void updateAddrPoDeps(unsigned int tid, llvm::Value *src)
+	{
 		addrPoDeps[tid].update(dataDeps[tid][src]);
 	};
 
 	/* Adds the dependencies from src to the control dependencies */
-	void updateCtrlDeps(unsigned int tid, llvm::Value *src) {
+	void updateCtrlDeps(unsigned int tid, llvm::Value *src)
+	{
 		ctrlDeps[tid].update(dataDeps[tid][src]);
 	};
 
 	/* Clears the dependencies calculated for thread TID */
-	void clearDeps(unsigned int tid) {
+	void clearDeps(unsigned int tid)
+	{
 		dataDeps[tid].clear();
 		addrPoDeps[tid].clear();
 		ctrlDeps[tid].clear();
@@ -80,8 +79,7 @@ public:
 private:
 	/* The data dependencies of each instruction are
 	 * stored in a map (per thread) */
-	std::unordered_map<unsigned int,
-			   std::unordered_map<llvm::Value *, DepInfo>> dataDeps;
+	std::unordered_map<unsigned int, std::unordered_map<llvm::Value *, DepInfo>> dataDeps;
 
 	/* Since {addr, ctrl} are forwards-closed under po, we just
 	 * keep a DepInfo item for these */

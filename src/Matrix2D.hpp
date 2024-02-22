@@ -23,12 +23,11 @@
 
 #include <vector>
 
-template <class T>
-class Matrix2D {
+template <class T> class Matrix2D {
 
 public:
 	/* Constructors */
-	Matrix2D() {};
+	Matrix2D(){};
 	Matrix2D(const std::vector<T> &es);
 	Matrix2D(std::vector<T> &&es);
 
@@ -45,7 +44,7 @@ public:
 	const_iterator end() const { return elems_.end(); };
 
 	/* Returns the elements of this matrix */
-	const std::vector<T>& getElems() const;
+	const std::vector<T> &getElems() const;
 
 	/* Returns the index of a given element in the matrix */
 	int getIndex(const T &e) const;
@@ -67,20 +66,23 @@ public:
 	/* Calls "prop" on all topological sortings of the matrix,
 	 * until one where "prop" returns true is found.
 	 * Returns whether such a sorting is found */
-	template<typename F>
-	bool allTopoSort(F&& prop) const;
+	template <typename F> bool allTopoSort(F &&prop) const;
 
 	/* Runs prop on each combination of topological sortings of matrices in
 	 * "toCombine", until a combination that satisfies "prop" is found.
 	 * Returns whether a valid combination was found */
-	template<typename F>
-	static bool combineAllTopoSort(const std::vector<Matrix2D<T> *> &toCombine, F&& prop);
+	template <typename F>
+	static bool combineAllTopoSort(const std::vector<Matrix2D<T> *> &toCombine, F &&prop);
 
 	/* For each "f" in "froms", adds edges to all the "tos"*/
 	void addEdgesFromTo(const std::vector<T> &froms, const std::vector<T> &tos);
 
 	/* Empties the matrix */
-	void clear() { matrix_.clear(); elems_.clear(); }
+	void clear()
+	{
+		matrix_.clear();
+		elems_.clear();
+	}
 
 	/* Returns the number of elements in the matrix */
 	unsigned int size() const;
@@ -95,61 +97,69 @@ public:
 	void transClosure();
 
 	/* Operators */
-	inline bool operator()(const T &a, const T &b) const {
-		return !!matrix_[computeIndex(getIndex(a),getIndex(b))];
+	inline bool operator()(const T &a, const T &b) const
+	{
+		return !!matrix_[computeIndex(getIndex(a), getIndex(b))];
 	};
-	inline bool operator()(const T &a, unsigned int j) const {
-		return !!matrix_[computeIndex(getIndex(a),j)];
+	inline bool operator()(const T &a, unsigned int j) const
+	{
+		return !!matrix_[computeIndex(getIndex(a), j)];
 	};
-	inline bool operator()(unsigned int i, const T &b) const {
-		return !!matrix_[computeIndex(i,getIndex(b))];
+	inline bool operator()(unsigned int i, const T &b) const
+	{
+		return !!matrix_[computeIndex(i, getIndex(b))];
 	};
-	inline bool operator()(unsigned int i, unsigned int j) const {
-		return !!matrix_[computeIndex(i,j)];
+	inline bool operator()(unsigned int i, unsigned int j) const
+	{
+		return !!matrix_[computeIndex(i, j)];
 	};
 
-	inline unsigned char& operator()(const T &a, const T &b) {
-		return matrix_[computeIndex(getIndex(a),getIndex(b))];
+	inline unsigned char &operator()(const T &a, const T &b)
+	{
+		return matrix_[computeIndex(getIndex(a), getIndex(b))];
 	};
-	inline unsigned char& operator()(const T &a, unsigned int j) {
-		return matrix_[computeIndex(getIndex(a),j)];
+	inline unsigned char &operator()(const T &a, unsigned int j)
+	{
+		return matrix_[computeIndex(getIndex(a), j)];
 	};
-	inline unsigned char& operator()(unsigned int i, const T &b) {
+	inline unsigned char &operator()(unsigned int i, const T &b)
+	{
 		return matrix_[computeIndex(i, getIndex(b))];
 	};
-	inline unsigned char& operator()(unsigned int i, unsigned int j) {
-		return matrix_[computeIndex(i,j)];
+	inline unsigned char &operator()(unsigned int i, unsigned int j)
+	{
+		return matrix_[computeIndex(i, j)];
 	};
 
-	inline bool operator==(const Matrix2D<T> &m) const {
+	inline bool operator==(const Matrix2D<T> &m) const
+	{
 		return m.getElems() == getElems() && m.matrix_ == matrix_;
 	};
 	inline bool operator!=(const Matrix2D<T> &m) const { return !(*this == m); };
 
-	template<typename U>
-	friend llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const Matrix2D<U> &m);
+	template <typename U>
+	friend llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const Matrix2D<U> &m);
 
 private:
 	/* Workhorse of allTopoSort() */
-	template<typename F>
-	bool allTopoSortUtil(std::vector<T> &current,
-			     std::vector<bool> visited,
-			     std::vector<int> &inDegree,
-			     F&& prop, bool &found) const;
+	template <typename F>
+	bool allTopoSortUtil(std::vector<T> &current, std::vector<bool> visited,
+			     std::vector<int> &inDegree, F &&prop, bool &found) const;
 
 	/* Workhorse of combineAllTopoSort() */
-	template<typename F>
+	template <typename F>
 	static bool combineAllTopoSortUtil(unsigned int index, std::vector<std::vector<T>> &current,
 					   bool &found, const std::vector<Matrix2D<T> *> &toCombine,
-					   F&& prop);
-
+					   F &&prop);
 
 #ifdef __MATRIX_2D_INCREMENTAL__
-	static inline unsigned int computeIndex (unsigned int i, unsigned int j) {
+	static inline unsigned int computeIndex(unsigned int i, unsigned int j)
+	{
 		return (i < j) ? (j * j + i) : (i * i + i + j);
 	}
 #else
-	inline unsigned int computeIndex (unsigned int i, unsigned int j) const {
+	inline unsigned int computeIndex(unsigned int i, unsigned int j) const
+	{
 		return i * elems_.size() + j;
 	}
 #endif

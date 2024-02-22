@@ -33,24 +33,35 @@
  * Visitor for EventLabel objects (CRTP-style).
  */
 
-template<typename Subclass>
-class LabelVisitor {
+template <typename Subclass> class LabelVisitor {
 
 public:
 	/* Gets a variadic arguments because some labels have the extension suffix */
-#define VISIT_LABEL(NAME, ...)					\
-	case EventLabel::EL_##NAME##__VA_ARGS__:		\
-		return static_cast<Subclass *>(this)->		\
-		visit##NAME##Label##__VA_ARGS__(static_cast<const NAME##Label##__VA_ARGS__&>(lab))
+#define VISIT_LABEL(NAME, ...)                                                                     \
+	case EventLabel::EL_##NAME##__VA_ARGS__:                                                   \
+		return static_cast<Subclass *>(this)->visit##NAME##Label##__VA_ARGS__(             \
+			static_cast<const NAME##Label##__VA_ARGS__ &>(lab))
 
 	void visit(const EventLabel *lab) { return visit(*lab); }
 	void visit(const std::unique_ptr<EventLabel> &lab) { return visit(*lab); }
 	void visit(const std::shared_ptr<EventLabel> &lab) { return visit(*lab); }
 
-	void visit(const EventLabel &lab) {
-		switch(lab.getKind()) {
+	void visit(const EventLabel &lab)
+	{
+		switch (lab.getKind()) {
 			VISIT_LABEL(Empty);
-			VISIT_LABEL(Block);
+			VISIT_LABEL(JoinBlock);
+			VISIT_LABEL(SpinloopBlock);
+			VISIT_LABEL(FaiZNEBlock);
+			VISIT_LABEL(LockZNEBlock);
+			VISIT_LABEL(HelpedCASBlock);
+			VISIT_LABEL(ConfirmationBlock);
+			VISIT_LABEL(LockNotAcqBlock);
+			VISIT_LABEL(LockNotRelBlock);
+			VISIT_LABEL(BarrierBlock);
+			VISIT_LABEL(ErrorBlock);
+			VISIT_LABEL(UserBlock);
+			VISIT_LABEL(ReadOptBlock);
 			VISIT_LABEL(Optional);
 			VISIT_LABEL(ThreadStart);
 			VISIT_LABEL(Init);
@@ -113,66 +124,183 @@ public:
 		}
 	}
 
-#define DELEGATE_LABEL(TO_CLASS)				\
-	static_cast<Subclass *>(this)->				\
-	visit##TO_CLASS(static_cast<const TO_CLASS&>(lab))
+#define DELEGATE_LABEL(TO_CLASS)                                                                   \
+	static_cast<Subclass *>(this)->visit##TO_CLASS(static_cast<const TO_CLASS &>(lab))
 
 	void visitEmptyLabel(const EmptyLabel &lab) { return DELEGATE_LABEL(EventLabel); }
-	void visitBlockLabel(const BlockLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 	void visitOptionalLabel(const OptionalLabel &lab) { return DELEGATE_LABEL(EventLabel); }
+
+	void visitJoinBlockLabel(const JoinBlockLabel &lab) { return DELEGATE_LABEL(BlockLabel); }
+	void visitSpinloopBlockLabel(const SpinloopBlockLabel &lab)
+	{
+		return DELEGATE_LABEL(BlockLabel);
+	}
+	void visitFaiZNEBlockLabel(const FaiZNEBlockLabel &lab)
+	{
+		return DELEGATE_LABEL(BlockLabel);
+	}
+	void visitLockZNEBlockLabel(const LockZNEBlockLabel &lab)
+	{
+		return DELEGATE_LABEL(BlockLabel);
+	}
+	void visitHelpedCASBlockLabel(const HelpedCASBlockLabel &lab)
+	{
+		return DELEGATE_LABEL(BlockLabel);
+	}
+	void visitConfirmationBlockLabel(const ConfirmationBlockLabel &lab)
+	{
+		return DELEGATE_LABEL(BlockLabel);
+	}
+	void visitLockNotAcqBlockLabel(const LockNotAcqBlockLabel &lab)
+	{
+		return DELEGATE_LABEL(BlockLabel);
+	}
+	void visitLockNotRelBlockLabel(const LockNotRelBlockLabel &lab)
+	{
+		return DELEGATE_LABEL(BlockLabel);
+	}
+	void visitBarrierBlockLabel(const BarrierBlockLabel &lab)
+	{
+		return DELEGATE_LABEL(BlockLabel);
+	}
+	void visitErrorBlockLabel(const ErrorBlockLabel &lab) { return DELEGATE_LABEL(BlockLabel); }
+	void visitUserBlockLabel(const UserBlockLabel &lab) { return DELEGATE_LABEL(BlockLabel); }
+	void visitReadOptBlockLabel(const ReadOptBlockLabel &lab)
+	{
+		return DELEGATE_LABEL(BlockLabel);
+	}
+
 	void visitInitLabel(const InitLabel &lab) { return DELEGATE_LABEL(EventLabel); }
-	void visitThreadStartLabel(const ThreadStartLabel &lab) { return DELEGATE_LABEL(EventLabel); }
-	void visitThreadFinishLabel(const ThreadFinishLabel &lab) { return DELEGATE_LABEL(EventLabel); }
-	void visitThreadCreateLabel(const ThreadCreateLabel &lab) { return DELEGATE_LABEL(EventLabel); }
+	void visitThreadStartLabel(const ThreadStartLabel &lab)
+	{
+		return DELEGATE_LABEL(EventLabel);
+	}
+	void visitThreadFinishLabel(const ThreadFinishLabel &lab)
+	{
+		return DELEGATE_LABEL(EventLabel);
+	}
+	void visitThreadCreateLabel(const ThreadCreateLabel &lab)
+	{
+		return DELEGATE_LABEL(EventLabel);
+	}
 	void visitThreadJoinLabel(const ThreadJoinLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 	void visitThreadKillLabel(const ThreadKillLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 	void visitLoopBeginLabel(const LoopBeginLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 	void visitSpinStartLabel(const SpinStartLabel &lab) { return DELEGATE_LABEL(EventLabel); }
-	void visitFaiZNESpinEndLabel(const FaiZNESpinEndLabel &lab) { return DELEGATE_LABEL(EventLabel); }
-	void visitLockZNESpinEndLabel(const LockZNESpinEndLabel &lab) { return DELEGATE_LABEL(EventLabel); }
+	void visitFaiZNESpinEndLabel(const FaiZNESpinEndLabel &lab)
+	{
+		return DELEGATE_LABEL(EventLabel);
+	}
+	void visitLockZNESpinEndLabel(const LockZNESpinEndLabel &lab)
+	{
+		return DELEGATE_LABEL(EventLabel);
+	}
 
 	void visitReadLabel(const ReadLabel &lab) { return DELEGATE_LABEL(MemAccessLabel); }
 	void visitBWaitReadLabel(const BWaitReadLabel &lab) { return DELEGATE_LABEL(ReadLabel); }
-	void visitSpeculativeReadLabel(const SpeculativeReadLabel &lab) { return DELEGATE_LABEL(ReadLabel); }
-	void visitConfirmingReadLabel(const ConfirmingReadLabel &lab) { return DELEGATE_LABEL(ReadLabel); }
+	void visitSpeculativeReadLabel(const SpeculativeReadLabel &lab)
+	{
+		return DELEGATE_LABEL(ReadLabel);
+	}
+	void visitConfirmingReadLabel(const ConfirmingReadLabel &lab)
+	{
+		return DELEGATE_LABEL(ReadLabel);
+	}
 	void visitDskReadLabel(const DskReadLabel &lab) { return DELEGATE_LABEL(ReadLabel); }
 
 	void visitFaiReadLabel(const FaiReadLabel &lab) { return DELEGATE_LABEL(ReadLabel); }
-	void visitNoRetFaiReadLabel(const NoRetFaiReadLabel &lab) { return DELEGATE_LABEL(FaiReadLabel); }
-	void visitBIncFaiReadLabel(const BIncFaiReadLabel &lab) { return DELEGATE_LABEL(FaiReadLabel); }
+	void visitNoRetFaiReadLabel(const NoRetFaiReadLabel &lab)
+	{
+		return DELEGATE_LABEL(FaiReadLabel);
+	}
+	void visitBIncFaiReadLabel(const BIncFaiReadLabel &lab)
+	{
+		return DELEGATE_LABEL(FaiReadLabel);
+	}
 
 	void visitCasReadLabel(const CasReadLabel &lab) { return DELEGATE_LABEL(ReadLabel); }
-	void visitLockCasReadLabel(const LockCasReadLabel &lab) { return DELEGATE_LABEL(CasReadLabel); }
-	void visitTrylockCasReadLabel(const TrylockCasReadLabel &lab) { return DELEGATE_LABEL(CasReadLabel); }
-	void visitHelpedCasReadLabel(const HelpedCasReadLabel &lab) { return DELEGATE_LABEL(CasReadLabel); }
-	void visitConfirmingCasReadLabel(const ConfirmingCasReadLabel &lab) { return DELEGATE_LABEL(CasReadLabel); }
+	void visitLockCasReadLabel(const LockCasReadLabel &lab)
+	{
+		return DELEGATE_LABEL(CasReadLabel);
+	}
+	void visitTrylockCasReadLabel(const TrylockCasReadLabel &lab)
+	{
+		return DELEGATE_LABEL(CasReadLabel);
+	}
+	void visitHelpedCasReadLabel(const HelpedCasReadLabel &lab)
+	{
+		return DELEGATE_LABEL(CasReadLabel);
+	}
+	void visitConfirmingCasReadLabel(const ConfirmingCasReadLabel &lab)
+	{
+		return DELEGATE_LABEL(CasReadLabel);
+	}
 
 	void visitWriteLabel(const WriteLabel &lab) { return DELEGATE_LABEL(MemAccessLabel); }
-	void visitUnlockWriteLabel(const UnlockWriteLabel &lab) { return DELEGATE_LABEL(WriteLabel); }
+	void visitUnlockWriteLabel(const UnlockWriteLabel &lab)
+	{
+		return DELEGATE_LABEL(WriteLabel);
+	}
 	void visitBInitWriteLabel(const BInitWriteLabel &lab) { return DELEGATE_LABEL(WriteLabel); }
-	void visitBDestroyWriteLabel(const BDestroyWriteLabel &lab) { return DELEGATE_LABEL(WriteLabel); }
+	void visitBDestroyWriteLabel(const BDestroyWriteLabel &lab)
+	{
+		return DELEGATE_LABEL(WriteLabel);
+	}
 
 	void visitFaiWriteLabel(const FaiWriteLabel &lab) { return DELEGATE_LABEL(WriteLabel); }
-	void visitNoRetFaiWriteLabel(const NoRetFaiWriteLabel &lab) { return DELEGATE_LABEL(FaiWriteLabel); }
-	void visitBIncFaiWriteLabel(const BIncFaiWriteLabel &lab) { return DELEGATE_LABEL(FaiWriteLabel); }
+	void visitNoRetFaiWriteLabel(const NoRetFaiWriteLabel &lab)
+	{
+		return DELEGATE_LABEL(FaiWriteLabel);
+	}
+	void visitBIncFaiWriteLabel(const BIncFaiWriteLabel &lab)
+	{
+		return DELEGATE_LABEL(FaiWriteLabel);
+	}
 
 	void visitCasWriteLabel(const CasWriteLabel &lab) { return DELEGATE_LABEL(WriteLabel); }
-	void visitLockCasWriteLabel(const LockCasWriteLabel &lab) { return DELEGATE_LABEL(CasWriteLabel); }
-	void visitTrylockCasWriteLabel(const TrylockCasWriteLabel &lab) { return DELEGATE_LABEL(CasWriteLabel); }
-	void visitHelpedCasWriteLabel(const HelpedCasWriteLabel &lab) { return DELEGATE_LABEL(CasWriteLabel); }
-	void visitConfirmingCasWriteLabel(const ConfirmingCasWriteLabel &lab) { return DELEGATE_LABEL(CasWriteLabel); }
+	void visitLockCasWriteLabel(const LockCasWriteLabel &lab)
+	{
+		return DELEGATE_LABEL(CasWriteLabel);
+	}
+	void visitTrylockCasWriteLabel(const TrylockCasWriteLabel &lab)
+	{
+		return DELEGATE_LABEL(CasWriteLabel);
+	}
+	void visitHelpedCasWriteLabel(const HelpedCasWriteLabel &lab)
+	{
+		return DELEGATE_LABEL(CasWriteLabel);
+	}
+	void visitConfirmingCasWriteLabel(const ConfirmingCasWriteLabel &lab)
+	{
+		return DELEGATE_LABEL(CasWriteLabel);
+	}
 
 	void visitDskWriteLabel(const DskWriteLabel &lab) { return DELEGATE_LABEL(WriteLabel); }
 	void visitDskMdWriteLabel(const DskMdWriteLabel &lab) { return DELEGATE_LABEL(WriteLabel); }
-	void visitDskJnlWriteLabel(const DskJnlWriteLabel &lab) { return DELEGATE_LABEL(WriteLabel); }
-	void visitDskDirWriteLabel(const DskDirWriteLabel &lab) { return DELEGATE_LABEL(WriteLabel); }
+	void visitDskJnlWriteLabel(const DskJnlWriteLabel &lab)
+	{
+		return DELEGATE_LABEL(WriteLabel);
+	}
+	void visitDskDirWriteLabel(const DskDirWriteLabel &lab)
+	{
+		return DELEGATE_LABEL(WriteLabel);
+	}
 
 	void visitFenceLabel(const FenceLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 	void visitDskFsyncLabel(const DskFsyncLabel &lab) { return DELEGATE_LABEL(FenceLabel); }
 	void visitDskSyncLabel(const DskSyncLabel &lab) { return DELEGATE_LABEL(FenceLabel); }
-	void visitDskPbarrierLabel(const DskPbarrierLabel &lab) { return DELEGATE_LABEL(FenceLabel); }
-	void visitSmpFenceLabelLKMM(const SmpFenceLabelLKMM &lab) { return DELEGATE_LABEL(FenceLabel); }
-	void visitRCUSyncLabelLKMM(const RCUSyncLabelLKMM &lab) { return DELEGATE_LABEL(FenceLabel); }
+	void visitDskPbarrierLabel(const DskPbarrierLabel &lab)
+	{
+		return DELEGATE_LABEL(FenceLabel);
+	}
+	void visitSmpFenceLabelLKMM(const SmpFenceLabelLKMM &lab)
+	{
+		return DELEGATE_LABEL(FenceLabel);
+	}
+	void visitRCUSyncLabelLKMM(const RCUSyncLabelLKMM &lab)
+	{
+		return DELEGATE_LABEL(FenceLabel);
+	}
 
 	void visitMallocLabel(const MallocLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 	void visitFreeLabel(const FreeLabel &lab) { return DELEGATE_LABEL(EventLabel); }
@@ -180,11 +308,20 @@ public:
 
 	void visitHpProtectLabel(const HpProtectLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 	void visitLockLabelLAPOR(const LockLabelLAPOR &lab) { return DELEGATE_LABEL(EventLabel); }
-	void visitUnlockLabelLAPOR(const UnlockLabelLAPOR &lab) { return DELEGATE_LABEL(EventLabel); }
+	void visitUnlockLabelLAPOR(const UnlockLabelLAPOR &lab)
+	{
+		return DELEGATE_LABEL(EventLabel);
+	}
 	void visitHelpingCasLabel(const HelpingCasLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 	void visitDskOpenLabel(const DskOpenLabel &lab) { return DELEGATE_LABEL(EventLabel); }
-	void visitRCULockLabelLKMM(const RCULockLabelLKMM &lab) { return DELEGATE_LABEL(EventLabel); }
-	void visitRCUUnlockLabelLKMM(const RCUUnlockLabelLKMM &lab) { return DELEGATE_LABEL(EventLabel); }
+	void visitRCULockLabelLKMM(const RCULockLabelLKMM &lab)
+	{
+		return DELEGATE_LABEL(EventLabel);
+	}
+	void visitRCUUnlockLabelLKMM(const RCUUnlockLabelLKMM &lab)
+	{
+		return DELEGATE_LABEL(EventLabel);
+	}
 	void visitCLFlushLabel(const CLFlushLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 
 	/*
@@ -193,14 +330,15 @@ public:
 	 */
 	void visitMemAccessLabel(const MemAccessLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 
+	/* Similar to the above, but for blocked labels */
+	void visitBlockLabel(const BlockLabel &lab) { return DELEGATE_LABEL(EventLabel); }
+
 	/*
 	 * If no one else could handle this particular instruction,
 	 * call the generic handler
 	 */
 	void visitEventLabel(const EventLabel &lab) { return; }
-
 };
-
 
 /*******************************************************************************
  **                           LabelPrinter Class
@@ -210,39 +348,40 @@ public:
  * Prints a label to a string.
  */
 
-template<typename Subclass>
-class LabelPrinterBase : public LabelVisitor<Subclass> {
+template <typename Subclass> class LabelPrinterBase : public LabelVisitor<Subclass> {
 
 public:
 	using FmterT = std::function<std::string(SAddr)>;
-	using GetterT = std::function<SVal(const ReadLabel&)>;
+	using GetterT = std::function<SVal(const ReadLabel &)>;
 
 	LabelPrinterBase()
-		: out(buf),
-		  fmtFun([&](const SAddr &saddr){
-				      std::string buf;
-				      llvm::raw_string_ostream s(buf);
-				      s << saddr;
-				      return s.str();
-			      }),
-		  valFun() {}
+		: out(buf), fmtFun([&](const SAddr &saddr) {
+			  std::string buf;
+			  llvm::raw_string_ostream s(buf);
+			  s << saddr;
+			  return s.str();
+		  }),
+		  valFun()
+	{}
 	LabelPrinterBase(FmterT addrFmter, GetterT readValGetter)
-			 : out(buf), fmtFun(addrFmter), valFun(readValGetter) {}
+		: out(buf), fmtFun(addrFmter), valFun(readValGetter)
+	{}
 
-#define IMPLEMENT_INTEGER_PRINT(OS, TY)			\
-	case AType::Signed:				\
-		OS << val.getSigned();			\
-		break;					\
-	case AType::Unsigned:				\
-		OS << val.get();			\
+#define IMPLEMENT_INTEGER_PRINT(OS, TY)                                                            \
+	case AType::Signed:                                                                        \
+		OS << val.getSigned();                                                             \
+		break;                                                                             \
+	case AType::Unsigned:                                                                      \
+		OS << val.get();                                                                   \
 		break;
 
-#define IMPLEMENT_POINTER_PRINT(OS, TY)			\
-	case AType::Pointer:				\
-		OS << val.getPointer();			\
+#define IMPLEMENT_POINTER_PRINT(OS, TY)                                                            \
+	case AType::Pointer:                                                                       \
+		OS << val.getPointer();                                                            \
 		break;
 
-	void printVal(const SVal &val, AType atyp) {
+	void printVal(const SVal &val, AType atyp)
+	{
 		switch (atyp) {
 			IMPLEMENT_INTEGER_PRINT(out, atyp);
 			IMPLEMENT_POINTER_PRINT(out, atyp);
@@ -252,12 +391,8 @@ public:
 		}
 	}
 
-	void visitBlockLabel(const BlockLabel &lab) {
-		DELEGATE_LABEL(EventLabel);
-		out << " [" << lab.getType() << "]";
-	}
-
-	void visitReadLabel(const ReadLabel &lab) {
+	void visitReadLabel(const ReadLabel &lab)
+	{
 		DELEGATE_LABEL(MemAccessLabel);
 		out << " (" << fmtFun(lab.getAddr());
 		if (valFun) {
@@ -267,56 +402,66 @@ public:
 		out << ")";
 	}
 
-	void visitWriteLabel(const WriteLabel &lab) {
+	void visitWriteLabel(const WriteLabel &lab)
+	{
 		DELEGATE_LABEL(MemAccessLabel);
 		out << " (" << fmtFun(lab.getAddr()) << ", ";
 		printVal(lab.getVal(), lab.getType());
 		out << ")";
 	}
 
-	void visitFenceLabel(const FenceLabel &lab) {
+	void visitFenceLabel(const FenceLabel &lab)
+	{
 		DELEGATE_LABEL(EventLabel);
 		out << lab.getOrdering();
 	}
 
-	void visitSmpFenceLabelLKMM(const SmpFenceLabelLKMM &lab) {
+	void visitSmpFenceLabelLKMM(const SmpFenceLabelLKMM &lab)
+	{
 		DELEGATE_LABEL(EventLabel);
 		out << lab.getType();
 	}
 
-	void visitCLFlushLabel(const CLFlushLabel &lab) {
+	void visitCLFlushLabel(const CLFlushLabel &lab)
+	{
 		DELEGATE_LABEL(EventLabel);
 		out << " " << fmtFun(lab.getAddr());
 	}
 
-	void visitThreadCreateLabel(const ThreadCreateLabel &lab) {
+	void visitThreadCreateLabel(const ThreadCreateLabel &lab)
+	{
 		DELEGATE_LABEL(EventLabel);
 		out << " [thread " << lab.getChildId() << "]";
 	}
 
-	void visitThreadJoinLabel(const ThreadJoinLabel &lab) {
+	void visitThreadJoinLabel(const ThreadJoinLabel &lab)
+	{
 		DELEGATE_LABEL(EventLabel);
 		out << " [thread " << lab.getChildId() << "]";
 	}
 
-	void visitDskOpenLabel(const DskOpenLabel &lab) {
+	void visitDskOpenLabel(const DskOpenLabel &lab)
+	{
 		DELEGATE_LABEL(EventLabel);
 		out << " (" << lab.getFileName() << ", " << lab.getFd() << ")";
 	}
 
-	void visitMallocLabel(const MallocLabel &lab) {
+	void visitMallocLabel(const MallocLabel &lab)
+	{
 		DELEGATE_LABEL(EventLabel);
 		out << " " << lab.getName();
 	}
 
 	/* Generic handlers */
 
-	void visitMemAccessLabel(const MemAccessLabel &lab) {
+	void visitMemAccessLabel(const MemAccessLabel &lab)
+	{
 		DELEGATE_LABEL(EventLabel);
 		out << lab.getOrdering();
 	}
 
-	void visitEventLabel(const EventLabel &lab) {
+	void visitEventLabel(const EventLabel &lab)
+	{
 		out << lab.getPos() << ": " << lab.getKind();
 	}
 
@@ -327,24 +472,25 @@ protected:
 	GetterT valFun;
 };
 
-
 class LabelPrinter : public LabelPrinterBase<LabelPrinter> {
 
 public:
 	using FmterT = LabelPrinterBase<LabelPrinter>::FmterT;
 	using GetterT = LabelPrinterBase<LabelPrinter>::GetterT;
 
-	LabelPrinter() : LabelPrinterBase() {};
+	LabelPrinter() : LabelPrinterBase(){};
 	LabelPrinter(FmterT fmter, GetterT getter) : LabelPrinterBase(fmter, getter) {}
 
-	std::string toString(const EventLabel &lab) {
+	std::string toString(const EventLabel &lab)
+	{
 		buf.clear();
 		this->visit(lab);
 		return out.str();
 	}
 
 	/* Helper to print read RFs */
-	void printRf(const ReadLabel &lab) {
+	void printRf(const ReadLabel &lab)
+	{
 		if (!lab.getRf())
 			out << "[BOTTOM]";
 		else if (lab.getRf()->getPos().isInitializer())
@@ -353,7 +499,8 @@ public:
 			out << "[" << lab.getRf()->getPos() << "]";
 	}
 
-	void visitReadLabel(const ReadLabel &lab) {
+	void visitReadLabel(const ReadLabel &lab)
+	{
 		LabelPrinterBase::visitReadLabel(lab);
 		out << " ";
 		printRf(lab);
@@ -366,51 +513,51 @@ public:
 	using FmterT = LabelPrinterBase<DotPrinter>::FmterT;
 	using GetterT = LabelPrinterBase<DotPrinter>::GetterT;
 
-	DotPrinter() : LabelPrinterBase() {};
+	DotPrinter() : LabelPrinterBase(){};
 	DotPrinter(FmterT fmter, GetterT getter) : LabelPrinterBase(fmter, getter) {}
 
-	std::string toString(const EventLabel &lab) {
+	std::string toString(const EventLabel &lab)
+	{
 		buf.clear();
 		this->visit(lab);
 		return out.str();
 	}
 
 	/* Helpers to print orderings as exponent */
-	void printOrdering(const EventLabel &lab) {
+	void printOrdering(const EventLabel &lab)
+	{
 		out << "<SUP>" << lab.getOrdering() << "</SUP>";
 	}
-	void printFenceType(const SmpFenceLabelLKMM &lab) {
+	void printFenceType(const SmpFenceLabelLKMM &lab)
+	{
 		out << "<SUP>" << lab.getType() << "</SUP>";
 	}
 
-	void visitFenceLabel(const FenceLabel &lab) {
+	void visitFenceLabel(const FenceLabel &lab)
+	{
 		visitEventLabel(lab);
 		printOrdering(lab);
 	}
 
-	void visitSmpFenceLabelLKMM(const SmpFenceLabelLKMM &lab) {
+	void visitSmpFenceLabelLKMM(const SmpFenceLabelLKMM &lab)
+	{
 		visitEventLabel(lab);
 		printFenceType(lab);
 	}
 
-	void visitThreadCreateLabel(const ThreadCreateLabel &lab) {
-		visitEventLabel(lab);
-	}
+	void visitThreadCreateLabel(const ThreadCreateLabel &lab) { visitEventLabel(lab); }
 
-	void visitThreadJoinLabel(const ThreadJoinLabel &lab) {
-		visitEventLabel(lab);
-	}
+	void visitThreadJoinLabel(const ThreadJoinLabel &lab) { visitEventLabel(lab); }
 
 	/* Generic handlers */
 
-	void visitMemAccessLabel(const EventLabel &lab) {
+	void visitMemAccessLabel(const EventLabel &lab)
+	{
 		visitEventLabel(lab);
 		printOrdering(lab);
 	}
 
-	void visitEventLabel(const EventLabel &lab) {
-		out << lab.getKind();
-	}
+	void visitEventLabel(const EventLabel &lab) { out << lab.getKind(); }
 };
 
 #endif /* __LABEL_VISITOR_HPP__ */

@@ -22,10 +22,10 @@
 
 void ThreadPool::addWorker(unsigned int i, std::unique_ptr<GenMCDriver> d)
 {
-	using ThreadT = std::packaged_task<
-		GenMCDriver::Result(unsigned int, std::unique_ptr<GenMCDriver> driver)>;
+	using ThreadT = std::packaged_task<GenMCDriver::Result(
+		unsigned int, std::unique_ptr<GenMCDriver> driver)>;
 
-	ThreadT t([this](unsigned int i, std::unique_ptr<GenMCDriver> driver){
+	ThreadT t([this](unsigned int i, std::unique_ptr<GenMCDriver> driver) {
 		while (true) {
 			auto taskUP = popTask();
 
@@ -61,10 +61,7 @@ void ThreadPool::submit(ThreadPool::TaskT t)
 	stateCV_.notify_one();
 }
 
-ThreadPool::TaskT ThreadPool::tryPopPoolQueue()
-{
-	return queue_.tryPop();
-}
+ThreadPool::TaskT ThreadPool::tryPopPoolQueue() { return queue_.tryPop(); }
 
 ThreadPool::TaskT ThreadPool::tryStealOtherQueue()
 {

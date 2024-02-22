@@ -25,13 +25,13 @@
 #ifndef __SC_DRIVER_HPP__
 #define __SC_DRIVER_HPP__
 
-#include "config.h"
 #include "ExecutionGraph.hpp"
 #include "GenMCDriver.hpp"
 #include "GraphIterators.hpp"
 #include "MaximalIterator.hpp"
-#include "VerificationError.hpp"
 #include "VSet.hpp"
+#include "VerificationError.hpp"
+#include "config.h"
 #include <cstdint>
 #include <vector>
 
@@ -49,20 +49,25 @@ private:
 
 public:
 	SCDriver(std::shared_ptr<const Config> conf, std::unique_ptr<llvm::Module> mod,
-		std::unique_ptr<ModuleInfo> MI, GenMCDriver::Mode mode = GenMCDriver::VerificationMode{});
+		 std::unique_ptr<ModuleInfo> MI,
+		 GenMCDriver::Mode mode = GenMCDriver::VerificationMode{});
 
 	std::vector<VSet<Event>> calculateSaved(const EventLabel *lab);
 	std::vector<View> calculateViews(const EventLabel *lab);
 	void updateMMViews(EventLabel *lab) override;
 	bool isDepTracking() const override;
 	bool isConsistent(const EventLabel *lab) const override;
-	VerificationError checkErrors(const EventLabel *lab, const EventLabel *&race) const override;
-	std::vector<VerificationError> checkWarnings(const EventLabel *lab, const VSet<VerificationError> &seenWarnings, std::vector<const EventLabel *> &racyLabs) const;
+	VerificationError checkErrors(const EventLabel *lab,
+				      const EventLabel *&race) const override;
+	std::vector<VerificationError>
+	checkWarnings(const EventLabel *lab, const VSet<VerificationError> &seenWarnings,
+		      std::vector<const EventLabel *> &racyLabs) const;
 	bool isRecoveryValid(const EventLabel *lab) const override;
 	std::unique_ptr<VectorClock> calculatePrefixView(const EventLabel *lab) const override;
 	const View &getHbView(const EventLabel *lab) const override;
 	std::vector<Event> getCoherentStores(SAddr addr, Event read) override;
-	std::vector<Event> getCoherentRevisits(const WriteLabel *sLab, const VectorClock &pporf) override;
+	std::vector<Event> getCoherentRevisits(const WriteLabel *sLab,
+					       const VectorClock &pporf) override;
 	llvm::iterator_range<ExecutionGraph::co_iterator>
 	getCoherentPlacings(SAddr addr, Event store, bool isRMW) override;
 
@@ -218,16 +223,16 @@ private:
 
 	mutable const EventLabel *racyLab7 = nullptr;
 
-	bool visitAcyclic0(const EventLabel *lab) const;
+	bool visitAcyclic0_0(const EventLabel *lab) const;
 
-	bool isAcyclic(const EventLabel *lab) const ;
+	bool isAcyclic0(const EventLabel *lab) const;
 
-	mutable std::vector<NodeCountStatus> visitedAcyclic0;
+	mutable std::vector<NodeCountStatus> visitedAcyclic0_0;
 
-	mutable uint16_t visitedAccepting = 0;
+	mutable uint16_t visitedAccepting0 = 0;
+	bool shouldVisitAcyclic0(void) const { return true; };
 
 	bool isRecAcyclic(const EventLabel *lab) const;
-
 
 	mutable uint16_t visitedRecAccepting = 0;
 	void visitPPoRf0(const EventLabel *lab, View &pporf) const;
@@ -238,7 +243,6 @@ private:
 
 	mutable std::vector<VSet<Event>> saved;
 	mutable std::vector<View> views;
-
 };
 
 #endif /* __SC_DRIVER_HPP__ */

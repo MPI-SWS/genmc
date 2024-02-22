@@ -21,7 +21,7 @@
 #include "SVal.hpp"
 #include "SAddr.hpp"
 
-llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const SVal &v)
+auto operator<<(llvm::raw_ostream &s, const SVal &v) -> llvm::raw_ostream &
 {
 	s << v.get();
 	return s;

@@ -18,23 +18,23 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-#include "config.h"
 #include "EliminateCastsPass.hpp"
 #include "Error.hpp"
 #include "LLVMUtils.hpp"
 #include "VSet.hpp"
+#include "config.h"
 
 #include <llvm/Analysis/AssumptionCache.h>
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/InstIterator.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Intrinsics.h>
-#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
 #if defined(HAVE_LLVM_TRANSFORMS_UTILS_H)
 #include <llvm/Transforms/Utils.h>
@@ -44,29 +44,29 @@
 using namespace llvm;
 
 #if LLVM_VERSION_MAJOR >= 12
-# if LLVM_VERSION_MAJOR > 7
-#  define IS_LIFETIME_START_OR_END(i) (i)->isLifetimeStartOrEnd()
-# else
-#  define IS_LIFETIME_START_OR_END(i) isLifetimeStartOrEnd(i)
-# endif
-# if LLVM_VERSION_MAJOR >= 11
-#  define IS_DROPPABLE(i) (i)->isDroppable()
-# else
-#  define IS_DROPPABLE(i) isDroppable(i)
-# endif
-# define ONLY_USED_BY_MARKERS_OR_DROPPABLE(i) onlyUsedByLifetimeMarkersOrDroppableInsts(i)
+#if LLVM_VERSION_MAJOR > 7
+#define IS_LIFETIME_START_OR_END(i) (i)->isLifetimeStartOrEnd()
 #else
-# define IS_LIFETIME_START_OR_END(i)				\
-	(i->getIntrinsicID() != Intrinsic::lifetime_start &&	\
+#define IS_LIFETIME_START_OR_END(i) isLifetimeStartOrEnd(i)
+#endif
+#if LLVM_VERSION_MAJOR >= 11
+#define IS_DROPPABLE(i) (i)->isDroppable()
+#else
+#define IS_DROPPABLE(i) isDroppable(i)
+#endif
+#define ONLY_USED_BY_MARKERS_OR_DROPPABLE(i) onlyUsedByLifetimeMarkersOrDroppableInsts(i)
+#else
+#define IS_LIFETIME_START_OR_END(i)                                                                \
+	(i->getIntrinsicID() != Intrinsic::lifetime_start &&                                       \
 	 i->getIntrinsicID() != Intrinsic::lifetime_end)
-# define IS_DROPPABLE(i) false
-# define ONLY_USED_BY_MARKERS_OR_DROPPABLE(i) onlyUsedByLifetimeMarkers(i)
+#define IS_DROPPABLE(i) false
+#define ONLY_USED_BY_MARKERS_OR_DROPPABLE(i) onlyUsedByLifetimeMarkers(i)
 #endif
 
 #if LLVM_VERSION_MAJOR >= 11
-# define GET_INST_ALIGN(i) i->getAlign()
+#define GET_INST_ALIGN(i) i->getAlign()
 #else
-# define GET_INST_ALIGN(i) i->getAlignment()
+#define GET_INST_ALIGN(i) i->getAlignment()
 #endif
 
 #define GET_INST_SYNC_SCOPE(i) i->getSyncScopeID()
@@ -86,8 +86,9 @@ static bool haveSameSizePointees(const Type *p1, const Type *p2, const DataLayou
 	auto *pTy1 = dyn_cast<PointerType>(p1);
 	auto *pTy2 = dyn_cast<PointerType>(p2);
 
-	return pTy1 && pTy2 && DL.getTypeAllocSize(pTy1->getElementType()) ==
-		DL.getTypeAllocSize(pTy2->getElementType());
+	return pTy1 && pTy2 &&
+	       DL.getTypeAllocSize(pTy1->getElementType()) ==
+		       DL.getTypeAllocSize(pTy2->getElementType());
 }
 
 static bool isUnpromotablePureHelper(User *u, std::vector<Instruction *> &aliases);
@@ -109,7 +110,8 @@ static bool isUserPure(User *u, std::vector<Instruction *> &aliases)
 	} else if (auto *bci = dyn_cast<BitCastInst>(u)) {
 		if (ONLY_USED_BY_MARKERS_OR_DROPPABLE(bci))
 			return true;
-		if (!haveSameSizePointees(bci->getSrcTy(), bci->getDestTy(), bci->getModule()->getDataLayout()))
+		if (!haveSameSizePointees(bci->getSrcTy(), bci->getDestTy(),
+					  bci->getModule()->getDataLayout()))
 			return false;
 		aliases.push_back(bci);
 		return isUnpromotablePureHelper(bci, aliases);
@@ -125,7 +127,7 @@ static bool isUserPure(User *u, std::vector<Instruction *> &aliases)
 static bool isUnpromotablePureHelper(User *i, std::vector<Instruction *> &aliases)
 {
 	return std::all_of(i->users().begin(), i->users().end(),
-			   [&aliases](User *u){ return isUserPure(u, aliases); });
+			   [&aliases](User *u) { return isUserPure(u, aliases); });
 }
 
 static bool isUnpromotablePure(Instruction *i, std::vector<Instruction *> &aliases)
@@ -137,8 +139,8 @@ static bool isUnpromotablePure(Instruction *i, std::vector<Instruction *> &alias
 	return pure;
 }
 
-static Instruction::CastOps
-isEliminableCastPair(const CastInst *CI1, const CastInst *CI2, const DataLayout &DL)
+static Instruction::CastOps isEliminableCastPair(const CastInst *CI1, const CastInst *CI2,
+						 const DataLayout &DL)
 {
 	Type *SrcTy = CI1->getSrcTy();
 	Type *MidTy = CI1->getDestTy();
@@ -146,15 +148,11 @@ isEliminableCastPair(const CastInst *CI1, const CastInst *CI2, const DataLayout 
 
 	Instruction::CastOps firstOp = CI1->getOpcode();
 	Instruction::CastOps secondOp = CI2->getOpcode();
-	Type *SrcIntPtrTy =
-		SrcTy->isPtrOrPtrVectorTy() ? DL.getIntPtrType(SrcTy) : nullptr;
-	Type *MidIntPtrTy =
-		MidTy->isPtrOrPtrVectorTy() ? DL.getIntPtrType(MidTy) : nullptr;
-	Type *DstIntPtrTy =
-		DstTy->isPtrOrPtrVectorTy() ? DL.getIntPtrType(DstTy) : nullptr;
-	unsigned Res = CastInst::isEliminableCastPair(firstOp, secondOp, SrcTy, MidTy,
-						      DstTy, SrcIntPtrTy, MidIntPtrTy,
-						      DstIntPtrTy);
+	Type *SrcIntPtrTy = SrcTy->isPtrOrPtrVectorTy() ? DL.getIntPtrType(SrcTy) : nullptr;
+	Type *MidIntPtrTy = MidTy->isPtrOrPtrVectorTy() ? DL.getIntPtrType(MidTy) : nullptr;
+	Type *DstIntPtrTy = DstTy->isPtrOrPtrVectorTy() ? DL.getIntPtrType(DstTy) : nullptr;
+	unsigned Res = CastInst::isEliminableCastPair(firstOp, secondOp, SrcTy, MidTy, DstTy,
+						      SrcIntPtrTy, MidIntPtrTy, DstIntPtrTy);
 
 	/* We don't want to form an inttoptr or ptrtoint that converts to an integer
 	 * type that differs from the pointer size */
@@ -194,7 +192,7 @@ static Value *isLoadCastedFromSameSrcType(const LoadInst *li, CastInst &ci)
 }
 
 static void replaceAndMarkDelete(Instruction *toDel, Value *toRepl,
-			  VSet<Instruction *> *deleted = nullptr)
+				 VSet<Instruction *> *deleted = nullptr)
 {
 	if (toRepl && toDel->hasNUsesOrMore(1))
 		toDel->replaceAllUsesWith(toRepl);
@@ -235,8 +233,9 @@ static void transformStoredBitcast(CastInst &ci, StoreInst *si, VSet<Instruction
 		auto *load = new LoadInst(origPTy->getElementType(), lsrc, li->getName(),
 					  li->isVolatile(), GET_INST_ALIGN(li), li->getOrdering(),
 					  GET_INST_SYNC_SCOPE(li), si);
-		auto *store = new StoreInst(load, ci.getOperand(0), si->isVolatile(), GET_INST_ALIGN(si),
-					    si->getOrdering(), GET_INST_SYNC_SCOPE(si), si);
+		auto *store = new StoreInst(load, ci.getOperand(0), si->isVolatile(),
+					    GET_INST_ALIGN(si), si->getOrdering(),
+					    GET_INST_SYNC_SCOPE(si), si);
 
 		replaceAndMarkDelete(si, store);
 		replaceAndMarkDelete(li, load);
@@ -257,9 +256,9 @@ static void transformLoadedBitcast(CastInst &ci, LoadInst *li, VSet<Instruction 
 {
 
 	auto *load = new LoadInst(dyn_cast<PointerType>(ci.getSrcTy())->getElementType(),
-				  ci.getOperand(0), li->getName(),
-				  li->isVolatile(), GET_INST_ALIGN(li), li->getOrdering(),
-				  GET_INST_SYNC_SCOPE(li), li);
+				  ci.getOperand(0), li->getName(), li->isVolatile(),
+				  GET_INST_ALIGN(li), li->getOrdering(), GET_INST_SYNC_SCOPE(li),
+				  li);
 	auto *cast = castToType(load, li->getType(), li);
 	replaceAndMarkDelete(li, cast, &deleted);
 	return;
@@ -305,10 +304,10 @@ static bool commonCastTransforms(CastInst &ci, std::vector<Instruction *> &alias
 	}
 
 	/* Try to eliminate unnecessary casts */
-	if (std::all_of(ci.user_begin(), ci.user_end(), [&](const User *u){
-		return isa<LoadInst>(u) || (isa<StoreInst>(u) &&
-			    &ci != dyn_cast<StoreInst>(u)->getValueOperand());
-	})) {
+	if (std::all_of(ci.user_begin(), ci.user_end(), [&](const User *u) {
+		    return isa<LoadInst>(u) ||
+			   (isa<StoreInst>(u) && &ci != dyn_cast<StoreInst>(u)->getValueOperand());
+	    })) {
 		/* We know there is at least one use because otherwise the
 		 * bitcast would have been deleted previously */
 		auto *cusr = *ci.user_begin();
@@ -378,9 +377,8 @@ static bool eliminateCasts(Function &F, DominatorTree &DT, AssumptionCache &AC)
 	}
 	return changed;
 }
-#else /* LLVM_VERSION_MAJOR <= 14 */
-static bool isUserPure(User *u, AllocaInst *ai, const DataLayout &DL,
-		       std::vector<Type *> &useTypes)
+#else  /* LLVM_VERSION_MAJOR <= 14 */
+static bool isUserPure(User *u, AllocaInst *ai, const DataLayout &DL, std::vector<Type *> &useTypes)
 {
 	if (auto *li = dyn_cast<LoadInst>(u)) {
 		useTypes.push_back(li->getType());
@@ -406,13 +404,12 @@ static bool isPromotable(AllocaInst *ai)
 	std::vector<Type *> useTypes;
 
 	if (!ai->getAllocatedType()->isIntOrPtrTy() ||
-	    std::any_of(ai->users().begin(), ai->users().end(), [&](User *u){
-				return !isUserPure(u, ai, DL, useTypes); }))
+	    std::any_of(ai->users().begin(), ai->users().end(),
+			[&](User *u) { return !isUserPure(u, ai, DL, useTypes); }))
 		return false;
-	return std::all_of(useTypes.begin(), useTypes.end(), [&ai,&DL](auto *typ){
-		return DL.getTypeAllocSize(typ) ==
-			DL.getTypeAllocSize(ai->getAllocatedType()) &&
-			typ->isIntOrPtrTy();
+	return std::all_of(useTypes.begin(), useTypes.end(), [&ai, &DL](auto *typ) {
+		return DL.getTypeAllocSize(typ) == DL.getTypeAllocSize(ai->getAllocatedType()) &&
+		       typ->isIntOrPtrTy();
 	});
 }
 
@@ -427,15 +424,15 @@ static bool introduceAllocaCasts(AllocaInst *ai)
 			auto opc = CastInst::getCastOpcode(li, false, prevType, false);
 			auto *res = CastInst::Create(opc, li, prevType, "",
 						     li->getNextNonDebugInstruction());
-			replaceUsesWithIf(li, res, [&](Use &u){
+			replaceUsesWithIf(li, res, [&](Use &u) {
 				auto *us = dyn_cast<Instruction>(u.getUser());
 				return us && us != res;
 			});
 		} else if (auto *si = dyn_cast<StoreInst>(u)) {
 			if (si->getValueOperand()->getType() == ai->getAllocatedType())
 				continue;
-			auto opc = CastInst::getCastOpcode(
-				si->getValueOperand(), false, ai->getAllocatedType(), false);
+			auto opc = CastInst::getCastOpcode(si->getValueOperand(), false,
+							   ai->getAllocatedType(), false);
 			auto *res = CastInst::Create(opc, si->getValueOperand(),
 						     ai->getAllocatedType(), "", si);
 			si->setOperand(0, res);

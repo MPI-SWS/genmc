@@ -37,7 +37,6 @@ private:
 	[[nodiscard]] auto calculate() const -> unsigned override;
 	[[nodiscard]] auto calculate(View v, int t) const -> unsigned;
 #endif
-
 };
 
 #endif /* __CONTEXT_BOUND_DECIDER_HPP__ */

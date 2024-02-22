@@ -30,8 +30,8 @@ ThreadPinner::ThreadPinner(unsigned int n) : numTasks(n)
 	cpusets.resize(n);
 
 	hwloc_obj_t root = hwloc_get_root_obj(topology);
-	int result = hwloc_distrib(topology, &root, 1, cpusets.data(),
-				   numTasks, std::numeric_limits<int>::max(), 0u);
+	int result = hwloc_distrib(topology, &root, 1, cpusets.data(), numTasks,
+				   std::numeric_limits<int>::max(), 0u);
 	if (result)
 		ERROR("Error during topology distribution\n");
 

@@ -36,12 +36,12 @@ auto BoundDecider::doesExecutionExceedBound(const ExecutionGraph &g, unsigned in
 auto BoundDecider::create(BoundType type) -> std::unique_ptr<BoundDecider>
 {
 	switch (type) {
-		case BoundType::context:
-			return std::make_unique<ContextBoundDecider>();
-		case BoundType::round:
-			return std::make_unique<RoundBoundDecider>();
-		default:
-			BUG();
+	case BoundType::context:
+		return std::make_unique<ContextBoundDecider>();
+	case BoundType::round:
+		return std::make_unique<RoundBoundDecider>();
+	default:
+		BUG();
 	}
 }
 

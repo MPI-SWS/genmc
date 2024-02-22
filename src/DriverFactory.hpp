@@ -31,21 +31,23 @@
 
 class DriverFactory {
 
- public:
-	template<typename... Ts>
-	static std::unique_ptr<GenMCDriver>
-	create(std::shared_ptr<const Config> conf, Ts&&... params) {
+public:
+	template <typename... Ts>
+	static std::unique_ptr<GenMCDriver> create(std::shared_ptr<const Config> conf,
+						   Ts &&...params)
+	{
 		return DriverFactory::create(nullptr, std::move(conf), std::forward<Ts>(params)...);
 	}
 
-	template<typename... Ts>
+	template <typename... Ts>
 	static std::unique_ptr<GenMCDriver>
-	create(ThreadPool *pool, std::shared_ptr<const Config> conf, Ts&&... params) {
+	create(ThreadPool *pool, std::shared_ptr<const Config> conf, Ts &&...params)
+	{
 
-#define CREATE_MODEL_DRIVER(_model)					\
-		case ModelType::_model:					\
-			driver = new _model##Driver(std::move(conf), std::forward<Ts>(params)...); \
-			break
+#define CREATE_MODEL_DRIVER(_model)                                                                \
+	case ModelType::_model:                                                                    \
+		driver = new _model##Driver(std::move(conf), std::forward<Ts>(params)...);         \
+		break
 
 		GenMCDriver *driver = nullptr;
 		switch (conf->model) {

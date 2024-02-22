@@ -49,10 +49,10 @@ std::string Parser::getFileLineByNumber(const std::string &absPath, int line)
 
 void Parser::stripWhitespace(std::string &s)
 {
-	s.erase(s.begin(), std::find_if(s.begin(), s.end(),
-		[](int c){ return !std::isspace(c); }));
-	s.erase(std::find_if(s.rbegin(), s.rend(),
-		[](int c){ return !std::isspace(c); }).base(), s.end());
+	s.erase(s.begin(),
+		std::find_if(s.begin(), s.end(), [](int c) { return !std::isspace(c); }));
+	s.erase(std::find_if(s.rbegin(), s.rend(), [](int c) { return !std::isspace(c); }).base(),
+		s.end());
 }
 
 void Parser::stripSlashes(std::string &absPath)
@@ -62,8 +62,7 @@ void Parser::stripSlashes(std::string &absPath)
 		absPath = absPath.substr(i + 1);
 }
 
-void Parser::parseInstFromMData(std::pair<int, std::string> &locAndFile,
-				std::string functionName,
+void Parser::parseInstFromMData(std::pair<int, std::string> &locAndFile, std::string functionName,
 				llvm::raw_ostream &os /* llvm::outs() */)
 {
 	int line = locAndFile.first;

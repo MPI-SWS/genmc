@@ -20,34 +20,34 @@
 
 #include "config.h"
 
-#include "VSet.hpp"
-#include "LoopUnrollPass.hpp"
 #include "DeclareInternalsPass.hpp"
 #include "Error.hpp"
-#include <llvm/IR/Module.h>
+#include "LoopUnrollPass.hpp"
+#include "VSet.hpp"
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/Module.h>
 #ifdef LLVM_ALLOCAINST_TAKES_ALIGN
-# include <llvm/Support/Alignment.h>
+#include <llvm/Support/Alignment.h>
 #endif
 #include <llvm/Transforms/Utils/Cloning.h>
 
 #if LLVM_VERSION_MAJOR < 8
- typedef llvm::TerminatorInst TerminatorInst;
+typedef llvm::TerminatorInst TerminatorInst;
 #else
- typedef llvm::Instruction TerminatorInst;
+typedef llvm::Instruction TerminatorInst;
 #endif
 
 #if LLVM_VERSION_MAJOR >= 11
-# define GET_LOADINST_ARG(val)
+#define GET_LOADINST_ARG(val)
 #else
-# define GET_LOADINST_ARG(val) (val)->getType()->getPointerElementType(),
+#define GET_LOADINST_ARG(val) (val)->getType()->getPointerElementType(),
 #endif
 
 #if LLVM_VERSION_MAJOR >= 11
-# define GET_BOUND_ALLOCA_ALIGN_ARG(val) llvm::Align(val)
+#define GET_BOUND_ALLOCA_ALIGN_ARG(val) llvm::Align(val)
 #else
-# define GET_BOUND_ALLOCA_ALIGN_ARG(val) val
+#define GET_BOUND_ALLOCA_ALIGN_ARG(val) val
 #endif
 
 using namespace llvm;
@@ -94,10 +94,9 @@ void addBoundCmpAndSpinEndBefore(Loop *l, PHINode *val, BinaryOperator *decVal)
 	Function *endLoopFun = parentFun->getParent()->getFunction("__VERIFIER_kill_thread");
 	Type *int32Typ = Type::getInt32Ty(parentFun->getContext());
 
-
 	Value *zero = ConstantInt::get(int32Typ, 0);
-	Value *cmp = new ICmpInst(decVal, ICmpInst::ICMP_EQ, val, zero,
-				  l->getName() + ".bound.cmp");
+	Value *cmp =
+		new ICmpInst(decVal, ICmpInst::ICMP_EQ, val, zero, l->getName() + ".bound.cmp");
 
 	BUG_ON(!endLoopFun);
 	CallInst::Create(endLoopFun, {cmp}, "", decVal);
@@ -115,8 +114,9 @@ bool LoopUnrollPass::runOnLoop(Loop *l, LPPassManager &lpm)
 
 	/* Adjust incoming values for the bound variable */
 	for (BasicBlock *bb : predecessors(l->getHeader()))
-		val->addIncoming(l->contains(bb) ? (Value *) dec : (Value *)
-				 ConstantInt::get(int32Typ, unrollDepth), bb);
+		val->addIncoming(l->contains(bb) ? (Value *)dec
+						 : (Value *)ConstantInt::get(int32Typ, unrollDepth),
+				 bb);
 
 	/* Finally, compare the bound and block if it reaches zero */
 	addBoundCmpAndSpinEndBefore(l, val, dec);

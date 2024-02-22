@@ -18,12 +18,12 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-#include "config.h"
 #include "EliminateUnusedCodePass.hpp"
 #include "Error.hpp"
+#include "config.h"
 
-#include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/STLExtras.h>
+#include <llvm/ADT/SetVector.h>
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/InstIterator.h>
@@ -38,15 +38,9 @@
 
 using namespace llvm;
 
-void EliminateUnusedCodePass::getAnalysisUsage(AnalysisUsage &AU) const
-{
-	AU.setPreservesCFG();
-}
+void EliminateUnusedCodePass::getAnalysisUsage(AnalysisUsage &AU) const { AU.setPreservesCFG(); }
 
-bool isEliminable(Instruction *i)
-{
-	return !MAY_BE_MEM_DEPENDENT(*i) && !i->isTerminator();
-}
+bool isEliminable(Instruction *i) { return !MAY_BE_MEM_DEPENDENT(*i) && !i->isTerminator(); }
 
 static bool eliminateUnusedCode(Function &F)
 {
@@ -84,10 +78,7 @@ static bool eliminateUnusedCode(Function &F)
 	return !worklist.empty();
 }
 
-bool EliminateUnusedCodePass::runOnFunction(Function &F)
-{
-	return eliminateUnusedCode(F);
-}
+bool EliminateUnusedCodePass::runOnFunction(Function &F) { return eliminateUnusedCode(F); }
 
 Pass *createEliminateUnusedCodePass()
 {
@@ -96,5 +87,4 @@ Pass *createEliminateUnusedCodePass()
 }
 
 char EliminateUnusedCodePass::ID = 42;
-static llvm::RegisterPass<EliminateUnusedCodePass> P("elim-unused-code",
-						     "Eliminates unused code.");
+static llvm::RegisterPass<EliminateUnusedCodePass> P("elim-unused-code", "Eliminates unused code.");

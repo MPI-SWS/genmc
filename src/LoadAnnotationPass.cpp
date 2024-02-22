@@ -20,21 +20,18 @@
 
 #include "config.h"
 
-#include "LoadAnnotationPass.hpp"
-#include "InstAnnotator.hpp"
 #include "Error.hpp"
+#include "InstAnnotator.hpp"
 #include "LLVMUtils.hpp"
+#include "LoadAnnotationPass.hpp"
 #include "SExpr.hpp"
-#include <llvm/IR/Instructions.h>
-#include <llvm/IR/InstIterator.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/InstIterator.h>
+#include <llvm/IR/Instructions.h>
 
 using namespace llvm;
 
-void LoadAnnotationPass::getAnalysisUsage(llvm::AnalysisUsage &au) const
-{
-	au.setPreservesAll();
-}
+void LoadAnnotationPass::getAnalysisUsage(llvm::AnalysisUsage &au) const { au.setPreservesAll(); }
 
 /* Helper for getSourceLoads() -- see below */
 void calcSourceLoads(Instruction *i, VSet<PHINode *> phis, std::vector<Instruction *> &source)
@@ -68,7 +65,9 @@ void calcSourceLoads(Instruction *i, VSet<PHINode *> phis, std::vector<Instructi
 				auto *term = phi->getIncomingBlock(u)->getTerminator();
 				if (auto *bi = dyn_cast<BranchInst>(term))
 					if (bi->isConditional())
-						calcSourceLoads(dyn_cast<Instruction>(bi->getCondition()), phis, source);
+						calcSourceLoads(
+							dyn_cast<Instruction>(bi->getCondition()),
+							phis, source);
 			}
 		}
 	}
@@ -88,7 +87,8 @@ std::vector<Instruction *> LoadAnnotationPass::getSourceLoads(CallInst *assm) co
 }
 
 std::vector<Instruction *>
-LoadAnnotationPass::filterAnnotatableFromSource(CallInst *assm, const std::vector<Instruction *> &source) const
+LoadAnnotationPass::filterAnnotatableFromSource(CallInst *assm,
+						const std::vector<Instruction *> &source) const
 {
 	std::vector<Instruction *> result;
 
@@ -98,35 +98,34 @@ LoadAnnotationPass::filterAnnotatableFromSource(CallInst *assm, const std::vecto
 		auto loadFound = false;
 		auto sideEffects = false;
 		foreachInBackPathTo(assm->getParent(), li->getParent(), [&](Instruction &i) {
-				/* wait until we find the assume */
-				if (!assumeFound) {
-					assumeFound |= (dyn_cast<CallInst>(&i) == assm);
-					return;
+			/* wait until we find the assume */
+			if (!assumeFound) {
+				assumeFound |= (dyn_cast<CallInst>(&i) == assm);
+				return;
+			}
+			/* we should stop when the load is found */
+			if (assumeFound && !loadFound) {
+				sideEffects |= (hasSideEffects(&i) && &i != li); /* also CASes */
+				sideEffects |= (isa<LoadInst>(&i) && &i != li);
+			}
+			if (!loadFound) {
+				loadFound |= (&i == li);
+				if (loadFound) {
+					if (!sideEffects)
+						result.push_back(li);
+					/* reset for next path */
+					assumeFound = false;
+					loadFound = false;
+					sideEffects = false;
 				}
-				/* we should stop when the load is found */
-				if (assumeFound && !loadFound) {
-					sideEffects |= (hasSideEffects(&i) && &i != li); /* also CASes */
-					sideEffects |= (isa<LoadInst>(&i) && &i != li) ;
-				}
-				if (!loadFound) {
-					loadFound |= (&i == li);
-					if (loadFound) {
-						if (!sideEffects)
-							result.push_back(li);
-						/* reset for next path */
-						assumeFound = false;
-						loadFound = false;
-						sideEffects = false;
-					}
-				}
-			});
+			}
+		});
 	}
 	result.erase(std::unique(result.begin(), result.end()), result.end());
 	return result;
 }
 
-std::vector<Instruction *>
-LoadAnnotationPass::getAnnotatableLoads(CallInst *assm) const
+std::vector<Instruction *> LoadAnnotationPass::getAnnotatableLoads(CallInst *assm) const
 {
 	if (!isAssumeFunction(getCalledFunOrStripValName(*assm)))
 		return std::vector<Instruction *>(); /* yet another check... */

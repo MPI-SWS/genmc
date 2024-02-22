@@ -1,4 +1,4 @@
-AC_INIT([GenMC], [0.10.0], [michalis@mpi-sws.org], [genmc], [https://plv.mpi-sws.org/genmc])
+AC_INIT([GenMC], [0.10.1], [michalis@mpi-sws.org], [genmc], [https://plv.mpi-sws.org/genmc])
 
 m4_include([m4/ax_llvm.m4])
 m4_include([m4/ax_clang.m4])

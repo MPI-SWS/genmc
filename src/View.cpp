@@ -18,10 +18,10 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-#include "Error.hpp"
 #include "View.hpp"
+#include "Error.hpp"
 
-View& View::update(const View &v)
+View &View::update(const View &v)
 {
 	if (v.empty())
 		return *this;
@@ -33,10 +33,7 @@ View& View::update(const View &v)
 	return *this;
 }
 
-DepView& View::update(const DepView &v)
-{
-	BUG();
-}
+DepView &View::update(const DepView &v) { BUG(); }
 
 VectorClock &View::update(const VectorClock &vc)
 {

@@ -18,16 +18,16 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-#include "config.h"
-#include "Error.hpp"
 #include "ConfirmationAnnotationPass.hpp"
+#include "Error.hpp"
 #include "InterpreterEnumAPI.hpp"
 #include "LLVMUtils.hpp"
+#include "config.h"
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/Analysis/PostDominators.h>
-#include <llvm/IR/Instructions.h>
-#include <llvm/IR/InstIterator.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/InstIterator.h>
+#include <llvm/IR/Instructions.h>
 
 using namespace llvm;
 
@@ -45,7 +45,8 @@ bool isSpinEndCall(Instruction *i)
 		return false;
 
 	auto name = getCalledFunOrStripValName(*ci);
-	return isInternalFunction(name) && internalFunNames.at(name) == InternalFunctions::FN_SpinEnd;
+	return isInternalFunction(name) &&
+	       internalFunNames.at(name) == InternalFunctions::FN_SpinEnd;
 }
 
 /*
@@ -64,7 +65,9 @@ Instruction *getConfirmationCandidate(Instruction *i)
 		if (!op1 || !op2)
 			return nullptr;
 		return isa<LoadInst>(op1->stripPointerCasts()) &&
-			isa<LoadInst>(op2->stripPointerCasts()) ? ci : nullptr;
+				       isa<LoadInst>(op2->stripPointerCasts())
+			       ? ci
+			       : nullptr;
 	}
 	return nullptr;
 }
@@ -77,17 +80,17 @@ Instruction *getConfirmationCandidate(Instruction *i)
 Instruction *getCommonConfirmationFromPreds(BasicBlock *bb)
 {
 	Instruction *conf = nullptr;
-	if (std::all_of(pred_begin(bb), pred_end(bb), [&conf](const BasicBlock *pred){
-		auto *ji = dyn_cast<BranchInst>(pred->getTerminator());
-		if (!ji || !ji->isConditional() || !isa<Instruction>(ji->getCondition()))
-			return false;
-		auto *res = getConfirmationCandidate(dyn_cast<Instruction>(ji->getCondition()));
-		if (!res)
-			return false;
-		if (conf == nullptr)
-			conf = res;
-		return conf == res;
-	}))
+	if (std::all_of(pred_begin(bb), pred_end(bb), [&conf](const BasicBlock *pred) {
+		    auto *ji = dyn_cast<BranchInst>(pred->getTerminator());
+		    if (!ji || !ji->isConditional() || !isa<Instruction>(ji->getCondition()))
+			    return false;
+		    auto *res = getConfirmationCandidate(dyn_cast<Instruction>(ji->getCondition()));
+		    if (!res)
+			    return false;
+		    if (conf == nullptr)
+			    conf = res;
+		    return conf == res;
+	    }))
 		return conf;
 	return nullptr;
 }
@@ -111,8 +114,8 @@ Instruction *spinEndsOnConfirmation(CallInst *ci)
 	return nullptr;
 }
 
-std::pair<LoadInst *, Instruction *>
-getConfirmationPair(Instruction *i, LoopInfo &LI, DominatorTree &DT)
+std::pair<LoadInst *, Instruction *> getConfirmationPair(Instruction *i, LoopInfo &LI,
+							 DominatorTree &DT)
 {
 	LoadInst *spec = nullptr;
 	Instruction *conf = nullptr;
@@ -154,8 +157,8 @@ getConfirmationPair(Instruction *i, LoopInfo &LI, DominatorTree &DT)
 
 	auto *specI = dyn_cast<Instruction>(specPtr);
 	auto *confI = dyn_cast<Instruction>(confPtr);
-	return (specI && confI && confI->isIdenticalTo(specI)) ?
-		std::make_pair(spec, conf) : std::make_pair(nullptr, nullptr);
+	return (specI && confI && confI->isIdenticalTo(specI)) ? std::make_pair(spec, conf)
+							       : std::make_pair(nullptr, nullptr);
 }
 
 void annotateConfPair(Instruction *i, LoopInfo &LI, DominatorTree &DT)
@@ -188,11 +191,8 @@ bool ConfirmationAnnotationPass::runOnFunction(llvm::Function &F)
 	return false;
 }
 
-FunctionPass *createConfirmationAnnotationPass()
-{
-	return new ConfirmationAnnotationPass();
-}
+FunctionPass *createConfirmationAnnotationPass() { return new ConfirmationAnnotationPass(); }
 
 char ConfirmationAnnotationPass::ID = 42;
-static llvm::RegisterPass<ConfirmationAnnotationPass> P("annotate-confirmation",
-							"Annotates loads used in confirmation patterns.");
+static llvm::RegisterPass<ConfirmationAnnotationPass>
+	P("annotate-confirmation", "Annotates loads used in confirmation patterns.");

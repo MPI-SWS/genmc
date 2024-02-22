@@ -37,7 +37,6 @@ public:
 	LoopJumpThreadingPass() : llvm::LoopPass(ID) {}
 
 protected:
-
 	virtual llvm::StringRef getPassName() const { return "LoopJumpThreadingPass"; }
 	virtual void getAnalysisUsage(llvm::AnalysisUsage &au) const;
 	virtual bool runOnLoop(llvm::Loop *l, llvm::LPPassManager &LPM);

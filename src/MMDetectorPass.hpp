@@ -21,9 +21,9 @@
 #ifndef __MM_DETECTOR_PASS_HPP__
 #define __MM_DETECTOR_PASS_HPP__
 
+#include <llvm/Analysis/LoopPass.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Pass.h>
-#include <llvm/Analysis/LoopPass.h>
 
 class PassModuleInfo;
 enum class ModelType : std::uint8_t;

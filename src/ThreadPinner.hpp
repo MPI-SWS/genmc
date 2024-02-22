@@ -22,10 +22,10 @@
 #define __THREAD_PINNER_HPP__
 
 #include "config.h"
-#include <vector>
 #include <thread>
+#include <vector>
 #ifdef HAVE_LIBHWLOC
-# include <hwloc.h>
+#include <hwloc.h>
 #endif
 
 /*******************************************************************************
@@ -47,7 +47,8 @@ public:
 	void pin(std::thread &t, unsigned int cpu);
 
 	/*** Destructor ***/
-	~ThreadPinner() {
+	~ThreadPinner()
+	{
 		hwloc_topology_destroy(topology);
 		for (auto set : cpusets)
 			hwloc_bitmap_free(set);

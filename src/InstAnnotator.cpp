@@ -25,10 +25,10 @@
 #include "LLVMUtils.hpp"
 #include "ModuleInfo.hpp"
 #include "SExprVisitor.hpp"
+#include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/InstIterator.h>
 #include <llvm/IR/Module.h>
-#include <llvm/Analysis/ValueTracking.h>
 
 using namespace llvm;
 
@@ -39,10 +39,7 @@ void InstAnnotator::reset()
 	return;
 }
 
-Value *InstAnnotator::getAnnotMapKey(Value *i) const
-{
-	return i;
-}
+Value *InstAnnotator::getAnnotMapKey(Value *i) const { return i; }
 
 const InstAnnotator::IRExpr *InstAnnotator::getAnnot(Instruction *i)
 {
@@ -63,21 +60,26 @@ InstAnnotator::IRExprUP InstAnnotator::generateOperandExpr(Value *op)
 {
 	if (auto *c = dyn_cast<Constant>(op)) {
 		if (isa<UndefValue>(c)) {
-			return ConcreteExpr<Value *>::create(c->getType()->getIntegerBitWidth(), 42);
+			return ConcreteExpr<Value *>::create(c->getType()->getIntegerBitWidth(),
+							     42);
 		} else if (c->getType()->isIntegerTy()) {
 			auto v = c->getUniqueInteger();
 			return ConcreteExpr<Value *>::create(v.getBitWidth(), v.getLimitedValue());
 		} else if (isa<ConstantPointerNull>(c)) {
 			BUG_ON(!op->getType()->isPointerTy());
-			auto iIt = std::find_if(op->user_begin(), op->user_end(), [](const User *u){
+			auto iIt =
+				std::find_if(op->user_begin(), op->user_end(), [](const User *u) {
 					return llvm::isa<Instruction>(u);
 				});
 			BUG_ON(iIt == op->user_end());
-			auto *mod = dyn_cast<Instruction>(*iIt)->getParent()->getParent()->getParent();
+			auto *mod =
+				dyn_cast<Instruction>(*iIt)->getParent()->getParent()->getParent();
 			auto &DL = mod->getDataLayout();
-			return ConcreteExpr<Value *>::create(DL.getTypeAllocSizeInBits(op->getType()), 0);
+			return ConcreteExpr<Value *>::create(
+				DL.getTypeAllocSizeInBits(op->getType()), 0);
 		}
-		ERROR("Only integer and null constants currently allowed in assume() expressions.\n");
+		ERROR("Only integer and null constants currently allowed in assume() "
+		      "expressions.\n");
 	}
 	BUG_ON(!isa<Instruction>(op) && !isa<Argument>(op));
 	Module *mod = nullptr;
@@ -86,7 +88,8 @@ InstAnnotator::IRExprUP InstAnnotator::generateOperandExpr(Value *op)
 	else if (auto *a = dyn_cast<Argument>(op))
 		mod = a->getParent()->getParent();
 	auto &DL = mod->getDataLayout();
-	return RegisterExpr<Value *>::create(DL.getTypeAllocSizeInBits(op->getType()), getAnnotMapKey(op));
+	return RegisterExpr<Value *>::create(DL.getTypeAllocSizeInBits(op->getType()),
+					     getAnnotMapKey(op));
 }
 
 InstAnnotator::IRExprUP InstAnnotator::generateInstExpr(Instruction *curr)
@@ -97,8 +100,8 @@ InstAnnotator::IRExprUP InstAnnotator::generateInstExpr(Instruction *curr)
 	 * For the cases we do not handle, we simply return false.
 	 */
 
-#define HANDLE_INST(op, ...)			\
-	case Instruction::op:			\
+#define HANDLE_INST(op, ...)                                                                       \
+	case Instruction::op:                                                                      \
 		return op##Expr<Value *>::create(__VA_ARGS__)
 
 	switch (curr->getOpcode()) {
@@ -191,35 +194,35 @@ InstAnnotator::IRExprUP InstAnnotator::generateInstExpr(Instruction *curr)
 
 	case Instruction::ICmp: {
 		llvm::CmpInst *cmpi = llvm::dyn_cast<llvm::CmpInst>(curr);
-		switch(cmpi->getPredicate()) {
-		case CmpInst::ICMP_EQ :
+		switch (cmpi->getPredicate()) {
+		case CmpInst::ICMP_EQ:
 			return EqExpr<Value *>::create(generateOperandExpr(curr->getOperand(0)),
 						       generateOperandExpr(curr->getOperand(1)));
-		case CmpInst::ICMP_NE :
+		case CmpInst::ICMP_NE:
 			return NeExpr<Value *>::create(generateOperandExpr(curr->getOperand(0)),
 						       generateOperandExpr(curr->getOperand(1)));
-		case CmpInst::ICMP_UGT :
+		case CmpInst::ICMP_UGT:
 			return UgtExpr<Value *>::create(generateOperandExpr(curr->getOperand(0)),
 							generateOperandExpr(curr->getOperand(1)));
-		case CmpInst::ICMP_UGE :
+		case CmpInst::ICMP_UGE:
 			return UgeExpr<Value *>::create(generateOperandExpr(curr->getOperand(0)),
 							generateOperandExpr(curr->getOperand(1)));
-		case CmpInst::ICMP_ULT :
+		case CmpInst::ICMP_ULT:
 			return UltExpr<Value *>::create(generateOperandExpr(curr->getOperand(0)),
 							generateOperandExpr(curr->getOperand(1)));
-		case CmpInst::ICMP_ULE :
+		case CmpInst::ICMP_ULE:
 			return UleExpr<Value *>::create(generateOperandExpr(curr->getOperand(0)),
 							generateOperandExpr(curr->getOperand(1)));
-		case CmpInst::ICMP_SGT :
+		case CmpInst::ICMP_SGT:
 			return SgtExpr<Value *>::create(generateOperandExpr(curr->getOperand(0)),
 							generateOperandExpr(curr->getOperand(1)));
-		case CmpInst::ICMP_SGE :
+		case CmpInst::ICMP_SGE:
 			return SgeExpr<Value *>::create(generateOperandExpr(curr->getOperand(0)),
 							generateOperandExpr(curr->getOperand(1)));
-		case CmpInst::ICMP_SLT :
+		case CmpInst::ICMP_SLT:
 			return SltExpr<Value *>::create(generateOperandExpr(curr->getOperand(0)),
 							generateOperandExpr(curr->getOperand(1)));
-		case CmpInst::ICMP_SLE :
+		case CmpInst::ICMP_SLE:
 			return SleExpr<Value *>::create(generateOperandExpr(curr->getOperand(0)),
 							generateOperandExpr(curr->getOperand(1)));
 		default:
@@ -263,8 +266,7 @@ std::vector<Instruction *> getNextOrBranchSuccessors(Instruction *i)
 	return succs;
 }
 
-InstAnnotator::IRExprUP
-InstAnnotator::propagateAnnotFromSucc(Instruction *curr, Instruction *succ)
+InstAnnotator::IRExprUP InstAnnotator::propagateAnnotFromSucc(Instruction *curr, Instruction *succ)
 {
 	auto succExp = getAnnot(succ)->clone();
 	auto substitutor = SExprRegSubstitutor<Value *>();
@@ -273,7 +275,8 @@ InstAnnotator::propagateAnnotFromSucc(Instruction *curr, Instruction *succ)
 	for (auto iit = succ;
 	     (succPhi = dyn_cast<PHINode>(iit)) && curr->getParent() != succ->getParent();
 	     iit = iit->getNextNode()) {
-		auto phiOp = generateOperandExpr(succPhi->getIncomingValueForBlock(curr->getParent()));
+		auto phiOp =
+			generateOperandExpr(succPhi->getIncomingValueForBlock(curr->getParent()));
 		succExp = substitutor.substitute(succExp.get(), getAnnotMapKey(iit), phiOp.get());
 	}
 
@@ -314,8 +317,8 @@ void InstAnnotator::annotateDFS(Instruction *curr)
 	/* If this is a branch instruction, create a select expression */
 	if (succs.size() == 2) {
 		auto cond = dyn_cast<BranchInst>(curr)->getCondition();
-		auto regExp = RegisterExpr<Value *>::create(cond->getType()->getPrimitiveSizeInBits(),
-							    getAnnotMapKey(cond));
+		auto regExp = RegisterExpr<Value *>::create(
+			cond->getType()->getPrimitiveSizeInBits(), getAnnotMapKey(cond));
 		setAnnot(curr, SelectExpr<Value *>::create(std::move(regExp),
 							   propagateAnnotFromSucc(curr, succs[0]),
 							   propagateAnnotFromSucc(curr, succs[1])));
@@ -339,7 +342,8 @@ InstAnnotator::IRExprUP InstAnnotator::annotate(Instruction *curr)
 	return releaseAnnot(curr->getNextNode());
 }
 
-InstAnnotator::IRExprUP InstAnnotator::annotateBBCond(BasicBlock *bb, BasicBlock *pred /* = nullptr */)
+InstAnnotator::IRExprUP InstAnnotator::annotateBBCond(BasicBlock *bb,
+						      BasicBlock *pred /* = nullptr */)
 {
 	auto *bi = dyn_cast<BranchInst>(bb->getTerminator());
 	if (!bi)
@@ -353,8 +357,9 @@ InstAnnotator::IRExprUP InstAnnotator::annotateBBCond(BasicBlock *bb, BasicBlock
 	/* Propagate jump condition backwards to the beginning of the basic block */
 	setAnnot(bi, generateOperandExpr(bi->getCondition()));
 	for (auto irit = ++bb->rbegin(); irit != bb->rend(); ++irit) {
-		annotMap[&*irit] = irit->mayReadOrWriteMemory() ?
-			ConcreteExpr<Value *>::createFalse() : propagateAnnotFromSucc(&*irit, irit->getNextNode());
+		annotMap[&*irit] = irit->mayReadOrWriteMemory()
+					   ? ConcreteExpr<Value *>::createFalse()
+					   : propagateAnnotFromSucc(&*irit, irit->getNextNode());
 	}
 
 	/* If a predecessor is given substitute Φ values too */
@@ -408,11 +413,13 @@ InstAnnotator::propagateAnnotFromSuccInLoop(Instruction *curr, Instruction *succ
 	for (auto iit = succ;
 	     (succPhi = dyn_cast<PHINode>(iit)) && curr->getParent() != succ->getParent();
 	     iit = iit->getNextNode()) {
-		auto phiOp = generateOperandExpr(succPhi->getIncomingValueForBlock(curr->getParent()));
+		auto phiOp =
+			generateOperandExpr(succPhi->getIncomingValueForBlock(curr->getParent()));
 		succExp = substitutor.substitute(succExp.get(), getAnnotMapKey(iit), phiOp.get());
 	}
 
-	if (isa<BranchInst>(curr) || (isa<PHINode>(curr) && curr->getParent() == succ->getParent()) ||
+	if (isa<BranchInst>(curr) ||
+	    (isa<PHINode>(curr) && curr->getParent() == succ->getParent()) ||
 	    isa<AtomicCmpXchgInst>(curr) || isa<ExtractValueInst>(curr) || isa<LoadInst>(curr) ||
 	    isa<CallInst>(curr))
 		return succExp;
@@ -420,8 +427,8 @@ InstAnnotator::propagateAnnotFromSuccInLoop(Instruction *curr, Instruction *succ
 	/* Transform assume()s into disjunctions */
 	if (auto *ci = dyn_cast<CallInst>(curr)) {
 		BUG_ON(!isAssumeFunction(getCalledFunOrStripValName(*ci)));
-		return ConjunctionExpr<Value *>::create(std::move(generateOperandExpr(ci->getOperand(0))),
-							std::move(succExp));
+		return ConjunctionExpr<Value *>::create(
+			std::move(generateOperandExpr(ci->getOperand(0))), std::move(succExp));
 	}
 
 	auto currOp = generateInstExpr(curr);
@@ -429,13 +436,13 @@ InstAnnotator::propagateAnnotFromSuccInLoop(Instruction *curr, Instruction *succ
 }
 
 void InstAnnotator::annotateCASWithBackedgeCondDFS(Instruction *curr,
-						   const VSet<BasicBlock *> &backedgePaths,
-						   Loop *l,
+						   const VSet<BasicBlock *> &backedgePaths, Loop *l,
 						   const VSet<llvm::Function *> *cleanSet)
 {
 	statusMap[curr] = InstAnnotator::entered;
 
-	std::vector<Instruction *> succs = getNextOrBranchSuccessorsInLoop(curr, backedgePaths, l, cleanSet);
+	std::vector<Instruction *> succs =
+		getNextOrBranchSuccessorsInLoop(curr, backedgePaths, l, cleanSet);
 	BUG_ON(succs.size() > 2);
 
 	for (auto *succ : succs) {
@@ -465,11 +472,13 @@ void InstAnnotator::annotateCASWithBackedgeCondDFS(Instruction *curr,
 	/* If this is a branch instruction, create a select expression */
 	if (succs.size() == 2) {
 		auto cond = dyn_cast<BranchInst>(curr)->getCondition();
-		auto regExp = RegisterExpr<Value *>::create(cond->getType()->getPrimitiveSizeInBits(),
-						   getAnnotMapKey(cond));
-		setAnnot(curr, SelectExpr<Value *>::create(std::move(regExp),
-						  propagateAnnotFromSuccInLoop(curr, succs[0], backedgePaths, l),
-						  propagateAnnotFromSuccInLoop(curr, succs[1], backedgePaths, l)));
+		auto regExp = RegisterExpr<Value *>::create(
+			cond->getType()->getPrimitiveSizeInBits(), getAnnotMapKey(cond));
+		setAnnot(curr,
+			 SelectExpr<Value *>::create(
+				 std::move(regExp),
+				 propagateAnnotFromSuccInLoop(curr, succs[0], backedgePaths, l),
+				 propagateAnnotFromSuccInLoop(curr, succs[1], backedgePaths, l)));
 		return;
 	}
 	/* At this point we know there is just one successor: substitute */
@@ -486,7 +495,8 @@ InstAnnotator::annotateCASWithBackedgeCond(AtomicCmpXchgInst *curr, BasicBlock *
 
 	/* Collect backedge paths */
 	VSet<BasicBlock *> backedgePaths;
-	foreachInBackPathTo(latch, l->getHeader(), [&](Instruction &i){ backedgePaths.insert(i.getParent()); });
+	foreachInBackPathTo(latch, l->getHeader(),
+			    [&](Instruction &i) { backedgePaths.insert(i.getParent()); });
 
 	for (auto &i : instructions(curr->getParent()->getParent()))
 		statusMap[&i] = InstAnnotator::unseen;

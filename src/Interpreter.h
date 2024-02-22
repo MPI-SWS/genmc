@@ -153,6 +153,24 @@ struct ExecutionContext {
   ExecutionContext() : CurFunction(nullptr), CurBB(nullptr), CurInst(nullptr) {}
 };
 
+/* The different reasons a thread might block */
+enum class BlockageType {
+	NotBlocked,
+	ThreadJoin,
+	Spinloop,
+	FaiZNESpinloop,
+	LockZNESpinloop,
+	HelpedCas,
+	Confirmation,
+	ReadOptBlock,
+	LockNotAcq,
+	LockNotRel,
+	Barrier,
+	Cons,
+	Error,
+	User,
+};
+
 /*
  * Thread class -- Contains information specific to each thread.
  */
@@ -341,11 +359,15 @@ public:
 		driver->method(__VA_ARGS__);				\
 	})
 
+/* When replaying, we don't decrease the pos so we don't get into an
+ * infinite loop, e.g., if the last instruction reads bottom.
+ * (Besides, the amount of replaying should be well-defined.)
+ */
 #define CALL_DRIVER_RESET_IF_NONE(method, ...)			\
 	({							\
 		incPos();					\
 		auto ret = driver->method(__VA_ARGS__);		\
-		if (!ret.has_value()) {				\
+		if (!ret.has_value() && getExecState() != ExecutionState::Replay) { \
 			decPos();				\
 			--ECStack().back().CurInst;		\
 		} else if (getProgramState() == ProgramState::Recovery && \

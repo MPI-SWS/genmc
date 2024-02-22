@@ -100,7 +100,11 @@ std::string getCalledFunOrStripValName(const CallInst &ci)
 {
 	if (auto *fun = ci.getCalledFunction())
 		return fun->getName().str();
-	return CallInstWrapper(const_cast<CallInst *>(&ci)).getCalledOperand()->stripPointerCasts()->getName().str();
+	return CallInstWrapper(const_cast<CallInst *>(&ci))
+		.getCalledOperand()
+		->stripPointerCasts()
+		->getName()
+		.str();
 }
 
 bool isIntrinsicCallNoSideEffects(const Instruction &i)
@@ -153,8 +157,9 @@ bool hasSideEffects(const Instruction *i, const VSet<Function *> *cleanFuns /* =
 			if (!cleanFuns)
 				return true;
 			CallInstWrapper CW(const_cast<CallInst *>(ci));
-			const auto *fun = dyn_cast<Function>(CW.getCalledOperand()->stripPointerCasts());
-			if (!fun || !cleanFuns->count(const_cast<Function*>(fun)))
+			const auto *fun =
+				dyn_cast<Function>(CW.getCalledOperand()->stripPointerCasts());
+			if (!fun || !cleanFuns->count(const_cast<Function *>(fun)))
 				return true;
 		} else if (!isa<LoadInst>(i) && !isa<FenceInst>(i)) {
 			return true;
@@ -190,12 +195,13 @@ void annotateInstruction(llvm::Instruction *i, const std::string &type, uint64_t
 	uint64_t mValue = value;
 	if (md) {
 		auto old = dyn_cast<ConstantInt>(
-			dyn_cast<ConstantAsMetadata>(md->getOperand(0))->getValue())->getZExtValue();
+				   dyn_cast<ConstantAsMetadata>(md->getOperand(0))->getValue())
+				   ->getZExtValue();
 		mValue |= old;
 	}
 
-	auto *node = MDNode::get(ctx,
-				 ConstantAsMetadata::get(ConstantInt::get(ctx, APInt(64, mValue))));
+	auto *node =
+		MDNode::get(ctx, ConstantAsMetadata::get(ConstantInt::get(ctx, APInt(64, mValue))));
 	i->setMetadata(type, node);
 	return;
 }
@@ -223,10 +229,9 @@ BasicBlock *tryThreadSuccessor(BranchInst *term, BasicBlock *succ)
 
 #if LLVM_VERSION_MAJOR < 9
 
-void DetatchDeadBlocks(
-	ArrayRef<BasicBlock *> BBs,
-	// SmallVectorImpl<DominatorTree::UpdateType> *Updates,
-	bool KeepOneInputPHIs)
+void DetatchDeadBlocks(ArrayRef<BasicBlock *> BBs,
+		       // SmallVectorImpl<DominatorTree::UpdateType> *Updates,
+		       bool KeepOneInputPHIs)
 {
 	for (auto *BB : BBs) {
 		// Loop through all of our successors and make sure they know that one
@@ -251,24 +256,22 @@ void DetatchDeadBlocks(
 			BB->getInstList().pop_back();
 		}
 		new UnreachableInst(BB->getContext(), BB);
-		assert(BB->getInstList().size() == 1 &&
-		       isa<UnreachableInst>(BB->getTerminator()) &&
+		assert(BB->getInstList().size() == 1 && isa<UnreachableInst>(BB->getTerminator()) &&
 		       "The successor list of BB isn't empty before "
 		       "applying corresponding DTU updates.");
 	}
 }
 
-void DeleteDeadBlocks(ArrayRef <BasicBlock *> BBs, DomTreeUpdater *DTU,
-		      bool KeepOneInputPHIs)
+void DeleteDeadBlocks(ArrayRef<BasicBlock *> BBs, DomTreeUpdater *DTU, bool KeepOneInputPHIs)
 {
-// #ifndef NDEBUG
-// 	// Make sure that all predecessors of each dead block is also dead.
-// 	SmallPtrSet<BasicBlock *, 4> Dead(BBs.begin(), BBs.end());
-// 	assert(Dead.size() == BBs.size() && "Duplicating blocks?");
-// 	for (auto *BB : Dead)
-// 		for (BasicBlock *Pred : predecessors(BB))
-// 			assert(Dead.count(Pred) && "All predecessors must be dead!");
-// #endif
+	// #ifndef NDEBUG
+	// 	// Make sure that all predecessors of each dead block is also dead.
+	// 	SmallPtrSet<BasicBlock *, 4> Dead(BBs.begin(), BBs.end());
+	// 	assert(Dead.size() == BBs.size() && "Duplicating blocks?");
+	// 	for (auto *BB : Dead)
+	// 		for (BasicBlock *Pred : predecessors(BB))
+	// 			assert(Dead.count(Pred) && "All predecessors must be dead!");
+	// #endif
 
 	// SmallVector<DominatorTree::UpdateType, 4> Updates;
 	DetatchDeadBlocks(BBs, // DTU ? &Updates : nullptr,
@@ -293,14 +296,14 @@ void DeleteDeadBlock(BasicBlock *BB, DomTreeUpdater *DTU /* = nullptr */,
 bool EliminateUnreachableBlocks(Function &F, DomTreeUpdater *DTU /* = nullptr */,
 				bool KeepOneInputPHIs /* = false */)
 {
-	df_iterator_default_set<BasicBlock*> Reachable;
+	df_iterator_default_set<BasicBlock *> Reachable;
 
 	// Mark all reachable blocks.
 	for (BasicBlock *BB : depth_first_ext(&F, Reachable))
-		(void)BB/* Mark all reachable blocks */;
+		(void)BB /* Mark all reachable blocks */;
 
 	// Collect all dead blocks.
-	std::vector<BasicBlock*> DeadBlocks;
+	std::vector<BasicBlock *> DeadBlocks;
 	for (Function::iterator I = F.begin(), E = F.end(); I != E; ++I)
 		if (!Reachable.count(&*I)) {
 			BasicBlock *BB = &*I;
@@ -315,8 +318,7 @@ bool EliminateUnreachableBlocks(Function &F, DomTreeUpdater *DTU /* = nullptr */
 
 #endif /* LLVM_VERSION_MAJOR < 9 */
 
-void replaceUsesWithIf(Value *Old, Value *New,
-		       llvm::function_ref<bool(Use &U)> ShouldReplace)
+void replaceUsesWithIf(Value *Old, Value *New, llvm::function_ref<bool(Use &U)> ShouldReplace)
 {
 	// assert(New && "Value::replaceUsesWithIf(<null>) is invalid!");
 	// assert(New->getType() == old->getType() &&

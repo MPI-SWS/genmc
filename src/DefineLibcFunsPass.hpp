@@ -28,7 +28,7 @@ class DefineLibcFunsPass : public llvm::ModulePass {
 public:
 	static char ID;
 
-	DefineLibcFunsPass() : ModulePass(ID) {};
+	DefineLibcFunsPass() : ModulePass(ID){};
 	virtual void getAnalysisUsage(llvm::AnalysisUsage &AU) const;
 	virtual bool runOnModule(llvm::Module &M);
 

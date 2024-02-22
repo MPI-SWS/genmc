@@ -22,9 +22,9 @@
 #define __DEP_VIEW_HPP__
 
 #include "Error.hpp"
+#include "VSet.hpp"
 #include "VectorClock.hpp"
 #include "View.hpp"
-#include "VSet.hpp"
 #include <llvm/ADT/IndexedMap.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -51,13 +51,15 @@ private:
 
 		void clear() { hs_.clear(); }
 
-		inline const Holes& operator[](int idx) const {
+		inline const Holes &operator[](int idx) const
+		{
 			if (idx < hs_.size())
 				return hs_[idx];
 			BUG();
 		}
 
-		inline Holes& operator[](int idx) {
+		inline Holes &operator[](int idx)
+		{
 			hs_.grow(idx);
 			return hs_[idx];
 		}
@@ -65,8 +67,7 @@ private:
 
 public:
 	/* Constructors */
-	DepView() : VectorClock(VectorClock::VectorClockKind::VC_DepView),
-		    view_(), holes_() {}
+	DepView() : VectorClock(VectorClock::VectorClockKind::VC_DepView), view_(), holes_() {}
 
 	/* Returns the size of the depview (i.e., number of threads seen) */
 	unsigned int size() const { return view_.size(); }
@@ -74,37 +75,44 @@ public:
 	/* Returns true if the clock is empty */
 	bool empty() const { return size() == 0; }
 
-	void clear() override { view_.clear(); holes_.clear(); }
+	void clear() override
+	{
+		view_.clear();
+		holes_.clear();
+	}
 
 	/* Returns true if the clock contains e */
 	bool contains(const Event e) const;
 
-	DepView &updateIdx(Event e) override {
+	DepView &updateIdx(Event e) override
+	{
 		auto old = view_.getMax(e.thread);
 		if (e.index > old) {
 			view_.setMax(e);
 			holes_[e.thread];
-			addHolesInRange(Event(e.thread, old+1), e.index);
+			addHolesInRange(Event(e.thread, old + 1), e.index);
 		} else
 			removeHole(e);
 		return *this;
 	}
 
-	int getMax(int thread) const override {	return view_.getMax(thread); }
+	int getMax(int thread) const override { return view_.getMax(thread); }
 
-	void setMax(Event e) override {
-		if (e.thread >= (int) view_.size())
+	void setMax(Event e) override
+	{
+		if (e.thread >= (int)view_.size())
 			holes_[e.thread]; // grow
 		auto old = view_.getMax(e.thread);
 		view_.setMax(e);
 		if (old < e.index)
-			addHolesInRange(Event(e.thread, old+1), e.index);
+			addHolesInRange(Event(e.thread, old + 1), e.index);
 		else
-			removeHolesInRange(e, old+1);
+			removeHolesInRange(e, old + 1);
 	}
 
 	/* Returns true if there's a hole in E's position */
-	bool hasHole(const Event e) const {
+	bool hasHole(const Event e) const
+	{
 		return e.thread < holes_.size() && !holes_[e.thread].count(e.index);
 	}
 
@@ -126,15 +134,13 @@ public:
 
 	/* Updates the view based on another clock. The update is valid
 	 * only if the other clock provided is also a DepView */
-	View& update(const View &v) override;
-	DepView& update(const DepView &v) override;
+	View &update(const View &v) override;
+	DepView &update(const DepView &v) override;
 	VectorClock &update(const VectorClock &vc) override;
 
 	void printData(llvm::raw_ostream &s) const;
 
-	static bool classof(const VectorClock *vc) {
-		return vc->getKind() == VC_DepView;
-	}
+	static bool classof(const VectorClock *vc) { return vc->getKind() == VC_DepView; }
 
 private:
 	/* A view containing the highest index seen for each thread */

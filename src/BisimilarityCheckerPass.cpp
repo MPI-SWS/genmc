@@ -83,7 +83,8 @@ void filterCandidateConstraints(BsPoint &bsp, const std::vector<Constraint> &cs,
 				std::vector<ConstrainedBsPoint> &candidates)
 {
 	for (auto &cnd : candidates) {
-		for (auto cit = cnd.constraints.begin(); cit != cnd.constraints.end(); /* empty */) {
+		for (auto cit = cnd.constraints.begin(); cit != cnd.constraints.end();
+		     /* empty */) {
 			if (solvesConstraint(bsp, *cit)) {
 				/* Remove the solved constraint */
 				cit = cnd.constraints.erase(cit);
@@ -120,8 +121,7 @@ bool calcOperatorConstraints(Instruction *a, Instruction *b, std::vector<Constra
 	return true;
 }
 
-void calcBsPointCandidates(Instruction *a,
-			   Instruction *b,
+void calcBsPointCandidates(Instruction *a, Instruction *b,
 			   std::vector<ConstrainedBsPoint> &candidates)
 {
 	/* Make sure a and b are valid instructions */
@@ -161,7 +161,7 @@ bool BisimilarityCheckerPass::runOnFunction(Function &F)
 		if (std::distance(pred_begin(&*bit), pred_end(&*bit)) != 2)
 			continue;
 
-		auto b1 = *pred_begin(&*bit);     /* pred 1 */
+		auto b1 = *pred_begin(&*bit);	  /* pred 1 */
 		auto b2 = *(++pred_begin(&*bit)); /* pred 2 */
 
 		/* Skip if the predecessors are the same */
@@ -171,11 +171,14 @@ bool BisimilarityCheckerPass::runOnFunction(Function &F)
 		/* Find bisimilar points and make sure they lead to the same state */
 		auto ps = getBsPoints(b1->getTerminator(), b2->getTerminator());
 		bool sameState = true;
-		for (auto iit = bit->begin(); auto phi = llvm::dyn_cast<llvm::PHINode>(iit); ++iit) {
-			auto bp1 = std::find_if(ps.begin(), ps.end(),
-					       [&](const BsPoint &p){ return phi->getIncomingValue(0) == p.first; });
-			auto bp2 = std::find_if(ps.begin(), ps.end(),
-					       [&](const BsPoint &p){ return phi->getIncomingValue(0) == p.second; });
+		for (auto iit = bit->begin(); auto phi = llvm::dyn_cast<llvm::PHINode>(iit);
+		     ++iit) {
+			auto bp1 = std::find_if(ps.begin(), ps.end(), [&](const BsPoint &p) {
+				return phi->getIncomingValue(0) == p.first;
+			});
+			auto bp2 = std::find_if(ps.begin(), ps.end(), [&](const BsPoint &p) {
+				return phi->getIncomingValue(0) == p.second;
+			});
 			if ((bp1 == ps.end() && bp2 == ps.end()) ||
 			    (bp1 == ps.end() && bp2->first != phi->getIncomingValue(1)) ||
 			    (bp2 == ps.end() && bp1->second != phi->getIncomingValue(1)))
@@ -192,11 +195,8 @@ bool BisimilarityCheckerPass::runOnFunction(Function &F)
 	return false;
 }
 
-FunctionPass *createBisimilarityCheckerPass()
-{
-	return new BisimilarityCheckerPass();
-}
+FunctionPass *createBisimilarityCheckerPass() { return new BisimilarityCheckerPass(); }
 
 char BisimilarityCheckerPass::ID = 42;
-static llvm::RegisterPass<BisimilarityCheckerPass> P("bisimilarity-checker",
-						     "Calculates bisimilar points in all functions.");
+static llvm::RegisterPass<BisimilarityCheckerPass>
+	P("bisimilarity-checker", "Calculates bisimilar points in all functions.");

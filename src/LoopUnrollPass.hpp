@@ -21,8 +21,8 @@
 #ifndef __LOOP_UNROLL_PASS_HPP__
 #define __LOOP_UNROLL_PASS_HPP__
 
-#include "config.h"
 #include "VSet.hpp"
+#include "config.h"
 #include <llvm/Pass.h>
 #ifdef LLVM_PASS_GETPASSNAME_IS_STRINGREF
 #include <llvm/ADT/StringRef.h>
@@ -33,14 +33,14 @@
 
 class LoopUnrollPass : public llvm::LoopPass {
 
-
 public:
 	static char ID;
 
 	LoopUnrollPass(unsigned int depth, const VSet<std::string> &noUnrollFuns = {})
-		: llvm::LoopPass(ID), unrollDepth(depth), noUnroll(noUnrollFuns) {};
+		: llvm::LoopPass(ID), unrollDepth(depth), noUnroll(noUnrollFuns){};
 
-	bool shouldUnroll(llvm::Loop *l) const {
+	bool shouldUnroll(llvm::Loop *l) const
+	{
 		return !noUnroll.count((*l->block_begin())->getParent()->getName().str());
 	}
 

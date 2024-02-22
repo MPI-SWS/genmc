@@ -1,1 +1,1 @@
--disable-ipr -disable-sr -disable-race-detection | -std=c++17 -fno-use-cxa-atexit
+ -disable-race-detection | -std=c++17 -fno-use-cxa-atexit

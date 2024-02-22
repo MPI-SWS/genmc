@@ -45,17 +45,16 @@ private:
 
 public:
 	/* Constructors */
-	View() : VectorClock(VectorClock::VectorClockKind::VC_View),
-		 view_(EventView(0)) {}
+	View() : VectorClock(VectorClock::VectorClockKind::VC_View), view_(EventView(0)) {}
 
 	/* Iterators */
 	using iterator = int *;
 	using const_iterator = const int *;
 
 	iterator begin() { return &view_[0]; };
-	iterator end()   { return &view_[0] + size(); }
+	iterator end() { return &view_[0] + size(); }
 	const_iterator begin() const { return empty() ? nullptr : &view_[0]; }
-	const_iterator end() const { return empty() ? nullptr :  &view_[0] + size(); }
+	const_iterator end() const { return empty() ? nullptr : &view_[0] + size(); }
 
 	/* Returns the size of this view (i.e., number of threads seen) */
 	unsigned int size() const { return view_.size(); }
@@ -66,41 +65,40 @@ public:
 	void clear() override { view_.clear(); }
 
 	/* Returns true if e is contained in the clock */
-	bool contains(const Event e) const {
-		return e.index <= getMax(e.thread);
-	}
+	bool contains(const Event e) const { return e.index <= getMax(e.thread); }
 
 	/* Updates the view based on another vector clock. We can
 	 * only update the current view given another View (and not
 	 * some other subclass of VectorClock) */
-	View& update(const View &v) override;
-	DepView& update(const DepView &dv) override;
+	View &update(const View &v) override;
+	DepView &update(const DepView &dv) override;
 	VectorClock &update(const VectorClock &vc) override;
 
 	/* Makes the maximum event seen in e's thread equal to e */
-	View& updateIdx(Event e) override {
+	View &updateIdx(Event e) override
+	{
 		if (getMax(e.thread) < e.index)
 			setMax(e);
 		return *this;
 	}
 
-	int getMax(int thread) const override {
-		if (thread < (int) view_.size())
+	int getMax(int thread) const override
+	{
+		if (thread < (int)view_.size())
 			return view_[thread];
 		return 0;
 	}
 
-	void setMax(Event e) override {
-		if (e.thread >= (int) view_.size())
+	void setMax(Event e) override
+	{
+		if (e.thread >= (int)view_.size())
 			view_.grow(e.thread);
 		view_[e.thread] = e.index;
 	}
 
 	void printData(llvm::raw_ostream &s) const;
 
-	static bool classof(const VectorClock *vc) {
-		return vc->getKind() == VC_View;
-	}
+	static bool classof(const VectorClock *vc) { return vc->getKind() == VC_View; }
 };
 
 #endif /* __VIEW_HPP__ */

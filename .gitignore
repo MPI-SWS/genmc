@@ -1,5 +1,6 @@
 genmc
 
+.dir-locals.el
 *~
 \#*\#
 *.bak

@@ -22,8 +22,8 @@
 #define __LOAD_ANNOTATION_PASS_HPP__
 
 #include "ModuleInfo.hpp"
-#include <llvm/Pass.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/Pass.h>
 
 using namespace llvm;
 
@@ -34,7 +34,7 @@ public:
 	AnnotationInfo<Instruction *, Value *> &LAI;
 
 	LoadAnnotationPass(AnnotationInfo<Instruction *, Value *> &LAI)
-		: FunctionPass(ID), LAI(LAI) {};
+		: FunctionPass(ID), LAI(LAI){};
 
 	virtual void getAnalysisUsage(AnalysisUsage &AU) const;
 	virtual bool runOnFunction(Function &F);
@@ -55,8 +55,7 @@ private:
 	/*
 	 * Returns all of ASSM's annotatable loads
 	 */
-	std::vector<Instruction *>
-	getAnnotatableLoads(CallInst *assm) const;
+	std::vector<Instruction *> getAnnotatableLoads(CallInst *assm) const;
 };
 
 #endif /* __LOAD_ANNOTATION_PASS_HPP__ */

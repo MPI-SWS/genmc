@@ -20,7 +20,7 @@
 
 #include "Revisit.hpp"
 
-llvm::raw_ostream& operator<<(llvm::raw_ostream& s,  const Revisit::Kind k)
+llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const Revisit::Kind k)
 {
 	switch (k) {
 	case Revisit::RV_FRevRead:
@@ -46,7 +46,7 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s,  const Revisit::Kind k)
 	return s;
 }
 
-llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const Revisit &item)
+llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const Revisit &item)
 {
 	switch (item.getKind()) {
 	case Revisit::RV_FRevRead: {
@@ -66,8 +66,7 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const Revisit &item)
 	}
 	case Revisit::RV_BRev: {
 		auto &bi = static_cast<const BackwardRevisit &>(item);
-		s << bi.getKind() << "(" << bi.getPos() << ": ["
-		  << bi.getRev() << ", ";
+		s << bi.getKind() << "(" << bi.getPos() << ": [" << bi.getRev() << ", ";
 		s << *bi.getViewNoRel();
 		s << "]";
 		break;

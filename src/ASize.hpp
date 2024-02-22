@@ -21,8 +21,8 @@
 #ifndef __ASIZE_HPP__
 #define __ASIZE_HPP__
 
-#include "config.h"
 #include "Error.hpp"
+#include "config.h"
 
 #include <climits>
 #include <cstdint>
@@ -46,33 +46,15 @@ public:
 	ASize(Size s) : size(s) {}
 
 	/* Returns the number of bytes this Size occupies */
-	Size get() const { return size; }
+	[[nodiscard]] auto get() const -> Size { return size; }
 
-	/* Returns the number of bits this Size occupies x*/
-	Size getBits() const { return size * CHAR_BIT; }
+	/* Returns the number of bits this Size occupies */
+	[[nodiscard]] auto getBits() const -> Size { return size * CHAR_BIT; }
 
-	inline bool operator==(const ASize &s) const {
-		return s.size == size;
-	}
-	inline bool operator!=(const ASize &s) const {
-		return !(*this == s);
-	}
-	inline bool operator<=(const ASize &s) const {
-		return size <= s.size;
-	}
-	inline bool operator<(const ASize &s) const {
-		return size < s.size;
-	}
-	inline bool operator>=(const ASize &s) const {
-		return !(*this < s);
-	}
-	inline bool operator>(const ASize &s) const {
-		return !(*this <= s);
-	}
-	Size operator()() const { return size; }
+	inline auto operator<=>(const ASize &other) const = default;
+	auto operator()() const -> Size { return size; }
 
-	friend llvm::raw_ostream& operator<<(llvm::raw_ostream& rhs,
-					     const ASize &s);
+	friend auto operator<<(llvm::raw_ostream &rhs, const ASize &s) -> llvm::raw_ostream &;
 
 private:
 	/* The actual size */

@@ -21,8 +21,8 @@
 #ifndef __NAME_INFO_HPP__
 #define __NAME_INFO_HPP__
 
-#include "config.h"
 #include "Error.hpp"
+#include "config.h"
 
 #include <string>
 
@@ -46,8 +46,7 @@ public:
 	/* Whether we have any information stored */
 	bool empty() const { return info.empty(); }
 
-	friend llvm::raw_ostream& operator<<(llvm::raw_ostream& rhs,
-					     const NameInfo &info);
+	friend llvm::raw_ostream &operator<<(llvm::raw_ostream &rhs, const NameInfo &info);
 
 private:
 	/*
@@ -56,7 +55,7 @@ private:
 	 * we use the map to dynamically find out the name corresponding to
 	 * a particular address.
 	 */
-	using OffsetInfo = std::vector<std::pair<unsigned, std::string > >;
+	using OffsetInfo = std::vector<std::pair<unsigned, std::string>>;
 
 	/* Naming information at different offsets */
 	OffsetInfo info;

@@ -21,20 +21,19 @@
 #ifndef __THREAD_POOL_HPP__
 #define __THREAD_POOL_HPP__
 
-#include "config.h"
+#include "DriverFactory.hpp"
 #include "Error.hpp"
 #include "ExecutionGraph.hpp"
-#include "DriverFactory.hpp"
 #include "LLVMModule.hpp"
 #include "ThreadPinner.hpp"
+#include "config.h"
 #include <llvm/IR/Module.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
 #include <atomic>
+#include <future>
 #include <memory>
 #include <thread>
-#include <future>
-
 
 /*******************************************************************************
  **                           GlobalWorkQueue Class
@@ -55,19 +54,22 @@ public:
 	/*** Queue operations ***/
 
 	/* Returns true if the queue is empty */
-	bool empty() {
+	bool empty()
+	{
 		std::lock_guard<std::mutex> lock(qMutex);
 		return queue.empty();
 	}
 
 	/* Adds a new item to the queue */
-	void push(ItemT item) {
+	void push(ItemT item)
+	{
 		std::lock_guard<std::mutex> lock(qMutex);
 		queue.push_back(std::move(item));
 	}
 
 	/* Tries to pop an item from the queue */
-	ItemT tryPop() {
+	ItemT tryPop()
+	{
 		std::lock_guard<std::mutex> lock(qMutex);
 		if (queue.empty())
 			return nullptr;
@@ -84,7 +86,6 @@ private:
 	std::mutex qMutex;
 };
 
-
 /*******************************************************************************
  **                           ThreadJoiner Class
  ******************************************************************************/
@@ -99,7 +100,8 @@ public:
 	ThreadJoiner(const ThreadJoiner &) = delete;
 
 	/*** Destructor ***/
-	~ThreadJoiner() {
+	~ThreadJoiner()
+	{
 		for (auto i = 0u; i < threads.size(); i++) {
 			if (threads[i].joinable())
 				threads[i].join();
@@ -127,13 +129,12 @@ public:
 	using GlobalQueueT = GlobalWorkQueue;
 	using TaskT = GlobalQueueT::ItemT;
 
-
 	/*** Constructors ***/
 
 	ThreadPool(const std::shared_ptr<const Config> conf,
-		   const std::unique_ptr<llvm::Module> &mod,
-		   const std::unique_ptr<ModuleInfo> &MI)
-		: numWorkers_(conf->threads), pinner_(numWorkers_), joiner_(workers_) {
+		   const std::unique_ptr<llvm::Module> &mod, const std::unique_ptr<ModuleInfo> &MI)
+		: numWorkers_(conf->threads), pinner_(numWorkers_), joiner_(workers_)
+	{
 		numWorkers_ = conf->threads;
 
 		/* Set global variables before spawning the threads */
@@ -145,7 +146,8 @@ public:
 			auto newmod = LLVMModule::cloneModule(mod, contexts_.back());
 			auto newMI = MI->clone(*newmod);
 
-			auto dw = DriverFactory::create(this, conf, std::move(newmod), std::move(newMI));
+			auto dw = DriverFactory::create(this, conf, std::move(newmod),
+							std::move(newMI));
 			if (i == 0)
 				submit(std::move(dw->extractState()));
 			addWorker(i, std::move(dw));
@@ -183,7 +185,8 @@ public:
 	bool shouldHalt() const { return shouldHalt_.load(); }
 
 	/* Stops all threads */
-	void halt() {
+	void halt()
+	{
 		std::lock_guard<std::mutex> lock(stateMtx_);
 		shouldHalt_.store(true);
 		stateCV_.notify_all();

@@ -35,7 +35,6 @@ public:
 	static char ID;
 
 private:
-
 };
 
 #endif /* __FUNCTION_INLINER_PASS_HPP__ */

@@ -21,8 +21,8 @@
 #ifndef __CODE_CONDENSER_PASS_HPP__
 #define __CODE_CONDENSER_PASS_HPP__
 
-#include <llvm/Pass.h>
 #include <llvm/IR/Function.h>
+#include <llvm/Pass.h>
 
 using namespace llvm;
 

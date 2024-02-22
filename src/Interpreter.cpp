@@ -41,55 +41,51 @@
 #include "Config.hpp"
 #include "Error.hpp"
 #include "Interpreter.h"
+#include <cstring>
 #include <llvm/CodeGen/IntrinsicLowering.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Module.h>
-#include <cstring>
 #include <optional>
 
 using namespace llvm;
 
-extern "C" void LLVMLinkInInterpreter() { }
+extern "C" void LLVMLinkInInterpreter() {}
 
 /// create - Create a new interpreter object.  This can never fail.
 ///
-std::unique_ptr<Interpreter>
-Interpreter::create(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> MI,
-		    GenMCDriver *driver, const Config *userConf,
-		    SAddrAllocator &alloctor, std::string* ErrStr) {
-  // Tell this Module to materialize everything and release the GVMaterializer.
-  if (Error Err = M->materializeAll()) {
-    std::string Msg;
-    handleAllErrors(std::move(Err), [&](ErrorInfoBase &EIB) {
-      Msg = EIB.message();
-    });
-    if (ErrStr)
-      *ErrStr = Msg;
-    // We got an error, just return 0
-    return nullptr;
-  }
-  return std::make_unique<Interpreter>(std::move(M), std::move(MI), driver, userConf, alloctor);
+std::unique_ptr<Interpreter> Interpreter::create(std::unique_ptr<Module> M,
+						 std::unique_ptr<ModuleInfo> MI,
+						 GenMCDriver *driver, const Config *userConf,
+						 SAddrAllocator &alloctor, std::string *ErrStr)
+{
+	// Tell this Module to materialize everything and release the GVMaterializer.
+	if (Error Err = M->materializeAll()) {
+		std::string Msg;
+		handleAllErrors(std::move(Err), [&](ErrorInfoBase &EIB) { Msg = EIB.message(); });
+		if (ErrStr)
+			*ErrStr = Msg;
+		// We got an error, just return 0
+		return nullptr;
+	}
+	return std::make_unique<Interpreter>(std::move(M), std::move(MI), driver, userConf,
+					     alloctor);
 }
 
 /* Thread::seed is ODR-used -- we need to provide a definition (C++14) */
 constexpr int Thread::seed;
 
-llvm::raw_ostream& llvm::operator<<(llvm::raw_ostream &s, const Thread &thr)
+llvm::raw_ostream &llvm::operator<<(llvm::raw_ostream &s, const Thread &thr)
 {
 	return s << "<" << thr.parentId << ", " << thr.id << ">"
 		 << " " << thr.threadFun->getName().str();
 }
 
-std::unique_ptr<InterpreterState>
-Interpreter::saveState()
+std::unique_ptr<InterpreterState> Interpreter::saveState()
 {
 	return std::make_unique<InterpreterState>(dynState);
 }
 
-void Interpreter::restoreState(std::unique_ptr<InterpreterState> s)
-{
-	dynState = std::move(*s);
-}
+void Interpreter::restoreState(std::unique_ptr<InterpreterState> s) { dynState = std::move(*s); }
 
 void Interpreter::resetThread(unsigned int id)
 {
@@ -111,7 +107,7 @@ void Interpreter::reset()
 	 */
 	dynState.currentThread = 0;
 	dynState.AtExitHandlers.clear();
-	std::for_each(threads_begin(), threads_end(), [this](Thread &thr){ resetThread(thr.id); });
+	std::for_each(threads_begin(), threads_end(), [this](Thread &thr) { resetThread(thr.id); });
 }
 
 void Interpreter::setupRecoveryRoutine(int tid)
@@ -139,7 +135,7 @@ void Interpreter::cleanupRecoveryRoutine(int tid)
 Thread &Interpreter::addNewThread(Thread &&thread)
 {
 	if (thread.id == getNumThreads()) {
-	        dynState.threads.push_back(std::move(thread));
+		dynState.threads.push_back(std::move(thread));
 		return dynState.threads.back();
 	}
 
@@ -159,7 +155,7 @@ Thread &Interpreter::createAddMainThread()
 
 /* Creates an entry for another thread */
 Thread &Interpreter::createAddNewThread(llvm::Function *F, SVal arg, int tid, int pid,
-				       const llvm::ExecutionContext &SF)
+					const llvm::ExecutionContext &SF)
 {
 	Thread thr(F, arg, tid, pid, SF);
 	thr.ECStack.push_back(SF);
@@ -175,24 +171,23 @@ Thread &Interpreter::createAddRecoveryThread(int tid)
 }
 
 #if LLVM_VERSION_MAJOR >= 8
-# define GET_GV_ADDRESS_SPACE(v) (v).getAddressSpace()
+#define GET_GV_ADDRESS_SPACE(v) (v).getAddressSpace()
 #else
-# define GET_GV_ADDRESS_SPACE(v)			\
-({						        \
-	llvm::PointerType *pTy = v.getType();		\
-	pTy->getAddressSpace();				\
-})
+#define GET_GV_ADDRESS_SPACE(v)                                                                    \
+	({                                                                                         \
+		llvm::PointerType *pTy = v.getType();                                              \
+		pTy->getAddressSpace();                                                            \
+	})
 #endif
 
 void Interpreter::collectStaticAddresses(SAddrAllocator &alloctor)
 {
 	auto *M = Modules.back().get();
-	std::vector<std::pair<const GlobalVariable *, void *> > toReinitialize;
+	std::vector<std::pair<const GlobalVariable *, void *>> toReinitialize;
 
 	for (auto &v : M->getGlobalList()) {
 		char *ptr = static_cast<char *>(GVTOP(getConstantValue(&v)));
-		unsigned int typeSize =
-		        getDataLayout().getTypeAllocSize(v.getValueType());
+		unsigned int typeSize = getDataLayout().getTypeAllocSize(v.getValueType());
 
 		/* Record whether this is a thread local variable or not */
 		if (v.isThreadLocal()) {
@@ -210,15 +205,17 @@ void Interpreter::collectStaticAddresses(SAddrAllocator &alloctor)
 
 		/* ... and use that in the EE instead. Make sure to re-initialize it too;
 		 * it might contain the address of another global */
-		updateGlobalMapping(&v, (void *) addr.get());
+		updateGlobalMapping(&v, (void *)addr.get());
 		toReinitialize.push_back(std::make_pair(&v, ptr));
 
 		/* Update naming information */
 		staticNames[addr] = &v;
-		if (!v.hasPrivateLinkage() && (!MI->idInfo.VID.count(&v) ||
-					       !MI->varInfo.globalInfo.count(MI->idInfo.VID.at(&v)))) {
-			WARN_ONCE("name-info", ("Inadequate naming info for variable " + v.getName() +
-						".\nPlease submit a bug report to " PACKAGE_BUGREPORT "\n"));
+		if (!v.hasPrivateLinkage() &&
+		    (!MI->idInfo.VID.count(&v) ||
+		     !MI->varInfo.globalInfo.count(MI->idInfo.VID.at(&v)))) {
+			WARN_ONCE("name-info",
+				  ("Inadequate naming info for variable " + v.getName() +
+				   ".\nPlease submit a bug report to " PACKAGE_BUGREPORT "\n"));
 		}
 	}
 
@@ -274,17 +271,16 @@ void Interpreter::setupFsInfo(Module *M, const Config *userConf)
 	unsigned int intPtrSize = getTypeSize(intTyp->getPointerTo());
 	auto *SL = getDataLayout().getStructLayout(FI.inodeTyp);
 	for (auto &fname : FI.filenames) {
-		auto *addr = (char *) FI.dirInode + SL->getElementOffset(4) + count * intPtrSize;
+		auto *addr = (char *)FI.dirInode + SL->getElementOffset(4) + count * intPtrSize;
 		dynState.nameToInodeAddr[fname] = addr;
 		++count;
 	}
 	return;
 }
 
-std::unique_ptr<EventDeps>
-Interpreter::makeEventDeps(const DepInfo *addr, const DepInfo *data,
-			   const DepInfo *ctrl, const DepInfo *addrPo,
-			   const DepInfo *cas)
+std::unique_ptr<EventDeps> Interpreter::makeEventDeps(const DepInfo *addr, const DepInfo *data,
+						      const DepInfo *ctrl, const DepInfo *addrPo,
+						      const DepInfo *cas)
 {
 	if (!getDepTracker())
 		return nullptr;
@@ -304,8 +300,7 @@ Interpreter::makeEventDeps(const DepInfo *addr, const DepInfo *data,
 	return result;
 }
 
-std::unique_ptr<EventDeps>
-Interpreter::updateFunArgDeps(unsigned int tid, Function *fun)
+std::unique_ptr<EventDeps> Interpreter::updateFunArgDeps(unsigned int tid, Function *fun)
 {
 	if (!getDepTracker())
 		return nullptr;
@@ -319,8 +314,8 @@ Interpreter::updateFunArgDeps(unsigned int tid, Function *fun)
 	bool isInternal = internalFunNames.count(name);
 	if (!isInternal) {
 		auto ai = fun->arg_begin();
-		for (auto ci = SF.Caller.arg_begin(),
-			     ce = SF.Caller.arg_end(); ci != ce; ++ci, ++ai) {
+		for (auto ci = SF.Caller.arg_begin(), ce = SF.Caller.arg_end(); ci != ce;
+		     ++ci, ++ai) {
 			updateDataDeps(tid, &*ai, &*ci->get());
 		}
 		return nullptr;
@@ -329,15 +324,13 @@ Interpreter::updateFunArgDeps(unsigned int tid, Function *fun)
 	auto iFunCode = internalFunNames.at(name);
 	if (iFunCode == InternalFunctions::FN_Assume) {
 		/* We have ctrl dependency on the argument of an assume() */
-		for (auto i = SF.Caller.arg_begin(),
-			     e = SF.Caller.arg_end(); i != e; ++i) {
+		for (auto i = SF.Caller.arg_begin(), e = SF.Caller.arg_end(); i != e; ++i) {
 			updateCtrlDeps(tid, *i);
 		}
 	} else if (isMutexCode(iFunCode) || isBarrierCode(iFunCode)) {
 		/* We have addr dependency on the argument of mutex/barrier calls */
-		return makeEventDeps(getDataDeps(tid, *SF.Caller.arg_begin()),
-				     nullptr, getCtrlDeps(tid),
-				     getAddrPoDeps(tid), nullptr);
+		return makeEventDeps(getDataDeps(tid, *SF.Caller.arg_begin()), nullptr,
+				     getCtrlDeps(tid), getAddrPoDeps(tid), nullptr);
 	}
 	return nullptr;
 }
@@ -359,99 +352,98 @@ void Interpreter::updateInternalFunRetDeps(unsigned int tid, Function *F, Instru
 //
 Interpreter::Interpreter(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> MI,
 			 GenMCDriver *driver, const Config *userConf, SAddrAllocator &alloctor)
-	: ExecutionEngine(std::move(M)), MI(std::move(MI)), driver(driver) {
+	: ExecutionEngine(std::move(M)), MI(std::move(MI)), driver(driver)
+{
 
-  memset(&dynState.ExitValue.Untyped, 0, sizeof(dynState.ExitValue.Untyped));
+	memset(&dynState.ExitValue.Untyped, 0, sizeof(dynState.ExitValue.Untyped));
 
-  // Initialize the "backend"
-  initializeExecutionEngine();
-  initializeExternalFunctions();
-  emitGlobals();
+	// Initialize the "backend"
+	initializeExecutionEngine();
+	initializeExternalFunctions();
+	emitGlobals();
 
-  IL = new IntrinsicLowering(getDataLayout());
+	IL = new IntrinsicLowering(getDataLayout());
 
-  auto mod = Modules.back().get();
+	auto mod = Modules.back().get();
 
-  /* Set up a dependency tracker if the model requires it */
-  if (userConf->isDepTrackingModel)
-	  dynState.depTracker = std::make_unique<DepTracker>();
+	/* Set up a dependency tracker if the model requires it */
+	if (userConf->isDepTrackingModel)
+		dynState.depTracker = std::make_unique<DepTracker>();
 
-  collectStaticAddresses(alloctor);
+	collectStaticAddresses(alloctor);
 
-  /* Set up the system error policy */
-  setupErrorPolicy(mod, userConf);
+	/* Set up the system error policy */
+	setupErrorPolicy(mod, userConf);
 
-  /* Also run a recovery routine if it is required to do so */
-  setupFsInfo(mod, userConf);
+	/* Also run a recovery routine if it is required to do so */
+	setupFsInfo(mod, userConf);
 
-  /* Setup the interpreter for the exploration */
-  mainFun = mod->getFunction(userConf->programEntryFun);
-  ERROR_ON(!mainFun, "Could not find program's entry point function!\n");
+	/* Setup the interpreter for the exploration */
+	mainFun = mod->getFunction(userConf->programEntryFun);
+	ERROR_ON(!mainFun, "Could not find program's entry point function!\n");
 
-  createAddMainThread();
+	createAddMainThread();
 }
 
-Interpreter::~Interpreter() {
-  delete IL;
-}
+Interpreter::~Interpreter() { delete IL; }
 
-void Interpreter::runAtExitHandlers () {
-  auto oldState = getProgramState();
-  setProgramState(ProgramState::Dtors);
-  while (!dynState.AtExitHandlers.empty()) {
-    scheduleThread(0);
-    callFunction(dynState.AtExitHandlers.back(), std::vector<GenericValue>(), nullptr);
-    dynState.AtExitHandlers.pop_back();
-    run();
-  }
-  setProgramState(oldState);
+void Interpreter::runAtExitHandlers()
+{
+	auto oldState = getProgramState();
+	setProgramState(ProgramState::Dtors);
+	while (!dynState.AtExitHandlers.empty()) {
+		scheduleThread(0);
+		callFunction(dynState.AtExitHandlers.back(), std::vector<GenericValue>(), nullptr);
+		dynState.AtExitHandlers.pop_back();
+		run();
+	}
+	setProgramState(oldState);
 }
 
 namespace {
- class ArgvArray {
-   std::unique_ptr<char[]> Array;
-   std::vector<std::unique_ptr<char[]>> Values;
- public:
-   /// Turn a vector of strings into a nice argv style array of pointers to null
-   /// terminated strings.
-   void *reset(LLVMContext &C, ExecutionEngine *EE,
-               const std::vector<std::string> &InputArgv);
- };
- }  // anonymous namespace
- void *ArgvArray::reset(LLVMContext &C, ExecutionEngine *EE,
-                        const std::vector<std::string> &InputArgv) {
-   Values.clear();  // Free the old contents.
-   Values.reserve(InputArgv.size());
-   unsigned PtrSize = EE->getDataLayout().getPointerSize();
-   Array = std::make_unique<char[]>((InputArgv.size()+1)*PtrSize);
+class ArgvArray {
+	std::unique_ptr<char[]> Array;
+	std::vector<std::unique_ptr<char[]>> Values;
 
-   // LLVM_DEBUG(dbgs() << "JIT: ARGV = " << (void *)Array.get() << "\n");
-   Type *SBytePtr = Type::getInt8PtrTy(C);
+public:
+	/// Turn a vector of strings into a nice argv style array of pointers to null
+	/// terminated strings.
+	void *reset(LLVMContext &C, ExecutionEngine *EE, const std::vector<std::string> &InputArgv);
+};
+} // anonymous namespace
+void *ArgvArray::reset(LLVMContext &C, ExecutionEngine *EE,
+		       const std::vector<std::string> &InputArgv)
+{
+	Values.clear(); // Free the old contents.
+	Values.reserve(InputArgv.size());
+	unsigned PtrSize = EE->getDataLayout().getPointerSize();
+	Array = std::make_unique<char[]>((InputArgv.size() + 1) * PtrSize);
 
-   for (unsigned i = 0; i != InputArgv.size(); ++i) {
-     unsigned Size = InputArgv[i].size()+1;
-     auto Dest = std::make_unique<char[]>(Size);
-     // LLVM_DEBUG(dbgs() << "JIT: ARGV[" << i << "] = " << (void *)Dest.get()
-     //                   << "\n");
+	// LLVM_DEBUG(dbgs() << "JIT: ARGV = " << (void *)Array.get() << "\n");
+	Type *SBytePtr = Type::getInt8PtrTy(C);
 
-     std::copy(InputArgv[i].begin(), InputArgv[i].end(), Dest.get());
-     Dest[Size-1] = 0;
+	for (unsigned i = 0; i != InputArgv.size(); ++i) {
+		unsigned Size = InputArgv[i].size() + 1;
+		auto Dest = std::make_unique<char[]>(Size);
+		// LLVM_DEBUG(dbgs() << "JIT: ARGV[" << i << "] = " << (void *)Dest.get()
+		//                   << "\n");
 
-     // Endian safe: Array[i] = (PointerTy)Dest;
-     EE->StoreValueToMemory(PTOGV(Dest.get()),
-                            (GenericValue*)(&Array[i*PtrSize]), SBytePtr);
-     Values.push_back(std::move(Dest));
-   }
+		std::copy(InputArgv[i].begin(), InputArgv[i].end(), Dest.get());
+		Dest[Size - 1] = 0;
 
-   // Null terminate it
-   EE->StoreValueToMemory(PTOGV(nullptr),
-                          (GenericValue*)(&Array[InputArgv.size()*PtrSize]),
-                          SBytePtr);
-   return Array.get();
- }
+		// Endian safe: Array[i] = (PointerTy)Dest;
+		EE->StoreValueToMemory(PTOGV(Dest.get()), (GenericValue *)(&Array[i * PtrSize]),
+				       SBytePtr);
+		Values.push_back(std::move(Dest));
+	}
 
-void
-Interpreter::setupFunctionCall(Function *F, ArrayRef<GenericValue> ArgValues)
+	// Null terminate it
+	EE->StoreValueToMemory(PTOGV(nullptr), (GenericValue *)(&Array[InputArgv.size() * PtrSize]),
+			       SBytePtr);
+	return Array.get();
+}
+
+void Interpreter::setupFunctionCall(Function *F, ArrayRef<GenericValue> ArgValues)
 {
 	// Try extra hard not to pass extra args to a function that isn't
 	// expecting them.  C programmers frequently bend the rules and
@@ -470,18 +462,17 @@ Interpreter::setupFunctionCall(Function *F, ArrayRef<GenericValue> ArgValues)
 
 /// run - Start execution with the specified function and arguments.
 ///
-GenericValue
-Interpreter::runFunction(Function *F,
-                         ArrayRef<GenericValue> ArgValues) {
-  assert (F && "Function *F was null at entry to run()");
+GenericValue Interpreter::runFunction(Function *F, ArrayRef<GenericValue> ArgValues)
+{
+	assert(F && "Function *F was null at entry to run()");
 
-  // Set up the function call.
-  setupFunctionCall(F, ArgValues);
+	// Set up the function call.
+	setupFunctionCall(F, ArgValues);
 
-  // Start executing the function.
-  run();
+	// Start executing the function.
+	run();
 
-  return dynState.ExitValue;
+	return dynState.ExitValue;
 }
 
 void Interpreter::setupStaticCtorsDtors(Module &module, bool isDtors)
@@ -493,7 +484,8 @@ void Interpreter::setupStaticCtorsDtors(Module &module, bool isDtors)
 	// an old-style (llvmgcc3) static ctor with __main linked in and in use.  If
 	// this is the case, don't execute any of the global ctors, __main will do
 	// it.
-	if (!GV || GV->isDeclaration() || GV->hasLocalLinkage()) return;
+	if (!GV || GV->isDeclaration() || GV->hasLocalLinkage())
+		return;
 
 	// Should be an array of '{ i32, void ()* }' structs.  The first value is
 	// the init priority, which we ignore.
@@ -502,11 +494,12 @@ void Interpreter::setupStaticCtorsDtors(Module &module, bool isDtors)
 		return;
 	for (unsigned i = 0, e = InitList->getNumOperands(); i != e; ++i) {
 		ConstantStruct *CS = dyn_cast<ConstantStruct>(InitList->getOperand(i));
-		if (!CS) continue;
+		if (!CS)
+			continue;
 
 		Constant *FP = CS->getOperand(1);
 		if (FP->isNullValue())
-			continue;  // Found a sentinal value, ignore.
+			continue; // Found a sentinal value, ignore.
 
 		// Strip off constant expression casts.
 		if (ConstantExpr *CE = dyn_cast<ConstantExpr>(FP))
@@ -521,13 +514,13 @@ void Interpreter::setupStaticCtorsDtors(Module &module, bool isDtors)
 #else
 					  None
 #endif
-				);
+			);
 
 		// FIXME: It is marginally lame that we just do nothing here if we see an
 		// entry we don't recognize. It might not be unreasonable for the verifier
 		// to not even allow this and just assert here.
 	}
- }
+}
 
 void Interpreter::setupStaticCtorsDtors(bool isDtors)
 {
@@ -542,15 +535,14 @@ static bool isTargetNullPtr(ExecutionEngine *EE, void *Loc)
 {
 	unsigned PtrSize = EE->getDataLayout().getPointerSize();
 	for (unsigned i = 0; i < PtrSize; ++i)
-		if (*(i + (uint8_t*)Loc))
+		if (*(i + (uint8_t *)Loc))
 			return false;
 	return true;
 }
 #endif
 
-void Interpreter::setupMain(Function *Fn,
-			    const std::vector<std::string> &argv,
-			    const char * const * envp)
+void Interpreter::setupMain(Function *Fn, const std::vector<std::string> &argv,
+			    const char *const *envp)
 {
 	std::vector<GenericValue> GVArgs;
 	GenericValue GVArgc;
@@ -559,7 +551,7 @@ void Interpreter::setupMain(Function *Fn,
 	// Check main() type
 	unsigned NumArgs = Fn->getFunctionType()->getNumParams();
 	FunctionType *FTy = Fn->getFunctionType();
-	Type* PPInt8Ty = Type::getInt8PtrTy(Fn->getContext())->getPointerTo();
+	Type *PPInt8Ty = Type::getInt8PtrTy(Fn->getContext())->getPointerTo();
 
 	// Check the argument types.
 	if (NumArgs > 3)
@@ -570,8 +562,7 @@ void Interpreter::setupMain(Function *Fn,
 		report_fatal_error("Invalid type for second argument of main() supplied");
 	if (NumArgs >= 1 && !FTy->getParamType(0)->isIntegerTy(32))
 		report_fatal_error("Invalid type for first argument of main() supplied");
-	if (!FTy->getReturnType()->isIntegerTy() &&
-	    !FTy->getReturnType()->isVoidTy())
+	if (!FTy->getReturnType()->isIntegerTy() && !FTy->getReturnType()->isVoidTy())
 		report_fatal_error("Invalid return type of main() supplied");
 
 	ArgvArray CArgv;
@@ -588,7 +579,8 @@ void Interpreter::setupMain(Function *Fn,
 				for (unsigned i = 0; envp[i]; ++i)
 					EnvVars.emplace_back(envp[i]);
 				// Arg #2 = envp.
-				GVArgs.push_back(PTOGV(CEnv.reset(Fn->getContext(), this, EnvVars)));
+				GVArgs.push_back(
+					PTOGV(CEnv.reset(Fn->getContext(), this, EnvVars)));
 			}
 		}
 	}

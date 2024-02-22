@@ -52,7 +52,7 @@ protected:
 	VectorClock(VectorClockKind k) : kind(k) {}
 
 public:
-	virtual ~VectorClock() {};
+	virtual ~VectorClock(){};
 
 	/* Returns the kind of this vector clock */
 	VectorClockKind getKind() const { return kind; }
@@ -70,9 +70,9 @@ public:
 	bool contains(const EventLabel *lab) const;
 
 	/* Updates the clock based on another clock **of the same kind** */
-	virtual View& update(const View &v) = 0;
-	virtual DepView& update(const DepView &v) = 0;
-	virtual VectorClock& update(const VectorClock &v) = 0;
+	virtual View &update(const View &v) = 0;
+	virtual DepView &update(const DepView &v) = 0;
+	virtual VectorClock &update(const VectorClock &v) = 0;
 
 	/* Ensures event E is included in the clock */
 	virtual VectorClock &updateIdx(Event e) = 0;
@@ -87,7 +87,7 @@ public:
 
 	/* Printing facilities */
 	virtual void printData(llvm::raw_ostream &s) const = 0;
-	friend llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const VectorClock &v);
+	friend llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const VectorClock &v);
 
 private:
 	/* The kind of this VectorClock */
@@ -99,6 +99,5 @@ struct VectorClockCloner {
 	VectorClock *operator()(const VectorClock &x) const { return x.clone().release(); }
 	// VectorClock *operator()(VectorClock &&x) const { return new VectorClock(std::move(x)); }
 };
-
 
 #endif /* __VECTOR_CLOCK_HPP__ */

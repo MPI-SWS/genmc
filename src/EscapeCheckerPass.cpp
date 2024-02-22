@@ -19,14 +19,14 @@
  */
 
 #include "EscapeCheckerPass.hpp"
-#include "config.h"
-#include "Error.hpp"
 #include "CallInfoCollectionPass.hpp"
+#include "Error.hpp"
 #include "InterpreterEnumAPI.hpp"
 #include "LLVMUtils.hpp"
+#include "config.h"
+#include <llvm/IR/InstIterator.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
-#include <llvm/IR/InstIterator.h>
 
 using namespace llvm;
 
@@ -41,13 +41,13 @@ bool EscapeInfo::escapes(const Value *v) const
 bool EscapeInfo::escapesAfter(const Value *a, const Instruction *b, DominatorTree &DT) const
 {
 	auto it = escapePoints.find(a);
-	return it == escapePoints.cend() ? true :
-		std::all_of(it->second.begin(), it->second.end(), [&](const Instruction *p){
-				return DT.dominates(b, p);
-			});
+	return it == escapePoints.cend()
+		       ? true
+		       : std::all_of(it->second.begin(), it->second.end(),
+				     [&](const Instruction *p) { return DT.dominates(b, p); });
 }
 
-Instruction *EscapeInfo::writesDynamicMemory(Value *val/*, AliasAnalysis &AA */)
+Instruction *EscapeInfo::writesDynamicMemory(Value *val /*, AliasAnalysis &AA */)
 {
 	auto *ptr = dyn_cast<Instruction>(val);
 	if (!ptr)
@@ -72,7 +72,8 @@ Instruction *EscapeInfo::writesDynamicMemory(Value *val/*, AliasAnalysis &AA */)
 	// /* Escape through globals? */
 	// return std::any_of(F->getParent()->global_begin(), F->getParent()->global_end(),
 	// 		   [&](const GlobalValue &gv){
-	// 			   return isa<Value>(gv) && !AA.isNoAlias(ptr, dyn_cast<Value>(&gv));
+	// 			   return isa<Value>(gv) && !AA.isNoAlias(ptr,
+	// dyn_cast<Value>(&gv));
 	// 		   });
 }
 
@@ -80,7 +81,7 @@ void EscapeInfo::calculate(llvm::Function &F, const VSet<Function *> &allocFuns,
 			   llvm::AliasAnalysis &AA)
 {
 	/* First, collect all allocations */
-	std::for_each(inst_begin(F), inst_end(F), [&](Instruction &i){
+	std::for_each(inst_begin(F), inst_end(F), [&](Instruction &i) {
 		if (isAlloc(&i, &allocFuns))
 			allocs.insert(&i);
 	});
@@ -150,14 +151,12 @@ void EscapeInfo::calculate(llvm::Function &F, const VSet<Function *> &allocFuns,
 void EscapeInfo::print(llvm::raw_ostream &s) const
 {
 	for (auto P : escapePoints) {
-		s << P.first->getName() << " has " << P.second.size()
-		  << " escape point(s): [";
+		s << P.first->getName() << " has " << P.second.size() << " escape point(s): [";
 		for (auto &p : P.second)
 			s << " " << *p << " ";
 		s << "]\n";
 	}
 }
-
 
 /*  Pass impl */
 

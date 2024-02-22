@@ -30,10 +30,10 @@
  * Represents the position of a given label in an execution graph.
  */
 struct Event {
-	Event() : thread(DEF_IDX), index(DEF_IDX) {};
+	Event() : thread(DEF_IDX), index(DEF_IDX){};
 
 	/** Constructs an event at the given position */
-	Event(int tid, int idx) : thread(tid), index(idx) {};
+	Event(int tid, int idx) : thread(tid), index(idx){};
 
 	/** Returns the INIT event */
 	static auto getInit() -> Event { return {0, 0}; };
@@ -48,61 +48,67 @@ struct Event {
 	[[nodiscard]] auto isBottom() const -> bool { return *this == getBottom(); };
 
 	/** Returns the po-predecessor. No bounds checking is performed. */
-	[[nodiscard]] auto prev() const -> Event { return {thread, index-1}; };
+	[[nodiscard]] auto prev() const -> Event { return {thread, index - 1}; };
 
 	/** Returns the po-successor. No bounds checking is performed  */
-	[[nodiscard]] auto next() const -> Event { return {thread, index+1}; };
+	[[nodiscard]] auto next() const -> Event { return {thread, index + 1}; };
 
 	inline auto operator==(const Event &) const -> bool = default;
-	inline auto operator<=>(const Event &other) const -> std::partial_ordering {
-		return this->thread == other.thread ?
-		       this->index <=> other.index :
-		       std::partial_ordering::unordered;
+	inline auto operator<=>(const Event &other) const -> std::partial_ordering
+	{
+		return this->thread == other.thread ? this->index <=> other.index
+						    : std::partial_ordering::unordered;
 	}
 
-	inline auto operator++() -> Event& {
+	inline auto operator++() -> Event &
+	{
 		++index;
 		return *this;
 	}
-	inline auto operator++(int) -> Event {
+	inline auto operator++(int) -> Event
+	{
 		auto tmp = *this;
 		operator++();
 		return tmp;
 	}
-	inline auto operator--() -> Event& {
+	inline auto operator--() -> Event &
+	{
 		--index;
 		return *this;
 	}
-	inline auto operator--(int) -> Event {
+	inline auto operator--(int) -> Event
+	{
 		auto tmp = *this;
 		operator--();
 		return tmp;
 	}
 
-	friend auto hash_value(const Event &e) -> llvm::hash_code {
+	friend auto hash_value(const Event &e) -> llvm::hash_code
+	{
 		return llvm::hash_combine(e.thread, e.index);
-        };
+	};
 
 	int thread;
-        int index;
+	int index;
 
 private:
 	/* Default and bottom events should really be opaque.
 	 * Try to throw out of bounds if used as index. */
-        static constexpr int DEF_IDX = -17;
-        static constexpr int BOT_IDX = -42;
+	static constexpr int DEF_IDX = -17;
+	static constexpr int BOT_IDX = -42;
 };
 
-auto operator<<(llvm::raw_ostream &s, Event e) -> llvm::raw_ostream&;
+auto operator<<(llvm::raw_ostream &s, Event e) -> llvm::raw_ostream &;
 
 struct EventHasher {
 
-	template <class T>
-	inline void hash_combine(std::size_t& seed, const T& v)	const {
-		seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed<<6) + (seed>>2);
+	template <class T> inline void hash_combine(std::size_t &seed, const T &v) const
+	{
+		seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 	}
 
-	auto operator()(const Event& e) const -> std::size_t {
+	auto operator()(const Event &e) const -> std::size_t
+	{
 		std::size_t hash = 0;
 		hash_combine(hash, e.thread);
 		hash_combine(hash, e.index);

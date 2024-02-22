@@ -18,12 +18,12 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-#include "config.h"
 #include "FunctionInlinerPass.hpp"
-#include "Error.hpp"
 #include "DeclareInternalsPass.hpp"
+#include "Error.hpp"
 #include "InterpreterEnumAPI.hpp"
 #include "MDataCollectionPass.hpp"
+#include "config.h"
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Analysis/CallGraph.h>
 #include <llvm/Analysis/PostDominators.h>
@@ -75,7 +75,7 @@ bool inlineCall(CallInst *ci)
 #else
 	BUG_ON(!InlineFunction(ci, ifi));
 #endif
-      return true;
+	return true;
 }
 
 bool inlineFunction(Module &M, Function *toInline)
@@ -93,9 +93,7 @@ bool inlineFunction(Module &M, Function *toInline)
 	}
 
 	bool changed = false;
-	std::for_each(calls.begin(), calls.end(), [&](CallInst *ci){
-		changed |= inlineCall(ci);
-	});
+	std::for_each(calls.begin(), calls.end(), [&](CallInst *ci) { changed |= inlineCall(ci); });
 	return changed;
 }
 
@@ -112,10 +110,7 @@ bool FunctionInlinerPass::runOnModule(Module &M)
 	return changed;
 }
 
-ModulePass *createFunctionInlinerPass()
-{
-	return new FunctionInlinerPass();
-}
+ModulePass *createFunctionInlinerPass() { return new FunctionInlinerPass(); }
 
 char FunctionInlinerPass::ID = 42;
 static llvm::RegisterPass<FunctionInlinerPass> P("function-inliner",

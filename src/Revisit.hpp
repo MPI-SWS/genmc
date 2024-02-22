@@ -63,30 +63,27 @@ public:
 
 	/* Destructor and printing facilities */
 	virtual ~Revisit() {}
-	friend llvm::raw_ostream& operator<<(llvm::raw_ostream& rhs, const Revisit &item);
+	friend llvm::raw_ostream &operator<<(llvm::raw_ostream &rhs, const Revisit &item);
 
 private:
 	Kind kind;
 	Event pos;
 };
 
-llvm::raw_ostream& operator<<(llvm::raw_ostream& rhs, const Revisit::Kind k);
-
+llvm::raw_ostream &operator<<(llvm::raw_ostream &rhs, const Revisit::Kind k);
 
 /* Multiple hierarchy for read revisits */
 class ReadRevisit {
 
 protected:
-	ReadRevisit(Revisit::Kind k, Event rev)
-		: revisitKind(k), rev(rev) {}
+	ReadRevisit(Revisit::Kind k, Event rev) : revisitKind(k), rev(rev) {}
 
 public:
 	Event getRev() const { return rev; }
 
-	Revisit::Kind getRevisitKind() const {
-		return revisitKind;
-	}
-	static bool classof(const Revisit *r) {
+	Revisit::Kind getRevisitKind() const { return revisitKind; }
+	static bool classof(const Revisit *r)
+	{
 		return r->getKind() == Revisit::RV_FRevRead ||
 		       (r->getKind() >= Revisit::RV_BRev && r->getKind() <= Revisit::RV_BRevLast);
 	}
@@ -98,7 +95,6 @@ private:
 	Event rev;
 };
 
-
 /*
  * ForwardRevisit class (abstract) - Represents a forward revisit
  */
@@ -109,11 +105,11 @@ protected:
 	ForwardRevisit(Kind k, Event p) : Revisit(k, p) {}
 
 public:
-	static bool classof(const Revisit *item) {
+	static bool classof(const Revisit *item)
+	{
 		return item->getKind() >= RV_FRev && item->getKind() <= RV_FRevLast;
 	}
 };
-
 
 /*
  * ReadForwardRevisit class - Forward revisit a read
@@ -124,25 +120,24 @@ public:
 	/* Constructors */
 	ReadForwardRevisit() = delete;
 	ReadForwardRevisit(Event p, Event r, bool m = false)
-		: ForwardRevisit(RV_FRevRead, p), maximal(m),
-		  ReadRevisit(RV_FRevRead, r) {}
+		: ForwardRevisit(RV_FRevRead, p), maximal(m), ReadRevisit(RV_FRevRead, r)
+	{}
 
 	bool isMaximal() const { return maximal; }
 
-	static bool classof(const Revisit *item) {
-		return item->getKind() == RV_FRevRead;
+	static bool classof(const Revisit *item) { return item->getKind() == RV_FRevRead; }
+	static ReadRevisit *castToReadRevisit(const ReadForwardRevisit *r)
+	{
+		return static_cast<ReadRevisit *>(const_cast<ReadForwardRevisit *>(r));
 	}
-	static ReadRevisit *castToReadRevisit(const ReadForwardRevisit *r) {
-		return static_cast<ReadRevisit *>(const_cast<ReadForwardRevisit*>(r));
-	}
-	static ReadForwardRevisit *castFromReadRevisit(const ReadRevisit *r) {
-		return static_cast<ReadForwardRevisit *>(const_cast<ReadRevisit*>(r));
+	static ReadForwardRevisit *castFromReadRevisit(const ReadRevisit *r)
+	{
+		return static_cast<ReadForwardRevisit *>(const_cast<ReadRevisit *>(r));
 	}
 
 private:
 	bool maximal;
 };
-
 
 /*
  * WriteForwardRevisit class - Represents an alternative MO position for a store
@@ -151,25 +146,20 @@ private:
 class WriteForwardRevisit : public ForwardRevisit {
 
 protected:
-	WriteForwardRevisit(Kind k, Event p, Event moSucc)
-		: ForwardRevisit(k, p), moSucc(moSucc) {}
+	WriteForwardRevisit(Kind k, Event p, Event moSucc) : ForwardRevisit(k, p), moSucc(moSucc) {}
 
 public:
-	WriteForwardRevisit(Event p, Event moSucc)
-		: WriteForwardRevisit(RV_FRevMO, p, moSucc) {}
+	WriteForwardRevisit(Event p, Event moSucc) : WriteForwardRevisit(RV_FRevMO, p, moSucc) {}
 
 	/* Returns the new MO successor of the event for which
 	 * we are exploring alternative exploration options */
 	Event getSucc() const { return moSucc; }
 
-	static bool classof(const Revisit *item) {
-		return item->getKind() == RV_FRevMO;
-	}
+	static bool classof(const Revisit *item) { return item->getKind() == RV_FRevMO; }
 
 private:
 	Event moSucc;
 };
-
 
 /*
  * OptionalForwardRevisit class - Represents the revisit of an optional block
@@ -179,11 +169,8 @@ class OptionalForwardRevisit : public ForwardRevisit {
 public:
 	OptionalForwardRevisit(Event p) : ForwardRevisit(RV_FRevOpt, p) {}
 
-	static bool classof(const Revisit *item) {
-		return item->getKind() == RV_FRevOpt;
-	}
+	static bool classof(const Revisit *item) { return item->getKind() == RV_FRevOpt; }
 };
-
 
 /*
  * RerunForwardRevisit class - Represents an execution "rerun".
@@ -194,11 +181,8 @@ class RerunForwardRevisit : public ForwardRevisit {
 public:
 	RerunForwardRevisit() : ForwardRevisit(RV_FRevRerun, Event::getInit()) {}
 
-	static bool classof(const Revisit *item) {
-		return item->getKind() == RV_FRevRerun;
-	}
+	static bool classof(const Revisit *item) { return item->getKind() == RV_FRevRerun; }
 };
-
 
 /*
  * BackwardRevisit class - Represents a backward revisit
@@ -207,40 +191,40 @@ class BackwardRevisit : public Revisit, public ReadRevisit {
 
 protected:
 	BackwardRevisit(Kind k, Event p, Event r, std::unique_ptr<VectorClock> view)
-		: Revisit(k, p),
-		  view(std::move(view)),
-		  ReadRevisit(k, r) {}
+		: Revisit(k, p), view(std::move(view)), ReadRevisit(k, r)
+	{}
 
 public:
 	BackwardRevisit(Event p, Event r, std::unique_ptr<VectorClock> view)
-		: BackwardRevisit(RV_BRev, p, r, std::move(view)) {}
-	BackwardRevisit(const ReadLabel *rLab, const WriteLabel *wLab, std::unique_ptr<VectorClock> view)
-		: BackwardRevisit(rLab->getPos(), wLab->getPos(), std::move(view)) {}
+		: BackwardRevisit(RV_BRev, p, r, std::move(view))
+	{}
+	BackwardRevisit(const ReadLabel *rLab, const WriteLabel *wLab,
+			std::unique_ptr<VectorClock> view)
+		: BackwardRevisit(rLab->getPos(), wLab->getPos(), std::move(view))
+	{}
 
 	/* Returns (releases) the prefix of the revisiting event */
-	std::unique_ptr<VectorClock> getViewRel() {
-		return std::move(view);
-	}
+	std::unique_ptr<VectorClock> getViewRel() { return std::move(view); }
 
 	/* Returns (but does not release) the prefix of the revisiting event */
-	const std::unique_ptr<VectorClock> &getViewNoRel() const {
-		return view;
-	}
+	const std::unique_ptr<VectorClock> &getViewNoRel() const { return view; }
 
-	static bool classof(const Revisit *item) {
+	static bool classof(const Revisit *item)
+	{
 		return item->getKind() >= RV_BRev && item->getKind() <= RV_BRevLast;
 	}
-	static ReadRevisit *castToReadRevisit(const BackwardRevisit *r) {
-		return static_cast<ReadRevisit *>(const_cast<BackwardRevisit*>(r));
+	static ReadRevisit *castToReadRevisit(const BackwardRevisit *r)
+	{
+		return static_cast<ReadRevisit *>(const_cast<BackwardRevisit *>(r));
 	}
-	static BackwardRevisit *castFromReadRevisit(const ReadRevisit *r) {
-		return static_cast<BackwardRevisit *>(const_cast<ReadRevisit*>(r));
+	static BackwardRevisit *castFromReadRevisit(const ReadRevisit *r)
+	{
+		return static_cast<BackwardRevisit *>(const_cast<ReadRevisit *>(r));
 	}
 
 private:
 	std::unique_ptr<VectorClock> view;
 };
-
 
 /*
  * BackwardRevisitHELPER class - Represents an optimized BR performed by Helper
@@ -249,29 +233,30 @@ class BackwardRevisitHELPER : public BackwardRevisit {
 
 public:
 	BackwardRevisitHELPER(Event p, Event r, std::unique_ptr<VectorClock> view, Event m)
-		: BackwardRevisit(RV_BRevHelper, p, r, std::move(view)), mid(m) {}
-	BackwardRevisitHELPER(const ReadLabel *rLab, const WriteLabel *wLab, std::unique_ptr<VectorClock> view,
-			      const WriteLabel *mLab)
+		: BackwardRevisit(RV_BRevHelper, p, r, std::move(view)), mid(m)
+	{}
+	BackwardRevisitHELPER(const ReadLabel *rLab, const WriteLabel *wLab,
+			      std::unique_ptr<VectorClock> view, const WriteLabel *mLab)
 		: BackwardRevisitHELPER(rLab->getPos(), wLab->getPos(), std::move(view),
-					mLab->getPos()) {}
+					mLab->getPos())
+	{}
 
 	/* Returns the intermediate write participating in the revisit */
 	Event getMid() const { return mid; }
 
-	static bool classof(const Revisit *item) {
-		return item->getKind() == RV_BRevHelper;
+	static bool classof(const Revisit *item) { return item->getKind() == RV_BRevHelper; }
+	static ReadRevisit *castToReadRevisit(const BackwardRevisitHELPER *r)
+	{
+		return static_cast<ReadRevisit *>(const_cast<BackwardRevisitHELPER *>(r));
 	}
-	static ReadRevisit *castToReadRevisit(const BackwardRevisitHELPER *r) {
-		return static_cast<ReadRevisit *>(const_cast<BackwardRevisitHELPER*>(r));
-	}
-	static BackwardRevisitHELPER *castFromReadRevisit(const ReadRevisit *r) {
-		return static_cast<BackwardRevisitHELPER *>(const_cast<ReadRevisit*>(r));
+	static BackwardRevisitHELPER *castFromReadRevisit(const ReadRevisit *r)
+	{
+		return static_cast<BackwardRevisitHELPER *>(const_cast<ReadRevisit *>(r));
 	}
 
 private:
 	Event mid;
 };
-
 
 /*******************************************************************************
  **                             Static methods
@@ -307,107 +292,84 @@ inline ReadRevisit *Revisit::castToReadRevisit(const Revisit *r)
 	}
 }
 
-
 /*******************************************************************************
  **                             RTTI helpers
  *******************************************************************************/
 
 /* Specialization selected when ToTy is not a known subclass of ReadRevisit */
-template <class ToTy,
-	  bool IsKnownSubtype = ::std::is_base_of<ReadRevisit, ToTy>::value>
+template <class ToTy, bool IsKnownSubtype = ::std::is_base_of<ReadRevisit, ToTy>::value>
 struct cast_convert_read_rev {
-	static const ToTy *doit(const ReadRevisit *Val) {
-		return static_cast<const ToTy*>(Revisit::castFromReadRevisit(Val));
+	static const ToTy *doit(const ReadRevisit *Val)
+	{
+		return static_cast<const ToTy *>(Revisit::castFromReadRevisit(Val));
 	}
 
-	static ToTy *doit(ReadRevisit *Val) {
-		return static_cast<ToTy*>(Revisit::castFromReadRevisit(Val));
+	static ToTy *doit(ReadRevisit *Val)
+	{
+		return static_cast<ToTy *>(Revisit::castFromReadRevisit(Val));
 	}
 };
 
 /* Specialization selected when ToTy is a known subclass of ReadRevisit */
-template <class ToTy>
-struct cast_convert_read_rev<ToTy, true> {
-	static const ToTy *doit(const ReadRevisit *Val) {
-		return static_cast<const ToTy*>(Val);
-	}
+template <class ToTy> struct cast_convert_read_rev<ToTy, true> {
+	static const ToTy *doit(const ReadRevisit *Val) { return static_cast<const ToTy *>(Val); }
 
-	static ToTy *doit(ReadRevisit *Val) {
-		return static_cast<ToTy*>(Val);
-	}
+	static ToTy *doit(ReadRevisit *Val) { return static_cast<ToTy *>(Val); }
 };
 
 namespace llvm {
 
-	/* isa<T>(ReadRevisit *) */
-	template <typename To>
-	struct isa_impl<To, ::ReadRevisit> {
-		static bool doit(const ::ReadRevisit &Val) {
-			return To::classofKind(Val.getRevisitKind());
-		}
-	};
+/* isa<T>(ReadRevisit *) */
+template <typename To> struct isa_impl<To, ::ReadRevisit> {
+	static bool doit(const ::ReadRevisit &Val) { return To::classofKind(Val.getRevisitKind()); }
+};
 
-	/* cast<T>(ReadRevisit *) */
-	template<class ToTy>
-	struct cast_convert_val<ToTy,
-				const ::ReadRevisit,const ::ReadRevisit> {
-		static const ToTy &doit(const ::ReadRevisit &Val) {
-			return *::cast_convert_read_rev<ToTy>::doit(&Val);
-		}
-	};
+/* cast<T>(ReadRevisit *) */
+template <class ToTy> struct cast_convert_val<ToTy, const ::ReadRevisit, const ::ReadRevisit> {
+	static const ToTy &doit(const ::ReadRevisit &Val)
+	{
+		return *::cast_convert_read_rev<ToTy>::doit(&Val);
+	}
+};
 
-	template<class ToTy>
-	struct cast_convert_val<ToTy, ::ReadRevisit, ::ReadRevisit> {
-		static ToTy &doit(::ReadRevisit &Val) {
-			return *::cast_convert_read_rev<ToTy>::doit(&Val);
-		}
-	};
+template <class ToTy> struct cast_convert_val<ToTy, ::ReadRevisit, ::ReadRevisit> {
+	static ToTy &doit(::ReadRevisit &Val) { return *::cast_convert_read_rev<ToTy>::doit(&Val); }
+};
 
-	template<class ToTy>
-	struct cast_convert_val<ToTy,
-				const ::ReadRevisit*, const ::ReadRevisit*> {
-		static const ToTy *doit(const ::ReadRevisit *Val) {
-			return ::cast_convert_read_rev<ToTy>::doit(Val);
-		}
-	};
+template <class ToTy> struct cast_convert_val<ToTy, const ::ReadRevisit *, const ::ReadRevisit *> {
+	static const ToTy *doit(const ::ReadRevisit *Val)
+	{
+		return ::cast_convert_read_rev<ToTy>::doit(Val);
+	}
+};
 
-	template<class ToTy>
-	struct cast_convert_val<ToTy, ::ReadRevisit*, ::ReadRevisit*> {
-		static ToTy *doit(::ReadRevisit *Val) {
-			return ::cast_convert_read_rev<ToTy>::doit(Val);
-		}
-	};
+template <class ToTy> struct cast_convert_val<ToTy, ::ReadRevisit *, ::ReadRevisit *> {
+	static ToTy *doit(::ReadRevisit *Val) { return ::cast_convert_read_rev<ToTy>::doit(Val); }
+};
 
-	/// Implement cast_convert_val for EventLabel -> ReadRevisit conversions.
-	template<class FromTy>
-	struct cast_convert_val< ::ReadRevisit, FromTy, FromTy> {
-		static ::ReadRevisit &doit(const FromTy &Val) {
-			return *FromTy::castToReadRevisit(&Val);
-		}
-	};
+/// Implement cast_convert_val for EventLabel -> ReadRevisit conversions.
+template <class FromTy> struct cast_convert_val<::ReadRevisit, FromTy, FromTy> {
+	static ::ReadRevisit &doit(const FromTy &Val) { return *FromTy::castToReadRevisit(&Val); }
+};
 
-	template<class FromTy>
-	struct cast_convert_val< ::ReadRevisit, FromTy*, FromTy*> {
-		static ::ReadRevisit *doit(const FromTy *Val) {
-			return FromTy::castToReadRevisit(Val);
-		}
-	};
+template <class FromTy> struct cast_convert_val<::ReadRevisit, FromTy *, FromTy *> {
+	static ::ReadRevisit *doit(const FromTy *Val) { return FromTy::castToReadRevisit(Val); }
+};
 
-	template<class FromTy>
-	struct cast_convert_val< const ::ReadRevisit, FromTy, FromTy> {
-		static const ::ReadRevisit &doit(const FromTy &Val) {
-			return *FromTy::castToReadRevisit(&Val);
-		}
-	};
+template <class FromTy> struct cast_convert_val<const ::ReadRevisit, FromTy, FromTy> {
+	static const ::ReadRevisit &doit(const FromTy &Val)
+	{
+		return *FromTy::castToReadRevisit(&Val);
+	}
+};
 
-	template<class FromTy>
-	struct cast_convert_val< const ::ReadRevisit, FromTy*, FromTy*> {
-		static const ::ReadRevisit *doit(const FromTy *Val) {
-			return FromTy::castToReadRevisit(Val);
-		}
-	};
+template <class FromTy> struct cast_convert_val<const ::ReadRevisit, FromTy *, FromTy *> {
+	static const ::ReadRevisit *doit(const FromTy *Val)
+	{
+		return FromTy::castToReadRevisit(Val);
+	}
+};
 
 } /* namespace llvm */
-
 
 #endif /* __REVISIT_HPP__ */

@@ -31,7 +31,6 @@
 #include <unordered_map>
 #include <vector>
 
-
 /*
  * This class is responsible for identifying allocations that escape
  * their enclosing functions through writes to "global" memory.
@@ -76,7 +75,6 @@ private:
 	EPT escapePoints;
 	VSet<llvm::Instruction *> allocs;
 };
-
 
 /*
  * Populates an EscapeInfo object for the function the pass runs on.

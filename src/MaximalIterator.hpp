@@ -21,10 +21,10 @@
 #ifndef __MAXIMAL_ITERATOR_HPP__
 #define __MAXIMAL_ITERATOR_HPP__
 
-#include "config.h"
 #include "View.hpp"
-#include <llvm/ADT/iterator_range.h>
+#include "config.h"
 #include <iterator>
+#include <llvm/ADT/iterator_range.h>
 #include <type_traits>
 #include <utility>
 
@@ -48,7 +48,8 @@ public:
 	/*** begin()/end() ctors ***/
 	MaximalIterator() = delete;
 
-	MaximalIterator(const View &v) : view(v) {
+	MaximalIterator(const View &v) : view(v)
+	{
 		curr = view.begin();
 		if (view.begin() != view.end())
 			e = Event(0, *curr);
@@ -60,30 +61,34 @@ public:
 	inline reference operator*() const { return e; }
 	inline pointer operator->() const { return &operator*(); }
 
-	inline bool operator==(const MaximalIterator &other) const {
-		return curr == other.curr;
-	}
+	inline bool operator==(const MaximalIterator &other) const { return curr == other.curr; }
 
-	inline bool operator!=(const MaximalIterator& other) const {
-		return !operator==(other);
-	}
+	inline bool operator!=(const MaximalIterator &other) const { return !operator==(other); }
 
-	MaximalIterator& operator++() {
+	MaximalIterator &operator++()
+	{
 		if (++curr != view.end())
 			e = Event(curr - view.begin(), *curr);
 		return *this;
 	}
-	inline MaximalIterator operator++(int) {
-		auto tmp = *this; ++*this; return tmp;
+	inline MaximalIterator operator++(int)
+	{
+		auto tmp = *this;
+		++*this;
+		return tmp;
 	}
 
-	MaximalIterator& operator--() {
+	MaximalIterator &operator--()
+	{
 		if (--curr != view.end())
 			e = Event(curr - view.begin(), *curr);
 		return *this;
 	}
-	inline MaximalIterator operator--(int) {
-		auto tmp = *this; --*this; return tmp;
+	inline MaximalIterator operator--(int)
+	{
+		auto tmp = *this;
+		--*this;
+		return tmp;
 	}
 
 protected:
@@ -96,11 +101,14 @@ using maximal_iterator = MaximalIterator;
 using maximal_range = llvm::iterator_range<maximal_iterator>;
 
 inline maximal_iterator maximal_begin(const View &v) { return maximal_iterator(v); }
-inline maximal_iterator maximal_end(const View &v)   { return maximal_iterator(v, true); }
-inline maximal_range maximals(const View &v) { return maximal_range(maximal_begin(v), maximal_end(v)); }
+inline maximal_iterator maximal_end(const View &v) { return maximal_iterator(v, true); }
+inline maximal_range maximals(const View &v)
+{
+	return maximal_range(maximal_begin(v), maximal_end(v));
+}
 
-#define FOREACH_MAXIMAL(result, graph, view)				\
-	for (auto i = 0u; i < view.size(); i++)				\
+#define FOREACH_MAXIMAL(result, graph, view)                                                       \
+	for (auto i = 0u; i < view.size(); i++)                                                    \
 		if (auto *result = graph.getEventLabel(Event(i, view.getMax(i))); true)
 
 #endif /*__MAXIMAL_ITERATOR_HPP__ */

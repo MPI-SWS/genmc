@@ -21,23 +21,23 @@
 #ifndef __LLVM_UTILS_HPP__
 #define __LLVM_UTILS_HPP__
 
-#include "config.h"
 #include "Error.hpp"
 #include "EventAttr.hpp"
 #include "VSet.hpp"
+#include "config.h"
 #ifdef LLVM_HAVE_ELIMINATE_UNCREACHABLE_BLOCKS
 #include <llvm/Analysis/DomTreeUpdater.h>
 #endif
-#include <llvm/IR/Constants.h>
-#include <llvm/IR/Value.h>
-#include <llvm/IR/Instructions.h>
 #include <llvm/IR/CFG.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/Value.h>
 #include <string>
 
 #if LLVM_VERSION_MAJOR < 8
- typedef llvm::TerminatorInst TerminatorInst;
+typedef llvm::TerminatorInst TerminatorInst;
 #else
- typedef llvm::Instruction TerminatorInst;
+typedef llvm::Instruction TerminatorInst;
 #endif
 
 /*
@@ -130,27 +130,25 @@ inline WriteAttr getWriteAttr(llvm::Instruction &I)
 }
 
 namespace details {
-	template<typename F>
-	void foreachInBackPathTo(llvm::BasicBlock *curr,
-				 llvm::BasicBlock *to,
-				 llvm::SmallVector<llvm::BasicBlock *, 4> &path,
-				 F&& fun)
-	{
-		path.push_back(curr);
-		if (curr == to) {
-			for (auto *bb : path)
-				std::for_each(bb->rbegin(), bb->rend(), fun);
-			path.pop_back();
-			return;
-		}
-
-		for (auto *pred: predecessors(curr))
-			if (std::find(path.begin(), path.end(), pred) == path.end())
-				foreachInBackPathTo(pred, to, path, fun);
+template <typename F>
+void foreachInBackPathTo(llvm::BasicBlock *curr, llvm::BasicBlock *to,
+			 llvm::SmallVector<llvm::BasicBlock *, 4> &path, F &&fun)
+{
+	path.push_back(curr);
+	if (curr == to) {
+		for (auto *bb : path)
+			std::for_each(bb->rbegin(), bb->rend(), fun);
 		path.pop_back();
 		return;
 	}
+
+	for (auto *pred : predecessors(curr))
+		if (std::find(path.begin(), path.end(), pred) == path.end())
+			foreachInBackPathTo(pred, to, path, fun);
+	path.pop_back();
+	return;
 }
+} // namespace details
 
 /*
  * Executes FUN for all instructions from FROM to TO.
@@ -158,8 +156,8 @@ namespace details {
  * FUN is applied in reverse iteration order within a block.
  */
 
-template<typename F>
-void foreachInBackPathTo(llvm::BasicBlock *from, llvm::BasicBlock *to, F&& fun)
+template <typename F>
+void foreachInBackPathTo(llvm::BasicBlock *from, llvm::BasicBlock *to, F &&fun)
 {
 	llvm::SmallVector<llvm::BasicBlock *, 4> path;
 	::details::foreachInBackPathTo(from, to, path, fun);
@@ -175,25 +173,23 @@ void foreachInBackPathTo(llvm::BasicBlock *from, llvm::BasicBlock *to, F&& fun)
 using namespace llvm;
 
 namespace llvm {
-	class DomTreeUpdater;
+class DomTreeUpdater;
 }
 
-void DetatchDeadBlocks(
-	ArrayRef<BasicBlock *> BBs,
-	// SmallVectorImpl<DominatorTree::UpdateType> *Updates,
-	bool KeepOneInputPHIs);
+void DetatchDeadBlocks(ArrayRef<BasicBlock *> BBs,
+		       // SmallVectorImpl<DominatorTree::UpdateType> *Updates,
+		       bool KeepOneInputPHIs);
 
-void DeleteDeadBlocks(ArrayRef <BasicBlock *> BBs, DomTreeUpdater *DTU,
-		      bool KeepOneInputPHIs);
+void DeleteDeadBlocks(ArrayRef<BasicBlock *> BBs, DomTreeUpdater *DTU, bool KeepOneInputPHIs);
 
-void DeleteDeadBlock(BasicBlock *BB, DomTreeUpdater *DTU = nullptr,
-		     bool KeepOneInputPHIs = false);
+void DeleteDeadBlock(BasicBlock *BB, DomTreeUpdater *DTU = nullptr, bool KeepOneInputPHIs = false);
 
 bool EliminateUnreachableBlocks(Function &F, DomTreeUpdater *DTU = nullptr,
 				bool KeepOneInputPHIs = false);
 
 #endif /* LLVM_VERSION_MAJOR < 9 */
 
-void replaceUsesWithIf(llvm::Value *Old, llvm::Value *New, llvm::function_ref<bool(llvm::Use &U)> ShouldReplace);
+void replaceUsesWithIf(llvm::Value *Old, llvm::Value *New,
+		       llvm::function_ref<bool(llvm::Use &U)> ShouldReplace);
 
 #endif /* __LLVM_UTILS_HPP__ */

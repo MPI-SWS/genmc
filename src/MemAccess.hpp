@@ -21,9 +21,9 @@
 #ifndef __MEM_ACCESS_HPP__
 #define __MEM_ACCESS_HPP__
 
-#include "config.h"
 #include "Error.hpp"
 #include "SAddr.hpp"
+#include "config.h"
 
 #include <climits>
 #include <cstdint>
@@ -35,10 +35,7 @@
 /*
  * Represents the type of an access: pointer, signed integer, unsigned integer
  */
-enum class AType {
-	Pointer, Signed, Unsigned
-};
-
+enum class AType { Pointer, Signed, Unsigned };
 
 /*******************************************************************************
  **                             AAccess Class
@@ -51,29 +48,31 @@ class AAccess {
 
 public:
 	AAccess() = delete;
-	AAccess(SAddr a, ASize s, AType t) : addr(a), size(s), type(t) {}
+	AAccess(SAddr addr, ASize size, AType type) : addr(addr), size(size), type(type) {}
 
-	SAddr getAddr() const { return addr; }
-	ASize getSize() const { return size; }
-	AType getType() const { return type; }
+	[[nodiscard]] auto getAddr() const -> SAddr { return addr; }
+	[[nodiscard]] auto getSize() const -> ASize { return size; }
+	[[nodiscard]] auto getType() const -> AType { return type; }
 
-	bool isPointer() const { return getType() == AType::Pointer; }
-	bool isUnsigned() const { return getType() == AType::Unsigned; }
-	bool isSigned() const { return getType() == AType::Signed; }
+	[[nodiscard]] auto isPointer() const -> bool { return getType() == AType::Pointer; }
+	[[nodiscard]] auto isUnsigned() const -> bool { return getType() == AType::Unsigned; }
+	[[nodiscard]] auto isSigned() const -> bool { return getType() == AType::Signed; }
 
 	/* Whether the access contains a given address */
-	bool contains(SAddr a) const {
-		if (!getAddr().sameStorageAs(a))
+	[[nodiscard]] auto contains(SAddr addr) const -> bool
+	{
+		if (!getAddr().sameStorageAs(addr))
 			return false;
-		return getAddr() <= a && a < getAddr() + getSize();
+		return getAddr() <= addr && addr < getAddr() + getSize();
 	}
 
 	/* Whether the access overlaps with another access */
-	bool overlaps(const AAccess &other) const {
+	[[nodiscard]] auto overlaps(const AAccess &other) const -> bool
+	{
 		if (!getAddr().sameStorageAs(other.getAddr()))
 			return false;
 		return getAddr() + getSize() > other.getAddr() &&
-			getAddr() < other.getAddr() + other.getSize();
+		       getAddr() < other.getAddr() + other.getSize();
 	}
 
 private:

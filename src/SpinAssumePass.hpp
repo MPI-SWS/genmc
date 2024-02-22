@@ -22,26 +22,29 @@
 #define __SPIN_ASSUME_PASS_HPP__
 
 #include "VSet.hpp"
-#include <llvm/Pass.h>
 #include <llvm/Analysis/LoopPass.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/Pass.h>
 
 class SpinAssumePass : public llvm::LoopPass {
 
 protected:
-	bool isPathToHeaderEffectFree(llvm::BasicBlock *latch, llvm::Loop *l, bool &checkDynamically);
-	bool isPathToHeaderFAIZNE(llvm::BasicBlock *latch, llvm::Loop *l, llvm::Instruction *&lastEffect);
-	bool isPathToHeaderLockZNE(llvm::BasicBlock *latch, llvm::Loop *l, llvm::Instruction *&lastEffect);
+	bool isPathToHeaderEffectFree(llvm::BasicBlock *latch, llvm::Loop *l,
+				      bool &checkDynamically);
+	bool isPathToHeaderFAIZNE(llvm::BasicBlock *latch, llvm::Loop *l,
+				  llvm::Instruction *&lastEffect);
+	bool isPathToHeaderLockZNE(llvm::BasicBlock *latch, llvm::Loop *l,
+				   llvm::Instruction *&lastEffect);
 
 public:
 	static char ID;
 
-	SpinAssumePass() : llvm::LoopPass(ID) {};
+	SpinAssumePass() : llvm::LoopPass(ID){};
 
-	void markSpinloopStarts(bool mark)  { markStarts = mark; }
+	void markSpinloopStarts(bool mark) { markStarts = mark; }
 
-        virtual void getAnalysisUsage(llvm::AnalysisUsage &AU) const;
-        virtual bool runOnLoop(llvm::Loop *L, llvm::LPPassManager &LPM);
+	virtual void getAnalysisUsage(llvm::AnalysisUsage &AU) const;
+	virtual bool runOnLoop(llvm::Loop *L, llvm::LPPassManager &LPM);
 
 private:
 	/* Whether we should mark spinloop starts */

@@ -18,22 +18,22 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-#include "config.h"
 #include "IntrinsicLoweringPass.hpp"
+#include "config.h"
 #include <llvm/ADT/Twine.h>
 #include <llvm/IR/Function.h>
-#include <llvm/IR/IntrinsicInst.h>
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
-#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 
 bool IntrinsicLoweringPass::runOnBasicBlock(llvm::BasicBlock &BB, llvm::Module &M)
 {
 	bool modified = false;
-	for (auto it = BB.begin(); it != BB.end();  ) {
+	for (auto it = BB.begin(); it != BB.end();) {
 		llvm::IntrinsicInst *I = llvm::dyn_cast<llvm::IntrinsicInst>(&*it);
 		/* Iterator is incremented in order for it not to be invalidated */
 		++it;
@@ -59,7 +59,8 @@ bool IntrinsicLoweringPass::runOnBasicBlock(llvm::BasicBlock &BB, llvm::Module &
 			break;
 		case llvm::Intrinsic::trap: {
 			/* Lower calls to @llvm.trap to abort() calls */
-			auto FC = M.getOrInsertFunction("abort", llvm::Type::getVoidTy(M.getContext()));
+			auto FC = M.getOrInsertFunction("abort",
+							llvm::Type::getVoidTy(M.getContext()));
 #if LLVM_VERSION_MAJOR < 9
 			if (auto *F = llvm::dyn_cast<llvm::Function>(FC)) {
 #else

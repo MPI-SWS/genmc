@@ -32,28 +32,24 @@ void LoopJumpThreadingPass::getAnalysisUsage(AnalysisUsage &au) const
 	LoopPass::getAnalysisUsage(au);
 }
 
-bool inLoopBody(Loop *l, BasicBlock *bb)
-{
-	return l->contains(bb) && bb != l->getHeader();
-}
+bool inLoopBody(Loop *l, BasicBlock *bb) { return l->contains(bb) && bb != l->getHeader(); }
 
 bool isNonTrivialUser(User *u, PHINode *criticalPHI)
 {
 	auto *p = dyn_cast<PHINode>(u);
 	return !p || std::any_of(p->user_begin(), p->user_end(),
-				 [criticalPHI](User *us){ return us != criticalPHI; });
+				 [criticalPHI](User *us) { return us != criticalPHI; });
 }
 
 bool isCriticalPHIUsedTrivially(Loop *l, PHINode *criticalPHI)
 {
-	return std::none_of(criticalPHI->user_begin(), criticalPHI->user_end(), [&](User *u){
-			auto *p = dyn_cast<Instruction>(u)->getParent();
-			return (inLoopBody(l, p) && isNonTrivialUser(u, criticalPHI)) ||
-				(p == l->getHeader() &&
-				 std::any_of(criticalPHI->incoming_values().begin(),
-					     criticalPHI->incoming_values().end(),
-					     [u](Value *in){ return u == in; }));
-		});
+	return std::none_of(criticalPHI->user_begin(), criticalPHI->user_end(), [&](User *u) {
+		auto *p = dyn_cast<Instruction>(u)->getParent();
+		return (inLoopBody(l, p) && isNonTrivialUser(u, criticalPHI)) ||
+		       (p == l->getHeader() && std::any_of(criticalPHI->incoming_values().begin(),
+							   criticalPHI->incoming_values().end(),
+							   [u](Value *in) { return u == in; }));
+	});
 }
 
 bool areNonCriticalPHIsUsedInBody(Loop *l, PHINode *criticalPHI)
@@ -101,7 +97,7 @@ PHINode *getPHIConstEntryValueUsedInCond(Loop *l)
 
 std::unique_ptr<SExpr<Value *>> generateExprJumpsToBody(Loop *l)
 {
-	auto condExp  = InstAnnotator().annotateBBCond(l->getHeader(), l->getLoopPredecessor());
+	auto condExp = InstAnnotator().annotateBBCond(l->getHeader(), l->getLoopPredecessor());
 	auto *bi = dyn_cast<BranchInst>(l->getHeader()->getTerminator());
 	if (!bi)
 		return ConcreteExpr<Value *>::createFalse();
@@ -115,9 +111,8 @@ bool entryAlwaysJumpsToBody(Loop *l)
 {
 	/* Make sure that the header (conditionally) jumps at the body */
 	auto *h = l->getHeader();
-	if (std::none_of(succ_begin(h), succ_end(h), [&](BasicBlock *bb){
-		return inLoopBody(l, bb);
-	}))
+	if (std::none_of(succ_begin(h), succ_end(h),
+			 [&](BasicBlock *bb) { return inLoopBody(l, bb); }))
 		return false;
 
 	/* Get the expression that jumps from the header to the body.. */
@@ -125,8 +120,8 @@ bool entryAlwaysJumpsToBody(Loop *l)
 
 	/* ...and check whether it always evaluates to true */
 	size_t numSeen;
-	auto res = SExprEvaluator<Value *>().evaluate(
-		e.get(), SExprEvaluator<Value *>::VMap(), &numSeen);
+	auto res = SExprEvaluator<Value *>().evaluate(e.get(), SExprEvaluator<Value *>::VMap(),
+						      &numSeen);
 	return (numSeen == 0) && res.getBool();
 }
 
@@ -151,10 +146,10 @@ bool invertLoop(Loop *l, PHINode *criticalPHI)
 	 * Now, however, we have proven that the critical PHI's value remains unchanged
 	 * as long as the loop is executed, so we can replace all uses with the initial value
 	 */
-	replaceUsesWithIf(criticalPHI, criticalPHI->getIncomingValueForBlock(ph), [&](Use &u){
-			auto *us = dyn_cast<Instruction>(u.getUser());
-			return us && inLoopBody(l, us->getParent());
-		});
+	replaceUsesWithIf(criticalPHI, criticalPHI->getIncomingValueForBlock(ph), [&](Use &u) {
+		auto *us = dyn_cast<Instruction>(u.getUser());
+		return us && inLoopBody(l, us->getParent());
+	});
 
 	// /*
 	//  * Create a new PHI node to the BB of the body the entry jumps to:
@@ -174,8 +169,8 @@ bool invertLoop(Loop *l, PHINode *criticalPHI)
 
 	/* Set preheader's successor to the loop body */
 	auto phJmpIdx = (phbi->getSuccessor(0) == h) ? 0 : 1;
-	auto *b = (inLoopBody(l, hbi->getSuccessor(0))) ?
-		hbi->getSuccessor(0) : hbi->getSuccessor(1);
+	auto *b = (inLoopBody(l, hbi->getSuccessor(0))) ? hbi->getSuccessor(0)
+							: hbi->getSuccessor(1);
 	phbi->setSuccessor(phJmpIdx, b);
 
 	/* Actually change the header */
@@ -206,10 +201,7 @@ bool LoopJumpThreadingPass::runOnLoop(Loop *l, LPPassManager &lpm)
 	return false;
 }
 
-Pass *createLoopJumpThreadingPass()
-{
-	return new LoopJumpThreadingPass();
-}
+Pass *createLoopJumpThreadingPass() { return new LoopJumpThreadingPass(); }
 
 char LoopJumpThreadingPass::ID = 42;
 static RegisterPass<LoopJumpThreadingPass> P("loop-jump-threading",

@@ -29,8 +29,7 @@
 #include <unordered_set>
 #include <vector>
 
-template <class T, class Hash = std::hash<T> >
-class AdjList {
+template <class T, class Hash = std::hash<T>> class AdjList {
 
 public:
 	/* Simple aliases to easily defer what function arguments represent */
@@ -42,7 +41,8 @@ public:
 
 public:
 	AdjList() {}
-	AdjList(const std::vector<T> &es) : elems(es) {
+	AdjList(const std::vector<T> &es) : elems(es)
+	{
 		auto size = elems.size();
 
 		nodeSucc.resize(size);
@@ -55,7 +55,8 @@ public:
 			transC[i].resize(size);
 		}
 	}
-	AdjList(std::vector<T> &&es) : elems(std::move(es)) {
+	AdjList(std::vector<T> &&es) : elems(std::move(es))
+	{
 		auto size = elems.size();
 
 		nodeSucc.resize(size);
@@ -78,18 +79,18 @@ public:
 
 	/* Iterators -- they iterate over the nodes of the graph */
 	iterator begin() { return elems.begin(); };
-	iterator end()   { return elems.end(); };
+	iterator end() { return elems.end(); };
 	const_iterator begin() const { return elems.begin(); };
-	const_iterator end()   const { return elems.end(); };
+	const_iterator end() const { return elems.end(); };
 
 	adj_iterator adj_begin(T a) { return nodeSucc[getIndex(a)].begin(); }
-	adj_iterator adj_end(T a)   { return nodeSucc[getIndex(a)].end(); }
+	adj_iterator adj_end(T a) { return nodeSucc[getIndex(a)].end(); }
 	adj_iterator adj_begin(NodeId a) { return nodeSucc[a].begin(); }
-	adj_iterator adj_end(NodeId a)   { return nodeSucc[a].end(); }
+	adj_iterator adj_end(NodeId a) { return nodeSucc[a].end(); }
 	const_adj_iterator adj_begin(T a) const { return nodeSucc[getIndex(a)].begin(); }
-	const_adj_iterator adj_end(T a)   const { return nodeSucc[getIndex(a)].end(); }
+	const_adj_iterator adj_end(T a) const { return nodeSucc[getIndex(a)].end(); }
 	const_adj_iterator adj_begin(NodeId a) const { return nodeSucc[a].begin(); }
-	const_adj_iterator adj_end(NodeId a)   const { return nodeSucc[a].end(); }
+	const_adj_iterator adj_end(NodeId a) const { return nodeSucc[a].end(); }
 
 	/* Returns the elements (nodes) of the graph */
 	const std::vector<T> &getElems() const { return elems; }
@@ -118,78 +119,71 @@ public:
 	const std::vector<int> &getInDegrees() const;
 
 	/* Returns true if the in-degree and out-degree of a node is 0 */
-	bool hasNoEdges(T a) const {
-		return inDegree[getIndex(a)] == 0 &&
-		       nodeSucc[getIndex(a)].size() == 0;
+	bool hasNoEdges(T a) const
+	{
+		return inDegree[getIndex(a)] == 0 && nodeSucc[getIndex(a)].size() == 0;
 	}
 
 	/* Performs a DFS exploration */
-	template<typename FVB, typename FET, typename FEB,
-		 typename FEF, typename FVE, typename FEND>
-	void dfs(FVB&& atEntryV, FET&& atTreeE, FEB&& atBackE,
-		 FEF&& atForwE, FVE&& atExitV, FEND&& atEnd) const;
+	template <typename FVB, typename FET, typename FEB, typename FEF, typename FVE,
+		  typename FEND>
+	void dfs(FVB &&atEntryV, FET &&atTreeE, FEB &&atBackE, FEF &&atForwE, FVE &&atExitV,
+		 FEND &&atEnd) const;
 
 	/* Visits all reachable nodes starting from a in a DFS manner */
-	template<typename FVB, typename FET, typename FEB,
-		 typename FEF, typename FVE, typename FEND>
-	void visitReachable(T a, FVB&& atEntryV, FET&& atTreeE, FEB&& atBackE,
-			    FEF&& atForwE, FVE&& atExitV, FEND&& atEnd) const;
+	template <typename FVB, typename FET, typename FEB, typename FEF, typename FVE,
+		  typename FEND>
+	void visitReachable(T a, FVB &&atEntryV, FET &&atTreeE, FEB &&atBackE, FEF &&atForwE,
+			    FVE &&atExitV, FEND &&atEnd) const;
 
 	/* Returns a topological sorting of the graph */
 	std::vector<T> topoSort();
 
 	/* Runs prop on all topological sortings */
-	template<typename F>
-	bool allTopoSort(F&& prop) const;
+	template <typename F> bool allTopoSort(F &&prop) const;
 
-	template<typename F>
-	static bool combineAllTopoSort(const std::vector<AdjList<T, Hash> *> &toCombine, F&& prop);
+	template <typename F>
+	static bool combineAllTopoSort(const std::vector<AdjList<T, Hash> *> &toCombine, F &&prop);
 
 	void transClosure();
 
 	bool isIrreflexive();
 
 	/* Returns true if the respective edge exists */
-	inline bool operator()(const T a, const T b) const {
+	inline bool operator()(const T a, const T b) const
+	{
 		return transC[getIndex(a)][getIndex(b)];
 	}
-	inline bool operator()(const T a, NodeId b) const {
-		return transC[getIndex(a)][b];
-	}
-	inline bool operator()(NodeId a, const T b) const {
-		return transC[a][getIndex(b)];
-	}
-	inline bool operator()(NodeId a, NodeId b) const {
-		return transC[a][b];
-	}
+	inline bool operator()(const T a, NodeId b) const { return transC[getIndex(a)][b]; }
+	inline bool operator()(NodeId a, const T b) const { return transC[a][getIndex(b)]; }
+	inline bool operator()(NodeId a, NodeId b) const { return transC[a][b]; }
 
-	template<typename U, typename Z>
-	friend llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const AdjList<U, Z> &l);
+	template <typename U, typename Z>
+	friend llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const AdjList<U, Z> &l);
 
 private:
 	/* Helper for dfs() */
-	template<typename FVB, typename FET, typename FEB,
-		 typename FEF, typename FVE>
-	void dfsUtil(NodeId i, Timestamp &t, std::vector<NodeStatus> &m,
-		     std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		     std::vector<Timestamp> &f, FVB&& atEntryV, FET&& atTreeE,
-		     FEB&& atBackE, FEF&& atForwE, FVE&& atExitV) const;
+	template <typename FVB, typename FET, typename FEB, typename FEF, typename FVE>
+	void dfsUtil(NodeId i, Timestamp &t, std::vector<NodeStatus> &m, std::vector<NodeId> &p,
+		     std::vector<Timestamp> &d, std::vector<Timestamp> &f, FVB &&atEntryV,
+		     FET &&atTreeE, FEB &&atBackE, FEF &&atForwE, FVE &&atExitV) const;
 
-	template<typename F>
+	template <typename F>
 	bool allTopoSortUtil(std::vector<T> &current, std::vector<bool> visited,
-			     std::vector<int> &inDegree, F&& prop, bool &found) const;
+			     std::vector<int> &inDegree, F &&prop, bool &found) const;
 
-	template<typename F>
+	template <typename F>
 	static bool combineAllTopoSortUtil(unsigned int index, std::vector<std::vector<T>> &current,
-					   bool &found, const std::vector<AdjList<T, Hash> *> &toCombine,
-					   F&& prop);
+					   bool &found,
+					   const std::vector<AdjList<T, Hash> *> &toCombine,
+					   F &&prop);
 
 	/* The node elements.
 	 * Must be in 1-1 correspondence with the successor list below */
 	std::vector<T> elems;
 
 	/* The successor list for each node */
-	std::vector<std::vector<NodeId> > nodeSucc;
+	std::vector<std::vector<NodeId>> nodeSucc;
 
 	std::vector<int> inDegree;
 

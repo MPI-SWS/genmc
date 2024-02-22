@@ -23,16 +23,15 @@
 
 #include "Error.hpp"
 #include "VSet.hpp"
-#include <llvm/Pass.h>
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/Pass.h>
 
 #include <unordered_map>
 
 using namespace llvm;
 
-template<typename T>
-class SExpr;
+template <typename T> class SExpr;
 
 /*
  * A class that annotates loads by performing a DFS-like propagation procedure.
@@ -86,11 +85,13 @@ private:
 
 	/* Similar to propagateAnnotFromSucc, but for when annotating backedges */
 	IRExprUP propagateAnnotFromSuccInLoop(Instruction *curr, Instruction *succ,
-							    const VSet<BasicBlock *> &latch, Loop *l);
+					      const VSet<BasicBlock *> &latch, Loop *l);
 
-	/* Helper for annotateCASWithBackedgeCond(); performs the actual annotation (for backedge paths) */
-	void annotateCASWithBackedgeCondDFS(Instruction *curr, const VSet<BasicBlock *> &backedgePaths,
-					    Loop *l, const VSet<llvm::Function *> *cleanSet);
+	/* Helper for annotateCASWithBackedgeCond(); performs the actual annotation (for backedge
+	 * paths) */
+	void annotateCASWithBackedgeCondDFS(Instruction *curr,
+					    const VSet<BasicBlock *> &backedgePaths, Loop *l,
+					    const VSet<llvm::Function *> *cleanSet);
 
 	/* Various getters/setters */
 

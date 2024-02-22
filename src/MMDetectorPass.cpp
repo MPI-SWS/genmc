@@ -18,24 +18,21 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-#include "config.h"
 #include "MMDetectorPass.hpp"
 #include "ModuleInfo.hpp"
+#include "config.h"
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/InstIterator.h>
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
-#include <llvm/IR/InstIterator.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 
 using namespace llvm;
 
-void MMDetectorPass::setDeterminedMM(ModelType m)
-{
-	PI->determinedMM = m;
-}
+void MMDetectorPass::setDeterminedMM(ModelType m) { PI->determinedMM = m; }
 
 bool isSCNAOrdering(AtomicOrdering o)
 {
@@ -45,7 +42,8 @@ bool isSCNAOrdering(AtomicOrdering o)
 bool isRANAOrdering(AtomicOrdering o)
 {
 	using AO = AtomicOrdering;
-	return o == AO::Acquire || o == AO::Release || o == AO::AcquireRelease || o == AtomicOrdering::NotAtomic;
+	return o == AO::Acquire || o == AO::Release || o == AO::AcquireRelease ||
+	       o == AtomicOrdering::NotAtomic;
 }
 
 bool MMDetectorPass::runOnModule(Module &M)

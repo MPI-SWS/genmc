@@ -20,7 +20,7 @@
 
 #include "SAddr.hpp"
 
-llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const SAddr &addr)
+auto operator<<(llvm::raw_ostream &s, const SAddr &addr) -> llvm::raw_ostream &
 {
 	auto internal = addr.isInternal() ? "I" : "U";
 

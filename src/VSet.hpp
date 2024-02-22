@@ -21,13 +21,12 @@
 #ifndef __VSET_HPP__
 #define __VSET_HPP__
 
-#include <llvm/Support/raw_ostream.h>
 #include <functional>
 #include <initializer_list>
+#include <llvm/Support/raw_ostream.h>
 #include <vector>
 
-template<class T>
-class VSet {
+template <class T> class VSet {
 
 protected:
 	/* Pre: Set needs to support random_access iterators */
@@ -35,17 +34,15 @@ protected:
 	Set vset_;
 
 public:
-
-	VSet() : vset_() { };
-
-	/* Pre: v is sorted and distinct */
-	VSet(const std::vector<T> &v) : vset_(v) { };
+	VSet() : vset_(){};
 
 	/* Pre: v is sorted and distinct */
-	VSet(std::vector<T> &&v) : vset_(std::move(v)) { };
+	VSet(const std::vector<T> &v) : vset_(v){};
 
-	template<typename ITER>
-	VSet(ITER begin, ITER end);
+	/* Pre: v is sorted and distinct */
+	VSet(std::vector<T> &&v) : vset_(std::move(v)){};
+
+	template <typename ITER> VSet(ITER begin, ITER end);
 
 	VSet(std::initializer_list<T> il);
 
@@ -53,11 +50,11 @@ public:
 
 	VSet(VSet &&);
 
-	VSet &operator=(const VSet&) = default;
+	VSet &operator=(const VSet &) = default;
 
-	VSet &operator=(VSet&&);
+	VSet &operator=(VSet &&);
 
-	virtual ~VSet() {};
+	virtual ~VSet(){};
 
 	using const_iterator = typename Set::const_iterator;
 	using const_reverse_iterator = typename Set::const_reverse_iterator;
@@ -69,8 +66,7 @@ public:
 
 	std::pair<const_iterator, bool> insert(const T &t);
 	int insert(const VSet<T> &s);
-	template<typename ITER>
-	void insert(ITER begin, ITER end);
+	template <typename ITER> void insert(ITER begin, ITER end);
 
 	int erase(const T &t);
 
@@ -82,7 +78,7 @@ public:
 
 	size_t size() const { return vset_.size(); };
 
-	bool empty() const { return vset_.empty();};
+	bool empty() const { return vset_.empty(); };
 
 	void clear() { vset_.clear(); };
 
@@ -91,13 +87,13 @@ public:
 	bool intersects(const VSet<T> &s) const;
 	VSet<T> intersectWith(const VSet<T> &s) const;
 
-	const T& min() const { return vset_[0]; };
-	const T& max() const { return vset_.back(); };
+	const T &min() const { return vset_[0]; };
+	const T &max() const { return vset_.back(); };
 
-	inline const T& operator[](int i) const { return vset_[i]; };
+	inline const T &operator[](int i) const { return vset_[i]; };
 
-	template<typename U>
-	friend llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const VSet<U>& set);
+	template <typename U>
+	friend llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const VSet<U> &set);
 };
 
 #include "VSet.tcc"

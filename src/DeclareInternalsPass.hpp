@@ -27,7 +27,7 @@ class DeclareInternalsPass : public llvm::ModulePass {
 public:
 	static char ID;
 
-	DeclareInternalsPass() : ModulePass(ID) {};
+	DeclareInternalsPass() : ModulePass(ID){};
 	virtual bool runOnModule(llvm::Module &M);
 };
 

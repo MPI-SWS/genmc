@@ -20,7 +20,7 @@
 
 #include "WorkSet.hpp"
 
-llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const WorkSet &wset)
+llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const WorkSet &wset)
 {
 	s << "[ ";
 	for (auto it = wset.cbegin(), ie = wset.cend(); it != ie; ++it)

@@ -21,10 +21,10 @@
 #ifndef __PARSER_HPP__
 #define __PARSER_HPP__
 
+#include <fstream>
+#include <iostream>
 #include <llvm/Support/Debug.h>
 #include <llvm/Support/raw_ostream.h>
-#include <iostream>
-#include <fstream>
 #include <string>
 #include <vector>
 

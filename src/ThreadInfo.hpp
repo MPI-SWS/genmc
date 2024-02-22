@@ -21,8 +21,8 @@
 #ifndef __THREAD_INFO_HPP__
 #define __THREAD_INFO_HPP__
 
-#include "config.h"
 #include "SVal.hpp"
+#include "config.h"
 
 struct ThreadInfo {
 	int id;
@@ -33,7 +33,8 @@ struct ThreadInfo {
 
 	ThreadInfo() = default;
 	ThreadInfo(int id, int parentId, unsigned funId, SVal arg, int symm = -1)
-		: id(id), parentId(parentId), funId(funId), arg(arg), symmId(symm) {}
+		: id(id), parentId(parentId), funId(funId), arg(arg), symmId(symm)
+	{}
 };
 
 #endif /* __THREAD_INFO_HPP__ */

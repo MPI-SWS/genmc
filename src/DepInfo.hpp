@@ -43,10 +43,10 @@ protected:
 public:
 	/* Constructors */
 	DepInfo() : set_() {}
-	DepInfo(Event e) : set_({ e }) {}
+	DepInfo(Event e) : set_({e}) {}
 
 	/* Updates this object based on the dependencies of dep (union) */
-	void update(const DepInfo& dep) { set_.insert(dep.set_); }
+	void update(const DepInfo &dep) { set_.insert(dep.set_); }
 
 	/* Clears all the stored dependencies */
 	void clear() { set_.clear(); }
@@ -65,13 +65,12 @@ public:
 	const_iterator end() const { return set_.end(); };
 
 	/* Printing */
-	friend llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const DepInfo &dep);
+	friend llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const DepInfo &dep);
 
 private:
 	/* The actual container for the dependencies */
 	Set set_;
 };
-
 
 /*******************************************************************************
  **                             EventDeps Class

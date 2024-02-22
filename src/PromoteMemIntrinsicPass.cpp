@@ -25,11 +25,11 @@
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/DebugInfo.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/InstIterator.h>
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
-#include <llvm/IR/InstIterator.h>
-#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 
@@ -60,13 +60,13 @@ Type *getPromotionGEPType(Value *op)
 		BUG();
 }
 
-void promoteMemCpy(IRBuilder<> &builder, Value *dst, Value *src,
-		   const std::vector<Value *> &args, Type *typ)
+void promoteMemCpy(IRBuilder<> &builder, Value *dst, Value *src, const std::vector<Value *> &args,
+		   Type *typ)
 {
-	Value *srcGEP = builder.CreateInBoundsGEP(getPromotionGEPType(src),
-						  src, args, "memcpy.src.gep");
-	Value *dstGEP = builder.CreateInBoundsGEP(getPromotionGEPType(dst),
-						  dst, args, "memcpy.dst.gep");
+	Value *srcGEP =
+		builder.CreateInBoundsGEP(getPromotionGEPType(src), src, args, "memcpy.src.gep");
+	Value *dstGEP =
+		builder.CreateInBoundsGEP(getPromotionGEPType(dst), dst, args, "memcpy.dst.gep");
 	Value *srcLoad = builder.CreateLoad(typ, srcGEP, "memcpy.src.load");
 	Value *dstStore = builder.CreateStore(srcLoad, dstGEP);
 	return;
@@ -79,22 +79,23 @@ void promoteMemSet(IRBuilder<> &builder, Value *dst, Value *argVal,
 	BUG_ON(!isa<ConstantInt>(argVal));
 
 	auto &DL = builder.GetInsertBlock()->getParent()->getParent()->getDataLayout();
-	auto sizeInBits = typ->isIntegerTy() ? typ->getIntegerBitWidth() : DL.getPointerTypeSizeInBits(typ);
+	auto sizeInBits = typ->isIntegerTy() ? typ->getIntegerBitWidth()
+					     : DL.getPointerTypeSizeInBits(typ);
 	long int ival = dyn_cast<ConstantInt>(argVal)->getSExtValue();
 	Value *val = Constant::getIntegerValue(typ, APInt(sizeInBits, ival));
 
-	Value *dstGEP = builder.CreateInBoundsGEP(getPromotionGEPType(dst),
-						  dst, args, "memset.dst.gep");
+	Value *dstGEP =
+		builder.CreateInBoundsGEP(getPromotionGEPType(dst), dst, args, "memset.dst.gep");
 	Value *dstStore = builder.CreateStore(val, dstGEP);
 	return;
 }
 
-template<typename F>
-void promoteMemIntrinsic(Type *typ, std::vector<Value *> &args, F&& promoteFun)
+template <typename F>
+void promoteMemIntrinsic(Type *typ, std::vector<Value *> &args, F &&promoteFun)
 {
 	auto *i32Ty = IntegerType::getInt32Ty(typ->getContext());
 
-	if(!isa<StructType>(typ) && !isa<ArrayType>(typ) && !isa<VectorType>(typ)) {
+	if (!isa<StructType>(typ) && !isa<ArrayType>(typ) && !isa<VectorType>(typ)) {
 		promoteFun(typ, args);
 		return;
 	}
@@ -128,8 +129,8 @@ bool canPromoteMemIntrinsic(MemIntrinsic *MI)
 	/* Skip if length is not a constant */
 	ConstantInt *length = dyn_cast<ConstantInt>(MI->getLength());
 	if (!length) {
-		WARN_ONCE("memintr-length", "Cannot promote non-constant-length mem intrinsic!" \
-			  "Skipping...\n");
+		WARN_ONCE("memintr-length", "Cannot promote non-constant-length mem intrinsic!"
+					    "Skipping...\n");
 		return false;
 	}
 
@@ -140,8 +141,8 @@ bool canPromoteMemIntrinsic(MemIntrinsic *MI)
 	 */
 	uint64_t size = length->getLimitedValue();
 	if (size == 0) {
-		WARN_ONCE("memintr-zero-length", "Cannot promote zero-length mem intrinsic!" \
-			  "Skipping...\n");
+		WARN_ONCE("memintr-zero-length", "Cannot promote zero-length mem intrinsic!"
+						 "Skipping...\n");
 		return false;
 	}
 
@@ -153,8 +154,10 @@ bool canPromoteMemIntrinsic(MemIntrinsic *MI)
 		BUG_ON(MC->getSourceAddressSpace() != MC->getDestAddressSpace());
 
 	if (!isPromotableMemIntrinsicOperand(MI->getDest()) ||
-	    (isa<MemCpyInst>(MI) && !isPromotableMemIntrinsicOperand(dyn_cast<MemCpyInst>(MI)->getSource()))) {
-		WARN_ONCE("memintr-dst", "Cannot promote intrinsic due to opaque operand type pointer!" \
+	    (isa<MemCpyInst>(MI) &&
+	     !isPromotableMemIntrinsicOperand(dyn_cast<MemCpyInst>(MI)->getSource()))) {
+		WARN_ONCE("memintr-dst",
+			  "Cannot promote intrinsic due to opaque operand type pointer!"
 			  "Skipping...\n");
 		return false;
 	}
@@ -183,11 +186,11 @@ bool PromoteMemIntrinsicPass::tryPromoteMemCpy(MemCpyInst *MI, Module &M)
 	BUG_ON(!dstTyp);
 
 	IRBuilder<> builder(MI);
-	std::vector<Value *> args = { nullInt };
+	std::vector<Value *> args = {nullInt};
 
-	promoteMemIntrinsic(dstTyp, args,
-			    [&](Type *typ, const std::vector<Value *> &args)
-			    { promoteMemCpy(builder, dst, src, args, typ); });
+	promoteMemIntrinsic(dstTyp, args, [&](Type *typ, const std::vector<Value *> &args) {
+		promoteMemCpy(builder, dst, src, args, typ);
+	});
 	promoted.push_back(MI);
 	return true;
 }
@@ -206,11 +209,11 @@ bool PromoteMemIntrinsicPass::tryPromoteMemSet(MemSetInst *MS, Module &M)
 	BUG_ON(!dstTyp);
 
 	IRBuilder<> builder(MS);
-	std::vector<Value *> args = { nullInt };
+	std::vector<Value *> args = {nullInt};
 
-	promoteMemIntrinsic(dstTyp, args,
-			    [&](Type *typ, const std::vector<Value *> &args)
-			    { promoteMemSet(builder, dst, val, args, typ); });
+	promoteMemIntrinsic(dstTyp, args, [&](Type *typ, const std::vector<Value *> &args) {
+		promoteMemSet(builder, dst, val, args, typ);
+	});
 	promoted.push_back(MS);
 	return true;
 }
@@ -260,9 +263,6 @@ bool PromoteMemIntrinsicPass::runOnModule(Module &M)
 	return modified;
 }
 
-ModulePass *createPromoteMemIntrinsicPass()
-{
-	return new PromoteMemIntrinsicPass();
-}
+ModulePass *createPromoteMemIntrinsicPass() { return new PromoteMemIntrinsicPass(); }
 
 char PromoteMemIntrinsicPass::ID = 42;

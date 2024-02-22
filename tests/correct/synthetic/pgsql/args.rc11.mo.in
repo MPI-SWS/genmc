@@ -1,1 +1,1 @@
--disable-ipr -disable-sr -unroll=3 |
+ -unroll=3 |

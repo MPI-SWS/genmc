@@ -29,18 +29,18 @@
 
 /* Some basic system error codes for the user -- should match include/errno.h */
 enum class SystemError {
-	SE_EPERM   = 1,
-	SE_ENOENT  = 2,
-	SE_EIO     = 5,
-	SE_EBADF   = 9,
-	SE_ENOMEM  = 12,
-	SE_EEXIST  = 17,
-	SE_EINVAL  = 22,
-	SE_EMFILE  = 24,
-	SE_ENFILE  = 23,
+	SE_EPERM = 1,
+	SE_ENOENT = 2,
+	SE_EIO = 5,
+	SE_EBADF = 9,
+	SE_ENOMEM = 12,
+	SE_EEXIST = 17,
+	SE_EINVAL = 22,
+	SE_EMFILE = 24,
+	SE_ENFILE = 23,
 	SE_ETXTBSY = 26,
-	SE_EFBIG   = 27,
-	SE_ESPIPE  = 29,
+	SE_EFBIG = 27,
+	SE_ESPIPE = 29,
 };
 
 /* Different errors that might be encountered during verification.
@@ -82,8 +82,8 @@ inline bool isHardError(VerificationError err)
 /* For compilers that do not have a recent enough lib{std}c++ */
 #ifndef STDLIBCPP_SUPPORTS_ENUM_MAP_KEYS
 struct EnumClassHash {
-	template <typename T>
-	std::size_t operator()(T t) const {
+	template <typename T> std::size_t operator()(T t) const
+	{
 		return static_cast<std::size_t>(t);
 	}
 };
@@ -95,6 +95,6 @@ struct EnumClassHash {
 extern SystemError systemErrorNumber; // just to inform the driver
 extern const std::unordered_map<SystemError, std::string, ENUM_HASH(SystemError)> errorList;
 
-llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const VerificationError &st);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const VerificationError &st);
 
 #endif /* __VERIFICATION_ERROR_HPP__ */

@@ -34,8 +34,8 @@ public:
 	llvm::IntrinsicLowering *IL;
 
 	IntrinsicLoweringPass(const llvm::DataLayout &TD)
-		: llvm::ModulePass(ID), dataLayout(TD),
-		  IL(new llvm::IntrinsicLowering(TD)) {}
+		: llvm::ModulePass(ID), dataLayout(TD), IL(new llvm::IntrinsicLowering(TD))
+	{}
 	~IntrinsicLoweringPass() { delete IL; }
 	virtual bool runOnModule(llvm::Module &M);
 

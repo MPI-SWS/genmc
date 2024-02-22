@@ -18,11 +18,11 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-#include "config.h"
 #include "EliminateAnnotationsPass.hpp"
 #include "Error.hpp"
-#include "LLVMUtils.hpp"
 #include "InterpreterEnumAPI.hpp"
+#include "LLVMUtils.hpp"
+#include "config.h"
 
 #include <llvm/Analysis/PostDominators.h>
 #include <llvm/IR/Constants.h>
@@ -52,7 +52,7 @@ bool isAnnotationBegin(Instruction *i)
 
 	auto name = getCalledFunOrStripValName(*ci);
 	return isInternalFunction(name) &&
-		internalFunNames.at(name) == InternalFunctions::FN_AnnotateBegin;
+	       internalFunNames.at(name) == InternalFunctions::FN_AnnotateBegin;
 }
 
 bool isAnnotationEnd(Instruction *i)
@@ -63,9 +63,8 @@ bool isAnnotationEnd(Instruction *i)
 
 	auto name = getCalledFunOrStripValName(*ci);
 	return isInternalFunction(name) &&
-		internalFunNames.at(name) == InternalFunctions::FN_AnnotateEnd;
+	       internalFunNames.at(name) == InternalFunctions::FN_AnnotateEnd;
 }
-
 
 uint64_t getAnnotationValue(CallInst *ci)
 {
@@ -83,7 +82,7 @@ bool annotateInstructions(CallInst *begin, CallInst *end)
 	auto beginFound = false;
 	auto endFound = false;
 	unsigned opcode = 0; /* no opcode == 0 in LLVM */
-	foreachInBackPathTo(end->getParent(), begin->getParent(), [&](Instruction &i){
+	foreachInBackPathTo(end->getParent(), begin->getParent(), [&](Instruction &i) {
 		/* wait until we find the end (e.g., if in same block) */
 		if (!endFound) {
 			endFound |= (dyn_cast<CallInst>(&i) == end);
@@ -106,19 +105,18 @@ bool annotateInstructions(CallInst *begin, CallInst *end)
 	return true;
 }
 
-CallInst *findMatchingEnd(CallInst *begin, const std::vector<CallInst *> &ends,
-			  DominatorTree &DT, PostDominatorTree &PDT)
+CallInst *findMatchingEnd(CallInst *begin, const std::vector<CallInst *> &ends, DominatorTree &DT,
+			  PostDominatorTree &PDT)
 {
-	auto it = std::find_if(ends.begin(), ends.end(), [&](auto *ei){
+	auto it = std::find_if(ends.begin(), ends.end(), [&](auto *ei) {
 		return getAnnotationValue(begin) == getAnnotationValue(ei) &&
-			DT.dominates(begin, ei) &&
-			PDT.dominates(ei->getParent(), begin->getParent()) &&
-			std::none_of(ends.begin(), ends.end(), [&](auto *ei2){
-				return ei != ei2 &&
-					DT.dominates(begin, ei2) &&
-					PDT.dominates(ei2->getParent(), begin->getParent()) &&
-					DT.dominates(ei2, ei);
-			});
+		       DT.dominates(begin, ei) &&
+		       PDT.dominates(ei->getParent(), begin->getParent()) &&
+		       std::none_of(ends.begin(), ends.end(), [&](auto *ei2) {
+			       return ei != ei2 && DT.dominates(begin, ei2) &&
+				      PDT.dominates(ei2->getParent(), begin->getParent()) &&
+				      DT.dominates(ei2, ei);
+		       });
 	});
 	BUG_ON(it == ends.end());
 	return *it;
@@ -128,7 +126,7 @@ bool EliminateAnnotationsPass::runOnFunction(Function &F)
 {
 	std::vector<CallInst *> begins, ends;
 
-	std::for_each(inst_begin(F), inst_end(F), [&](auto &i){
+	std::for_each(inst_begin(F), inst_end(F), [&](auto &i) {
 		if (isAnnotationBegin(&i))
 			begins.push_back(dyn_cast<CallInst>(&i));
 		else if (isAnnotationEnd(&i))
@@ -140,7 +138,7 @@ bool EliminateAnnotationsPass::runOnFunction(Function &F)
 	VSet<Instruction *> toDelete;
 
 	auto changed = false;
-	std::for_each(begins.begin(), begins.end(), [&](auto *bi){
+	std::for_each(begins.begin(), begins.end(), [&](auto *bi) {
 		auto *ei = findMatchingEnd(bi, ends, DT, PDT);
 		BUG_ON(!ei);
 		changed |= annotateInstructions(bi, ei);
@@ -162,4 +160,5 @@ Pass *createEliminateAnnotationsPass()
 }
 
 char EliminateAnnotationsPass::ID = 42;
-static llvm::RegisterPass<EliminateAnnotationsPass> P("elim-annots", "Eliminates intrinsic annotations.");
+static llvm::RegisterPass<EliminateAnnotationsPass> P("elim-annots",
+						      "Eliminates intrinsic annotations.");

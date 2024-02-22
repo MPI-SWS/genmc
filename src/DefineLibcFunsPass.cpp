@@ -24,9 +24,7 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
 
-void DefineLibcFunsPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const
-{
-}
+void DefineLibcFunsPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {}
 
 void DefineLibcFunsPass::replaceFunWithNop(llvm::Module &M, std::string name)
 {
@@ -59,10 +57,7 @@ bool DefineLibcFunsPass::runOnModule(llvm::Module &M)
 	return true;
 }
 
-llvm::ModulePass *createDefineLibcFunsPass()
-{
-	return new DefineLibcFunsPass();
-}
+llvm::ModulePass *createDefineLibcFunsPass() { return new DefineLibcFunsPass(); }
 
 char DefineLibcFunsPass::ID = 42;
 static llvm::RegisterPass<DefineLibcFunsPass> X("define-libc",

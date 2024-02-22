@@ -18,11 +18,11 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-#include "config.h"
 #include "EliminateCASPHIsPass.hpp"
 #include "Error.hpp"
-#include "VSet.hpp"
 #include "LLVMUtils.hpp"
+#include "VSet.hpp"
+#include "config.h"
 
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Dominators.h>
@@ -75,7 +75,8 @@ bool tryEliminateCASPHI(llvm::PHINode *phi, DominatorTree &DT, std::vector<Instr
 	if (cas->getCompareOperand() != other)
 		return false;
 
-	/* Finally, the compare operand should be taken when we are coming from the CAS's block (success) */
+	/* Finally, the compare operand should be taken when we are coming from the CAS's block
+	 * (success) */
 	if (phi->getIncomingBlock(otherId) != cas->getParent())
 		return false;
 
@@ -123,7 +124,8 @@ bool EliminateCASPHIsPass::runOnFunction(Function &F)
 	}
 
 	EliminateUnreachableBlocks(F);
-	std::for_each(toDelete.begin(), toDelete.end(), [](Instruction *i){ i->eraseFromParent(); });
+	std::for_each(toDelete.begin(), toDelete.end(),
+		      [](Instruction *i) { i->eraseFromParent(); });
 	return modified;
 }
 

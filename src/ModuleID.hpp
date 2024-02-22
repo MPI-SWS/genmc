@@ -33,7 +33,8 @@ struct ModuleID {
 	std::unordered_map<ID, const llvm::Value *> IDV;
 	std::unordered_map<const llvm::Value *, ID> VID;
 
-	void clear() {
+	void clear()
+	{
 		IDV.clear();
 		VID.clear();
 	}

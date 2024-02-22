@@ -20,8 +20,8 @@
 
 #include "config.h"
 
-#include "CodeCondenserPass.hpp"
 #include "BisimilarityCheckerPass.hpp"
+#include "CodeCondenserPass.hpp"
 #include "Error.hpp"
 #include "LLVMUtils.hpp"
 #include <llvm/IR/BasicBlock.h>
@@ -45,16 +45,17 @@ bool CodeCondenserPass::runOnFunction(Function &F)
 	auto &bsps = getAnalysis<BisimilarityCheckerPass>().getFuncBsPoints(&F);
 
 	/* Map blocks to bisimilarity points */
-	std::unordered_map<BasicBlock *, std::vector<BsPoint> > bbsToBsps;
+	std::unordered_map<BasicBlock *, std::vector<BsPoint>> bbsToBsps;
 	for (auto &p : bsps)
 		bbsToBsps[p.first->getParent()].push_back(p);
 
 	/* Condense the code: */
 	for (auto &bbP : bbsToBsps) {
-		/* find the first bisimilar point within each block (should not be TerminatorInst)... */
+		/* find the first bisimilar point within each block (should not be
+		 * TerminatorInst)... */
 		for (auto &i : *bbP.first) {
 			auto pIt = std::find_if(bbP.second.begin(), bbP.second.end(),
-					       [&](const BsPoint &p){ return p.first == &i; });
+						[&](const BsPoint &p) { return p.first == &i; });
 			if (pIt == bbP.second.end())
 				continue;
 			if (pIt->first->isTerminator())
@@ -66,8 +67,12 @@ bool CodeCondenserPass::runOnFunction(Function &F)
 			auto *aBB = aIt->getParent();
 			auto *bBB = bIt->getParent();
 
-			auto *aNewBB = (aBB->begin() != aIt || &*F.begin() == aBB) ? aBB->splitBasicBlock(aIt) : aBB;
-			auto *bNewBB = (bBB->begin() != bIt || &*F.begin() == bBB) ? bBB->splitBasicBlock(bIt) : bBB;
+			auto *aNewBB = (aBB->begin() != aIt || &*F.begin() == aBB)
+					       ? aBB->splitBasicBlock(aIt)
+					       : aBB;
+			auto *bNewBB = (bBB->begin() != bIt || &*F.begin() == bBB)
+					       ? bBB->splitBasicBlock(bIt)
+					       : bBB;
 			auto predIt = pred_begin(aNewBB);
 			while (predIt != pred_end(aNewBB)) {
 				auto tmpIt = predIt++;
@@ -88,11 +93,8 @@ bool CodeCondenserPass::runOnFunction(Function &F)
 	return true;
 }
 
-FunctionPass *createCodeCondenserPass()
-{
-	return new CodeCondenserPass();
-}
+FunctionPass *createCodeCondenserPass() { return new CodeCondenserPass(); }
 
 char CodeCondenserPass::ID = 42;
-static llvm::RegisterPass<CodeCondenserPass> P("code-condenser",
-					       "Reduces the size of the code by leveraging bisimilarity information.");
+static llvm::RegisterPass<CodeCondenserPass>
+	P("code-condenser", "Reduces the size of the code by leveraging bisimilarity information.");

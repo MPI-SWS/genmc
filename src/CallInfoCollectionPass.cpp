@@ -18,16 +18,16 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-#include "config.h"
-#include "Error.hpp"
 #include "CallInfoCollectionPass.hpp"
-#include "LLVMUtils.hpp"
+#include "Error.hpp"
 #include "InterpreterEnumAPI.hpp"
+#include "LLVMUtils.hpp"
+#include "config.h"
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/InstIterator.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
-#include <llvm/IR/InstIterator.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 
@@ -38,8 +38,8 @@ void CallInfoCollectionPass::getAnalysisUsage(llvm::AnalysisUsage &au) const
 	au.setPreservesAll();
 }
 
-bool hasSideEffects(Function *F, SmallVector<Function *, 4> &chain,
-		    VSet<Function *> &clean, VSet<Function *> &dirty)
+bool hasSideEffects(Function *F, SmallVector<Function *, 4> &chain, VSet<Function *> &clean,
+		    VSet<Function *> &dirty)
 {
 	if (!F || dirty.count(F))
 		return true;
@@ -82,12 +82,13 @@ bool isAllocating(Function *F)
 		return false;
 
 	SmallVector<ReturnInst *, 4> rets;
-	std::for_each(inst_begin(*F), inst_end(*F), [&](Instruction &i){ /* transform-if */
-		if (auto *ri = dyn_cast<ReturnInst>(&i))
-			rets.push_back(ri);
-	});
+	std::for_each(inst_begin(*F), inst_end(*F),
+		      [&](Instruction &i) { /* transform-if */
+					    if (auto *ri = dyn_cast<ReturnInst>(&i))
+						    rets.push_back(ri);
+		      });
 
-	return std::all_of(rets.begin(), rets.end(), [](const ReturnInst *ri){
+	return std::all_of(rets.begin(), rets.end(), [](const ReturnInst *ri) {
 		auto *rv = ri->getReturnValue();
 		return isa<Instruction>(rv) && isAlloc(dyn_cast<Instruction>(rv));
 	});
@@ -110,11 +111,8 @@ bool CallInfoCollectionPass::runOnModule(Module &M)
 	return false;
 }
 
-ModulePass *createCallInfoCollectionPass()
-{
-	return new CallInfoCollectionPass();
-}
+ModulePass *createCallInfoCollectionPass() { return new CallInfoCollectionPass(); }
 
 char CallInfoCollectionPass::ID = 42;
-static llvm::RegisterPass<CallInfoCollectionPass> P("call-info-collection",
-						    "Collects information about side-effect-free functions.");
+static llvm::RegisterPass<CallInfoCollectionPass>
+	P("call-info-collection", "Collects information about side-effect-free functions.");

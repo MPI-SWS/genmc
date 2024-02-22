@@ -18,14 +18,14 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-#include "config.h"
 #include "LocalSimplifyCFGPass.hpp"
 #include "EliminateCASPHIsPass.hpp"
 #include "Error.hpp"
 #include "LLVMUtils.hpp"
+#include "config.h"
 
-#include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/STLExtras.h>
+#include <llvm/ADT/SetVector.h>
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/InstIterator.h>
@@ -46,7 +46,8 @@ static bool foldSuccessors(BasicBlock *bb)
 	if (!bi || !bi->isConditional())
 		return false;
 
-	return tryThreadSuccessor(bi, bi->getSuccessor(0)) || tryThreadSuccessor(bi, bi->getSuccessor(1));
+	return tryThreadSuccessor(bi, bi->getSuccessor(0)) ||
+	       tryThreadSuccessor(bi, bi->getSuccessor(1));
 }
 
 static bool localSimplifyCFG(Function &F)
@@ -83,10 +84,7 @@ static bool localSimplifyCFG(Function &F)
 	return modified;
 }
 
-bool LocalSimplifyCFGPass::runOnFunction(Function &F)
-{
-	return localSimplifyCFG(F);
-}
+bool LocalSimplifyCFGPass::runOnFunction(Function &F) { return localSimplifyCFG(F); }
 
 Pass *createLocalSimplifyCFGPass()
 {
@@ -95,5 +93,5 @@ Pass *createLocalSimplifyCFGPass()
 }
 
 char LocalSimplifyCFGPass::ID = 42;
-static llvm::RegisterPass<LocalSimplifyCFGPass> P("local-simplify-cfg",
-						  "Performs some local simplifications to the CFG.");
+static llvm::RegisterPass<LocalSimplifyCFGPass>
+	P("local-simplify-cfg", "Performs some local simplifications to the CFG.");

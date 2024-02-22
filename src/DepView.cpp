@@ -18,8 +18,8 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-#include "Error.hpp"
 #include "DepView.hpp"
+#include "Error.hpp"
 
 bool DepView::contains(const Event e) const
 {
@@ -39,15 +39,9 @@ void DepView::addHolesInRange(Event start, int endIdx)
 		addHole(Event(start.thread, i));
 }
 
-void DepView::removeHole(const Event e)
-{
-	holes_[e.thread].erase(e.index);
-}
+void DepView::removeHole(const Event e) { holes_[e.thread].erase(e.index); }
 
-void DepView::removeAllHoles(int thread)
-{
-	holes_[thread].clear();
-}
+void DepView::removeAllHoles(int thread) { holes_[thread].clear(); }
 
 void DepView::removeHolesInRange(Event start, int endIdx)
 {
@@ -55,12 +49,9 @@ void DepView::removeHolesInRange(Event start, int endIdx)
 		removeHole(Event(start.thread, i));
 }
 
-View& DepView::update(const View &v)
-{
-	BUG();
-}
+View &DepView::update(const View &v) { BUG(); }
 
-DepView& DepView::update(const DepView &v)
+DepView &DepView::update(const DepView &v)
 {
 	if (v.empty())
 		return *this;
@@ -68,17 +59,15 @@ DepView& DepView::update(const DepView &v)
 	for (auto i = 0u; i < v.size(); i++) {
 		auto isec = holes_[i].intersectWith(v.holes_[i]);
 		if (getMax(i) < v.getMax(i)) {
-			isec.insert(std::lower_bound(v.holes_[i].begin(),
-						     v.holes_[i].end(),
+			isec.insert(std::lower_bound(v.holes_[i].begin(), v.holes_[i].end(),
 						     getMax(i) + 1),
 				    v.holes_[i].end());
 			view_.setMax(Event(i, v.getMax(i)));
 		} else {
-			isec.insert(std::lower_bound(holes_[i].begin(),
-						     holes_[i].end(),
+			isec.insert(std::lower_bound(holes_[i].begin(), holes_[i].end(),
 						     v.getMax(i) + 1),
 				    holes_[i].end());
-			}
+		}
 		holes_[i] = std::move(isec);
 	}
 	return *this;

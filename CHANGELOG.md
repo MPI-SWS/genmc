@@ -9,6 +9,16 @@ released.
 
 - Documentation
 
+## [0.10.1] - 2024.02.22
+### Fixes
+- Fixed in-place revisiting for CASes
+- Fixed genmc include path (by Jonathan Schwender)
+- Minor bug fixes
+
+### Changed
+- Verbosity level is now respected for stdout too
+- GenMC is less conservative when reporting ww-races
+
 
 ## [0.10.0] - 2023.10.25
 ### Added

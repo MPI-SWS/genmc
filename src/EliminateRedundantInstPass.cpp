@@ -18,10 +18,10 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-#include "config.h"
 #include "EliminateRedundantInstPass.hpp"
 #include "Error.hpp"
 #include "LLVMUtils.hpp"
+#include "config.h"
 
 #include <llvm/IR/DataLayout.h>
 #include <llvm/IR/Function.h>
@@ -31,14 +31,12 @@
 
 using namespace llvm;
 
-void EliminateRedundantInstPass::getAnalysisUsage(AnalysisUsage &au) const
-{
-}
+void EliminateRedundantInstPass::getAnalysisUsage(AnalysisUsage &au) const {}
 
 static bool isRedundantCastPair(const CastInst *ci1, const CastInst *ci2, const DataLayout &DL)
 {
-	return ci1->getSrcTy() == ci2->getDestTy() && DL.getTypeAllocSize(ci1->getDestTy()) >=
-		DL.getTypeAllocSize(ci1->getSrcTy());
+	return ci1->getSrcTy() == ci2->getDestTy() &&
+	       DL.getTypeAllocSize(ci1->getDestTy()) >= DL.getTypeAllocSize(ci1->getSrcTy());
 }
 
 static bool eliminateRedundantInst(Function &F)
@@ -66,10 +64,7 @@ static bool eliminateRedundantInst(Function &F)
 	return modified;
 }
 
-bool EliminateRedundantInstPass::runOnFunction(Function &F)
-{
-	return eliminateRedundantInst(F);
-}
+bool EliminateRedundantInstPass::runOnFunction(Function &F) { return eliminateRedundantInst(F); }
 
 Pass *createEliminateRedundantInstPass()
 {

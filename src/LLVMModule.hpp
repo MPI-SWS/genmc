@@ -28,20 +28,19 @@
 
 namespace LLVMModule {
 
-	/* Parses an LLVM module from FILENAME into CTX */
-	std::unique_ptr<llvm::Module>
-	parseLLVMModule(const std::string &filename, const std::unique_ptr<llvm::LLVMContext> &ctx);
+/* Parses an LLVM module from FILENAME into CTX */
+std::unique_ptr<llvm::Module> parseLLVMModule(const std::string &filename,
+					      const std::unique_ptr<llvm::LLVMContext> &ctx);
 
-	/* Clones MOD into CTX */
-	std::unique_ptr<llvm::Module>
-	cloneModule(const std::unique_ptr<llvm::Module> &mod,
-		    const std::unique_ptr<llvm::LLVMContext> &ctx);
+/* Clones MOD into CTX */
+std::unique_ptr<llvm::Module> cloneModule(const std::unique_ptr<llvm::Module> &mod,
+					  const std::unique_ptr<llvm::LLVMContext> &ctx);
 
-	/* Transforms MOD according to CONF. Collected info are stored in MI */
-	bool transformLLVMModule(llvm::Module &mod, ModuleInfo &MI,
-				 const std::shared_ptr<const Config> &conf);
+/* Transforms MOD according to CONF. Collected info are stored in MI */
+bool transformLLVMModule(llvm::Module &mod, ModuleInfo &MI,
+			 const std::shared_ptr<const Config> &conf);
 
-	/* Prints MOD to the file FILENAME */
-	void printLLVMModule(llvm::Module &mod, const std::string &filename);
+/* Prints MOD to the file FILENAME */
+void printLLVMModule(llvm::Module &mod, const std::string &filename);
 
-}
+} // namespace LLVMModule

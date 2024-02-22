@@ -19,27 +19,24 @@
  */
 
 #include "VectorClock.hpp"
+#include "DepView.hpp"
 #include "EventLabel.hpp"
 #include "View.hpp"
-#include "DepView.hpp"
 
-bool VectorClock::contains(const EventLabel *lab) const
-{
-	return contains(lab->getPos());
-}
+bool VectorClock::contains(const EventLabel *lab) const { return contains(lab->getPos()); }
 
 std::unique_ptr<VectorClock> VectorClock::clone() const
 {
 	switch (getKind()) {
 	case VC_View:
-                return std::make_unique<View>(*static_cast<const View *>(this));
+		return std::make_unique<View>(*static_cast<const View *>(this));
 	case VC_DepView:
-                return std::make_unique<DepView>(*static_cast<const DepView *>(this));
+		return std::make_unique<DepView>(*static_cast<const DepView *>(this));
 	}
 	BUG();
 }
 
-llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const VectorClock &vc)
+llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const VectorClock &vc)
 {
 	vc.printData(s);
 	return s;

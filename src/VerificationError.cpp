@@ -22,22 +22,21 @@
 #include "Error.hpp"
 
 const std::unordered_map<SystemError, std::string, ENUM_HASH(SystemError)> errorList = {
-	{SystemError::SE_EPERM,  "Operation not permitted"},
+	{SystemError::SE_EPERM, "Operation not permitted"},
 	{SystemError::SE_ENOENT, "No such file or directory"},
-	{SystemError::SE_EIO,    "Input/output error"},
-	{SystemError::SE_EBADF,  "Bad file descriptor"},
+	{SystemError::SE_EIO, "Input/output error"},
+	{SystemError::SE_EBADF, "Bad file descriptor"},
 	{SystemError::SE_ENOMEM, "Cannot allocate memory"},
 	{SystemError::SE_EEXIST, "File exists"},
 	{SystemError::SE_EINVAL, "Invalid argument"},
 	{SystemError::SE_EMFILE, "Too many open files"},
 	{SystemError::SE_ENFILE, "Too many open files in system"},
-	{SystemError::SE_EFBIG,  "File too large"},
+	{SystemError::SE_EFBIG, "File too large"},
 };
 
 SystemError systemErrorNumber;
 
-llvm::raw_ostream& operator<<(llvm::raw_ostream &s,
-			      const VerificationError &st)
+llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const VerificationError &st)
 {
 	switch (st) {
 	case VerificationError::VE_OK:

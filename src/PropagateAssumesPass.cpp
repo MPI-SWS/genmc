@@ -18,11 +18,11 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-#include "config.h"
 #include "PropagateAssumesPass.hpp"
 #include "Error.hpp"
-#include "LLVMUtils.hpp"
 #include "InterpreterEnumAPI.hpp"
+#include "LLVMUtils.hpp"
+#include "config.h"
 
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Dominators.h>
@@ -36,10 +36,7 @@
 
 using namespace llvm;
 
-void PropagateAssumesPass::getAnalysisUsage(AnalysisUsage &au) const
-{
-	au.setPreservesAll();
-}
+void PropagateAssumesPass::getAnalysisUsage(AnalysisUsage &au) const { au.setPreservesAll(); }
 
 bool isAssumeFalse(Instruction *i)
 {
@@ -80,7 +77,7 @@ bool propagateAssumeToPred(CallInst *assume, BasicBlock *pred)
 
 	auto *bb = assume->getParent();
 	auto assumeName = getCalledFunOrStripValName(*assume);
-        auto *endFun = bb->getParent()->getParent()->getFunction(assumeName);
+	auto *endFun = bb->getParent()->getParent()->getFunction(assumeName);
 	BUG_ON(!endFun);
 
 	/* Get the condition that we need to ensure; if there's a type
@@ -97,8 +94,8 @@ bool propagateAssumeToPred(CallInst *assume, BasicBlock *pred)
 	}
 
 	/* Ensure the condition */
-        auto *ci = CallInst::Create(endFun, {cond}, "", bi);
-        ci->setMetadata("dbg", bi->getMetadata("dbg"));
+	auto *ci = CallInst::Create(endFun, {cond}, "", bi);
+	ci->setMetadata("dbg", bi->getMetadata("dbg"));
 	return true;
 }
 
@@ -106,7 +103,7 @@ bool propagateAssume(CallInst *assume)
 {
 	auto *bb = assume->getParent();
 	return std::accumulate(pred_begin(bb), pred_end(bb), false,
-			       [&](const bool &accum, BasicBlock *p){
+			       [&](const bool &accum, BasicBlock *p) {
 				       return accum || propagateAssumeToPred(assume, p);
 			       });
 }

@@ -18,11 +18,11 @@
  * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
  */
 
-#include "config.h"
 #include "DepExecutionGraph.hpp"
+#include "config.h"
 
-std::vector<Event>
-DepExecutionGraph::getRevisitable(const WriteLabel *sLab, const VectorClock &pporf) const
+std::vector<Event> DepExecutionGraph::getRevisitable(const WriteLabel *sLab,
+						     const VectorClock &pporf) const
 {
 	auto pendingRMW = getPendingRMW(sLab);
 	std::vector<Event> loads;
@@ -34,22 +34,24 @@ DepExecutionGraph::getRevisitable(const WriteLabel *sLab, const VectorClock &ppo
 			const EventLabel *lab = getEventLabel(Event(i, j));
 			if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab)) {
 				if (rLab->getAddr() == sLab->getAddr() &&
-				    !pporf.contains(rLab->getPos()) &&
-				    rLab->isRevisitable() && rLab->wasAddedMax())
+				    !pporf.contains(rLab->getPos()) && rLab->isRevisitable() &&
+				    rLab->wasAddedMax())
 					loads.push_back(rLab->getPos());
 			}
 		}
 	}
 	if (!pendingRMW.isInitializer())
-		loads.erase(std::remove_if(loads.begin(), loads.end(), [&](Event &e){
-			auto *confLab = getEventLabel(pendingRMW);
-			return getEventLabel(e)->getStamp() > confLab->getStamp();
-		}), loads.end());
+		loads.erase(std::remove_if(loads.begin(), loads.end(),
+					   [&](Event &e) {
+						   auto *confLab = getEventLabel(pendingRMW);
+						   return getEventLabel(e)->getStamp() >
+							  confLab->getStamp();
+					   }),
+			    loads.end());
 	return loads;
 }
 
-std::unique_ptr<VectorClock>
-DepExecutionGraph::getViewFromStamp(Stamp stamp) const
+std::unique_ptr<VectorClock> DepExecutionGraph::getViewFromStamp(Stamp stamp) const
 {
 	auto preds = std::make_unique<DepView>();
 
@@ -81,7 +83,7 @@ void DepExecutionGraph::cutToStamp(Stamp stamp)
 			/* Otherwise, remove 'pointers' to it, in an
 			 * analogous manner cutToView(). */
 			if (auto *wLab = llvm::dyn_cast<WriteLabel>(lab)) {
-				wLab->removeReader([&](ReadLabel &rLab){
+				wLab->removeReader([&](ReadLabel &rLab) {
 					return !preds->contains(rLab.getPos());
 				});
 			}
@@ -94,7 +96,8 @@ void DepExecutionGraph::cutToStamp(Stamp stamp)
 					mLab->setAlloc(nullptr);
 			}
 			if (auto *eLab = llvm::dyn_cast<ThreadFinishLabel>(lab)) {
-				if (eLab->getParentJoin() && !preds->contains(eLab->getParentJoin()->getPos()))
+				if (eLab->getParentJoin() &&
+				    !preds->contains(eLab->getParentJoin()->getPos()))
 					eLab->setParentJoin(nullptr);
 			}
 			if (auto *dLab = llvm::dyn_cast<FreeLabel>(lab)) {
@@ -104,7 +107,7 @@ void DepExecutionGraph::cutToStamp(Stamp stamp)
 			if (auto *aLab = llvm::dyn_cast<MallocLabel>(lab)) {
 				if (aLab->getFree() && !preds->contains(aLab->getFree()->getPos()))
 					aLab->setFree(nullptr);
-				aLab->removeAccess([&](MemAccessLabel &mLab){
+				aLab->removeAccess([&](MemAccessLabel &mLab) {
 					return !preds->contains(mLab.getPos());
 				});
 			}
@@ -128,8 +131,7 @@ void DepExecutionGraph::cutToStamp(Stamp stamp)
 	}
 }
 
-std::unique_ptr<ExecutionGraph>
-DepExecutionGraph::getCopyUpTo(const VectorClock &v) const
+std::unique_ptr<ExecutionGraph> DepExecutionGraph::getCopyUpTo(const VectorClock &v) const
 {
 	auto og = std::unique_ptr<DepExecutionGraph>(new DepExecutionGraph());
 	copyGraphUpTo(*og, v);
