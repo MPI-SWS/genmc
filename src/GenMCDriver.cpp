@@ -1400,6 +1400,8 @@ void GenMCDriver::checkLiveness()
 	/* Collect all threads blocked at spinloops */
 	std::vector<int> spinBlocked;
 	for (auto i = 0U; i < g.getNumThreads(); i++) {
+		if (llvm::isa<UserBlockLabel>(g.getLastThreadLabel(i)) || llvm::isa<HelpedCASBlockLabel>(g.getLastThreadLabel(i)) || llvm::isa<ConfirmationBlockLabel>(g.getLastThreadLabel(i)))
+			return;
 		if (llvm::isa<SpinloopBlockLabel>(g.getLastThreadLabel(i)))
 			spinBlocked.push_back(i);
 	}
