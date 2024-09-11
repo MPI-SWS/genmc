@@ -1,7 +1,5 @@
-GenMC
+GenMC: Generic Model Checking for C Programs
 =====
-Generic Model Checking for C Programs
--------------------------------------
 
 GenMC is a stateless model checker for C programs that works on the
 level of LLVM Intermediate Representation.
@@ -90,7 +88,7 @@ For a default build issue:
 
 		./genmc [options] <file>
 
-* For more detailed usage examples please refer to the [manual](doc/manual.pdf).
+* For more detailed usage examples please refer to the [manual](doc/manual.md).
 
 
 <a name="troubleshooting">Troubleshooting</a>

@@ -1,6 +1,7 @@
 #ifndef __GENMC_H__
 #define __GENMC_H__
 
+#include <stdbool.h>
 #include <genmc_internal.h>
 
 #ifdef __cplusplus
@@ -11,7 +12,7 @@ extern "C"
 /*
  * Blocks the current execution if the argument is false
  */
-void __VERIFIER_assume(int) __attribute__ ((__nothrow__));
+void __VERIFIER_assume(bool) __attribute__ ((__nothrow__));
 
 /*
  * Models a limited amount of non-determinism by returning
@@ -92,7 +93,7 @@ void __VERIFIER_join_symmetric (__VERIFIER_thread_t __th)
  */
 void __VERIFIER_loop_begin(void) __attribute__ ((__nothrow__));
 void __VERIFIER_spin_start(void) __attribute__ ((__nothrow__));
-void __VERIFIER_spin_end(int) __attribute__ ((__nothrow__));
+void __VERIFIER_spin_end(bool) __attribute__ ((__nothrow__));
 
 /*
  * Marker function that denotes that a store is local.

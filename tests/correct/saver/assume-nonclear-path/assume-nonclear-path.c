@@ -5,8 +5,6 @@
 atomic_int x;
 atomic_int y;
 
-void __VERIFIER_assume(int);
-
 void *thread_1(void *unused)
 {
 	for (int i = 1u; i <= N; i++)

@@ -4,6 +4,7 @@
 #include <stdatomic.h>
 #include <pthread.h>
 #include <assert.h>
+#include <genmc.h>
 
 #include "../lamport_n.c"
 

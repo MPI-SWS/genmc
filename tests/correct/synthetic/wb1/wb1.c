@@ -1,5 +1,3 @@
-void __VERIFIER_assume(int);
-
 atomic_int x;
 
 void *thread1(void *unused)

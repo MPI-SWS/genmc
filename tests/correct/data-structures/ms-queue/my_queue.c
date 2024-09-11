@@ -24,8 +24,6 @@
 
 static unsigned int free_lists[MAX_THREADS][MAX_FREELIST];
 
-void __VERIFIER_assume(int);
-
 /* Search this thread's free list for a "new" node */
 static unsigned int new_node()
 {

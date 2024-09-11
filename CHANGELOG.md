@@ -7,7 +7,24 @@ released.
 
 ## [Unreleased]
 
-- Documentation
+## [0.10.2] - 2024.09.11
+### Added
+
+- Support for LLVM 17/18
+- GenMC now warns when memory is not freed
+- Minor performance improvements
+- Landing page for doxygen + rudimentary development documentation
+
+### Changed
+
+- `__VERIFIER_assume()` and `__VERIFIER_spin_end()` now take a boolean argument (instead of int)
+- GenMC now uses the new LLVM pass manager
+- IMM performance may incur a minor penalty
+- Project layout under `src`
+
+### Fixes
+
+- Minor bug fixes
 
 ## [0.10.1] - 2024.02.22
 ### Fixes

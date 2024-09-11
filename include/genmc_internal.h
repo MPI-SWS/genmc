@@ -1,6 +1,7 @@
 #ifndef __GENMC_INTERNAL_H__
 #define __GENMC_INTERNAL_H__
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
@@ -20,10 +21,14 @@ typedef struct { int __private; } __VERIFIER_attr_t;
 typedef struct { int __private; } __VERIFIER_barrier_t;
 typedef int __VERIFIER_barrierattr_t;
 
+typedef struct { int __private; } __VERIFIER_cond_t;
+typedef long __VERIFIER_condattr_t;
+
 typedef struct { int __private; } __VERIFIER_mutex_t;
 typedef long __VERIFIER_mutexattr_t;
 
 #define __VERIFIER_MUTEX_INITIALIZER { 0 }
+#define __VERIFIER_COND_INITIALIZER { 0 }
 
 typedef struct { void *__dummy; } __VERIFIER_hazptr_t;
 
@@ -146,6 +151,19 @@ extern int __VERIFIER_mutex_lock (__VERIFIER_mutex_t *__mutex) __attribute__ ((_
 
 extern int __VERIFIER_mutex_unlock (__VERIFIER_mutex_t *__mutex) __attribute__ ((__nothrow__));
 
+/* Condvar functions */
+
+extern int __VERIFIER_cond_init (__VERIFIER_cond_t *__cond,
+				  const __VERIFIER_condattr_t *__condattr) __attribute__ ((__nothrow__));
+
+extern int __VERIFIER_cond_destroy (__VERIFIER_cond_t *__cond) __attribute__ ((__nothrow__));
+
+extern int __VERIFIER_cond_wait (__VERIFIER_cond_t *__cond) __attribute__ ((__nothrow__));
+
+extern int __VERIFIER_cond_signal (__VERIFIER_cond_t *__cond) __attribute__ ((__nothrow__));
+
+extern int __VERIFIER_cond_bcast (__VERIFIER_cond_t *__cond) __attribute__ ((__nothrow__));
+
 
 /* barrier functions */
 
@@ -170,6 +188,8 @@ extern int __VERIFIER_barrier_destroy (__VERIFIER_barrier_t *__barrier) __attrib
 #define GENMC_KIND_HELPING 0x00040000
 #define GENMC_KIND_SPECUL  0x00080000
 #define GENMC_KIND_CONFIRM 0x00100000
+
+void __VERIFIER_assume(bool) __attribute__ ((__nothrow__));
 
 /*
  * Annotate a subsequent instruction with the given mask.

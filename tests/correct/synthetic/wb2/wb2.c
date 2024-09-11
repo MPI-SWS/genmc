@@ -2,8 +2,6 @@
 
 atomic_int x;
 
-void __VERIFIER_assume(int);
-
 void *thread1(void *arg)
 {
 	int a = atomic_load_explicit(&x, mo_rlx);

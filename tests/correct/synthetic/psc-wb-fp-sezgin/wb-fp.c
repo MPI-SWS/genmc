@@ -3,8 +3,6 @@ atomic_int b;
 atomic_int c;
 atomic_int d;
 
-void __VERIFIER_assume(int);
-
 void *thread_1(void *unused)
 {
 	c = 2;

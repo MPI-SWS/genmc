@@ -2,8 +2,6 @@
 
 atomic_int x;
 
-void __VERIFIER_assume(int);
-
 void *thread1(void *arg)
 {
 

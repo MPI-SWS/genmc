@@ -1,9 +1,9 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stdatomic.h>
 #include <pthread.h>
 #include <assert.h>
-#include <stdatomic.h>
+#include <genmc.h>
 
 #include "../pgsql.c"
 

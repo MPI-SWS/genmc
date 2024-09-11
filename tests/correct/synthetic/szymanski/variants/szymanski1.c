@@ -2,6 +2,7 @@
 #include <pthread.h>
 #include <assert.h>
 #include <stdatomic.h>
+#include <genmc.h>
 
 #include "../szymanski.c"
 

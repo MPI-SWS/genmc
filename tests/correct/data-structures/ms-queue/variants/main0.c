@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <stdatomic.h>
+#include <genmc.h>
 
 #include "../main.c"
 

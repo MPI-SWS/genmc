@@ -7,8 +7,6 @@ atomic_int back;
 
 int r_1, r_2, r_3, r_4;
 
-void __VERIFIER_assume(int);
-
 void enqueue(int a)
 {
 	int k = atomic_fetch_add_explicit(&back, 1, memory_order_acq_rel);

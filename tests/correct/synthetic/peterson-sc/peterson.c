@@ -4,8 +4,6 @@ atomic_bool flag2;
 atomic_int turn;   /* Atomic integer that holds the ID of the thread whose turn it is */
 atomic_bool x;     /* Boolean variable to test mutual exclusion */
 
-void __VERIFIER_assume(int);
-
 void *thread_1(void *arg)
 {
 	atomic_store_explicit(&flag1, 1, memory_order_seq_cst);

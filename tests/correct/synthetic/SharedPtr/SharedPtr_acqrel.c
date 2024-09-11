@@ -1,5 +1,3 @@
-void __VERIFIER_assume(int x);
-
 atomic_int x;
 atomic_int y;
 atomic_int z;

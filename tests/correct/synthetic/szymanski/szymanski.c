@@ -15,8 +15,6 @@ atomic_int x;
 atomic_int flag1;
 atomic_int flag2;
 
-void __VERIFIER_assume(int);
-
 void *thread_1(void *unused)
 {
 	for (int i = 0u; i < N; i++) {

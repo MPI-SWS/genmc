@@ -23,6 +23,7 @@
 
 #include <assert.h>
 #include <stdatomic.h>
+#include <stdbool.h> // asm/qspinlock.h uses bool
 #include "ordering.h"
 
 /* Stub some compiler directives */
@@ -41,12 +42,6 @@
 #define EXPORT_SYMBOL(sym)
 
 /* Various data types */
-typedef _Bool bool;
-
-enum {
-	false	= 0,
-	true	= 1
-};
 
 typedef int8_t s8;
 typedef uint8_t u8;

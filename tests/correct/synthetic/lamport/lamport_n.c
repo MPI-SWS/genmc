@@ -7,7 +7,6 @@
 #  define N 3
 #endif
 
-void __VERIFIER_assume(intptr_t);
 #define await(cond) __VERIFIER_assume(cond)
 
 atomic_intptr_t b[N+1], x, y;

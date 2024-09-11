@@ -41,12 +41,6 @@
 #define EXPORT_SYMBOL(sym)
 
 /* Various data types */
-typedef _Bool bool;
-
-enum {
-	false	= 0,
-	true	= 1
-};
 
 typedef int8_t s8;
 typedef uint8_t u8;

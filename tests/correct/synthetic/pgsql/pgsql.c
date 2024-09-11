@@ -17,8 +17,6 @@ atomic_bool latch2 = ATOMIC_VAR_INIT(false);
 atomic_bool flag1  = ATOMIC_VAR_INIT(true);
 atomic_bool flag2  = ATOMIC_VAR_INIT(false);
 
-void __VERIFIER_assume(int);
-
 void *thread_1(void *unused)
 {
 	for (;;) {

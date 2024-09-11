@@ -1,0 +1,410 @@
+/*
+ * GenMC -- Generic Model Checking.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-3.0.html.
+ *
+ * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
+ */
+
+/*** NOTE: No include guard ***/
+
+#ifndef FIRST_BEGIN_LABEL
+#define FIRST_BEGIN_LABEL(num)
+#endif
+#ifndef HANDLE_BEGIN_LABEL
+#ifndef HANDLE_LABEL
+#define HANDLE_BEGIN_LABEL(num, name)
+#else
+#define HANDLE_BEGIN_LABEL(num, name) HANDLE_LABEL(num, name)
+#endif
+#endif
+#ifndef LAST_BEGIN_LABEL
+#define LAST_BEGIN_LABEL(num)
+#endif
+
+#ifndef FIRST_TERM_LABEL
+#define FIRST_TERM_LABEL(num)
+#endif
+#ifndef HANDLE_TERM_LABEL
+#ifndef HANDLE_LABEL
+#define HANDLE_TERM_LABEL(num, name)
+#else
+#define HANDLE_TERM_LABEL(num, name) HANDLE_LABEL(num, name)
+#endif
+#endif
+#ifndef LAST_TERM_LABEL
+#define LAST_TERM_LABEL(num)
+#endif
+
+#ifndef FIRST_BLOCK_LABEL
+#define FIRST_BLOCK_LABEL(num)
+#endif
+#ifndef HANDLE_BLOCK_LABEL
+#ifndef HANDLE_TERM_LABEL
+#define HANDLE_BLOCK_LABEL(num, name)
+#else
+#define HANDLE_BLOCK_LABEL(num, name) HANDLE_TERM_LABEL(num, name)
+#endif
+#endif
+#ifndef LAST_BLOCK_LABEL
+#define LAST_BLOCK_LABEL(num)
+#endif
+
+#ifndef FIRST_MEMORY_LABEL
+#define FIRST_MEMORY_LABEL(num)
+#endif
+#ifndef HANDLE_MEMORY_LABEL
+#ifndef HANDLE_LABEL
+#define HANDLE_MEMORY_LABEL(num, name)
+#else
+#define HANDLE_MEMORY_LABEL(num, name) HANDLE_LABEL(num, name)
+#endif
+#endif
+#ifndef LAST_MEMORY_LABEL
+#define LAST_MEMORY_LABEL(num)
+#endif
+
+#ifndef FIRST_READ_LABEL
+#define FIRST_READ_LABEL(num)
+#endif
+#ifndef HANDLE_READ_LABEL
+#ifndef HANDLE_MEMORY_LABEL
+#define HANDLE_READ_LABEL(num, name)
+#else
+#define HANDLE_READ_LABEL(num, name) HANDLE_MEMORY_LABEL(num, name)
+#endif
+#endif
+#ifndef LAST_READ_LABEL
+#define LAST_READ_LABEL(num)
+#endif
+
+#ifndef FIRST_CAS_READ_LABEL
+#define FIRST_CAS_READ_LABEL(num)
+#endif
+#ifndef HANDLE_CAS_READ_LABEL
+#ifndef HANDLE_READ_LABEL
+#define HANDLE_CAS_READ_LABEL(num, name)
+#else
+#define HANDLE_CAS_READ_LABEL(num, name) HANDLE_READ_LABEL(num, name)
+#endif
+#endif
+#ifndef LAST_CAS_READ_LABEL
+#define LAST_CAS_READ_LABEL(num)
+#endif
+
+#ifndef FIRST_FAI_READ_LABEL
+#define FIRST_FAI_READ_LABEL(num)
+#endif
+#ifndef HANDLE_FAI_READ_LABEL
+#ifndef HANDLE_READ_LABEL
+#define HANDLE_FAI_READ_LABEL(num, name)
+#else
+#define HANDLE_FAI_READ_LABEL(num, name) HANDLE_READ_LABEL(num, name)
+#endif
+#endif
+#ifndef LAST_FAI_READ_LABEL
+#define LAST_FAI_READ_LABEL(num)
+#endif
+
+#ifndef FIRST_WRITE_LABEL
+#define FIRST_WRITE_LABEL(num)
+#endif
+#ifndef HANDLE_WRITE_LABEL
+#ifndef HANDLE_MEMORY_LABEL
+#define HANDLE_WRITE_LABEL(num, name)
+#else
+#define HANDLE_WRITE_LABEL(num, name) HANDLE_MEMORY_LABEL(num, name)
+#endif
+#endif
+#ifndef LAST_WRITE_LABEL
+#define LAST_WRITE_LABEL(num)
+#endif
+
+#ifndef FIRST_CAS_WRITE_LABEL
+#define FIRST_CAS_WRITE_LABEL(num)
+#endif
+#ifndef HANDLE_CAS_WRITE_LABEL
+#ifndef HANDLE_WRITE_LABEL
+#define HANDLE_CAS_WRITE_LABEL(num, name)
+#else
+#define HANDLE_CAS_WRITE_LABEL(num, name) HANDLE_WRITE_LABEL(num, name)
+#endif
+#endif
+#ifndef LAST_CAS_WRITE_LABEL
+#define LAST_CAS_WRITE_LABEL(num)
+#endif
+
+#ifndef FIRST_FAI_WRITE_LABEL
+#define FIRST_FAI_WRITE_LABEL(num)
+#endif
+#ifndef HANDLE_FAI_WRITE_LABEL
+#ifndef HANDLE_WRITE_LABEL
+#define HANDLE_FAI_WRITE_LABEL(num, name)
+#else
+#define HANDLE_FAI_WRITE_LABEL(num, name) HANDLE_WRITE_LABEL(num, name)
+#endif
+#endif
+#ifndef LAST_FAI_WRITE_LABEL
+#define LAST_FAI_WRITE_LABEL(num)
+#endif
+
+#ifndef FIRST_FENCE_LABEL
+#define FIRST_FENCE_LABEL(num)
+#endif
+#ifndef HANDLE_FENCE_LABEL
+#ifndef HANDLE_LABEL
+#define HANDLE_FENCE_LABEL(num, name)
+#else
+#define HANDLE_FENCE_LABEL(num, name) HANDLE_LABEL(num, name)
+#endif
+#endif
+#ifndef LAST_FENCE_LABEL
+#define LAST_FENCE_LABEL(num)
+#endif
+
+#ifndef FIRST_ALLOC_LABEL
+#define FIRST_ALLOC_LABEL(num)
+#endif
+#ifndef HANDLE_ALLOC_LABEL
+#ifndef HANDLE_LABEL
+#define HANDLE_ALLOC_LABEL(num, name)
+#else
+#define HANDLE_ALLOC_LABEL(num, name) HANDLE_LABEL(num, name)
+#endif
+#endif
+#ifndef LAST_ALLOC_LABEL
+#define LAST_ALLOC_LABEL(num)
+#endif
+
+#ifndef FIRST_FREE_LABEL
+#define FIRST_FREE_LABEL(num)
+#endif
+#ifndef HANDLE_FREE_LABEL
+#ifndef HANDLE_LABEL
+#define HANDLE_FREE_LABEL(num, name)
+#else
+#define HANDLE_FREE_LABEL(num, name) HANDLE_LABEL(num, name)
+#endif
+#endif
+#ifndef LAST_FREE_LABEL
+#define LAST_FREE_LABEL(num)
+#endif
+
+#ifndef FIRST_OTHER_LABEL
+#define FIRST_OTHER_LABEL(num)
+#endif
+#ifndef HANDLE_OTHER_LABEL
+#ifndef HANDLE_LABEL
+#define HANDLE_OTHER_LABEL(num, name)
+#else
+#define HANDLE_OTHER_LABEL(num, name) HANDLE_LABEL(num, name)
+#endif
+#endif
+#ifndef LAST_OTHER_LABEL
+#define LAST_OTHER_LABEL(num)
+#endif
+
+/*
+ * Begin labels - these denote the start of a given thread.
+ * A start might be the initial label (for main) or a start event (for others).
+ * Every thread has to have such a label.
+ */
+FIRST_BEGIN_LABEL(1)
+HANDLE_BEGIN_LABEL(1, ThreadStart)
+HANDLE_BEGIN_LABEL(2, Init)
+LAST_BEGIN_LABEL(2)
+
+/*
+ * Terminator labels - these denote the termination of a thread.
+ * A termination might be a block label (denoting blockage), a kill label
+ * (denoting the reach of unrolling bound), or a finish label (normal termination).
+ * Block labels have different types, depending on the blockage.
+ */
+FIRST_TERM_LABEL(3)
+FIRST_BLOCK_LABEL(3)
+HANDLE_TERM_LABEL(3, SpinloopBlock)
+HANDLE_TERM_LABEL(4, FaiZNEBlock)
+HANDLE_TERM_LABEL(5, LockZNEBlock)
+HANDLE_TERM_LABEL(6, HelpedCASBlock)
+HANDLE_TERM_LABEL(7, ConfirmationBlock)
+HANDLE_TERM_LABEL(8, LockNotAcqBlock)
+HANDLE_TERM_LABEL(9, LockNotRelBlock)
+HANDLE_TERM_LABEL(10, BarrierBlock)
+HANDLE_TERM_LABEL(11, ErrorBlock)
+HANDLE_TERM_LABEL(12, UserBlock)
+HANDLE_TERM_LABEL(13, JoinBlock)
+HANDLE_TERM_LABEL(14, ReadOptBlock)
+LAST_BLOCK_LABEL(14)
+HANDLE_TERM_LABEL(15, ThreadKill)
+HANDLE_TERM_LABEL(16, ThreadFinish)
+LAST_TERM_LABEL(16)
+
+/*
+ * Memory labels - these denote memory accesses.
+ * They are further divided into read and write labels,
+ * which in turn might be either plain, CAS or FAI.
+ */
+FIRST_MEMORY_LABEL(17)
+
+FIRST_READ_LABEL(17)
+
+HANDLE_READ_LABEL(17, Read)
+HANDLE_READ_LABEL(18, BWaitRead)
+HANDLE_READ_LABEL(19, SpeculativeRead)
+HANDLE_READ_LABEL(20, ConfirmingRead)
+HANDLE_READ_LABEL(21, CondVarWaitRead)
+
+FIRST_CAS_READ_LABEL(22)
+HANDLE_CAS_READ_LABEL(22, CasRead)
+HANDLE_CAS_READ_LABEL(23, LockCasRead)
+HANDLE_CAS_READ_LABEL(24, TrylockCasRead)
+HANDLE_CAS_READ_LABEL(25, HelpedCasRead)
+HANDLE_CAS_READ_LABEL(26, ConfirmingCasRead)
+LAST_CAS_READ_LABEL(26)
+
+FIRST_FAI_READ_LABEL(27)
+HANDLE_FAI_READ_LABEL(27, FaiRead)
+HANDLE_FAI_READ_LABEL(28, NoRetFaiRead)
+HANDLE_FAI_READ_LABEL(29, BIncFaiRead)
+LAST_FAI_READ_LABEL(29)
+
+LAST_READ_LABEL(29)
+
+FIRST_WRITE_LABEL(30)
+
+HANDLE_WRITE_LABEL(30, Write)
+HANDLE_WRITE_LABEL(31, UnlockWrite)
+HANDLE_WRITE_LABEL(32, BInitWrite)
+HANDLE_WRITE_LABEL(33, BDestroyWrite)
+HANDLE_WRITE_LABEL(34, CondVarInitWrite)
+HANDLE_WRITE_LABEL(35, CondVarSignalWrite)
+HANDLE_WRITE_LABEL(36, CondVarBcastWrite)
+HANDLE_WRITE_LABEL(37, CondVarDestroyWrite)
+
+FIRST_CAS_WRITE_LABEL(38)
+HANDLE_CAS_WRITE_LABEL(38, CasWrite)
+HANDLE_CAS_WRITE_LABEL(39, LockCasWrite)
+HANDLE_CAS_WRITE_LABEL(40, TrylockCasWrite)
+HANDLE_CAS_WRITE_LABEL(41, HelpedCasWrite)
+HANDLE_CAS_WRITE_LABEL(42, ConfirmingCasWrite)
+LAST_CAS_WRITE_LABEL(42)
+
+FIRST_FAI_WRITE_LABEL(43)
+HANDLE_FAI_WRITE_LABEL(43, FaiWrite)
+HANDLE_FAI_WRITE_LABEL(44, NoRetFaiWrite)
+HANDLE_FAI_WRITE_LABEL(45, BIncFaiWrite)
+LAST_FAI_WRITE_LABEL(45)
+
+LAST_WRITE_LABEL(45)
+
+LAST_MEMORY_LABEL(45)
+
+/*
+ * Fence labels - these represent a memory fence.
+ */
+FIRST_FENCE_LABEL(46)
+HANDLE_MEMORY_LABEL(46, Fence)
+LAST_FENCE_LABEL(46)
+
+/*
+ * Alloc labels - these represent memory allocation.
+ */
+FIRST_ALLOC_LABEL(47)
+HANDLE_ALLOC_LABEL(47, Malloc)
+LAST_ALLOC_LABEL(47)
+
+/*
+ * Free labels - these represent memory deallocation.
+ */
+FIRST_FREE_LABEL(48)
+HANDLE_FREE_LABEL(48, Free)
+HANDLE_FREE_LABEL(49, HpRetire)
+LAST_FREE_LABEL(49)
+
+/*
+ * Other labels - other operations that GenMC needs to track.
+ */
+FIRST_OTHER_LABEL(50)
+HANDLE_OTHER_LABEL(50, ThreadCreate)
+HANDLE_OTHER_LABEL(51, ThreadJoin)
+HANDLE_OTHER_LABEL(52, HpProtect)
+HANDLE_OTHER_LABEL(53, HelpingCas)
+HANDLE_OTHER_LABEL(54, Optional)
+HANDLE_OTHER_LABEL(55, LoopBegin)
+HANDLE_OTHER_LABEL(56, SpinStart)
+HANDLE_OTHER_LABEL(57, FaiZNESpinEnd)
+HANDLE_OTHER_LABEL(58, LockZNESpinEnd)
+HANDLE_OTHER_LABEL(59, Empty)
+LAST_OTHER_LABEL(59)
+
+#undef FIRST_BEGIN_LABEL
+#undef HANDLE_BEGIN_LABEL
+#undef LAST_BEGIN_LABEL
+
+#undef FIRST_TERM_LABEL
+#undef HANDLE_TERM_LABEL
+#undef LAST_TERM_LABEL
+
+#undef FIRST_BLOCK_LABEL
+#undef HANDLE_BLOCK_LABEL
+#undef LAST_BLOCK_LABEL
+
+#undef FIRST_MEMORY_LABEL
+#undef HANDLE_MEMORY_LABEL
+#undef LAST_MEMORY_LABEL
+
+#undef FIRST_READ_LABEL
+#undef HANDLE_READ_LABEL
+#undef LAST_READ_LABEL
+
+#undef FIRST_CAS_READ_LABEL
+#undef HANDLE_CAS_READ_LABEL
+#undef LAST_CAS_READ_LABEL
+
+#undef FIRST_FAI_READ_LABEL
+#undef HANDLE_FAI_READ_LABEL
+#undef LAST_FAI_READ_LABEL
+
+#undef FIRST_WRITE_LABEL
+#undef HANDLE_WRITE_LABEL
+#undef LAST_WRITE_LABEL
+
+#undef FIRST_CAS_WRITE_LABEL
+#undef HANDLE_CAS_WRITE_LABEL
+#undef LAST_CAS_WRITE_LABEL
+
+#undef FIRST_FAI_WRITE_LABEL
+#undef HANDLE_FAI_WRITE_LABEL
+#undef LAST_FAI_WRITE_LABEL
+
+#undef FIRST_FENCE_LABEL
+#undef HANDLE_FENCE_LABEL
+#undef LAST_FENCE_LABEL
+
+#undef FIRST_ALLOC_LABEL
+#undef HANDLE_ALLOC_LABEL
+#undef LAST_ALLOC_LABEL
+
+#undef FIRST_FREE_LABEL
+#undef HANDLE_FREE_LABEL
+#undef LAST_FREE_LABEL
+
+#undef FIRST_OTHER_LABEL
+#undef HANDLE_OTHER_LABEL
+#undef LAST_OTHER_LABEL
+
+#ifdef HANDLE_LABEL
+#undef HANDLE_LABEL
+#endif

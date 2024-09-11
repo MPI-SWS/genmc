@@ -3,6 +3,7 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <genmc.h>
 
 #include "../hwqueue-ra.c"
 

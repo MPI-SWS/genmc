@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include <genmc.h>
 
 #include "../wb2.c"
 
