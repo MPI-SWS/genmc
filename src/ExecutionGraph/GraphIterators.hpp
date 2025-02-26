@@ -122,14 +122,14 @@ inline auto po_succs(const ExecutionGraph &G, const EventLabel *lab) { return G.
 
 inline const EventLabel *po_imm_succ(const ExecutionGraph &G, const EventLabel *lab)
 {
-	return G.getNextLabel(lab);
+	return G.po_imm_succ(lab);
 }
 
 inline auto po_preds(const ExecutionGraph &G, const EventLabel *lab) { return G.po_preds(lab); }
 
 inline const EventLabel *po_imm_pred(const ExecutionGraph &G, const EventLabel *lab)
 {
-	return G.getPreviousLabel(lab);
+	return G.po_imm_pred(lab);
 }
 
 /*******************************************************************************

@@ -27,7 +27,7 @@
 
 auto canBlock(const ExecutionGraph &g, const View &s, int t) -> bool
 {
-	const auto *nLab = g.getNextLabel(g.getEventLabel(Event(t, s.getMax(t))));
+	const auto *nLab = g.po_imm_succ(g.getEventLabel(Event(t, s.getMax(t))));
 	return nLab && (llvm::isa<ThreadJoinLabel>(nLab) || llvm::isa<LockCasReadLabel>(nLab) ||
 			llvm::isa<BWaitReadLabel>(nLab));
 }
@@ -41,7 +41,7 @@ auto isEnabled(const ExecutionGraph &g, const View &v, int t) -> bool
 
 	/* If thread has no more events in the current execution,
 	 * we consider it disabled for the context-bound. */
-	const auto *nLab = g.getNextLabel(llab);
+	const auto *nLab = g.po_imm_succ(llab);
 	if (!nLab)
 		return false;
 

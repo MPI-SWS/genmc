@@ -21,6 +21,20 @@
 # Get binary's full path
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GenMC="${GenMC:-$DIR/../genmc}"
+GENMCFLAGS="${GENMCFLAGS:-}"
+MODELS=(rc11 imm)
+
+# Set the directories for testing
+if [ -z ${CORRECT_DIRS+x} ]
+then
+    CORRECT_DIRS=(infr litmus saver ipr sr liveness synthetic data-structures)
+    CORRECT_DIRS=("${CORRECT_DIRS[@]/#/${DIR}/../tests/correct/}" )
+fi
+if [ -z ${WRONG_DIRS+x} ]
+then
+    WRONG_DIRS=(safety liveness infr racy memory locking barriers helper)
+    WRONG_DIRS=("${WRONG_DIRS[@]/#/${DIR}/../tests/wrong/}" )
+fi
 
 source "${DIR}/terminal.sh"
 
@@ -108,12 +122,11 @@ print_results() {
 initialize_results
 
 # First, run the test cases in the correct/ directory
-correctdir="${DIR}/../tests/correct"
-for model in rc11 imm # rc11 imm lkmm
+for model in "${MODELS[@]}"
 do
-    for cat in infr litmus saver ipr sr liveness synthetic data-structures # helper fs lkmm lapor
+    for testdir in "${CORRECT_DIRS[@]}"
     do
-	testdir="${correctdir}/${cat}"
+	cat="${testdir##*/}"
 	if [[ ("${model}" == "lkmm" && "${cat}" != "lkmm" && "${cat}" != "fs") ||
 		  ("${model}" != "lkmm" && "${cat}" == "lkmm") ]]
 	then
@@ -140,17 +153,17 @@ done
 
 # Then, run the testcases in the wrong/ directory
 header_printed=""
-wrongdir="${DIR}/../tests/wrong"
-for model in rc11 imm
+
+for model in "${MODELS[@]}"
 do
-    for cat in safety liveness infr racy memory locking barriers helper # fs
+    for testdir in "${WRONG_DIRS[@]}"
     do
+	cat="${testdir##*/}"
 	# under IMM, only run safety and liveness tests
 	if test "${model}" = "imm" -a "${cat}" != "safety" -a "${cat}" != "liveness"
 	then
 	    continue
 	fi
-	testdir="${wrongdir}/${cat}"
 	if [[ "${cat}" == "liveness" || "${cat}" == "helper" ]]
 	then
 	    coherence="mo"

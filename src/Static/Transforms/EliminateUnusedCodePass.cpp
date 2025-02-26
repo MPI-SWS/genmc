@@ -19,7 +19,6 @@
  */
 
 #include "EliminateUnusedCodePass.hpp"
-#include "Support/Error.hpp"
 #include "config.h"
 
 #include <llvm/ADT/STLExtras.h>
@@ -38,7 +37,7 @@
 
 using namespace llvm;
 
-auto isEliminable(Instruction *i) -> bool
+static auto isEliminable(Instruction *i) -> bool
 {
 	return !MAY_BE_MEM_DEPENDENT(*i) && !i->isTerminator();
 }

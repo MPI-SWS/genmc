@@ -1,5 +1,12 @@
 # Modifying GenMC
 
+## Code conventions
+
+- CamelCase for everything apart from things mimicking STL
+  functionality (LLVM utilities remain unmodified)
+- Names start with a lowercase letter
+- Member variables should end with an underscore (_)
+
 ## Adding new label types
 
 To add a new label, follow these steps:

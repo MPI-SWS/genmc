@@ -350,7 +350,8 @@ public:
 
 #define CALL_DRIVER(method, ...)                                                                   \
 	({                                                                                         \
-		if (getProgramState() != ProgramState::Recovery || #method != "handleLoad") {      \
+		if (getProgramState() != ProgramState::Recovery ||                                 \
+		    strcmp(#method, "handleLoad")) {                                               \
 			incPos();                                                                  \
 		}                                                                                  \
 		driver->method(__VA_ARGS__);                                                       \
@@ -368,7 +369,7 @@ public:
 			decPos();                                                                  \
 			--ECStack().back().CurInst;                                                \
 		} else if (getProgramState() == ProgramState::Recovery &&                          \
-			   #method == "handleLoad") {                                              \
+			   (strcmp(#method, "handleLoad") == 0)) {                                 \
 			decPos();                                                                  \
 		}                                                                                  \
 		ret;                                                                               \

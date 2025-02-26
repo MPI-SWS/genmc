@@ -28,10 +28,12 @@
 #include "ExecutionGraph/EventLabel.hpp"
 #include "ExecutionGraph/Stamp.hpp"
 #include "Support/Error.hpp"
+#include "Support/Hash.hpp"
 #include "Verification/Revisit.hpp"
 #include "config.h"
 #include <llvm/ADT/StringMap.h>
 
+#include <functional>
 #include <memory>
 #include <ranges>
 #include <unordered_map>
@@ -56,16 +58,25 @@ public:
 	using ThreadList = std::vector<Thread>;
 	using StoreList = llvm::simple_ilist<WriteLabel>;
 	using LocMap = std::unordered_map<SAddr, StoreList>;
+	using InitValGetter = std::function<SVal(const AAccess &)>;
 
-	ExecutionGraph();
+	ExecutionGraph(InitValGetter f) : initValGetter_(std::move(f))
+	{
+		/* Create an entry for main() and push the "initializer" label */
+		events.push_back({});
+		auto *iLab = addLabelToGraph(InitLabel::create());
+		iLab->setCalculated({{}});
+		iLab->setViews({{}});
+		iLab->setPrefixView(std::make_unique<View>());
+	}
 
 	ExecutionGraph(const ExecutionGraph &) = delete;
-	ExecutionGraph(ExecutionGraph &&) = default;
+	ExecutionGraph(ExecutionGraph &&) noexcept = default;
 
 	auto operator=(const ExecutionGraph &) -> ExecutionGraph & = delete;
-	auto operator=(ExecutionGraph &&) -> ExecutionGraph & = default;
+	auto operator=(ExecutionGraph &&) noexcept -> ExecutionGraph & = default;
 
-	virtual ~ExecutionGraph();
+	virtual ~ExecutionGraph() = default;
 
 	/* Iterators */
 	using iterator = ThreadList::iterator;
@@ -108,6 +119,15 @@ public:
 	auto thr_ids() const { return std::views::iota(0, (int)getNumThreads()); }
 	auto thr_ids() { return std::views::iota(0, (int)getNumThreads()); }
 
+	auto po(int tid) const
+	{
+		return std::views::all(events[tid]) | std::ranges::views::transform(indirect);
+	}
+	auto po(int tid)
+	{
+		return std::views::all(events[tid]) | std::ranges::views::transform(indirect);
+	}
+
 	auto po_succs(const EventLabel *lab) const
 	{
 		const auto &thr = events[lab->getThread()];
@@ -136,29 +156,33 @@ public:
 
 	/* Returns the label in the previous position of E.
 	 * Returns nullptr if E is the first event of a thread */
-	const EventLabel *getPreviousLabel(const EventLabel *lab) const
+	auto po_imm_pred(const EventLabel *lab) const -> const EventLabel *
 	{
 		return lab->getIndex() == 0 ? nullptr
 					    : events[lab->getThread()][lab->getIndex() - 1].get();
 	}
-	EventLabel *getPreviousLabel(EventLabel *lab)
+	auto po_imm_pred(EventLabel *lab) -> EventLabel *
 	{
+		// NOLINTBEGIN(cppcoreguidelines-pro-type-const-cast)
 		return const_cast<EventLabel *>(
-			static_cast<const ExecutionGraph &>(*this).getPreviousLabel(lab));
+			static_cast<const ExecutionGraph &>(*this).po_imm_pred(lab));
+		// NOLINTEND(cppcoreguidelines-pro-type-const-cast)
 	}
 
 	/* Returns the label in the next position of E.
 	 * Returns nullptr if E is the last event of a thread */
-	const EventLabel *getNextLabel(const EventLabel *lab) const
+	auto po_imm_succ(const EventLabel *lab) const -> const EventLabel *
 	{
 		return lab->getIndex() == getThreadSize(lab->getThread()) - 1
 			       ? nullptr
 			       : events[lab->getThread()][lab->getIndex() + 1].get();
 	}
-	EventLabel *getNextLabel(EventLabel *lab)
+	auto po_imm_succ(EventLabel *lab) -> EventLabel *
 	{
+		// NOLINTBEGIN(cppcoreguidelines-pro-type-const-cast)
 		return const_cast<EventLabel *>(
-			static_cast<const ExecutionGraph &>(*this).getNextLabel(lab));
+			static_cast<const ExecutionGraph &>(*this).po_imm_succ(lab));
+		// NOLINTEND(cppcoreguidelines-pro-type-const-cast)
 	}
 
 	loc_iterator loc_begin() { return coherence.begin(); }
@@ -215,7 +239,7 @@ public:
 	{
 		return ++const_reverse_co_iterator(lab);
 	}
-	const_reverse_co_iterator co_pred_end(WriteLabel *lab) { return co_rend(lab->getAddr()); }
+	reverse_co_iterator co_pred_end(WriteLabel *lab) { return co_rend(lab->getAddr()); }
 	const_reverse_co_iterator co_pred_end(const WriteLabel *lab) const
 	{
 		return co_rend(lab->getAddr());
@@ -290,24 +314,16 @@ public:
 
 	/* Thread-related methods */
 
-	/* Returns a list of the threads in the graph */
-	inline const ThreadList &getThreadList() const { return events; }
-	inline ThreadList &getThreadList()
-	{
-		return const_cast<ThreadList &>(
-			static_cast<const ExecutionGraph &>(*this).getThreadList());
-	}
-
 	/* Creates a new thread in the execution graph */
-	inline void addNewThread() { events.push_back({}); };
+	void addNewThread() { events.push_back({}); };
 
 	/* Pers: Add/remove a thread for the recovery procedure */
-	inline void addRecoveryThread()
+	void addRecoveryThread()
 	{
 		recoveryTID = events.size();
 		events.push_back({});
 	};
-	inline void delRecoveryThread()
+	void delRecoveryThread()
 	{
 		events.pop_back();
 		recoveryTID = -1;
@@ -315,16 +331,16 @@ public:
 
 	/* Returns the tid of the recovery routine.
 	 * If not in recovery mode, returns -1 */
-	inline int getRecoveryRoutineId() const { return recoveryTID; };
+	int getRecoveryRoutineId() const { return recoveryTID; };
 
 	/* Returns the number of threads currently in the graph */
-	inline unsigned int getNumThreads() const { return events.size(); };
+	unsigned int getNumThreads() const { return events.size(); };
 
 	/* Returns the size of the thread tid */
-	inline unsigned int getThreadSize(int tid) const { return events[tid].size(); };
+	unsigned int getThreadSize(int tid) const { return events[tid].size(); };
 
 	/* Returns true if the thread tid is empty */
-	inline bool isThreadEmpty(int tid) const { return getThreadSize(tid) == 0; };
+	bool isThreadEmpty(int tid) const { return getThreadSize(tid) == 0; };
 
 	/* Event addition/removal methods */
 
@@ -410,28 +426,18 @@ public:
 			static_cast<const ExecutionGraph &>(*this).getWriteLabel(e));
 	}
 
-	/* Returns the previous non-empty label of e. Since all threads
-	 * have an initializing event, it returns that as a base case */
-	const EventLabel *getPreviousNonEmptyLabel(Event e) const;
-	const EventLabel *getPreviousNonEmptyLabel(const EventLabel *lab) const
-	{
-		return getPreviousNonEmptyLabel(lab->getPos());
-	}
-
-	/* Returns the first event in the thread tid */
-	Event getFirstThreadEvent(int tid) const { return Event(tid, 0); }
-
 	/* Returns the first label in the thread tid */
 	const ThreadStartLabel *getFirstThreadLabel(int tid) const
 	{
-		return llvm::dyn_cast<ThreadStartLabel>(getEventLabel(getFirstThreadEvent(tid)));
+		return llvm::dyn_cast<ThreadStartLabel>(getEventLabel(Event(tid, 0)));
+	}
+	ThreadStartLabel *getFirstThreadLabel(int tid)
+	{
+		return const_cast<ThreadStartLabel *>(
+			static_cast<const ExecutionGraph &>(*this).getFirstThreadLabel(tid));
 	}
 
-	/* Returns the last event/label in the thread tid */
-	Event getLastThreadEvent(int thread) const
-	{
-		return Event(thread, getThreadSize(thread) - 1);
-	}
+	/* Returns the last label in the thread tid */
 	const EventLabel *getLastThreadLabel(int thread) const
 	{
 		return getEventLabel(Event(thread, getThreadSize(thread) - 1));
@@ -442,39 +448,6 @@ public:
 			static_cast<const ExecutionGraph &>(*this).getLastThreadLabel(thread));
 	}
 
-	/* Returns the last store at ADDR that is before UPPERLIMIT in
-	 * UPPERLIMIT's thread. If such a store does not exist, it
-	 * returns INIT */
-	Event getLastThreadStoreAtLoc(Event upperLimit, SAddr addr) const;
-
-	/* Returns the last release before upperLimit in the latter's thread.
-	 * If it's not a fence, then it has to be at location addr */
-	Event getLastThreadReleaseAtLoc(Event upperLimit, SAddr addr) const;
-
-	/* Returns the lock that matches UNLOCK.
-	 * If no such event exists, returns INIT */
-	Event getMatchingLock(const Event unlock) const;
-
-	/* Returns the unlock that matches LOCK. LOCK needs to be the
-	 * read part of a lock operation. If no such event exists,
-	 * returns INIT */
-	Event getMatchingUnlock(const Event lock) const;
-
-	/* Helper: Returns the last speculative read in CONF's location that
-	 * is not matched. If no such event exists, returns INIT.
-	 * (If SC is non-null and an SC event is in-between the confirmation,
-	 * SC is set to that event) */
-	Event getMatchingSpeculativeRead(Event conf, Event *sc = nullptr) const;
-
-	/* Returns the allocating event for ADDR.
-	 * Assumes that only one such event may exist */
-	Event getMalloc(const SAddr &addr) const;
-
-	/* Given a deallocating event FLAB, returns its allocating
-	 * counterpart (their addresses need to match exactly).
-	 * Assumes that only one such event may exist */
-	Event getMallocCounterpart(const FreeLabel *fLab) const;
-
 	/* Given a write label sLab that is part of an RMW, returns
 	 * another RMW that reads from the same write. If no such event
 	 * exists, it returns INIT. If there are multiple such events,
@@ -482,41 +455,13 @@ public:
 	Event getPendingRMW(const WriteLabel *sLab) const;
 
 	/* Returns a list of loads that can be revisited */
-	virtual std::vector<Event> getRevisitable(const WriteLabel *sLab,
-						  const VectorClock &pporf) const;
-
-	/* Returns the first po-predecessor satisfying F */
-	template <typename F>
-	const EventLabel *getPreviousLabelST(const EventLabel *lab, F &&cond) const
-	{
-		for (auto j = lab->getIndex() - 1; j >= 0; j--) {
-			auto *eLab = getEventLabel(Event(lab->getThread(), j));
-			if (cond(eLab))
-				return eLab;
-		}
-		return nullptr;
-	}
-
-	/* Returns a list of all events satisfying property F */
-	template <typename F> std::vector<Event> collectAllEvents(F cond) const
-	{
-		std::vector<Event> result;
-
-		for (auto i = 0u; i < getNumThreads(); i++)
-			for (auto j = 0u; j < getThreadSize(i); j++)
-				if (cond(getEventLabel(Event(i, j))))
-					result.push_back(Event(i, j));
-		return result;
-	}
-
-	/* Calculation of relations in the graph */
-
-	std::vector<Event> getInitRfsAtLoc(SAddr addr) const;
-
-	/* Returns true if e is maximal in addr */
-	bool isCoMaximal(SAddr addr, Event e, bool checkCache = false);
+	virtual std::vector<ReadLabel *> getRevisitable(WriteLabel *sLab, const VectorClock &pporf);
 
 	/* Boolean helper functions */
+
+	SVal getInitVal(const AAccess &access) const { return initValGetter_(access); }
+
+	void setInitValGetter(InitValGetter f) { initValGetter_ = std::move(f); }
 
 	bool isLocEmpty(SAddr addr) const { return co_begin(addr) == co_end(addr); }
 
@@ -543,39 +488,18 @@ public:
 		return containsPos(e) && !llvm::isa<EmptyLabel>(getEventLabel(e));
 	}
 
-	/* Return true if its argument is the load/store part of a successful RMW */
-	bool isRMWLoad(const EventLabel *lab) const;
-	bool isRMWLoad(const Event e) const { return isRMWLoad(getEventLabel(e)); }
-	bool isRMWStore(const EventLabel *lab) const
-	{
-		return llvm::isa<FaiWriteLabel>(lab) || llvm::isa<CasWriteLabel>(lab);
-	}
-	bool isRMWStore(const Event e) const { return isRMWStore(getEventLabel(e)); }
-
 	/* Returns true if the addition of SLAB violates atomicity in the graph */
 	bool violatesAtomicity(const WriteLabel *sLab)
 	{
-		return isRMWStore(sLab) && !getPendingRMW(sLab).isInitializer();
+		return sLab->isRMW() && !getPendingRMW(sLab).isInitializer();
 	}
-
-	/* Returns true if store is read a successful RMW in the location ptr */
-	bool isStoreReadByExclusiveRead(Event store, SAddr addr) const;
-
-	/* Returns true if store is read by a successful RMW that is either non
-	 * revisitable, or in the view porfBefore */
-	bool isStoreReadBySettledRMW(Event store, SAddr addr, const VectorClock &porfBefore) const;
 
 	/* Debugging methods */
 
 	void validate(void);
 
-	/* Modification order methods */
-
-	void trackCoherenceAtLoc(SAddr addr);
-
 	/* Graph modification methods */
 
-	void changeRf(Event read, Event store);
 	void addAlloc(MallocLabel *aLab, MemAccessLabel *mLab);
 
 	/* Prefix saving and restoring */
@@ -594,9 +518,6 @@ public:
 
 	/* Cuts a graph so that it only contains events with stamp <= st */
 	virtual void cutToStamp(Stamp st);
-
-	/* Tries to recompress all stamps after ST */
-	void compressStampsAfter(Stamp st);
 
 	/* FIXME: Use value ptrs? (less error-prone than using explicit copy fun) */
 	/* Or maybe simply consolidate the copying procedure:
@@ -637,6 +558,8 @@ protected:
 	 * If ES is empty, returns INIT */
 	Event getMinimumStampEvent(const std::vector<Event> &es) const;
 
+	void trackCoherenceAtLoc(SAddr addr);
+
 	void copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) const;
 
 	void addInitRfToLoc(ReadLabel *rLab) { getInitLabel()->addReader(rLab); }
@@ -659,19 +582,49 @@ protected:
 
 protected:
 	/* A collection of threads and the events for each threads */
-	ThreadList events;
+	ThreadList events{};
 
 	/* The next available timestamp */
 	Stamp timestamp = 0;
 
-	LocMap coherence;
+	LocMap coherence{};
 
-	llvm::simple_ilist<EventLabel> insertionOrder;
+	llvm::simple_ilist<EventLabel> insertionOrder{};
 
 	/* Pers: The ID of the recovery routine.
 	 * It should be -1 if not in recovery mode, or have the
 	 * value of the recovery routine otherwise. */
 	int recoveryTID = -1;
+
+	InitValGetter initValGetter_;
 };
+
+namespace std {
+template <> struct hash<ExecutionGraph> {
+	auto operator()(const ExecutionGraph &g) const -> size_t
+	{
+		std::size_t hash = 0;
+
+		/* Use a fixed (non-insertion-order-dependent) iteration order */
+		hash_combine(hash, g.getNumThreads());
+		for (auto i = 0U; i < g.getNumThreads(); i++) {
+			hash_combine(hash, g.getThreadSize(i));
+			for (auto j = 0U; j < g.getThreadSize(i); j++) {
+				auto *lab = g.getEventLabel(Event(i, j));
+				if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab)) {
+					hash_combine(hash, rLab->getRf() ? rLab->getRf()->getPos()
+									 : Event::getBottom());
+				}
+				if (auto *wLab = llvm::dyn_cast<WriteLabel>(lab)) {
+					auto *pLab = g.co_imm_pred(wLab);
+					hash_combine(hash,
+						     pLab ? pLab->getPos() : Event::getInit());
+				}
+			}
+		}
+		return hash;
+	}
+};
+} // namespace std
 
 #endif /* GENMC_EXECUTION_GRAPH_HPP */

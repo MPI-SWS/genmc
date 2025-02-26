@@ -77,7 +77,13 @@ enum class VerificationError {
 	VE_SystemError,
 };
 
-inline bool isHardError(VerificationError err)
+inline auto isInvalidAccessError(VerificationError s) -> bool
+{
+	return VerificationError::VE_InvalidAccessBegin <= s &&
+	       s <= VerificationError::VE_InvalidAccessEnd;
+}
+
+inline auto isHardError(VerificationError err) -> bool
 {
 	return !(err >= VerificationError::VE_NonErrorBegin &&
 		 err <= VerificationError::VE_NonErrorLast);

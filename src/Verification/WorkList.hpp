@@ -18,8 +18,8 @@
  * Author: Michalis Kokologiannakis <mixaskok@gmail.com>
  */
 
-#ifndef GENMC_WORK_SET_HPP
-#define GENMC_WORK_SET_HPP
+#ifndef GENMC_WORK_LIST_HPP
+#define GENMC_WORK_LIST_HPP
 
 #include "Verification/Revisit.hpp"
 #include <llvm/Support/Casting.h>
@@ -28,49 +28,39 @@
 #include <vector>
 
 /*
- * WorkSet class - Represents the set of work items for one particular event
+ * WorkList class - Represents a list of TODOs for the driver.
  */
-class WorkSet {
+class WorkList {
 
 public:
 	using ItemT = std::unique_ptr<Revisit>;
 
-protected:
-	using WorkSetT = std::vector<ItemT>;
-	using iterator = WorkSetT::iterator;
-	using const_iterator = WorkSetT::const_iterator;
+	WorkList() = default;
 
-public:
-	/* Iterators */
-	iterator begin() { return wset_.begin(); }
-	iterator end() { return wset_.end(); }
-	const_iterator cbegin() const { return wset_.cbegin(); }
-	const_iterator cend() const { return wset_.cend(); }
+	/** Returns whether this worklist is empty */
+	[[nodiscard]] auto empty() const -> bool { return wlist_.empty(); }
 
-	/* Returns whether this workset is empty */
-	bool empty() const { return wset_.empty(); }
+	/** Adds an item to the worklist */
+	void add(auto &&item) { wlist_.emplace_back(std::move(item)); }
 
-	/* Adds an item to the workset */
-	void add(ItemT item)
+	/** Returns the next item to examine (NULL if none) */
+	auto getNext() -> ItemT
 	{
-		wset_.push_back(std::move(item));
-		return;
-	}
+		if (wlist_.empty())
+			return {};
 
-	/* Returns the next item to examine for this workset */
-	ItemT getNext()
-	{
-		auto i = std::move(wset_.back());
-		wset_.pop_back();
-		return i;
+		auto item = std::move(wlist_.back());
+		wlist_.pop_back();
+		return std::move(item);
 	}
 
 	/* Overloaded operators */
-	friend llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const WorkSet &wset);
+	friend auto operator<<(llvm::raw_ostream &s, const WorkList &wlist) -> llvm::raw_ostream &;
 
 private:
-	/* The workset of an event */
-	WorkSetT wset_;
+	/* Each stamp was associated with a bucket of TODOs before.
+	 * This is now unnecessary, as even a simple stack suffices */
+	std::vector<ItemT> wlist_;
 };
 
-#endif /* GENMC_WORK_SET_HPP */
+#endif /* GENMC_WORK_LIST_HPP */

@@ -34,7 +34,18 @@ libgenmc_a_SOURCES = \
   src/ExecutionGraph/Event.cpp \
   src/ExecutionGraph/EventLabel.cpp \
   src/ExecutionGraph/ExecutionGraph.cpp \
+  src/ExecutionGraph/GraphUtils.cpp \
   src/ExecutionGraph/Stamp.cpp \
+  src/ExecutionGraph/Consistency/BoundDecider.cpp \
+  src/ExecutionGraph/Consistency/ConsistencyChecker.cpp \
+  src/ExecutionGraph/Consistency/ContextBoundDecider.cpp \
+  src/ExecutionGraph/Consistency/IMMChecker.cpp \
+  src/ExecutionGraph/Consistency/RAChecker.cpp \
+  src/ExecutionGraph/Consistency/RC11Checker.cpp \
+  src/ExecutionGraph/Consistency/RoundBoundDecider.cpp \
+  src/ExecutionGraph/Consistency/SCChecker.cpp \
+  src/ExecutionGraph/Consistency/SymmetryChecker.cpp \
+  src/ExecutionGraph/Consistency/TSOChecker.cpp \
   src/Runtime/Execution.cpp \
   src/Runtime/ExternalFunctions.cpp \
   src/Runtime/Interpreter.cpp \
@@ -70,21 +81,15 @@ libgenmc_a_SOURCES = \
   src/Support/NameInfo.cpp \
   src/Support/Parser.cpp \
   src/Support/SAddr.cpp \
+  src/Support/SAddrAllocator.cpp \
   src/Support/SVal.cpp \
   src/Support/ThreadPinner.cpp \
   src/Support/ThreadPool.cpp \
+  src/Verification/ChoiceMap.cpp \
   src/Verification/GenMCDriver.cpp \
-  src/Verification/WorkSet.cpp \
+  src/Verification/WorkList.cpp \
   src/Verification/VerificationError.cpp \
   src/Verification/Revisit.cpp \
-  src/Verification/Consistency/BoundDecider.cpp \
-  src/Verification/Consistency/ContextBoundDecider.cpp \
-  src/Verification/Consistency/IMMDriver.cpp \
-  src/Verification/Consistency/RADriver.cpp \
-  src/Verification/Consistency/RC11Driver.cpp \
-  src/Verification/Consistency/RoundBoundDecider.cpp \
-  src/Verification/Consistency/SCDriver.cpp \
-  src/Verification/Consistency/TSODriver.cpp \
   src/main.cpp
 
 TESTS=scripts/fast-driver.sh scripts/randomize-driver.sh

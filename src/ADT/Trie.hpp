@@ -227,6 +227,47 @@ public:
 		return true;
 	}
 
+	unsigned findLongestCommonPrefix(const Seq &s) const
+	{
+		Node *cNode = getRoot();
+		Node *tNode = nullptr;
+		unsigned result = 0;
+
+		if (s.empty())
+			return result;
+
+		auto sBeg = s.begin();
+		auto sEnd = s.end();
+		while (tNode == nullptr) {
+			auto Id = *sBeg;
+			if (auto *nNode = cNode->getEdge(Id)) {
+				auto r = nNode->query(sBeg, sEnd);
+
+				switch (r) {
+				case Node::QueryResult::Same:
+					tNode = nNode;
+					++result;
+					break;
+				case Node::QueryResult::StringIsPrefix:
+					return result + std::distance(sBeg, sEnd);
+				case Node::QueryResult::DontMatch:
+					BUG();
+					return 0;
+				case Node::QueryResult::LabelIsPrefix:
+					sBeg = sBeg + nNode->label().size();
+					cNode = nNode;
+					result += nNode->label().size();
+					break;
+				default:
+					return result + static_cast<unsigned>(r);
+				}
+			} else
+				return result;
+		}
+		BUG_ON(result != s.size());
+		return result;
+	}
+
 	const Payload *lookup(const Seq &s) const
 	{
 		Node *cNode = getRoot();

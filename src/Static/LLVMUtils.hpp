@@ -31,11 +31,7 @@
 #include <llvm/IR/Value.h>
 #include <string>
 
-#if LLVM_VERSION_MAJOR < 8
-typedef llvm::TerminatorInst TerminatorInst;
-#else
-typedef llvm::Instruction TerminatorInst;
-#endif
+using TerminatorInst = llvm::Instruction;
 
 #if LLVM_VERSION_MAJOR < 17
 #define GLOBALS(M) (M).getGlobalList()
@@ -222,28 +218,6 @@ void foreachInBackPathTo(llvm::BasicBlock *from, llvm::BasicBlock *to, F &&fun)
 /*
  * LLVM Utilities for older LLVM versions
  */
-
-/* Copy portions of LLVM code for older LLVM versions */
-#if LLVM_VERSION_MAJOR < 9
-
-using namespace llvm;
-
-namespace llvm {
-class DomTreeUpdater;
-}
-
-void DetatchDeadBlocks(ArrayRef<BasicBlock *> BBs,
-		       // SmallVectorImpl<DominatorTree::UpdateType> *Updates,
-		       bool KeepOneInputPHIs);
-
-void DeleteDeadBlocks(ArrayRef<BasicBlock *> BBs, DomTreeUpdater *DTU, bool KeepOneInputPHIs);
-
-void DeleteDeadBlock(BasicBlock *BB, DomTreeUpdater *DTU = nullptr, bool KeepOneInputPHIs = false);
-
-bool EliminateUnreachableBlocks(Function &F, DomTreeUpdater *DTU = nullptr,
-				bool KeepOneInputPHIs = false);
-
-#endif /* LLVM_VERSION_MAJOR < 9 */
 
 void replaceUsesWithIf(llvm::Value *Old, llvm::Value *New,
 		       llvm::function_ref<bool(llvm::Use &U)> ShouldReplace);

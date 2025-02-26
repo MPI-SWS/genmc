@@ -57,7 +57,7 @@ public:
 	const_iterator end() const { return empty() ? nullptr : &view_[0] + size(); }
 
 	/* Returns the size of this view (i.e., number of threads seen) */
-	unsigned int size() const { return view_.size(); }
+	unsigned int size() const override { return view_.size(); }
 
 	/* Returns true if this view is empty */
 	bool empty() const { return size() == 0; }
@@ -65,7 +65,7 @@ public:
 	void clear() override { view_.clear(); }
 
 	/* Returns true if e is contained in the clock */
-	bool contains(const Event e) const { return e.index <= getMax(e.thread); }
+	bool contains(const Event e) const override { return e.index <= getMax(e.thread); }
 
 	/* Updates the view based on another vector clock. We can
 	 * only update the current view given another View (and not
@@ -96,7 +96,7 @@ public:
 		view_[e.thread] = e.index;
 	}
 
-	void printData(llvm::raw_ostream &s) const;
+	void printData(llvm::raw_ostream &s) const override;
 
 	static bool classof(const VectorClock *vc) { return vc->getKind() == VC_View; }
 };

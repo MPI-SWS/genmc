@@ -1044,6 +1044,7 @@ void Interpreter::visitFCmpInst(FCmpInst &I)
 	SetValue(&I, R, SF);
 }
 
+#if LLVM_VERSION_MAJOR < 19
 static GenericValue executeCmpInst(unsigned predicate, GenericValue Src1, GenericValue Src2,
 				   Type *Ty)
 {
@@ -1106,6 +1107,7 @@ static GenericValue executeCmpInst(unsigned predicate, GenericValue Src1, Generi
 		llvm_unreachable(nullptr);
 	}
 }
+#endif
 
 void Interpreter::visitBinaryOperator(BinaryOperator &I)
 {
@@ -2848,6 +2850,7 @@ GenericValue Interpreter::getConstantExprValue(ConstantExpr *CE, ExecutionContex
 	switch (CE->getOpcode()) {
 	case Instruction::Trunc:
 		return executeTruncInst(CE->getOperand(0), CE->getType(), SF);
+#if LLVM_VERSION_MAJOR < 19
 	case Instruction::ZExt:
 		return executeZExtInst(CE->getOperand(0), CE->getType(), SF);
 	case Instruction::SExt:
@@ -2864,6 +2867,7 @@ GenericValue Interpreter::getConstantExprValue(ConstantExpr *CE, ExecutionContex
 		return executeFPToUIInst(CE->getOperand(0), CE->getType(), SF);
 	case Instruction::FPToSI:
 		return executeFPToSIInst(CE->getOperand(0), CE->getType(), SF);
+#endif
 	case Instruction::PtrToInt:
 		return executePtrToIntInst(CE->getOperand(0), CE->getType(), SF);
 	case Instruction::IntToPtr:
@@ -2873,6 +2877,7 @@ GenericValue Interpreter::getConstantExprValue(ConstantExpr *CE, ExecutionContex
 	case Instruction::GetElementPtr:
 		return executeGEPOperation(CE->getOperand(0), gep_type_begin(CE), gep_type_end(CE),
 					   SF);
+#if LLVM_VERSION_MAJOR < 19
 	case Instruction::FCmp:
 	case Instruction::ICmp:
 		return executeCmpInst(CE->getPredicate(), getOperandValue(CE->getOperand(0), SF),
@@ -2883,6 +2888,7 @@ GenericValue Interpreter::getConstantExprValue(ConstantExpr *CE, ExecutionContex
 					 getOperandValue(CE->getOperand(1), SF),
 					 getOperandValue(CE->getOperand(2), SF),
 					 CE->getOperand(0)->getType());
+#endif
 	default:
 		break;
 	}
@@ -2892,7 +2898,9 @@ GenericValue Interpreter::getConstantExprValue(ConstantExpr *CE, ExecutionContex
 	GenericValue Op0 = getOperandValue(CE->getOperand(0), SF);
 	GenericValue Op1 = getOperandValue(CE->getOperand(1), SF);
 	GenericValue Dest;
+#if LLVM_VERSION_MAJOR < 19
 	Type *Ty = CE->getOperand(0)->getType();
+#endif
 	switch (CE->getOpcode()) {
 	case Instruction::Add:
 		Dest.IntVal = Op0.IntVal + Op1.IntVal;
@@ -2903,6 +2911,7 @@ GenericValue Interpreter::getConstantExprValue(ConstantExpr *CE, ExecutionContex
 	case Instruction::Mul:
 		Dest.IntVal = Op0.IntVal * Op1.IntVal;
 		break;
+#if LLVM_VERSION_MAJOR < 19
 	case Instruction::FAdd:
 		executeFAddInst(Dest, Op0, Op1, Ty);
 		break;
@@ -2936,18 +2945,21 @@ GenericValue Interpreter::getConstantExprValue(ConstantExpr *CE, ExecutionContex
 	case Instruction::Or:
 		Dest.IntVal = Op0.IntVal | Op1.IntVal;
 		break;
+#endif
 	case Instruction::Xor:
 		Dest.IntVal = Op0.IntVal ^ Op1.IntVal;
 		break;
 	case Instruction::Shl:
 		Dest.IntVal = Op0.IntVal.shl(Op1.IntVal.getZExtValue());
 		break;
+#if LLVM_VERSION_MAJOR < 19
 	case Instruction::LShr:
 		Dest.IntVal = Op0.IntVal.lshr(Op1.IntVal.getZExtValue());
 		break;
 	case Instruction::AShr:
 		Dest.IntVal = Op0.IntVal.ashr(Op1.IntVal.getZExtValue());
 		break;
+#endif
 	default:
 		dbgs() << "Unhandled ConstantExpr: " << *CE << "\n";
 		llvm_unreachable("Unhandled ConstantExpr");

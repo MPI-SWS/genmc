@@ -20,8 +20,8 @@
 
 #include "BoundDecider.hpp"
 #include "Config/Config.hpp"
-#include "Verification/Consistency/ContextBoundDecider.hpp"
-#include "Verification/Consistency/RoundBoundDecider.hpp"
+#include "ExecutionGraph/Consistency/ContextBoundDecider.hpp"
+#include "ExecutionGraph/Consistency/RoundBoundDecider.hpp"
 
 auto BoundDecider::doesExecutionExceedBound(const ExecutionGraph &g, unsigned int bound,
 					    BoundCalculationStrategy strategy) -> bool

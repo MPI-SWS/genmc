@@ -157,7 +157,7 @@ auto invertLoop(Loop *l, PHINode *criticalPHI) -> bool
 
 	// /* Replace uses of the old PHI in the loop's body and insert the new PHI */
 	// criticalPHI->replaceAllUsesWith(newPHI);
-	// newPHI->insertBefore(&*b->begin());
+	// newPHI->insertBefore(b->begin());
 
 	/* Fix PHI in the old header */
 	h->removePredecessor(ph);

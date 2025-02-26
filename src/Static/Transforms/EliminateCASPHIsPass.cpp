@@ -19,9 +19,6 @@
  */
 
 #include "EliminateCASPHIsPass.hpp"
-#include "ADT/VSet.hpp"
-#include "Static/LLVMUtils.hpp"
-#include "Support/Error.hpp"
 #include "config.h"
 
 #include <llvm/IR/Constants.h>
@@ -32,9 +29,11 @@
 #include <llvm/IR/Module.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
+#include <algorithm>
+
 using namespace llvm;
 
-auto hasPHIIncomingExtract(llvm::PHINode *phi) -> ExtractValueInst *
+static auto hasPHIIncomingExtract(llvm::PHINode *phi) -> ExtractValueInst *
 {
 	for (Value *val : phi->incoming_values())
 		if (auto *ei = dyn_cast<ExtractValueInst>(val))
@@ -48,8 +47,8 @@ auto hasPHIIncomingExtract(llvm::PHINode *phi) -> ExtractValueInst *
  * Populates TODELETE with the instructions that need to be erased.
  * May leave the CFG in an invalid state, requiring cleanup.
  */
-auto tryEliminateCASPHI(llvm::PHINode *phi, DominatorTree &DT, std::vector<Instruction *> &toDelete)
-	-> bool
+static auto tryEliminateCASPHI(llvm::PHINode *phi, DominatorTree &DT,
+			       std::vector<Instruction *> &toDelete) -> bool
 {
 	/* The PHI must have exactly two incomings... */
 	if (phi->getNumIncomingValues() != 2)
@@ -120,7 +119,6 @@ auto EliminateCASPHIsPass::run(Function &F, FunctionAnalysisManager &FAM) -> Pre
 	}
 
 	EliminateUnreachableBlocks(F);
-	std::for_each(toDelete.begin(), toDelete.end(),
-		      [](Instruction *i) { i->eraseFromParent(); });
+	std::ranges::for_each(toDelete, [](Instruction *i) { i->eraseFromParent(); });
 	return modified ? PreservedAnalyses::none() : PreservedAnalyses::all();
 }

@@ -59,7 +59,7 @@ public:
 	auto escapesAfter(const Value *a, const Instruction *b, DominatorTree &DT) const -> bool;
 
 	/* If VAL represents local memory, returns the respective allocating instructions */
-	auto writesDynamicMemory(Value *val /*, AliasAnalysis &AA */) -> Instruction *;
+	auto writesDynamicMemory(Value *val /*, AliasAnalysis &AA */) const -> Instruction *;
 
 	auto alloc_begin() const -> VSet<Instruction *>::const_iterator { return allocs_.begin(); }
 	auto alloc_end() const -> VSet<Instruction *>::const_iterator { return allocs_.end(); }

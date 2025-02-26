@@ -31,8 +31,8 @@ please issue the following command:
 
 You will need a C++20-compliant compiler and an LLVM installation.
 The LLVM versions currently supported are:
-10.0.1, 11.0.0, 12.0.1, 13.0.0, 14.0.0, 15.0.0, 16.0.0 (deprecated:
-7.0.1, 8.0.1, 9.0.1).
+13.0.0, 14.0.0, 15.0.0, 16.0.0, 17.0.0, 18.0.0, 19.0.0 (deprecated:
+10.0.1, 11.0.0, 12.0.1).
 
 ##### GNU/Linux
 

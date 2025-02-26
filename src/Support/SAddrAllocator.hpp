@@ -21,9 +21,13 @@
 #ifndef GENMC_SADDR_ALLOCATOR_HPP
 #define GENMC_SADDR_ALLOCATOR_HPP
 
-#include "Error.hpp"
-#include "SAddr.hpp"
 #include "config.h"
+
+#include "Support/SAddr.hpp"
+
+#include <unordered_map>
+
+class VectorClock;
 
 /*******************************************************************************
  **                         SAddrAllocator Class
@@ -40,40 +44,56 @@ class SAddrAllocator {
 protected:
 	/* Allocates a fresh address at the specified pool */
 	template <typename F>
-	SAddr allocate(F &&allocFun, SAddr::Width &pool, unsigned int size, unsigned int alignment,
-		       bool isDurable = false, bool isInternal = false)
+	auto allocate(F &allocFun, SAddr::Width &pool, unsigned int thread, unsigned int size,
+		      unsigned int alignment, bool isDurable = false, bool isInternal = false)
+		-> SAddr
 	{
 		auto offset = alignment - 1;
-		auto oldAddr = pool;
-		pool += (offset + size);
-		return allocFun(((SAddr::Width)oldAddr + offset) & ~(alignment - 1),
-				static_cast<bool &&>(isDurable), static_cast<bool &&>(isInternal));
+		unsigned newAddr = (pool + offset) & ~offset;
+		pool = newAddr + size;
+		return allocFun(thread, newAddr, static_cast<bool &&>(isDurable),
+				static_cast<bool &&>(isInternal));
 	}
 
 public:
 	SAddrAllocator() = default;
 
-	/* Allocating methods */
-	template <typename... Ts> SAddr allocStatic(Ts &&...params)
+	/* Allocating methods. Param format: thread, size, alignment, durable?, internal?  */
+	template <typename... Ts> auto allocStatic(unsigned thread, Ts &&...params) -> SAddr
 	{
-		return allocate(SAddr::createStatic<SAddr::Width, bool, bool>, staticPool,
-				std::forward<Ts>(params)...);
+		return allocate(SAddr::createStatic<SAddr::Width, SAddr::Width, bool, bool>,
+				staticPool_[thread], thread, std::forward<Ts>(params)...);
 	}
-	template <typename... Ts> SAddr allocAutomatic(Ts &&...params)
+	template <typename... Ts> auto allocAutomatic(unsigned thread, Ts &&...params) -> SAddr
 	{
-		return allocate(SAddr::createAutomatic<SAddr::Width, bool, bool>, automaticPool,
-				std::forward<Ts>(params)...);
+		return allocate(SAddr::createAutomatic<SAddr::Width, SAddr::Width, bool, bool>,
+				dynamicPool_[thread], thread, std::forward<Ts>(params)...);
 	}
-	template <typename... Ts> SAddr allocHeap(Ts &&...params)
+	template <typename... Ts> auto allocHeap(unsigned thread, Ts &&...params) -> SAddr
 	{
-		return allocate(SAddr::createHeap<SAddr::Width, bool, bool>, heapPool,
-				std::forward<Ts>(params)...);
+		return allocate(SAddr::createHeap<SAddr::Width, SAddr::Width, bool, bool>,
+				dynamicPool_[thread], thread, std::forward<Ts>(params)...);
 	}
 
+	void restrict(const VectorClock &view);
+
+	friend auto operator<<(llvm::raw_ostream &rhs, const SAddrAllocator &alloctor)
+		-> llvm::raw_ostream &;
+
 private:
-	SAddr::Width staticPool = 0;
-	SAddr::Width automaticPool = 0;
-	SAddr::Width heapPool = 1; /* avoid allocating null */
+	/* Helper class to avoid allocating null for heap addresses */
+	class WidthProxy {
+	public:
+		WidthProxy(SAddr::Width value = 1 /* default non-zero value */) : value_(value) {}
+		operator auto &() { return value_; }
+		operator auto const &() const { return value_; }
+
+	private:
+		SAddr::Width value_;
+	};
+
+	std::unordered_map<unsigned, SAddr::Width> staticPool_;
+	std::unordered_map<unsigned, WidthProxy> dynamicPool_; // Note different type here
 };
 
 #endif /* GENMC_SADDR_ALLOCATOR_HPP */

@@ -20,9 +20,6 @@
 
 #include "FunctionInlinerPass.hpp"
 #include "Runtime/InterpreterEnumAPI.hpp"
-#include "Static/Transforms/DeclareInternalsPass.hpp"
-#include "Static/Transforms/MDataCollectionPass.hpp"
-#include "Support/Error.hpp"
 #include "config.h"
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Analysis/CallGraph.h>
@@ -33,7 +30,8 @@
 
 using namespace llvm;
 
-auto isInlinable(CallGraph &CG, CallGraphNode *node, SmallVector<CallGraphNode *, 4> &chain) -> bool
+static auto isInlinable(CallGraph &CG, CallGraphNode *node, SmallVector<CallGraphNode *, 4> &chain)
+	-> bool
 {
 	/* Base cases: indirect/empty/recursive calls */
 	auto *F = node->getFunction();
@@ -53,13 +51,13 @@ auto isInlinable(CallGraph &CG, CallGraphNode *node, SmallVector<CallGraphNode *
 	return true;
 }
 
-auto isInlinable(CallGraph &CG, Function &F) -> bool
+static auto isInlinable(CallGraph &CG, Function &F) -> bool
 {
 	SmallVector<CallGraphNode *, 4> chain;
 	return isInlinable(CG, CG[&F], chain);
 }
 
-auto inlineCall(CallInst *ci) -> bool
+static auto inlineCall(CallInst *ci) -> bool
 {
 	llvm::InlineFunctionInfo ifi;
 
@@ -70,7 +68,7 @@ auto inlineCall(CallInst *ci) -> bool
 #endif
 }
 
-auto inlineFunction(Module &M, Function *toInline) -> bool
+static auto inlineFunction(Module &M, Function *toInline) -> bool
 {
 	std::vector<CallInst *> calls;
 	for (auto &F : M) {

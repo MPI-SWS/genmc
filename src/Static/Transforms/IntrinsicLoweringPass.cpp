@@ -34,7 +34,7 @@
 
 using namespace llvm;
 
-auto runOnBasicBlock(BasicBlock &BB, IntrinsicLowering *IL) -> bool
+static auto runOnBasicBlock(BasicBlock &BB, IntrinsicLowering *IL) -> bool
 {
 	auto &M = *BB.getParent()->getParent();
 	auto modified = false;
@@ -72,11 +72,7 @@ auto runOnBasicBlock(BasicBlock &BB, IntrinsicLowering *IL) -> bool
 			 */
 			auto FC = M.getOrInsertFunction("abort",
 							llvm::Type::getVoidTy(M.getContext()));
-#if LLVM_VERSION_MAJOR < 9
-			if (auto *F = llvm::dyn_cast<llvm::Function>(FC)) {
-#else
 			if (auto *F = llvm::dyn_cast<llvm::Function>(FC.getCallee())) {
-#endif
 				F->setDoesNotReturn();
 				F->setDoesNotThrow();
 				llvm::CallInst::Create(F, llvm::Twine(), I);

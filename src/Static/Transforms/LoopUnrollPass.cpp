@@ -20,20 +20,14 @@
 
 #include "config.h"
 
-#include "ADT/VSet.hpp"
 #include "LoopUnrollPass.hpp"
-#include "Static/Transforms/DeclareInternalsPass.hpp"
 #include "Support/Error.hpp"
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
-#if LLVM_VERSION_MAJOR < 8
-typedef llvm::TerminatorInst TerminatorInst;
-#else
-typedef llvm::Instruction TerminatorInst;
-#endif
+using TerminatorInst = llvm::Instruction;
 
 #if LLVM_VERSION_MAJOR >= 11
 #define GET_LOADINST_ARG(val)
@@ -54,12 +48,17 @@ using namespace llvm;
  * bound variable for this loop.  It does not set up the arguments for
  * the PHI node.
  */
-auto createBoundInit(Loop *l) -> PHINode *
+static auto createBoundInit(Loop *l) -> PHINode *
 {
 	Function *parentFun = (*l->block_begin())->getParent();
 	Type *int32Typ = Type::getInt32Ty(parentFun->getContext());
 
+	/* Post-dbgrecord migration, begin() iterator should be passed directly */
+#if LLVM_VERSION_MAJOR < 19
 	PHINode *bound = PHINode::Create(int32Typ, 0, "bound.val", &*l->getHeader()->begin());
+#else
+	PHINode *bound = PHINode::Create(int32Typ, 0, "bound.val", l->getHeader()->begin());
+#endif
 	return bound;
 }
 
@@ -67,18 +66,22 @@ auto createBoundInit(Loop *l) -> PHINode *
  * Returns an instruction which decrements the bound variable for this loop (BOUNDVAL).
  * The returned value should be later checked in order to bound the loop.
  */
-auto createBoundDecrement(Loop *l, PHINode *boundVal) -> BinaryOperator *
+static auto createBoundDecrement(Loop *l, PHINode *boundVal) -> BinaryOperator *
 {
 	Function *parentFun = (*l->block_begin())->getParent();
 	Type *int32Typ = Type::getInt32Ty(parentFun->getContext());
 
 	Value *minusOne = ConstantInt::get(int32Typ, -1, true);
-	Instruction *pt = &*l->getHeader()->getFirstInsertionPt();
+#if LLVM_VERSION_MAJOR < 19
+	auto *pt = &*l->getHeader()->getFirstInsertionPt();
+#else
+	auto pt = l->getHeader()->getFirstInsertionPt();
+#endif
 	return BinaryOperator::CreateNSW(Instruction::Add, boundVal, minusOne,
 					 l->getName() + ".bound.dec", pt);
 }
 
-void addBoundCmpAndSpinEndBefore(Loop *l, PHINode *val, BinaryOperator *decVal)
+static void addBoundCmpAndSpinEndBefore(Loop *l, PHINode *val, BinaryOperator *decVal)
 {
 	Function *parentFun = (*l->block_begin())->getParent();
 	Function *endLoopFun = parentFun->getParent()->getFunction("__VERIFIER_kill_thread");

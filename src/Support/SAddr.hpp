@@ -35,18 +35,18 @@
  * Represents a memory address. An address is a bitfield with the
  * following structure:
  *
- *     B64: 1 -> static, 0 -> dynamic
- *     B63: 1 -> automatic, 0 -> heap
- *     B62: 1 -> internal, 0 -> user
- *     B61: 1 -> durable, 0 -> volatile
- *     B0-B60: address
+ *     B63: 1 -> static, 0 -> dynamic
+ *     B62: 1 -> automatic, 0 -> heap
+ *     B61: 1 -> internal, 0 -> user
+ *     B60: 1 -> durable, 0 -> volatile
+ *     B32-59: thread id
+ *     B0-B31: thread allocation index
  */
 class SAddr {
 
 public:
 	using Width = uintptr_t;
 
-protected:
 	static constexpr Width wordSize = 3;
 
 	static constexpr Width staticMask = (Width)1 << 63;
@@ -55,18 +55,27 @@ protected:
 	static constexpr Width durableMask = (Width)1 << 60;
 	static constexpr Width storageMask = staticMask | automaticMask | internalMask |
 					     durableMask;
-	static constexpr Width addressMask = durableMask - 1;
 
-	static constexpr Width limit = addressMask;
+	static constexpr Width threadStartBit = 32;
+	static constexpr Width indexMask = ((Width)1 << threadStartBit) - 1;
+	static constexpr Width threadMask =
+		(durableMask - ((Width)1 << threadStartBit));
 
-	static auto create(Width storageMask, Width value, bool durable, bool internal) -> SAddr
+	static constexpr Width threadLimit = threadMask >> threadStartBit;
+	static constexpr Width allocLimit = indexMask;
+
+protected:
+	static auto create(Width storageMask, Width thread, Width index, bool durable,
+			   bool internal) -> SAddr
 	{
-		BUG_ON(value >= SAddr::limit);
+		BUG_ON(thread > SAddr::threadLimit);
+		BUG_ON(index > SAddr::allocLimit);
 		Width fresh = 0;
 		fresh |= storageMask;
 		fresh ^= (-(unsigned long)(!!durable) ^ fresh) & durableMask;
 		fresh ^= (-(unsigned long)(!!internal) ^ fresh) & internalMask;
-		fresh |= value;
+		fresh |= (thread << threadStartBit);
+		fresh |= (index);
 		return {fresh};
 	}
 
@@ -114,7 +123,7 @@ public:
 
 	[[nodiscard]] auto get() const -> Width { return addr; }
 
-	inline auto operator<=>(const SAddr &other) const = default;
+	auto operator<=>(const SAddr &other) const = default;
 
 	auto operator+(const ASize &size) const -> SAddr
 	{

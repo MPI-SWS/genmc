@@ -20,8 +20,6 @@
 
 #include "LocalSimplifyCFGPass.hpp"
 #include "Static/LLVMUtils.hpp"
-#include "Static/Transforms/EliminateCASPHIsPass.hpp"
-#include "Support/Error.hpp"
 #include "config.h"
 
 #include <llvm/ADT/STLExtras.h>
@@ -42,7 +40,7 @@ static auto foldSuccessors(BasicBlock *bb) -> bool
 		return false;
 
 	return tryThreadSuccessor(bi, bi->getSuccessor(0)) ||
-	       tryThreadSuccessor(bi, bi->getSuccessor(1));
+	       (tryThreadSuccessor(bi, bi->getSuccessor(1)) != nullptr);
 }
 
 static auto localSimplifyCFG(Function &F) -> bool

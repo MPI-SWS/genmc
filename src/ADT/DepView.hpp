@@ -70,7 +70,7 @@ public:
 	DepView() : VectorClock(VectorClock::VectorClockKind::VC_DepView), view_(), holes_() {}
 
 	/* Returns the size of the depview (i.e., number of threads seen) */
-	unsigned int size() const { return view_.size(); }
+	unsigned int size() const override { return view_.size(); }
 
 	/* Returns true if the clock is empty */
 	bool empty() const { return size() == 0; }
@@ -82,7 +82,7 @@ public:
 	}
 
 	/* Returns true if the clock contains e */
-	bool contains(const Event e) const;
+	bool contains(const Event e) const override;
 
 	DepView &updateIdx(Event e) override
 	{
@@ -138,7 +138,7 @@ public:
 	DepView &update(const DepView &v) override;
 	VectorClock &update(const VectorClock &vc) override;
 
-	void printData(llvm::raw_ostream &s) const;
+	void printData(llvm::raw_ostream &s) const override;
 
 	static bool classof(const VectorClock *vc) { return vc->getKind() == VC_DepView; }
 

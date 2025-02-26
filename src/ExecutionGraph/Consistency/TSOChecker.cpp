@@ -22,21 +22,22 @@
  * CAUTION: This file is generated automatically by Kater -- DO NOT EDIT.
  *******************************************************************************/
 
-#include "TSODriver.hpp"
-#include "Static/ModuleInfo.hpp"
+#include "TSOChecker.hpp"
+#include "ADT/VSet.hpp"
+#include "ADT/View.hpp"
+#include "ExecutionGraph/ExecutionGraph.hpp"
+#include "ExecutionGraph/GraphIterators.hpp"
+#include "ExecutionGraph/GraphUtils.hpp"
+#include "Verification/VerificationError.hpp"
 
-TSODriver::TSODriver(std::shared_ptr<const Config> conf, std::unique_ptr<llvm::Module> mod,
-		std::unique_ptr<ModuleInfo> MI, GenMCDriver::Mode mode /* = GenMCDriver::VerificationMode{} */)
-	: GenMCDriver(conf, std::move(mod), std::move(MI), mode) {}
-
-bool TSODriver::isDepTracking() const
+bool TSOChecker::isDepTracking() const
 {
 	return 0;
 }
 
-bool TSODriver::visitCalc57_0(const EventLabel *lab, View &calcRes) const
+bool TSOChecker::visitCalc57_0(const EventLabel *lab, View &calcRes) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 
@@ -44,9 +45,9 @@ bool TSODriver::visitCalc57_0(const EventLabel *lab, View &calcRes) const
 	return true;
 }
 
-bool TSODriver::visitCalc57_1(const EventLabel *lab, View &calcRes) const
+bool TSOChecker::visitCalc57_1(const EventLabel *lab, View &calcRes) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (auto pLab = lab; true)if (calcRes.update(pLab->view(0)); true) {
@@ -59,29 +60,11 @@ bool TSODriver::visitCalc57_1(const EventLabel *lab, View &calcRes) const
 	return true;
 }
 
-bool TSODriver::visitCalc57_2(const EventLabel *lab, View &calcRes) const
+bool TSOChecker::visitCalc57_2(const EventLabel *lab, View &calcRes) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
-	if (auto pLab = tc_pred(g, lab); pLab) {
-			if (!visitCalc57_1(pLab, calcRes)){
-				return false;
-		}
-
-	}
-	if (auto pLab = tj_pred(g, lab); pLab) {
-			if (!visitCalc57_1(pLab, calcRes)){
-				return false;
-		}
-
-	}
-	if (auto pLab = rf_pred(g, lab); pLab) {
-			if (!visitCalc57_1(pLab, calcRes)){
-				return false;
-		}
-
-	}
 	if (auto pLab = tc_pred(g, lab); pLab)if (calcRes.updateIdx(pLab->getPos()); true) {
 			if (!visitCalc57_0(pLab, calcRes)){
 				return false;
@@ -100,23 +83,41 @@ bool TSODriver::visitCalc57_2(const EventLabel *lab, View &calcRes) const
 		}
 
 	}
-
-	return true;
-}
-
-bool TSODriver::visitCalc57_3(const EventLabel *lab, View &calcRes) const
-{
-	auto &g = getGraph();
-
-
-	if (auto pLab = po_imm_pred(g, lab); pLab) {
+	if (auto pLab = tc_pred(g, lab); pLab) {
 			if (!visitCalc57_1(pLab, calcRes)){
 				return false;
 		}
 
 	}
+	if (auto pLab = tj_pred(g, lab); pLab) {
+			if (!visitCalc57_1(pLab, calcRes)){
+				return false;
+		}
+
+	}
+	if (auto pLab = rf_pred(g, lab); pLab) {
+			if (!visitCalc57_1(pLab, calcRes)){
+				return false;
+		}
+
+	}
+
+	return true;
+}
+
+bool TSOChecker::visitCalc57_3(const EventLabel *lab, View &calcRes) const
+{
+	auto &g = *lab->getParent();
+
+
 	if (auto pLab = po_imm_pred(g, lab); pLab)if (calcRes.updateIdx(pLab->getPos()); true) {
 			if (!visitCalc57_0(pLab, calcRes)){
+				return false;
+		}
+
+	}
+	if (auto pLab = po_imm_pred(g, lab); pLab) {
+			if (!visitCalc57_1(pLab, calcRes)){
 				return false;
 		}
 
@@ -131,24 +132,24 @@ bool TSODriver::visitCalc57_3(const EventLabel *lab, View &calcRes) const
 	return true;
 }
 
-View TSODriver::visitCalc57(const EventLabel *lab) const
+View TSOChecker::visitCalc57(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 	View calcRes;
 
 
 	visitCalc57_3(lab, calcRes);
 	return calcRes;
 }
-auto TSODriver::checkCalc57(const EventLabel *lab) const
+auto TSOChecker::checkCalc57(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 	return visitCalc57(lab);
 }
-bool TSODriver::visitCalc62_0(const EventLabel *lab, View &calcRes) const
+bool TSOChecker::visitCalc62_0(const EventLabel *lab, View &calcRes) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 
@@ -156,9 +157,9 @@ bool TSODriver::visitCalc62_0(const EventLabel *lab, View &calcRes) const
 	return true;
 }
 
-bool TSODriver::visitCalc62_1(const EventLabel *lab, View &calcRes) const
+bool TSOChecker::visitCalc62_1(const EventLabel *lab, View &calcRes) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (auto pLab = lab; true)if (calcRes.update(pLab->view(1)); true) {
@@ -171,19 +172,13 @@ bool TSODriver::visitCalc62_1(const EventLabel *lab, View &calcRes) const
 	return true;
 }
 
-bool TSODriver::visitCalc62_2(const EventLabel *lab, View &calcRes) const
+bool TSOChecker::visitCalc62_2(const EventLabel *lab, View &calcRes) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (auto pLab = po_imm_pred(g, lab); pLab) {
 			if (!visitCalc62_3(pLab, calcRes)){
-				return false;
-		}
-
-	}
-	if (auto pLab = po_imm_pred(g, lab); pLab)if (calcRes.updateIdx(pLab->getPos()); true) {
-			if (!visitCalc62_0(pLab, calcRes)){
 				return false;
 		}
 
@@ -194,15 +189,39 @@ bool TSODriver::visitCalc62_2(const EventLabel *lab, View &calcRes) const
 		}
 
 	}
+	if (auto pLab = po_imm_pred(g, lab); pLab)if (calcRes.updateIdx(pLab->getPos()); true) {
+			if (!visitCalc62_0(pLab, calcRes)){
+				return false;
+		}
+
+	}
 
 	return true;
 }
 
-bool TSODriver::visitCalc62_3(const EventLabel *lab, View &calcRes) const
+bool TSOChecker::visitCalc62_3(const EventLabel *lab, View &calcRes) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
+	if (auto pLab = tc_pred(g, lab); pLab) {
+			if (!visitCalc62_1(pLab, calcRes)){
+				return false;
+		}
+
+	}
+	if (auto pLab = tj_pred(g, lab); pLab) {
+			if (!visitCalc62_1(pLab, calcRes)){
+				return false;
+		}
+
+	}
+	if (auto pLab = rf_pred(g, lab); pLab) {
+			if (!visitCalc62_1(pLab, calcRes)){
+				return false;
+		}
+
+	}
 	if (auto pLab = tc_pred(g, lab); pLab)if (calcRes.updateIdx(pLab->getPos()); true) {
 			if (!visitCalc62_0(pLab, calcRes)){
 				return false;
@@ -221,165 +240,104 @@ bool TSODriver::visitCalc62_3(const EventLabel *lab, View &calcRes) const
 		}
 
 	}
-	if (auto pLab = tc_pred(g, lab); pLab) {
-			if (!visitCalc62_1(pLab, calcRes)){
-				return false;
-		}
-
-	}
-	if (auto pLab = tj_pred(g, lab); pLab) {
-			if (!visitCalc62_1(pLab, calcRes)){
-				return false;
-		}
-
-	}
-	if (auto pLab = rf_pred(g, lab); pLab) {
-			if (!visitCalc62_1(pLab, calcRes)){
-				return false;
-		}
-
-	}
 
 	return true;
 }
 
-View TSODriver::visitCalc62(const EventLabel *lab) const
+View TSOChecker::visitCalc62(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 	View calcRes;
 
 
 	visitCalc62_2(lab, calcRes);
 	return calcRes;
 }
-auto TSODriver::checkCalc62(const EventLabel *lab) const
+auto TSOChecker::checkCalc62(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 	return visitCalc62(lab);
 }
-void TSODriver::calculateSaved(EventLabel *lab)
+void TSOChecker::calculateSaved(EventLabel *lab)
 {
 }
 
-void TSODriver::calculateViews(EventLabel *lab)
+void TSOChecker::calculateViews(EventLabel *lab)
 {
 	lab->addView(checkCalc57(lab));
 	lab->addView(checkCalc62(lab));
 }
 
-void TSODriver::updateMMViews(EventLabel *lab)
+void TSOChecker::updateMMViews(EventLabel *lab)
 {
 	calculateViews(lab);
 	calculateSaved(lab);
 	lab->setPrefixView(calculatePrefixView(lab));
 }
 
-const View &TSODriver::getHbView(const EventLabel *lab) const
+const View &TSOChecker::getHbView(const EventLabel *lab) const
 {
 	return lab->view(0);
 }
 
 
-bool TSODriver::isWriteRfBefore(Event a, Event b)
+static auto isWriteRfBefore(const WriteLabel *wLab, const EventLabel *lab) -> bool
 {
-	auto &g = getGraph();
-	auto &before = g.getEventLabel(b)->view(0);
-	if (before.contains(a))
-		return true;
-
-	const EventLabel *lab = g.getEventLabel(a);
-
-	BUG_ON(!llvm::isa<WriteLabel>(lab));
-	auto *wLab = static_cast<const WriteLabel *>(lab);
-	for (auto &rLab : wLab->readers())
-		if (before.contains(rLab.getPos()))
-			return true;
-	return false;
+	auto &before = lab->view(0);
+	return before.contains(wLab->getPos()) ||
+	       std::ranges::any_of(wLab->readers(),
+				   [&](auto &rLab) { return before.contains(rLab.getPos()); });
 }
 
-std::vector<Event>
-TSODriver::getInitRfsAtLoc(SAddr addr)
+static auto isHbOptRfBefore(const EventLabel *lab, const WriteLabel *wLab) -> bool
 {
-	std::vector<Event> result;
-
-	for (const auto &lab : getGraph().labels()) {
-		if (auto *rLab = llvm::dyn_cast<ReadLabel>(&lab))
-			if (rLab->getRf()->getPos().isInitializer() && rLab->getAddr() == addr)
-				result.push_back(rLab->getPos());
-	}
-	return result;
+	return wLab->view(0).contains(lab->getPos()) ||
+	       std::ranges::any_of(wLab->readers(), [&](auto &rLab) {
+		       return rLab.view(0).contains(lab->getPos());
+	       });
 }
 
-bool TSODriver::isHbOptRfBefore(const Event e, const Event write)
+static auto splitLocMOBefore(MemAccessLabel *lab) -> ExecutionGraph::co_iterator
 {
-	auto &g = getGraph();
-	const EventLabel *lab = g.getEventLabel(write);
-
-	BUG_ON(!llvm::isa<WriteLabel>(lab));
-	auto *sLab = static_cast<const WriteLabel *>(lab);
-	if (sLab->view(0).contains(e))
-		return true;
-
-	for (auto &rLab : sLab->readers()) {
-		if (rLab.view(0).contains(e))
-			return true;
-	}
-	return false;
-}
-
-ExecutionGraph::co_iterator
-TSODriver::splitLocMOBefore(SAddr addr, Event e)
-{
-	auto &g = getGraph();
-	auto rit = std::find_if(g.co_rbegin(addr), g.co_rend(addr), [&](auto &lab){
-		return isWriteRfBefore(lab.getPos(), e);
-	});
+	auto &g = *lab->getParent();
+	auto rit = std::find_if(g.co_rbegin(lab->getAddr()), g.co_rend(lab->getAddr()),
+				[&](auto &oLab) { return isWriteRfBefore(&oLab, lab); });
 	/* Convert to forward iterator, but be _really_ careful */
-	if (rit == g.co_rend(addr))
-		return g.co_begin(addr);
-	return ++ExecutionGraph::co_iterator(*rit);
+	return (rit == g.co_rend(lab->getAddr())) ? g.co_begin(lab->getAddr())
+						  : ++ExecutionGraph::co_iterator(*rit);
 }
 
-ExecutionGraph::co_iterator
-TSODriver::splitLocMOAfterHb(SAddr addr, const Event read)
+static auto splitLocMOAfterHb(ReadLabel *rLab) -> ExecutionGraph::co_iterator
 {
-	auto &g = getGraph();
+	auto &g = *rLab->getParent();
+	if (std::any_of(g.init_rf_begin(rLab->getAddr()), g.init_rf_end(rLab->getAddr()),
+			[rLab](auto &rfLab) { return rfLab.view(0).contains(rLab->getPos()); }))
+		return g.co_begin(rLab->getAddr());
 
-	auto initRfs = g.getInitRfsAtLoc(addr);
-	if (std::any_of(initRfs.begin(), initRfs.end(), [&read,&g](const Event &rf){
-		return g.getEventLabel(rf)->view(0).contains(read);
-	}))
-		return g.co_begin(addr);
-
-	auto it = std::find_if(g.co_begin(addr), g.co_end(addr), [&](auto &lab){
-		return isHbOptRfBefore(read, lab.getPos());
-	});
-	if (it == g.co_end(addr) || it->view(0).contains(read))
+	auto it = std::find_if(g.co_begin(rLab->getAddr()), g.co_end(rLab->getAddr()),
+			       [&](auto &wLab) { return isHbOptRfBefore(rLab, &wLab); });
+	if (it == g.co_end(rLab->getAddr()) || it->view(0).contains(rLab->getPos()))
 		return it;
 	return ++it;
 }
 
-ExecutionGraph::co_iterator
-TSODriver::splitLocMOAfter(SAddr addr, const Event e)
+static auto splitLocMOAfter(WriteLabel *wLab) -> ExecutionGraph::co_iterator
 {
-	auto &g = getGraph();
-	return std::find_if(g.co_begin(addr), g.co_end(addr), [&](auto &lab){
-		return isHbOptRfBefore(e, lab.getPos());
-	});
+	auto &g = *wLab->getParent();
+	return std::find_if(g.co_begin(wLab->getAddr()), g.co_end(wLab->getAddr()),
+			    [&](auto &sLab) { return isHbOptRfBefore(wLab, &sLab); });
 }
 
-std::vector<Event>
-TSODriver::getCoherentStores(SAddr addr, Event read)
+auto TSOChecker::getCoherentStores(ReadLabel *rLab) -> std::vector<EventLabel *>
 {
-	auto &g = getGraph();
-	std::vector<Event> stores;
+	auto &g = *rLab->getParent();
+	std::vector<EventLabel *> stores;
 
 	/* Fastpath: co_max(G) is po-before R */
-	auto comax = g.co_rbegin(addr) == g.co_rend(addr) ? Event::getInit() :
-		     g.co_rbegin(addr)->getPos();
-	if (comax.thread == read.thread && comax.index < read.index)
-		return {comax};
+	auto *comaxLab = g.co_max(rLab->getAddr());
+	if (comaxLab->getThread() == rLab->getThread() && comaxLab->getIndex() < rLab->getIndex())
+		return {comaxLab};
 
 	/*
 	 * If there are no stores (rf?;hb)-before the current event
@@ -387,11 +345,11 @@ TSODriver::getCoherentStores(SAddr addr, Event read)
 	 * initializer store. Otherwise, we can read from all concurrent
 	 * stores and the mo-latest of the (rf?;hb)-before stores.
 	 */
-	auto begIt = splitLocMOBefore(addr, read);
-	if (begIt == g.co_begin(addr))
-		stores.push_back(Event::getInit());
+	auto begIt = splitLocMOBefore(rLab);
+	if (begIt == g.co_begin(rLab->getAddr()))
+		stores.push_back(g.getInitLabel());
 	else {
-		stores.push_back((--begIt)->getPos());
+		stores.push_back(&*(--begIt));
 		++begIt;
 	}
 
@@ -400,106 +358,102 @@ TSODriver::getCoherentStores(SAddr addr, Event read)
 	 * account for the possibility the read is hb-before some other
 	 * store, or some read that reads from a store.
 	 */
-	auto endIt = (isDepTracking()) ? splitLocMOAfterHb(addr, read) : g.co_end(addr);
+	auto endIt = (isDepTracking()) ? splitLocMOAfterHb(rLab) : g.co_end(rLab->getAddr());
 	std::transform(begIt, endIt, std::back_inserter(stores), [&](auto &lab){
-		return lab.getPos();
+		return &lab;
 	});
 	return stores;
 }
 
-std::vector<Event>
-TSODriver::getMOOptRfAfter(const WriteLabel *sLab)
+static auto getMOOptRfAfter(WriteLabel *sLab) -> std::vector<EventLabel *>
 {
-	std::vector<Event> after;
-	std::vector<const ReadLabel *> rfAfter;
+	auto &g = *sLab->getParent();
+	std::vector<EventLabel *> after;
+	std::vector<ReadLabel *> rfAfter;
 
-	const auto &g = getGraph();
-	std::for_each(g.co_succ_begin(sLab), g.co_succ_end(sLab),
-		      [&](auto &wLab){
-			      after.push_back(wLab.getPos());
-			      std::transform(wLab.readers_begin(), wLab.readers_end(), std::back_inserter(rfAfter),
-			      [&](auto &rLab){ return &rLab; });
+	std::for_each(g.co_succ_begin(sLab), g.co_succ_end(sLab), [&](auto &wLab) {
+		after.push_back(&wLab);
+		std::transform(wLab.readers_begin(), wLab.readers_end(),
+			       std::back_inserter(rfAfter), [&](auto &rLab) { return &rLab; });
 	});
-	std::transform(rfAfter.begin(), rfAfter.end(), std::back_inserter(after), [](auto *rLab){
-		return rLab->getPos();
-	});
+	std::transform(rfAfter.begin(), rfAfter.end(), std::back_inserter(after),
+		       [](auto *rLab) { return rLab; });
 	return after;
 }
 
-std::vector<Event>
-TSODriver::getMOInvOptRfAfter(const WriteLabel *sLab)
+static auto getMOInvOptRfAfter(WriteLabel *sLab) -> std::vector<EventLabel *>
 {
-	auto &g = getGraph();
-	std::vector<Event> after;
-	std::vector<const ReadLabel *> rfAfter;
+	auto &g = *sLab->getParent();
+	std::vector<EventLabel *> after;
+	std::vector<ReadLabel *> rfAfter;
 
 	/* First, add (mo;rf?)-before */
-	std::for_each(g.co_pred_begin(sLab),
-		      g.co_pred_end(sLab), [&](auto &wLab){
-			      after.push_back(wLab.getPos());
-			      std::transform(wLab.readers_begin(), wLab.readers_end(), std::back_inserter(rfAfter),
-			      [&](auto &rLab){ return &rLab; });
+	std::for_each(g.co_pred_begin(sLab), g.co_pred_end(sLab), [&](auto &wLab) {
+		after.push_back(&wLab);
+		std::transform(wLab.readers_begin(), wLab.readers_end(),
+			       std::back_inserter(rfAfter), [&](auto &rLab) { return &rLab; });
 	});
-	std::transform(rfAfter.begin(), rfAfter.end(), std::back_inserter(after), [](auto *rLab){
-		return rLab->getPos();
-	});
+	std::transform(rfAfter.begin(), rfAfter.end(), std::back_inserter(after),
+		       [](auto *rLab) { return rLab; });
 
 	/* Then, we add the reader list for the initializer */
-	auto initRfs = g.getInitRfsAtLoc(sLab->getAddr());
-	after.insert(after.end(), initRfs.begin(), initRfs.end());
+	std::for_each(g.init_rf_begin(sLab->getAddr()), g.init_rf_end(sLab->getAddr()),
+		      [&](auto &rLab) { after.insert(after.end(), &rLab); });
 	return after;
 }
 
-static std::vector<Event>
-getRevisitableFrom(const ExecutionGraph &g, const WriteLabel *sLab,
-		   const VectorClock &pporf, const WriteLabel *coPred)
+static auto getRevisitableFrom(WriteLabel *sLab, const VectorClock &pporf, WriteLabel *coPred)
+	-> std::vector<ReadLabel *>
 {
+	auto &g = *sLab->getParent();
 	auto pendingRMW = g.getPendingRMW(sLab);
-	std::vector<Event> loads;
+	std::vector<ReadLabel *> loads;
 
 	for (auto &rLab : coPred->readers()) {
 		if (!pporf.contains(rLab.getPos()) && rLab.getAddr() == sLab->getAddr() &&
 		    rLab.isRevisitable() && rLab.wasAddedMax())
-			loads.push_back(rLab.getPos());
+			loads.push_back(&rLab);
 	}
 	if (!pendingRMW.isInitializer())
 		loads.erase(std::remove_if(loads.begin(), loads.end(),
-					   [&](Event &e) {
+					   [&](auto &eLab) {
 						   auto *confLab = g.getEventLabel(pendingRMW);
-						   return g.getEventLabel(e)->getStamp() >
-							  confLab->getStamp();
+						   return eLab->getStamp() > confLab->getStamp();
 					   }),
 			    loads.end());
 	return loads;
 }
 
-std::vector<Event>
-TSODriver::getCoherentRevisits(const WriteLabel *sLab, const VectorClock &pporf)
+auto TSOChecker::getCoherentRevisits(WriteLabel *sLab, const VectorClock &pporf)
+	-> std::vector<ReadLabel *>
 {
-	auto &g = getGraph();
-	std::vector<Event> ls;
+	auto &g = *sLab->getParent();
+	std::vector<ReadLabel *> ls;
 
 	/* Fastpath: previous co-max is ppo-before SLAB */
 	auto prevCoMaxIt = std::find_if(g.co_rbegin(sLab->getAddr()), g.co_rend(sLab->getAddr()),
 					[&](auto &lab) { return lab.getPos() != sLab->getPos(); });
 	if (prevCoMaxIt != g.co_rend(sLab->getAddr()) && pporf.contains(prevCoMaxIt->getPos())) {
-		ls = getRevisitableFrom(g, sLab, pporf, &*prevCoMaxIt);
+		ls = getRevisitableFrom(sLab, pporf, &*prevCoMaxIt);
 	} else {
 		ls = g.getRevisitable(sLab, pporf);
 	}
 
 	/* If this store is po- and mo-maximal then we are done */
-	if (!isDepTracking() && g.isCoMaximal(sLab->getAddr(), sLab->getPos()))
+	if (!isDepTracking() && sLab == g.co_max(sLab->getAddr()))
 		return ls;
 
 	/* First, we have to exclude (mo;rf?;hb?;sb)-after reads */
 	auto optRfs = getMOOptRfAfter(sLab);
-	ls.erase(std::remove_if(ls.begin(), ls.end(), [&](Event e)
-				{ const View &before = g.getEventLabel(e)->view(0);
-				  return std::any_of(optRfs.begin(), optRfs.end(),
-					 [&](Event ev)
-					 { return before.contains(ev); });
-				}), ls.end());
+	ls.erase(std::remove_if(ls.begin(), ls.end(),
+				[&](auto &eLab) {
+					auto &before = eLab->view(0);
+					return std::any_of(
+						optRfs.begin(), optRfs.end(), [&](auto &evLab) {
+							return before.contains(evLab->getPos());
+						});
+				}),
+		 ls.end());
 
 	/* If out-of-order event addition is not supported, then we are done
 	 * due to po-maximality */
@@ -507,63 +461,66 @@ TSODriver::getCoherentRevisits(const WriteLabel *sLab, const VectorClock &pporf)
 		return ls;
 
 	/* Otherwise, we also have to exclude hb-before loads */
-	ls.erase(std::remove_if(ls.begin(), ls.end(), [&](Event e)
-		{ return g.getEventLabel(sLab->getPos())->view(0).contains(e); }),
-		ls.end());
+	ls.erase(std::remove_if(ls.begin(), ls.end(),
+				[&](auto &eLab) { return sLab->view(0).contains(eLab->getPos()); }),
+		 ls.end());
 
 	/* ...and also exclude (mo^-1; rf?; (hb^-1)?; sb^-1)-after reads in
 	 * the resulting graph */
 	auto &before = pporf;
 	auto moInvOptRfs = getMOInvOptRfAfter(sLab);
-	ls.erase(std::remove_if(ls.begin(), ls.end(), [&](Event e)
-				{ auto *eLab = g.getEventLabel(e);
-				  auto v = g.getViewFromStamp(eLab->getStamp());
-				  v->update(before);
-				  return std::any_of(moInvOptRfs.begin(),
-						     moInvOptRfs.end(),
-						     [&](Event ev)
-						     { return v->contains(ev) &&
-						       g.getEventLabel(ev)->view(0).contains(e); });
-				}),
+	ls.erase(std::remove_if(
+			 ls.begin(), ls.end(),
+			 [&](auto &eLab) {
+				 auto v = g.getViewFromStamp(eLab->getStamp());
+				 v->update(before);
+				 return std::any_of(
+					 moInvOptRfs.begin(), moInvOptRfs.end(), [&](auto &evLab) {
+						 return v->contains(evLab->getPos()) &&
+							evLab->view(0).contains(eLab->getPos());
+					 });
+			 }),
 		 ls.end());
 
 	return ls;
 }
 
-std::vector<Event>
-TSODriver::getCoherentPlacings(SAddr addr, Event store, bool isRMW)
+auto TSOChecker::getCoherentPlacings(WriteLabel *wLab)
+	-> std::vector<EventLabel *>
 {
-	auto &g = getGraph();
-	std::vector<Event> result;
+	auto &g = *wLab->getParent();
+	std::vector<EventLabel *> result;
 
 	/* If it is an RMW store, there is only one possible position in MO */
-	if (isRMW) {
-		auto *rLab = llvm::dyn_cast<ReadLabel>(g.getEventLabel(store.prev()));
+	if (wLab->isRMW()) {
+		auto *rLab = llvm::dyn_cast<ReadLabel>(g.po_imm_pred(wLab));
 		BUG_ON(!rLab);
 		auto *rfLab = rLab->getRf();
 		BUG_ON(!rfLab);
-		result.push_back(rfLab->getPos());
+		result.push_back(rfLab);
 		return result;
 	}
 
 	/* Otherwise, we calculate the full range and add the store */
-	auto rangeBegin = splitLocMOBefore(addr, store);
-	auto rangeEnd = (isDepTracking()) ? splitLocMOAfter(addr, store) : g.co_end(addr);
+	auto rangeBegin = splitLocMOBefore(wLab);
+	auto rangeEnd = (isDepTracking()) ? splitLocMOAfter(wLab) : g.co_end(wLab->getAddr());
 	auto cos = llvm::iterator_range(rangeBegin, rangeEnd) |
-		   std::views::filter([&](auto &sLab) { return !g.isRMWStore(sLab.getPos()); }) |
+		   std::views::filter([&](auto &sLab) { return !sLab.isRMW(); }) |
 		   std::views::transform([&](auto &sLab) {
 			   auto *pLab = g.co_imm_pred(&sLab);
-			   return pLab ? pLab->getPos() : Event::getInit();
+			   return pLab ? (EventLabel *)pLab : (EventLabel *)g.getInitLabel();
 		   });
 	std::ranges::copy(cos, std::back_inserter(result));
-	result.push_back(rangeEnd == g.co_end(addr)   ? g.co_max(addr)->getPos()
-			 : !g.co_imm_pred(&*rangeEnd) ? Event::getInit()
-						      : g.co_imm_pred(&*rangeEnd)->getPos());
+	result.push_back(rangeEnd == g.co_end(wLab->getAddr())
+				 ? g.co_max(wLab->getAddr())
+				 : (!g.co_imm_pred(&*rangeEnd)
+					    ? (EventLabel *)g.getInitLabel()
+					    : (EventLabel *)g.co_imm_pred(&*rangeEnd)));
 	return result;
 }
-bool TSODriver::visitCoherence_0(const EventLabel *lab) const
+bool TSOChecker::visitCoherence_0(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 	++visitedCoherenceAccepting;
 
@@ -572,12 +529,17 @@ bool TSODriver::visitCoherence_0(const EventLabel *lab) const
 	return true;
 }
 
-bool TSODriver::visitCoherence_1(const EventLabel *lab) const
+bool TSOChecker::visitCoherence_1(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 	visitedCoherence_1[lab->getStamp().get()] = { visitedCoherenceAccepting, NodeStatus::entered };
 
+	if (auto pLab = po_imm_pred(g, lab); pLab) {
+			if (!visitCoherence_2(pLab)){
+				return false;
+		}
+	}
 	if (auto pLab = po_imm_pred(g, lab); pLab) {
 		auto &node = visitedCoherence_1[pLab->getStamp().get()];
 		if (node.status == NodeStatus::unseen) {
@@ -589,11 +551,6 @@ bool TSODriver::visitCoherence_1(const EventLabel *lab) const
 			return false;
 		} else if (node.status == NodeStatus::left) {
 
-		}
-	}
-	if (auto pLab = po_imm_pred(g, lab); pLab) {
-			if (!visitCoherence_2(pLab)){
-				return false;
 		}
 	}
 	if (auto pLab = po_imm_pred(g, lab); pLab) {
@@ -605,9 +562,9 @@ bool TSODriver::visitCoherence_1(const EventLabel *lab) const
 	return true;
 }
 
-bool TSODriver::visitCoherence_2(const EventLabel *lab) const
+bool TSOChecker::visitCoherence_2(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (auto pLab = tc_pred(g, lab); pLab) {
@@ -667,10 +624,8 @@ bool TSODriver::visitCoherence_2(const EventLabel *lab) const
 	return true;
 }
 
-bool TSODriver::visitCoherenceFull() const
+bool TSOChecker::visitCoherenceFull(const ExecutionGraph &g) const
 {
-	auto &g = getGraph();
-
 	visitedCoherenceAccepting = 0;
 	visitedCoherence_1.clear();
 	visitedCoherence_1.resize(g.getMaxStamp().get() + 1);
@@ -678,25 +633,12 @@ bool TSODriver::visitCoherenceFull() const
 		&& std::ranges::all_of(g.labels(), [&](auto &lab){ return visitedCoherence_1[lab.getStamp().get()].status != NodeStatus::unseen || visitCoherence_1(&lab); });
 }
 
-bool TSODriver::visitConsAcyclic1_0(const EventLabel *lab) const
+bool TSOChecker::visitConsAcyclic1_0(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 	visitedConsAcyclic1_0[lab->getStamp().get()] = { visitedConsAcyclic1Accepting, NodeStatus::entered };
 
-	if (auto pLab = po_imm_succ(g, lab); pLab) {
-		auto &node = visitedConsAcyclic1_3[pLab->getStamp().get()];
-		if (node.status == NodeStatus::unseen) {
-			if (!visitConsAcyclic1_3(pLab)){
-				return false;
-		}
-		} else if (node.status == NodeStatus::entered && (visitedConsAcyclic1Accepting > node.count || 1)) {
-
-			return false;
-		} else if (node.status == NodeStatus::left) {
-
-		}
-	}
 	if (auto pLab = po_imm_succ(g, lab); pLab) {
 		auto &node = visitedConsAcyclic1_0[pLab->getStamp().get()];
 		if (node.status == NodeStatus::unseen) {
@@ -710,13 +652,26 @@ bool TSODriver::visitConsAcyclic1_0(const EventLabel *lab) const
 
 		}
 	}
+	if (auto pLab = po_imm_succ(g, lab); pLab) {
+		auto &node = visitedConsAcyclic1_3[pLab->getStamp().get()];
+		if (node.status == NodeStatus::unseen) {
+			if (!visitConsAcyclic1_3(pLab)){
+				return false;
+		}
+		} else if (node.status == NodeStatus::entered && (visitedConsAcyclic1Accepting > node.count || 1)) {
+
+			return false;
+		} else if (node.status == NodeStatus::left) {
+
+		}
+	}
 	visitedConsAcyclic1_0[lab->getStamp().get()] = { visitedConsAcyclic1Accepting, NodeStatus::left };
 	return true;
 }
 
-bool TSODriver::visitConsAcyclic1_1(const EventLabel *lab) const
+bool TSOChecker::visitConsAcyclic1_1(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 	visitedConsAcyclic1_1[lab->getStamp().get()] = { visitedConsAcyclic1Accepting, NodeStatus::entered };
 
@@ -789,9 +744,9 @@ bool TSODriver::visitConsAcyclic1_1(const EventLabel *lab) const
 	return true;
 }
 
-bool TSODriver::visitConsAcyclic1_2(const EventLabel *lab) const
+bool TSOChecker::visitConsAcyclic1_2(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 	visitedConsAcyclic1_2[lab->getStamp().get()] = { visitedConsAcyclic1Accepting, NodeStatus::entered };
 
@@ -825,9 +780,9 @@ bool TSODriver::visitConsAcyclic1_2(const EventLabel *lab) const
 	return true;
 }
 
-bool TSODriver::visitConsAcyclic1_3(const EventLabel *lab) const
+bool TSOChecker::visitConsAcyclic1_3(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 	++visitedConsAcyclic1Accepting;
 	visitedConsAcyclic1_3[lab->getStamp().get()] = { visitedConsAcyclic1Accepting, NodeStatus::entered };
@@ -837,6 +792,71 @@ bool TSODriver::visitConsAcyclic1_3(const EventLabel *lab) const
 		auto &node = visitedConsAcyclic1_2[pLab->getStamp().get()];
 		if (node.status == NodeStatus::unseen) {
 			if (!visitConsAcyclic1_2(pLab)){
+				return false;
+		}
+		} else if (node.status == NodeStatus::entered && (visitedConsAcyclic1Accepting > node.count || 0)) {
+
+			return false;
+		} else if (node.status == NodeStatus::left) {
+
+		}
+	}
+	if (true && llvm::isa<WriteLabel>(lab) && ((llvm::isa<ReadLabel>(lab) && llvm::dyn_cast<ReadLabel>(lab)->isRMW()) || (llvm::isa<WriteLabel>(lab) && llvm::dyn_cast<WriteLabel>(lab)->isRMW())))if (auto pLab = po_imm_succ(g, lab); pLab) {
+		auto &node = visitedConsAcyclic1_0[pLab->getStamp().get()];
+		if (node.status == NodeStatus::unseen) {
+			if (!visitConsAcyclic1_0(pLab)){
+				return false;
+		}
+		} else if (node.status == NodeStatus::entered && (visitedConsAcyclic1Accepting > node.count || 0)) {
+
+			return false;
+		} else if (node.status == NodeStatus::left) {
+
+		}
+	}
+	if (true && llvm::isa<ReadLabel>(lab))if (auto pLab = po_imm_succ(g, lab); pLab) {
+		auto &node = visitedConsAcyclic1_0[pLab->getStamp().get()];
+		if (node.status == NodeStatus::unseen) {
+			if (!visitConsAcyclic1_0(pLab)){
+				return false;
+		}
+		} else if (node.status == NodeStatus::entered && (visitedConsAcyclic1Accepting > node.count || 0)) {
+
+			return false;
+		} else if (node.status == NodeStatus::left) {
+
+		}
+	}
+	if (true && llvm::isa<FenceLabel>(lab))if (auto pLab = po_imm_succ(g, lab); pLab) {
+		auto &node = visitedConsAcyclic1_0[pLab->getStamp().get()];
+		if (node.status == NodeStatus::unseen) {
+			if (!visitConsAcyclic1_0(pLab)){
+				return false;
+		}
+		} else if (node.status == NodeStatus::entered && (visitedConsAcyclic1Accepting > node.count || 0)) {
+
+			return false;
+		} else if (node.status == NodeStatus::left) {
+
+		}
+	}
+	if (true && llvm::isa<ThreadJoinLabel>(lab))if (auto pLab = po_imm_succ(g, lab); pLab) {
+		auto &node = visitedConsAcyclic1_0[pLab->getStamp().get()];
+		if (node.status == NodeStatus::unseen) {
+			if (!visitConsAcyclic1_0(pLab)){
+				return false;
+		}
+		} else if (node.status == NodeStatus::entered && (visitedConsAcyclic1Accepting > node.count || 0)) {
+
+			return false;
+		} else if (node.status == NodeStatus::left) {
+
+		}
+	}
+	if (true && llvm::isa<ThreadStartLabel>(lab))if (auto pLab = po_imm_succ(g, lab); pLab) {
+		auto &node = visitedConsAcyclic1_0[pLab->getStamp().get()];
+		if (node.status == NodeStatus::unseen) {
+			if (!visitConsAcyclic1_0(pLab)){
 				return false;
 		}
 		} else if (node.status == NodeStatus::entered && (visitedConsAcyclic1Accepting > node.count || 0)) {
@@ -950,7 +970,7 @@ bool TSODriver::visitConsAcyclic1_3(const EventLabel *lab) const
 
 		}
 	}
-	if (true && llvm::isa<WriteLabel>(lab) && ((llvm::isa<ReadLabel>(lab) && g.isRMWLoad(lab)) || (llvm::isa<WriteLabel>(lab) && g.isRMWStore(lab))))if (auto pLab = po_imm_succ(g, lab); pLab) {
+	if (true && llvm::isa<WriteLabel>(lab) && ((llvm::isa<ReadLabel>(lab) && llvm::dyn_cast<ReadLabel>(lab)->isRMW()) || (llvm::isa<WriteLabel>(lab) && llvm::dyn_cast<WriteLabel>(lab)->isRMW())))if (auto pLab = po_imm_succ(g, lab); pLab) {
 		auto &node = visitedConsAcyclic1_3[pLab->getStamp().get()];
 		if (node.status == NodeStatus::unseen) {
 			if (!visitConsAcyclic1_3(pLab)){
@@ -1009,71 +1029,6 @@ bool TSODriver::visitConsAcyclic1_3(const EventLabel *lab) const
 				return false;
 		}
 		} else if (node.status == NodeStatus::entered && (visitedConsAcyclic1Accepting > node.count || 1)) {
-
-			return false;
-		} else if (node.status == NodeStatus::left) {
-
-		}
-	}
-	if (true && llvm::isa<WriteLabel>(lab) && ((llvm::isa<ReadLabel>(lab) && g.isRMWLoad(lab)) || (llvm::isa<WriteLabel>(lab) && g.isRMWStore(lab))))if (auto pLab = po_imm_succ(g, lab); pLab) {
-		auto &node = visitedConsAcyclic1_0[pLab->getStamp().get()];
-		if (node.status == NodeStatus::unseen) {
-			if (!visitConsAcyclic1_0(pLab)){
-				return false;
-		}
-		} else if (node.status == NodeStatus::entered && (visitedConsAcyclic1Accepting > node.count || 0)) {
-
-			return false;
-		} else if (node.status == NodeStatus::left) {
-
-		}
-	}
-	if (true && llvm::isa<ReadLabel>(lab))if (auto pLab = po_imm_succ(g, lab); pLab) {
-		auto &node = visitedConsAcyclic1_0[pLab->getStamp().get()];
-		if (node.status == NodeStatus::unseen) {
-			if (!visitConsAcyclic1_0(pLab)){
-				return false;
-		}
-		} else if (node.status == NodeStatus::entered && (visitedConsAcyclic1Accepting > node.count || 0)) {
-
-			return false;
-		} else if (node.status == NodeStatus::left) {
-
-		}
-	}
-	if (true && llvm::isa<FenceLabel>(lab))if (auto pLab = po_imm_succ(g, lab); pLab) {
-		auto &node = visitedConsAcyclic1_0[pLab->getStamp().get()];
-		if (node.status == NodeStatus::unseen) {
-			if (!visitConsAcyclic1_0(pLab)){
-				return false;
-		}
-		} else if (node.status == NodeStatus::entered && (visitedConsAcyclic1Accepting > node.count || 0)) {
-
-			return false;
-		} else if (node.status == NodeStatus::left) {
-
-		}
-	}
-	if (true && llvm::isa<ThreadJoinLabel>(lab))if (auto pLab = po_imm_succ(g, lab); pLab) {
-		auto &node = visitedConsAcyclic1_0[pLab->getStamp().get()];
-		if (node.status == NodeStatus::unseen) {
-			if (!visitConsAcyclic1_0(pLab)){
-				return false;
-		}
-		} else if (node.status == NodeStatus::entered && (visitedConsAcyclic1Accepting > node.count || 0)) {
-
-			return false;
-		} else if (node.status == NodeStatus::left) {
-
-		}
-	}
-	if (true && llvm::isa<ThreadStartLabel>(lab))if (auto pLab = po_imm_succ(g, lab); pLab) {
-		auto &node = visitedConsAcyclic1_0[pLab->getStamp().get()];
-		if (node.status == NodeStatus::unseen) {
-			if (!visitConsAcyclic1_0(pLab)){
-				return false;
-		}
-		} else if (node.status == NodeStatus::entered && (visitedConsAcyclic1Accepting > node.count || 0)) {
 
 			return false;
 		} else if (node.status == NodeStatus::left) {
@@ -1098,9 +1053,9 @@ bool TSODriver::visitConsAcyclic1_3(const EventLabel *lab) const
 	return true;
 }
 
-bool TSODriver::visitConsAcyclic1(const EventLabel *lab) const
+bool TSOChecker::visitConsAcyclic1(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 	visitedConsAcyclic1Accepting = 0;
 	visitedConsAcyclic1_0.clear();
@@ -1115,10 +1070,8 @@ bool TSODriver::visitConsAcyclic1(const EventLabel *lab) const
 		&& (visitedConsAcyclic1_3[lab->getStamp().get()].status != NodeStatus::unseen || visitConsAcyclic1_3(lab));
 }
 
-bool TSODriver::visitConsAcyclic1Full() const
+bool TSOChecker::visitConsAcyclic1Full(const ExecutionGraph &g) const
 {
-	auto &g = getGraph();
-
 	visitedConsAcyclic1Accepting = 0;
 	visitedConsAcyclic1_0.clear();
 	visitedConsAcyclic1_0.resize(g.getMaxStamp().get() + 1);
@@ -1132,21 +1085,21 @@ bool TSODriver::visitConsAcyclic1Full() const
 		&& std::ranges::all_of(g.labels(), [&](auto &lab){ return visitedConsAcyclic1_3[lab.getStamp().get()].status != NodeStatus::unseen || visitConsAcyclic1_3(&lab); });
 }
 
-bool TSODriver::checkConsAcyclic1(const EventLabel *lab) const
+bool TSOChecker::checkConsAcyclic1(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	return visitConsAcyclic1(lab);
 }
-bool TSODriver::visitError2(const EventLabel *lab) const
+bool TSOChecker::visitError2(const EventLabel *lab) const
 {
 	return false;
 }
 
-bool TSODriver::visitLHSUnlessError2_0(const EventLabel *lab, const View &v) const
+bool TSOChecker::visitLHSUnlessError2_0(const EventLabel *lab, const View &v) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (!v.contains(lab->getPos())) {
@@ -1158,9 +1111,9 @@ cexLab = lab;
 	return true;
 }
 
-bool TSODriver::visitLHSUnlessError2_1(const EventLabel *lab, const View &v) const
+bool TSOChecker::visitLHSUnlessError2_1(const EventLabel *lab, const View &v) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (auto pLab = alloc_pred(g, lab); pLab) {
@@ -1173,9 +1126,9 @@ bool TSODriver::visitLHSUnlessError2_1(const EventLabel *lab, const View &v) con
 	return true;
 }
 
-bool TSODriver::visitUnlessError2(const EventLabel *lab) const
+bool TSOChecker::visitUnlessError2(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 	visitedLHSUnlessError2Accepting.clear();
 	visitedLHSUnlessError2Accepting.resize(g.getMaxStamp().get() + 1, false);
@@ -1185,9 +1138,9 @@ bool TSODriver::visitUnlessError2(const EventLabel *lab) const
 		&& visitLHSUnlessError2_1(lab, v);
 }
 
-bool TSODriver::checkError2(const EventLabel *lab) const
+bool TSOChecker::checkError2(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (visitUnlessError2(lab))
@@ -1195,14 +1148,14 @@ bool TSODriver::checkError2(const EventLabel *lab) const
 
 	return visitError2(lab);
 }
-bool TSODriver::visitError3(const EventLabel *lab) const
+bool TSOChecker::visitError3(const EventLabel *lab) const
 {
 	return false;
 }
 
-bool TSODriver::visitLHSUnlessError3_0(const EventLabel *lab) const
+bool TSOChecker::visitLHSUnlessError3_0(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	return false;
@@ -1211,9 +1164,9 @@ bool TSODriver::visitLHSUnlessError3_0(const EventLabel *lab) const
 	return true;
 }
 
-bool TSODriver::visitLHSUnlessError3_1(const EventLabel *lab) const
+bool TSOChecker::visitLHSUnlessError3_1(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (true && llvm::isa<FreeLabel>(lab) && !llvm::isa<HpRetireLabel>(lab))for (auto &tmp : samelocs(g, lab)) if (auto *pLab = &tmp; true)if (true && llvm::isa<FreeLabel>(pLab) && !llvm::isa<HpRetireLabel>(pLab)) {
@@ -1244,9 +1197,9 @@ bool TSODriver::visitLHSUnlessError3_1(const EventLabel *lab) const
 	return true;
 }
 
-bool TSODriver::visitUnlessError3(const EventLabel *lab) const
+bool TSOChecker::visitUnlessError3(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 	visitedLHSUnlessError3Accepting.clear();
 	visitedLHSUnlessError3Accepting.resize(g.getMaxStamp().get() + 1, false);
@@ -1264,9 +1217,9 @@ bool TSODriver::visitUnlessError3(const EventLabel *lab) const
 	return true;
 }
 
-bool TSODriver::checkError3(const EventLabel *lab) const
+bool TSOChecker::checkError3(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (visitUnlessError3(lab))
@@ -1274,14 +1227,14 @@ bool TSODriver::checkError3(const EventLabel *lab) const
 
 	return visitError3(lab);
 }
-bool TSODriver::visitError4(const EventLabel *lab) const
+bool TSOChecker::visitError4(const EventLabel *lab) const
 {
 	return false;
 }
 
-bool TSODriver::visitLHSUnlessError4_0(const EventLabel *lab, const View &v) const
+bool TSOChecker::visitLHSUnlessError4_0(const EventLabel *lab, const View &v) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (!v.contains(lab->getPos())) {
@@ -1293,9 +1246,9 @@ cexLab = lab;
 	return true;
 }
 
-bool TSODriver::visitLHSUnlessError4_1(const EventLabel *lab, const View &v) const
+bool TSOChecker::visitLHSUnlessError4_1(const EventLabel *lab, const View &v) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	for (auto &tmp : alloc_succs(g, lab)) if (auto *pLab = &tmp; true) {
@@ -1308,9 +1261,9 @@ bool TSODriver::visitLHSUnlessError4_1(const EventLabel *lab, const View &v) con
 	return true;
 }
 
-bool TSODriver::visitLHSUnlessError4_2(const EventLabel *lab, const View &v) const
+bool TSOChecker::visitLHSUnlessError4_2(const EventLabel *lab, const View &v) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (true && llvm::isa<FreeLabel>(lab) && !llvm::isa<HpRetireLabel>(lab))if (auto pLab = free_pred(g, lab); pLab) {
@@ -1329,9 +1282,9 @@ bool TSODriver::visitLHSUnlessError4_2(const EventLabel *lab, const View &v) con
 	return true;
 }
 
-bool TSODriver::visitUnlessError4(const EventLabel *lab) const
+bool TSOChecker::visitUnlessError4(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 	visitedLHSUnlessError4Accepting.clear();
 	visitedLHSUnlessError4Accepting.resize(g.getMaxStamp().get() + 1, false);
@@ -1341,9 +1294,9 @@ bool TSODriver::visitUnlessError4(const EventLabel *lab) const
 		&& visitLHSUnlessError4_2(lab, v);
 }
 
-bool TSODriver::checkError4(const EventLabel *lab) const
+bool TSOChecker::checkError4(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (visitUnlessError4(lab))
@@ -1351,14 +1304,14 @@ bool TSODriver::checkError4(const EventLabel *lab) const
 
 	return visitError4(lab);
 }
-bool TSODriver::visitError5(const EventLabel *lab) const
+bool TSOChecker::visitError5(const EventLabel *lab) const
 {
 	return false;
 }
 
-bool TSODriver::visitLHSUnlessError5_0(const EventLabel *lab) const
+bool TSOChecker::visitLHSUnlessError5_0(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	return false;
@@ -1367,9 +1320,9 @@ bool TSODriver::visitLHSUnlessError5_0(const EventLabel *lab) const
 	return true;
 }
 
-bool TSODriver::visitLHSUnlessError5_1(const EventLabel *lab) const
+bool TSOChecker::visitLHSUnlessError5_1(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (auto pLab = free_succ(g, lab); pLab)if (true && llvm::isa<FreeLabel>(pLab) && !llvm::isa<HpRetireLabel>(pLab)) {
@@ -1382,9 +1335,9 @@ bool TSODriver::visitLHSUnlessError5_1(const EventLabel *lab) const
 	return true;
 }
 
-bool TSODriver::visitLHSUnlessError5_2(const EventLabel *lab) const
+bool TSOChecker::visitLHSUnlessError5_2(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (auto pLab = alloc_pred(g, lab); pLab) {
@@ -1397,9 +1350,9 @@ bool TSODriver::visitLHSUnlessError5_2(const EventLabel *lab) const
 	return true;
 }
 
-bool TSODriver::visitUnlessError5(const EventLabel *lab) const
+bool TSOChecker::visitUnlessError5(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 	visitedLHSUnlessError5Accepting.clear();
 	visitedLHSUnlessError5Accepting.resize(g.getMaxStamp().get() + 1, false);
@@ -1417,9 +1370,9 @@ bool TSODriver::visitUnlessError5(const EventLabel *lab) const
 	return true;
 }
 
-bool TSODriver::checkError5(const EventLabel *lab) const
+bool TSOChecker::checkError5(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (visitUnlessError5(lab))
@@ -1427,14 +1380,14 @@ bool TSODriver::checkError5(const EventLabel *lab) const
 
 	return visitError5(lab);
 }
-bool TSODriver::visitError6(const EventLabel *lab) const
+bool TSOChecker::visitError6(const EventLabel *lab) const
 {
 	return false;
 }
 
-bool TSODriver::visitLHSUnlessError6_0(const EventLabel *lab, const View &v) const
+bool TSOChecker::visitLHSUnlessError6_0(const EventLabel *lab, const View &v) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (!v.contains(lab->getPos())) {
@@ -1446,9 +1399,9 @@ cexLab = lab;
 	return true;
 }
 
-bool TSODriver::visitLHSUnlessError6_1(const EventLabel *lab, const View &v) const
+bool TSOChecker::visitLHSUnlessError6_1(const EventLabel *lab, const View &v) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	for (auto &tmp : alloc_succs(g, lab)) if (auto *pLab = &tmp; true)if (true && llvm::isa<MemAccessLabel>(pLab) && llvm::dyn_cast<MemAccessLabel>(pLab)->getAddr().isDynamic() && !isHazptrProtected(llvm::dyn_cast<MemAccessLabel>(pLab))) {
@@ -1461,19 +1414,19 @@ bool TSODriver::visitLHSUnlessError6_1(const EventLabel *lab, const View &v) con
 	return true;
 }
 
-bool TSODriver::visitLHSUnlessError6_2(const EventLabel *lab, const View &v) const
+bool TSOChecker::visitLHSUnlessError6_2(const EventLabel *lab, const View &v) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
-	if (true && llvm::isa<HpRetireLabel>(lab))if (auto pLab = free_pred(g, lab); pLab)if (true && llvm::isa<MemAccessLabel>(pLab) && llvm::dyn_cast<MemAccessLabel>(pLab)->getAddr().isDynamic() && !isHazptrProtected(llvm::dyn_cast<MemAccessLabel>(pLab))) {
-			if (!visitLHSUnlessError6_0(pLab, v)){
+	if (true && llvm::isa<HpRetireLabel>(lab))if (auto pLab = free_pred(g, lab); pLab) {
+			if (!visitLHSUnlessError6_1(pLab, v)){
 			return false;
 		}
 
 	}
-	if (true && llvm::isa<HpRetireLabel>(lab))if (auto pLab = free_pred(g, lab); pLab) {
-			if (!visitLHSUnlessError6_1(pLab, v)){
+	if (true && llvm::isa<HpRetireLabel>(lab))if (auto pLab = free_pred(g, lab); pLab)if (true && llvm::isa<MemAccessLabel>(pLab) && llvm::dyn_cast<MemAccessLabel>(pLab)->getAddr().isDynamic() && !isHazptrProtected(llvm::dyn_cast<MemAccessLabel>(pLab))) {
+			if (!visitLHSUnlessError6_0(pLab, v)){
 			return false;
 		}
 
@@ -1482,9 +1435,9 @@ bool TSODriver::visitLHSUnlessError6_2(const EventLabel *lab, const View &v) con
 	return true;
 }
 
-bool TSODriver::visitUnlessError6(const EventLabel *lab) const
+bool TSOChecker::visitUnlessError6(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 	visitedLHSUnlessError6Accepting.clear();
 	visitedLHSUnlessError6Accepting.resize(g.getMaxStamp().get() + 1, false);
@@ -1494,9 +1447,9 @@ bool TSODriver::visitUnlessError6(const EventLabel *lab) const
 		&& visitLHSUnlessError6_2(lab, v);
 }
 
-bool TSODriver::checkError6(const EventLabel *lab) const
+bool TSOChecker::checkError6(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (visitUnlessError6(lab))
@@ -1504,14 +1457,14 @@ bool TSODriver::checkError6(const EventLabel *lab) const
 
 	return visitError6(lab);
 }
-bool TSODriver::visitError7(const EventLabel *lab) const
+bool TSOChecker::visitError7(const EventLabel *lab) const
 {
 	return false;
 }
 
-bool TSODriver::visitLHSUnlessError7_0(const EventLabel *lab) const
+bool TSOChecker::visitLHSUnlessError7_0(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	return false;
@@ -1520,9 +1473,9 @@ bool TSODriver::visitLHSUnlessError7_0(const EventLabel *lab) const
 	return true;
 }
 
-bool TSODriver::visitLHSUnlessError7_1(const EventLabel *lab) const
+bool TSOChecker::visitLHSUnlessError7_1(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (auto pLab = free_succ(g, lab); pLab)if (true && llvm::isa<HpRetireLabel>(pLab)) {
@@ -1535,9 +1488,9 @@ bool TSODriver::visitLHSUnlessError7_1(const EventLabel *lab) const
 	return true;
 }
 
-bool TSODriver::visitLHSUnlessError7_2(const EventLabel *lab) const
+bool TSOChecker::visitLHSUnlessError7_2(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (true && llvm::isa<MemAccessLabel>(lab) && llvm::dyn_cast<MemAccessLabel>(lab)->getAddr().isDynamic() && !isHazptrProtected(llvm::dyn_cast<MemAccessLabel>(lab)))if (auto pLab = alloc_pred(g, lab); pLab) {
@@ -1550,9 +1503,9 @@ bool TSODriver::visitLHSUnlessError7_2(const EventLabel *lab) const
 	return true;
 }
 
-bool TSODriver::visitUnlessError7(const EventLabel *lab) const
+bool TSOChecker::visitUnlessError7(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 	visitedLHSUnlessError7Accepting.clear();
 	visitedLHSUnlessError7Accepting.resize(g.getMaxStamp().get() + 1, false);
@@ -1570,9 +1523,9 @@ bool TSODriver::visitUnlessError7(const EventLabel *lab) const
 	return true;
 }
 
-bool TSODriver::checkError7(const EventLabel *lab) const
+bool TSOChecker::checkError7(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (visitUnlessError7(lab))
@@ -1580,14 +1533,14 @@ bool TSODriver::checkError7(const EventLabel *lab) const
 
 	return visitError7(lab);
 }
-bool TSODriver::visitError8(const EventLabel *lab) const
+bool TSOChecker::visitError8(const EventLabel *lab) const
 {
 	return false;
 }
 
-bool TSODriver::visitLHSUnlessError8_0(const EventLabel *lab, const View &v) const
+bool TSOChecker::visitLHSUnlessError8_0(const EventLabel *lab, const View &v) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (!v.contains(lab->getPos())) {
@@ -1599,9 +1552,9 @@ cexLab = lab;
 	return true;
 }
 
-bool TSODriver::visitLHSUnlessError8_1(const EventLabel *lab, const View &v) const
+bool TSOChecker::visitLHSUnlessError8_1(const EventLabel *lab, const View &v) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (true && lab->isNotAtomic() && llvm::isa<WriteLabel>(lab))for (auto &tmp : samelocs(g, lab)) if (auto *pLab = &tmp; true)if (true && llvm::isa<WriteLabel>(pLab)) {
@@ -1644,9 +1597,9 @@ bool TSODriver::visitLHSUnlessError8_1(const EventLabel *lab, const View &v) con
 	return true;
 }
 
-bool TSODriver::visitUnlessError8(const EventLabel *lab) const
+bool TSOChecker::visitUnlessError8(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 	visitedLHSUnlessError8Accepting.clear();
 	visitedLHSUnlessError8Accepting.resize(g.getMaxStamp().get() + 1, false);
@@ -1656,9 +1609,9 @@ bool TSODriver::visitUnlessError8(const EventLabel *lab) const
 		&& visitLHSUnlessError8_1(lab, v);
 }
 
-bool TSODriver::checkError8(const EventLabel *lab) const
+bool TSOChecker::checkError8(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (visitUnlessError8(lab))
@@ -1666,14 +1619,14 @@ bool TSODriver::checkError8(const EventLabel *lab) const
 
 	return visitError8(lab);
 }
-bool TSODriver::visitWarning9(const EventLabel *lab) const
+bool TSOChecker::visitWarning9(const EventLabel *lab) const
 {
 	return false;
 }
 
-bool TSODriver::visitLHSUnlessWarning9_0(const EventLabel *lab, const View &v) const
+bool TSOChecker::visitLHSUnlessWarning9_0(const EventLabel *lab, const View &v) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (!v.contains(lab->getPos())) {
@@ -1685,9 +1638,9 @@ cexLab = lab;
 	return true;
 }
 
-bool TSODriver::visitLHSUnlessWarning9_1(const EventLabel *lab, const View &v) const
+bool TSOChecker::visitLHSUnlessWarning9_1(const EventLabel *lab, const View &v) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (true && llvm::isa<WriteLabel>(lab))for (auto &tmp : samelocs(g, lab)) if (auto *pLab = &tmp; true)if (true && llvm::isa<WriteLabel>(pLab)) {
@@ -1700,9 +1653,9 @@ bool TSODriver::visitLHSUnlessWarning9_1(const EventLabel *lab, const View &v) c
 	return true;
 }
 
-bool TSODriver::visitUnlessWarning9(const EventLabel *lab) const
+bool TSOChecker::visitUnlessWarning9(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 	visitedLHSUnlessWarning9Accepting.clear();
 	visitedLHSUnlessWarning9Accepting.resize(g.getMaxStamp().get() + 1, false);
@@ -1712,9 +1665,9 @@ bool TSODriver::visitUnlessWarning9(const EventLabel *lab) const
 		&& visitLHSUnlessWarning9_1(lab, v);
 }
 
-bool TSODriver::checkWarning9(const EventLabel *lab) const
+bool TSOChecker::checkWarning9(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 
 
 	if (visitUnlessWarning9(lab))
@@ -1722,7 +1675,7 @@ bool TSODriver::checkWarning9(const EventLabel *lab) const
 
 	return visitWarning9(lab);
 }
-VerificationError TSODriver::checkErrors(const EventLabel *lab, const EventLabel *&race) const
+VerificationError TSOChecker::checkErrors(const EventLabel *lab, const EventLabel *&race) const
 {
 	if (!checkError2(lab)) {
 		race = cexLab;
@@ -1762,7 +1715,7 @@ VerificationError TSODriver::checkErrors(const EventLabel *lab, const EventLabel
 	return VerificationError::VE_OK;
 }
 
-std::vector<VerificationError> TSODriver::checkWarnings(const EventLabel *lab, const VSet<VerificationError> &seenWarnings, std::vector<const EventLabel *> &racyLabs) const
+std::vector<VerificationError> TSOChecker::checkWarnings(const EventLabel *lab, const VSet<VerificationError> &seenWarnings, std::vector<const EventLabel *> &racyLabs) const
 {
 	std::vector<VerificationError> result;
 
@@ -1774,20 +1727,20 @@ std::vector<VerificationError> TSODriver::checkWarnings(const EventLabel *lab, c
 	return result;
 }
 
-bool TSODriver::isConsistent(const EventLabel *lab) const
+bool TSOChecker::isConsistent(const EventLabel *lab) const
 {
 
 	return true
 		&& checkConsAcyclic1(lab);
 }
 
-View TSODriver::calcPPoRfBefore(const EventLabel *lab) const
+View TSOChecker::calcPPoRfBefore(const EventLabel *lab) const
 {
-	auto &g = getGraph();
+	auto &g = *lab->getParent();
 	View pporf;
 	pporf.updateIdx(lab->getPos());
 
-	auto *pLab = g.getPreviousLabel(lab);
+	auto *pLab = g.po_imm_pred(lab);
 	if (!pLab)
 		return pporf;
 	pporf.update(pLab->getPrefixView());
@@ -1799,7 +1752,7 @@ View TSODriver::calcPPoRfBefore(const EventLabel *lab) const
 		pporf.update(g.getLastThreadLabel(tjLab->getChildId())->getPrefixView());
 	return pporf;
 }
-std::unique_ptr<VectorClock> TSODriver::calculatePrefixView(const EventLabel *lab) const
+std::unique_ptr<VectorClock> TSOChecker::calculatePrefixView(const EventLabel *lab) const
 {
 	return std::make_unique<View>(calcPPoRfBefore(lab));
 }

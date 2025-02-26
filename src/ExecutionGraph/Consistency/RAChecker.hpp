@@ -22,20 +22,15 @@
  * CAUTION: This file is generated automatically by Kater -- DO NOT EDIT.
  *******************************************************************************/
 
-#ifndef GENMC_RA_DRIVER_HPP
-#define GENMC_RA_DRIVER_HPP
+#ifndef GENMC_RA_CHECKER_HPP
+#define GENMC_RA_CHECKER_HPP
 
-#include "config.h"
-#include "ADT/VSet.hpp"
-#include "ExecutionGraph/ExecutionGraph.hpp"
-#include "ExecutionGraph/GraphIterators.hpp"
-#include "ExecutionGraph/MaximalIterator.hpp"
-#include "Verification/GenMCDriver.hpp"
-#include "Verification/VerificationError.hpp"
+#include "ExecutionGraph/Consistency/ConsistencyChecker.hpp"
+#include "ExecutionGraph/EventLabel.hpp"
 #include <cstdint>
 #include <vector>
 
-class RADriver : public GenMCDriver {
+class RAChecker : public ConsistencyChecker {
 
 private:
 	enum class NodeStatus : unsigned char { unseen, entered, left };
@@ -48,31 +43,21 @@ private:
 	};
 
 public:
-	RADriver(std::shared_ptr<const Config> conf, std::unique_ptr<llvm::Module> mod,
-		std::unique_ptr<ModuleInfo> MI, GenMCDriver::Mode mode = GenMCDriver::VerificationMode{});
-
-	void calculateSaved(EventLabel *lab);
-	void calculateViews(EventLabel *lab);
-	void updateMMViews(EventLabel *lab) override;
-	bool isDepTracking() const override;
-	bool isConsistent(const EventLabel *lab) const override;
-	VerificationError checkErrors(const EventLabel *lab, const EventLabel *&race) const override;
-	std::vector<VerificationError> checkWarnings(const EventLabel *lab, const VSet<VerificationError> &seenWarnings, std::vector<const EventLabel *> &racyLabs) const;
-	std::unique_ptr<VectorClock> calculatePrefixView(const EventLabel *lab) const override;
-	const View &getHbView(const EventLabel *lab) const override;
-	std::vector<Event> getCoherentStores(SAddr addr, Event read) override;
-	std::vector<Event> getCoherentRevisits(const WriteLabel *sLab, const VectorClock &pporf) override;
-	std::vector<Event> getCoherentPlacings(SAddr addr, Event store, bool isRMW) override;
+	RAChecker() {};
 
 private:
-	bool isWriteRfBefore(Event a, Event b);
-	std::vector<Event> getInitRfsAtLoc(SAddr addr);
-	bool isHbOptRfBefore(const Event e, const Event write);
-	ExecutionGraph::co_iterator splitLocMOBefore(SAddr addr, Event e);
-	ExecutionGraph::co_iterator splitLocMOAfterHb(SAddr addr, const Event read);
-	ExecutionGraph::co_iterator splitLocMOAfter(SAddr addr, const Event e);
-	std::vector<Event> getMOOptRfAfter(const WriteLabel *sLab);
-	std::vector<Event> getMOInvOptRfAfter(const WriteLabel *sLab);
+	bool isConsistent(const EventLabel *lab) const override;
+	VerificationError checkErrors(const EventLabel *lab, const EventLabel *&race) const;
+	std::vector<VerificationError> checkWarnings(const EventLabel *lab, const VSet<VerificationError> &reported, std::vector<const EventLabel *> &races) const override;
+	std::vector<EventLabel *> getCoherentStores(ReadLabel *rLab) override;
+	std::vector<ReadLabel *> getCoherentRevisits(WriteLabel *sLab, const VectorClock &pporf) override;
+	std::vector<EventLabel *> getCoherentPlacings(WriteLabel *sLab) override;
+	void updateMMViews(EventLabel *lab) override;
+	std::unique_ptr<VectorClock> calculatePrefixView(const EventLabel *lab) const override;
+	const View &getHbView(const EventLabel *lab) const override;
+	bool isDepTracking() const;
+	void calculateSaved(EventLabel *lab);
+	void calculateViews(EventLabel *lab);
 	mutable const EventLabel *cexLab{};
 
 	mutable std::vector<NodeStatus> visitedCalc61_0;
@@ -128,7 +113,7 @@ private:
 	bool visitCoherence_5(const EventLabel *lab) const;
 	bool visitCoherence_6(const EventLabel *lab) const;
 
-	bool visitCoherenceFull() const;
+	bool visitCoherenceFull(const ExecutionGraph &g) const;
 
 	bool visitError1(const EventLabel *lab) const;
 	mutable std::vector<NodeStatus> visitedLHSUnlessError1_0;
@@ -239,4 +224,4 @@ private:
 
 };
 
-#endif /* GENMC_RA_DRIVER_HPP */
+#endif /* GENMC_RA_CHECKER_HPP */

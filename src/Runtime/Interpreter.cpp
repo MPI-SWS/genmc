@@ -171,16 +171,6 @@ Thread &Interpreter::createAddRecoveryThread(int tid)
 	return addNewThread(std::move(rec));
 }
 
-#if LLVM_VERSION_MAJOR >= 8
-#define GET_GV_ADDRESS_SPACE(v) (v).getAddressSpace()
-#else
-#define GET_GV_ADDRESS_SPACE(v)                                                                    \
-	({                                                                                         \
-		llvm::PointerType *pTy = v.getType();                                              \
-		pTy->getAddressSpace();                                                            \
-	})
-#endif
-
 void Interpreter::collectStaticAddresses(SAddrAllocator &alloctor)
 {
 	auto *M = Modules.back().get();
@@ -198,9 +188,9 @@ void Interpreter::collectStaticAddresses(SAddrAllocator &alloctor)
 		}
 
 		/* "Allocate" an address for this global variable... */
-		auto addr = alloctor.allocStatic(typeSize, v.getAlignment(),
+		auto addr = alloctor.allocStatic(0, typeSize, v.getAlignment(),
 						 v.getSection() == "__genmc_persist",
-						 GET_GV_ADDRESS_SPACE(v) == 42);
+						 v.getAddressSpace() == 42);
 		staticAllocas.insert(std::make_pair(addr, addr + ASize(typeSize - 1)));
 		staticValueMap[addr] = ptr;
 

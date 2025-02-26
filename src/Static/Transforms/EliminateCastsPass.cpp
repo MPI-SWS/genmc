@@ -19,9 +19,7 @@
  */
 
 #include "EliminateCastsPass.hpp"
-#include "ADT/VSet.hpp"
 #include "Static/LLVMUtils.hpp"
-#include "Support/Error.hpp"
 #include "config.h"
 
 #include <llvm/Analysis/ValueTracking.h>
@@ -40,11 +38,7 @@
 using namespace llvm;
 
 #if LLVM_VERSION_MAJOR >= 12
-#if LLVM_VERSION_MAJOR > 7
 #define IS_LIFETIME_START_OR_END(i) (i)->isLifetimeStartOrEnd()
-#else
-#define IS_LIFETIME_START_OR_END(i) isLifetimeStartOrEnd(i)
-#endif
 #if LLVM_VERSION_MAJOR >= 11
 #define IS_DROPPABLE(i) (i)->isDroppable()
 #else
@@ -370,7 +364,8 @@ static auto eliminateCasts(Function &F, DominatorTree &DT) -> bool
 	return changed;
 }
 #else  /* LLVM_VERSION_MAJOR <= 14 */
-static bool isUserPure(User *u, AllocaInst *ai, const DataLayout &DL, std::vector<Type *> &useTypes)
+static auto isUserPure(User *u, AllocaInst *ai, const DataLayout &DL, std::vector<Type *> &useTypes)
+	-> bool
 {
 	if (auto *li = dyn_cast<LoadInst>(u)) {
 		useTypes.push_back(li->getType());
@@ -390,7 +385,7 @@ static bool isUserPure(User *u, AllocaInst *ai, const DataLayout &DL, std::vecto
 	return false;
 }
 
-static bool isPromotable(AllocaInst *ai)
+static auto isPromotable(AllocaInst *ai) -> bool
 {
 	auto &DL = ai->getModule()->getDataLayout();
 	std::vector<Type *> useTypes;
@@ -405,7 +400,7 @@ static bool isPromotable(AllocaInst *ai)
 	});
 }
 
-static bool introduceAllocaCasts(AllocaInst *ai)
+static auto introduceAllocaCasts(AllocaInst *ai) -> bool
 {
 	for (auto *u : ai->users()) {
 		if (auto *li = dyn_cast<LoadInst>(u)) {
@@ -433,7 +428,7 @@ static bool introduceAllocaCasts(AllocaInst *ai)
 	return false;
 }
 
-static bool introduceCasts(Function &F, DominatorTree &DT)
+static auto introduceCasts(Function &F, DominatorTree &DT) -> bool
 {
 	auto &eBB = F.getEntryBlock();
 	auto modified = false;

@@ -21,7 +21,7 @@
 #include "Config/Config.hpp"
 #include "Static/LLVMModule.hpp"
 #include "Support/Error.hpp"
-#include "Verification/DriverFactory.hpp"
+#include "Verification/GenMCDriver.hpp"
 #include "config.h"
 
 #include <chrono>

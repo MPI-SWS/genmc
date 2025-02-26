@@ -19,8 +19,7 @@
  */
 
 #include "EliminateRedundantInstPass.hpp"
-#include "Static/LLVMUtils.hpp"
-#include "Support/Error.hpp"
+#include "ADT/VSet.hpp"
 #include "config.h"
 
 #include <llvm/IR/DataLayout.h>

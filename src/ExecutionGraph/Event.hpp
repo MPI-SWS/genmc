@@ -21,6 +21,8 @@
 #ifndef GENMC_EVENT_HPP
 #define GENMC_EVENT_HPP
 
+#include "Support/Hash.hpp"
+
 #include <llvm/ADT/Hashing.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -100,14 +102,9 @@ private:
 
 auto operator<<(llvm::raw_ostream &s, Event e) -> llvm::raw_ostream &;
 
-struct EventHasher {
-
-	template <class T> inline void hash_combine(std::size_t &seed, const T &v) const
-	{
-		seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-	}
-
-	auto operator()(const Event &e) const -> std::size_t
+namespace std {
+template <> struct hash<Event> {
+	auto operator()(const Event &e) const -> size_t
 	{
 		std::size_t hash = 0;
 		hash_combine(hash, e.thread);
@@ -115,5 +112,6 @@ struct EventHasher {
 		return hash;
 	}
 };
+} // namespace std
 
 #endif /* GENMC_EVENT_HPP */
