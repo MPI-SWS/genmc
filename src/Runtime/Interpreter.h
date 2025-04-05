@@ -69,11 +69,18 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#if LLVM_VERSION_MAJOR >= 20
+#define APINT_NOCHECK , true
+#else
+#define APINT_NOCHECK
+#endif
+
 /* Some helpers for GenericValues */
 #define INT_TO_GV(typ, val)                                                                        \
 	({                                                                                         \
 		llvm::GenericValue __ret;                                                          \
-		__ret.IntVal = llvm::APInt((typ)->getIntegerBitWidth(), (val), true);              \
+		__ret.IntVal =                                                                     \
+			llvm::APInt((typ)->getIntegerBitWidth(), (val), true APINT_NOCHECK);       \
 		__ret;                                                                             \
 	})
 
@@ -95,20 +102,6 @@
 	})
 
 class GenMCDriver;
-
-#define INT_TO_GV(typ, val)                                                                        \
-	({                                                                                         \
-		llvm::GenericValue __ret;                                                          \
-		__ret.IntVal = llvm::APInt((typ)->getIntegerBitWidth(), (val), true);              \
-		__ret;                                                                             \
-	})
-
-#define PTR_TO_GV(ptr)                                                                             \
-	({                                                                                         \
-		llvm::GenericValue __ret;                                                          \
-		__ret.PointerVal = (void *)(ptr);                                                  \
-		__ret;                                                                             \
-	})
 
 namespace llvm {
 
@@ -538,7 +531,6 @@ public:
 	}
 
 	unsigned int getTypeSize(Type *typ) const;
-	SVal executeAtomicRMWOperation(SVal oldVal, SVal val, ASize size, AtomicRMWInst::BinOp op);
 
 	// Methods used to execute code:
 	// Place a call on the stack
@@ -719,6 +711,7 @@ private: // Helper functions
 	void handleUnlock(SAddr addr, ASize size, const EventDeps *deps);
 
 	/* Custom Opcode Implementations */
+
 #define HANDLE_FUNCTION(NUM, FUN, NAME)                                                            \
 	void call##NAME(Function *F, const std::vector<GenericValue> &ArgVals,                     \
 			const std::unique_ptr<EventDeps> &specialDeps);

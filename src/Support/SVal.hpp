@@ -27,7 +27,7 @@
 #include <climits>
 #include <cstdint>
 
-/*
+/**
  * Represents a value to be written to memory. All values are represented as
  * integers, and the interpreter has to convert these values to values of
  * the appropriate type.
@@ -40,14 +40,14 @@ public:
 	using Value = uint64_t;
 	static constexpr unsigned width = sizeof(Value) * CHAR_BIT;
 
-	/* Constructors/destructors */
+	/** Constructors/destructors */
 	SVal() : value(0) {}
 	explicit SVal(uint64_t v) : value(v) {}
 
-	/* Returns a (limited) representation of this Value */
+	/** Returns a (limited) representation of this Value */
 	[[nodiscard]] auto get() const -> uint64_t { return value; }
 
-	/* Returns a (limited) signed representation of this Value */
+	/** Returns a (limited) signed representation of this Value */
 	[[nodiscard]] auto getSigned() const -> int64_t
 	{
 		int64_t tmp;
@@ -55,13 +55,13 @@ public:
 		return tmp;
 	}
 
-	/* Returns a pointer representation of this Value */
+	/** Returns a pointer representation of this Value */
 	[[nodiscard]] auto getPointer() const -> void * { return (void *)(uintptr_t)value; }
 
-	/* Returns a (limited) representation of the Value as a boolean */
+	/** Returns a (limited) representation of the Value as a boolean */
 	[[nodiscard]] auto getBool() const -> bool { return (!!*this); }
 
-	/* Sign-extends the number in the bottom B bits of X to SVal::width
+	/** Sign-extends the number in the bottom B bits of X to SVal::width
 	 * Pre: 0 < B <= SVal::width */
 	auto signExtendBottom(unsigned b) -> SVal &
 	{
@@ -70,38 +70,38 @@ public:
 		return *this;
 	}
 
-	/* Equality operators */
+	/** Equality operators */
 
 	inline auto operator==(const SVal &v) const -> bool { return v.value == value; }
 	inline auto operator!=(const SVal &v) const -> bool { return !(*this == v); }
 
-	/* Comparison operators */
+	/** Comparison operators */
 
-	/* Returns true if *this < v if both are considered unsigned */
+	/** Returns true if *this < v if both are considered unsigned */
 	[[nodiscard]] auto ult(const SVal &v) const -> bool { return compare(v) < 0; }
 
-	/* Returns true if *this < v if both are considered signed */
+	/** Returns true if *this < v if both are considered signed */
 	[[nodiscard]] auto slt(const SVal &v) const -> bool { return compareSigned(v) < 0; }
 
-	/* Returns true if *this <= v when both are considered unsigned */
+	/** Returns true if *this <= v when both are considered unsigned */
 	[[nodiscard]] auto ule(const SVal &v) const -> bool { return compare(v) <= 0; }
 
-	/* Returns true if *this <= RHS when both are considered signed */
+	/** Returns true if *this <= RHS when both are considered signed */
 	[[nodiscard]] auto sle(const SVal &v) const -> bool { return compareSigned(v) <= 0; }
 
-	/* Returns true if *this > RHS when both are considered unsigned */
+	/** Returns true if *this > RHS when both are considered unsigned */
 	[[nodiscard]] auto ugt(const SVal &v) const -> bool { return !ule(v); }
 
-	/* Returns true if *this > RHS when both are considered signed */
+	/** Returns true if *this > RHS when both are considered signed */
 	[[nodiscard]] auto sgt(const SVal &v) const -> bool { return !sle(v); }
 
-	/* Returns true if *this >= RHS when both are considered unsigned */
+	/** Returns true if *this >= RHS when both are considered unsigned */
 	[[nodiscard]] auto uge(const SVal &v) const -> bool { return !ult(v); }
 
-	/* Returns true if *this >= RHS when both are considered signed */
+	/** Returns true if *this >= RHS when both are considered signed */
 	[[nodiscard]] auto sge(const SVal &v) const -> bool { return !slt(v); }
 
-	/* Binary operators */
+	/** Binary operators */
 
 #define IMPL_BINOP(_op)                                                                            \
 	SVal operator _op(const SVal &v) const                                                     \
@@ -151,10 +151,11 @@ private:
 		return lhsSext < rhsSext ? -1 : lhsSext > rhsSext;
 	}
 
-	/* The actual value */
+	/** The actual value */
 	Value value;
 };
 
+/** Comparator for SVal */
 struct SValUCmp {
 	auto operator()(const SVal &lhs, const SVal &rhs) -> bool { return lhs.ult(rhs); }
 };

@@ -35,9 +35,10 @@ template <typename Enum> struct EnableBitmaskOperators {
 #define DEFINE_BINARY_OPERATOR(_op)                                                                \
 	template <typename Enum>                                                                   \
 	auto operator _op(Enum lhs, Enum rhs)                                                      \
-		->typename std::enable_if<EnableBitmaskOperators<Enum>::enable, Enum>::type        \
+		->Enum                                                                             \
+	requires EnableBitmaskOperators<Enum>::enable                                              \
 	{                                                                                          \
-		using underlying = typename std::underlying_type<Enum>::type;                      \
+		using underlying = std::underlying_type_t<Enum>;                                   \
 		return static_cast<Enum>(static_cast<underlying>(lhs)                              \
 						 _op static_cast<underlying>(rhs));                \
 	}
@@ -47,16 +48,16 @@ DEFINE_BINARY_OPERATOR(&);
 DEFINE_BINARY_OPERATOR(^);
 
 template <typename Enum>
-auto operator~(Enum rhs) ->
-	typename std::enable_if<EnableBitmaskOperators<Enum>::enable, Enum>::type
+auto operator~(Enum rhs) -> Enum
+requires EnableBitmaskOperators<Enum>::enable
 {
-	using underlying = typename std::underlying_type<Enum>::type;
+	using underlying = std::underlying_type_t<Enum>;
 	return static_cast<Enum>(~static_cast<underlying>(rhs));
 }
 
 template <typename Enum>
-auto operator!(Enum rhs) ->
-	typename std::enable_if<EnableBitmaskOperators<Enum>::enable, bool>::type
+auto operator!(Enum rhs) -> bool
+requires EnableBitmaskOperators<Enum>::enable
 {
 	return rhs == static_cast<Enum>(0);
 }
@@ -64,9 +65,10 @@ auto operator!(Enum rhs) ->
 #define DEFINE_ASSIGNMENT_OPERATOR(_op)                                                            \
 	template <typename Enum>                                                                   \
 	auto operator _op##=(Enum &lhs, Enum rhs)                                                  \
-		->typename std::enable_if<EnableBitmaskOperators<Enum>::enable, Enum>::type        \
+		->Enum                                                                             \
+	requires EnableBitmaskOperators<Enum>::enable                                              \
 	{                                                                                          \
-		using underlying = typename std::underlying_type<Enum>::type;                      \
+		using underlying = std::underlying_type_t<Enum>;                                   \
 		lhs = static_cast<Enum>(static_cast<underlying>(lhs)                               \
 						_op static_cast<underlying>(rhs));                 \
 		return lhs;                                                                        \

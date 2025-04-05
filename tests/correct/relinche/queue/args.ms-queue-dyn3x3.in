@@ -1,0 +1,4 @@
+-DRTN=3 -DWTN=3 -include tests/correct/data-structures/ms-queue-dynamic/my_queue.c
+-DRTN=3 -DWTN=3 -DSYNC_INS -include tests/correct/data-structures/ms-queue-dynamic/my_queue.c
+-DRTN=3 -DWTN=3 -DSYNC_REM -include tests/correct/data-structures/ms-queue-dynamic/my_queue.c
+-DRTN=3 -DWTN=3 -DSYNC_INS -DSYNC_REM -include tests/correct/data-structures/ms-queue-dynamic/my_queue.c

@@ -33,7 +33,7 @@ class VectorClock;
  **                         SAddrAllocator Class
  ******************************************************************************/
 
-/*
+/**
  * Helper class that allocates addresses within the SAddr domain.  A
  * given allocator will never allocate the same address twice.  This
  * class is *not* thread-safe: each thread should own a different
@@ -42,7 +42,7 @@ class VectorClock;
 class SAddrAllocator {
 
 protected:
-	/* Allocates a fresh address at the specified pool */
+	/** Allocates a fresh address at the specified pool */
 	template <typename F>
 	auto allocate(F &allocFun, SAddr::Width &pool, unsigned int thread, unsigned int size,
 		      unsigned int alignment, bool isDurable = false, bool isInternal = false)
@@ -58,7 +58,7 @@ protected:
 public:
 	SAddrAllocator() = default;
 
-	/* Allocating methods. Param format: thread, size, alignment, durable?, internal?  */
+	/** Allocating methods. Param format: thread, size, alignment, durable?, internal?  */
 	template <typename... Ts> auto allocStatic(unsigned thread, Ts &&...params) -> SAddr
 	{
 		return allocate(SAddr::createStatic<SAddr::Width, SAddr::Width, bool, bool>,
@@ -81,7 +81,7 @@ public:
 		-> llvm::raw_ostream &;
 
 private:
-	/* Helper class to avoid allocating null for heap addresses */
+	/** Helper class to avoid allocating null for heap addresses */
 	class WidthProxy {
 	public:
 		WidthProxy(SAddr::Width value = 1 /* default non-zero value */) : value_(value) {}

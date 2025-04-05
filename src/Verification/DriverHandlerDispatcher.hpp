@@ -30,7 +30,7 @@
  **                           DriverHandlerDispatcher Class
  ******************************************************************************/
 
-/*
+/**
  * Calls the appropriate Driver handler for a particular label kind.
  */
 class DriverHandlerDispatcher : public LabelVisitor<DriverHandlerDispatcher> {
@@ -129,6 +129,16 @@ public:
 	{
 		driver->handleLockZNESpinEnd(std::unique_ptr<LockZNESpinEndLabel>(
 			static_cast<LockZNESpinEndLabel *>(lab.clone().release())));
+	}
+
+	void visitMethodBeginLabel(const MethodBeginLabel &lab) {
+		driver->handleDummy(std::unique_ptr<MethodBeginLabel>(
+			static_cast<MethodBeginLabel *>(lab.clone().release())));
+	}
+
+	void visitMethodEndLabel(const MethodEndLabel &lab) {
+		driver->handleDummy(std::unique_ptr<MethodEndLabel>(
+			static_cast<MethodEndLabel *>(lab.clone().release())));
 	}
 
 	/* Start,Init etc should never be handled here */

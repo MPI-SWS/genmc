@@ -47,10 +47,7 @@ class Value;
  * Information kept about the module under test by the interpreter.
  */
 
-/*
- * VariableInfo struct -- This struct contains source-code level (naming)
- * information for variables.
- */
+/** Source-code level (naming) information for variables */
 template <typename Key> struct VariableInfo {
 
 	/* Internal types (not exposed to user programs) for which we might
@@ -70,9 +67,7 @@ template <typename Key> struct VariableInfo {
 	}
 };
 
-/*
- * SAVer: AnnotationInfo struct -- Contains annotations for loads used by assume()s
- */
+/** Annotations for loads used by assume()s for SAVer */
 template <typename K, typename V> struct AnnotationInfo {
 
 	using AnnotUM = std::unordered_map<K, value_ptr<SExpr<V>, SExprCloner<V>>>;
@@ -82,34 +77,34 @@ template <typename K, typename V> struct AnnotationInfo {
 	AnnotUM annotMap;
 };
 
-/*
- * Pers: FsInfo struct -- Maintains some information regarding the
+/**
+ * Pers: Maintains some information regarding the
  * filesystem (e.g., type of inodes, files, etc)
  */
 struct FsInfo {
 
-	/* Explicitly initialize PODs to be C++11-compatible */
+	/** Explicitly initialize PODs to be C++11-compatible */
 	FsInfo()
 		: inodeTyp(nullptr), fileTyp(nullptr), blockSize(0), maxFileSize(0),
 		  journalData(JournalDataFS::writeback), delalloc(false), dirInode(nullptr)
 	{}
 
-	/* Type information */
+	/** Type information */
 	llvm::StructType *inodeTyp;
 	llvm::StructType *fileTyp;
 
-	/* Filesystem options*/
+	/** Filesystem options*/
 	unsigned int blockSize;
 	unsigned int maxFileSize;
 
-	/* "Mount" options */
+	/** "Mount" options */
 	JournalDataFS journalData;
 	bool delalloc;
 
-	/* Filenames in the module. These must be known statically. */
+	/** Filenames in the module. These must be known statically. */
 	VSet<std::string> filenames;
 
-	/* Should hold the address of the directory's inode */
+	/** Should hold the address of the directory's inode */
 	void *dirInode;
 
 	void clear()
@@ -125,10 +120,8 @@ struct FsInfo {
 	}
 };
 
-/*
- * PassModuleInfo -- A struct to be used from LLVM passes where
- * different kinds of data can be stored. It is different from
- * ModuleInfo as it does not require the module to have assigned IDs.
+/** A struct to be used from LLVM passes where different kinds of data can be stored.
+ * Different from ModuleInfo as it does not require the module to have assigned IDs.
  */
 struct PassModuleInfo {
 
@@ -140,9 +133,8 @@ struct PassModuleInfo {
 	std::optional<ModelType> determinedMM;
 };
 
-/*
- * ModuleInfo -- A struct to pack together all useful information like
- * VariableInfo and FsInfo for a given module
+/** Pack together all useful information like VariableInfo and FsInfo for a
+ * given module.
  */
 struct ModuleInfo {
 

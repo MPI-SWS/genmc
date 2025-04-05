@@ -12,6 +12,7 @@ typedef struct {
 } mystack_t;
 
 void init_stack(mystack_t *s, int num_threads);
+void clear_stack(mystack_t *s, int num_threads);
 void push(mystack_t *s, unsigned int val);
 unsigned int pop(mystack_t *s);
 int get_thread_num();

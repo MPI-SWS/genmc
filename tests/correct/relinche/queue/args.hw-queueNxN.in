@@ -1,0 +1,5 @@
+-DRTN=2 -DWTN=2 -include tests/correct/data-structures/hw-queue/my_queue.c
+-DRTN=2 -DWTN=3 -include tests/correct/data-structures/hw-queue/my_queue.c
+-DRTN=3 -DWTN=3 -include tests/correct/data-structures/hw-queue/my_queue.c
+-DRTN=3 -DWTN=4 -include tests/correct/data-structures/hw-queue/my_queue.c
+-DRTN=4 -DWTN=4 -include tests/correct/data-structures/hw-queue/my_queue.c

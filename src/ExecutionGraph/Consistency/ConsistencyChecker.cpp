@@ -19,20 +19,20 @@
  */
 
 #include "ExecutionGraph/Consistency/ConsistencyChecker.hpp"
-#include "Config/MemoryModel.hpp"
+#include "Config/Config.hpp"
 #include "ExecutionGraph/Consistency/IMMChecker.hpp"
 #include "ExecutionGraph/Consistency/RAChecker.hpp"
 #include "ExecutionGraph/Consistency/RC11Checker.hpp"
 #include "ExecutionGraph/Consistency/SCChecker.hpp"
 #include "ExecutionGraph/Consistency/TSOChecker.hpp"
 
-auto ConsistencyChecker::create(ModelType model) -> std::unique_ptr<ConsistencyChecker>
+auto ConsistencyChecker::create(const Config *conf) -> std::unique_ptr<ConsistencyChecker>
 {
 #define CREATE_CHECKER(_model)                                                                     \
 	case ModelType::_model:                                                                    \
-		return std::make_unique<_model##Checker>();
+		return std::make_unique<_model##Checker>(conf);
 
-	switch (model) {
+	switch (conf->model) {
 		CREATE_CHECKER(SC);
 		CREATE_CHECKER(TSO);
 		CREATE_CHECKER(RA);

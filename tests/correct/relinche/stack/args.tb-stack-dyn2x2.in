@@ -1,0 +1,1 @@
+-DRTN=2 -DWTN=2 -include tests/correct/data-structures/treiber-stack-dynamic/my_stack.c

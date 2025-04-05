@@ -59,6 +59,16 @@ auto isAnnotationEnd(Instruction *i) -> bool
 	       internalFunNames.at(name) == InternalFunctions::AnnotateEnd;
 }
 
+auto isMutexCall(Instruction *i) -> bool
+{
+	auto *ci = llvm::dyn_cast<CallInst>(i);
+	if (!ci)
+		return false;
+
+	auto name = getCalledFunOrStripValName(*ci);
+	return isInternalFunction(name) && isMutexCode(internalFunNames.at(name));
+}
+
 auto getAnnotationValue(CallInst *ci) -> uint64_t
 {
 	auto *funArg = llvm::dyn_cast<ConstantInt>(ci->getOperand(0));
@@ -81,8 +91,9 @@ auto annotateInstructions(CallInst *begin, CallInst *end) -> bool
 			endFound |= (dyn_cast<CallInst>(&i) == end);
 			return;
 		}
-		/* check until we find the begin; only deal with atomic insts */
-		if (endFound && !beginFound && i.isAtomic() && !isa<FenceInst>(i)) {
+		/* check until we find the begin; only deal with atomic insts + locks */
+		if (endFound && !beginFound &&
+		    ((i.isAtomic() && !isa<FenceInst>(i)) || isMutexCall(&i))) {
 			if (!opcode)
 				opcode = i.getOpcode();
 			BUG_ON(opcode != i.getOpcode()); /* annotations across paths must match */

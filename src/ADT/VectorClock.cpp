@@ -23,9 +23,9 @@
 #include "ADT/View.hpp"
 #include "ExecutionGraph/EventLabel.hpp"
 
-bool VectorClock::contains(const EventLabel *lab) const { return contains(lab->getPos()); }
+auto VectorClock::contains(const EventLabel *lab) const -> bool { return contains(lab->getPos()); }
 
-std::unique_ptr<VectorClock> VectorClock::clone() const
+auto VectorClock::clone() const -> std::unique_ptr<VectorClock>
 {
 	switch (getKind()) {
 	case VC_View:
@@ -36,8 +36,12 @@ std::unique_ptr<VectorClock> VectorClock::clone() const
 	BUG();
 }
 
-llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const VectorClock &vc)
+auto operator<<(llvm::raw_ostream &s, const VectorClock &vc) -> llvm::raw_ostream &
 {
 	vc.printData(s);
 	return s;
 }
+
+auto VectorClock::empty() const -> bool { return size() == 0; }
+
+auto VectorClock::getMax(Event e) const -> int { return getMax(e.thread); }

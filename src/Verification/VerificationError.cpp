@@ -83,9 +83,11 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const VerificationError &st)
 		return s << "Annotation error";
 	case VerificationError::VE_MixedSize:
 		return s << "Mixed-size accesses";
+	case VerificationError::VE_LinearizabilityError:
+		return s << "Linearizability error";
 	case VerificationError::VE_SystemError:
 		return s << errorList.at(systemErrorNumber);
 	default:
-		return s << "Uknown status";
+		return s << "Unknown status";
 	}
 }

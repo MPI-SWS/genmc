@@ -16,11 +16,15 @@ Checks: |
   modernize-*,
   performance-*,
 CheckOptions:
+- key: readability-implicit-bool-conversion.AllowPointerConditions
+  value: true
 - key: readability-function-cognitive-complexity.IgnoreMacros
+  value: true
+- key: cppcoreguidelines-avoid-do-while.IgnoreMacros
   value: true
 - key: readability-identifier-length.IgnoredVariableNames
   value: 'i|g|e|EE|l|r|s|w|f|b|br|v|hb'
 - key: readability-identifier-length.IgnoredLoopCounterNames
   value: 'i|j|k|g|e|EE|l|r|s|w|f|b|br|v|hb'
 - key: readability-identifier-length.IgnoredParameterNames
-  value: 'g|e|EE|l|r|s|w|f|b|br|v|hb'
+  value: 'i|g|e|EE|l|r|s|w|f|b|br|v|hb'

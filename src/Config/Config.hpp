@@ -26,89 +26,89 @@
 #include "Config/Verbosity.hpp"
 #include "Runtime/InterpreterEnumAPI.hpp"
 
+#include <cstdint>
 #include <optional>
 #include <string>
 
-enum class SchedulePolicy { ltr, wf, wfr, arbitrary };
-enum class BoundType { context, round };
+enum class SchedulePolicy : std::uint8_t { ltr, wf, wfr, arbitrary };
+enum class BoundType : std::uint8_t { context, round };
 
 struct Config {
-
-public:
 	/*** General syntax ***/
 	std::vector<std::string> cflags;
 	std::string inputFile;
 
 	/*** Exploration options ***/
-	ModelType model;
-	bool estimate;
-	bool isDepTrackingModel;
-	unsigned int threads;
+	ModelType model{};
+	bool estimate{};
+	bool isDepTrackingModel{};
+	unsigned int threads{};
 	std::optional<unsigned int> bound;
-	BoundType boundType;
-	bool LAPOR;
-	bool symmetryReduction;
-	bool helper;
-	bool checkLiveness;
-	bool printErrorTrace;
+	BoundType boundType{};
+	bool LAPOR{};
+	bool symmetryReduction{};
+	bool helper{};
+	bool checkLiveness{};
+	bool printErrorTrace{};
 	std::string dotFile;
-	bool instructionCaching;
-	bool disableRaceDetection;
-	bool disableBAM;
-	bool ipr;
-	bool disableStopOnSystemError;
-	bool warnUnfreedMemory;
+	bool instructionCaching{};
+	bool disableRaceDetection{};
+	bool disableBAM{};
+	bool ipr{};
+	bool disableStopOnSystemError{};
+	bool warnUnfreedMemory{};
+	std::optional<std::string> collectLinSpec;
+	std::optional<std::string> checkLinSpec;
+	unsigned int maxExtSize{};
+	bool dotPrintOnlyClientEvents{};
 
 	/*** Persistency options ***/
-	bool persevere;
-	unsigned int blockSize;
-	unsigned int maxFileSize;
-	JournalDataFS journalData;
-	bool disableDelalloc;
+	bool persevere{};
+	unsigned int blockSize{};
+	unsigned int maxFileSize{};
+	JournalDataFS journalData{};
+	bool disableDelalloc{};
 
 	/*** Transformation options ***/
 	std::optional<unsigned> unroll;
 	VSet<std::string> noUnrollFuns;
-	bool castElimination;
-	bool inlineFunctions;
-	bool loopJumpThreading;
-	bool spinAssume;
-	bool codeCondenser;
-	bool loadAnnot;
-	bool assumePropagation;
-	bool confirmAnnot;
-	bool mmDetector;
+	bool castElimination{};
+	bool inlineFunctions{};
+	bool loopJumpThreading{};
+	bool spinAssume{};
+	bool codeCondenser{};
+	bool loadAnnot{};
+	bool assumePropagation{};
+	bool confirmAnnot{};
+	bool mmDetector{};
 
 	/*** Debugging options ***/
-	unsigned int estimationMax;
-	unsigned int estimationMin;
-	unsigned int sdThreshold;
-	bool inputFromBitcodeFile;
-	bool printExecGraphs;
-	bool printBlockedExecs;
-	SchedulePolicy schedulePolicy;
+	unsigned int estimationMax{};
+	unsigned int estimationMin{};
+	unsigned int sdThreshold{};
+	bool inputFromBitcodeFile{};
+	bool printExecGraphs{};
+	bool printBlockedExecs{};
+	SchedulePolicy schedulePolicy{};
 	std::string randomScheduleSeed;
-	bool printRandomScheduleSeed;
+	bool printRandomScheduleSeed{};
 	std::string transformFile;
 	std::string programEntryFun;
-	unsigned int warnOnGraphSize;
-	VerbosityLevel vLevel;
+	unsigned int warnOnGraphSize{};
+	VerbosityLevel vLevel{};
 #ifdef ENABLE_GENMC_DEBUG
-	bool printStamps;
-	bool colorAccesses;
-	bool validateExecGraphs;
-	bool countDuplicateExecs;
-	bool countMootExecs;
-	bool printEstimationStats;
-	bool boundsHistogram;
+	bool printStamps{};
+	bool colorAccesses{};
+	bool validateExecGraphs{};
+	bool countDuplicateExecs{};
+	bool countMootExecs{};
+	bool printEstimationStats{};
+	bool boundsHistogram{};
+	bool relincheDebug{};
 #endif
-
-	/* Parses the CLI options and initialized the respective fields */
-	void getConfigOptions(int argc, char **argv);
-
-private:
-	void checkConfigOptions() const;
-	void saveConfigOptions();
 };
+
+/* Parses CLI options and initializes a Config object */
+void parseConfig(int argc, char **argv, Config &conf);
 
 #endif /* GENMC_CONFIG_HPP */

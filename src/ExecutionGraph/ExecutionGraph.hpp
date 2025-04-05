@@ -21,15 +21,11 @@
 #ifndef GENMC_EXECUTION_GRAPH_HPP
 #define GENMC_EXECUTION_GRAPH_HPP
 
-#include "ADT/AdjList.hpp"
 #include "ADT/VectorClock.hpp"
-#include "ExecutionGraph/DepInfo.hpp"
 #include "ExecutionGraph/Event.hpp"
 #include "ExecutionGraph/EventLabel.hpp"
 #include "ExecutionGraph/Stamp.hpp"
-#include "Support/Error.hpp"
 #include "Support/Hash.hpp"
-#include "Verification/Revisit.hpp"
 #include "config.h"
 #include <llvm/ADT/StringMap.h>
 
@@ -38,7 +34,7 @@
 #include <ranges>
 #include <unordered_map>
 
-class PSCCalculator;
+// NOLINTBEGIN(cppcoreguidelines-pro-type-const-cast)
 
 /*******************************************************************************
  **                           ExecutionGraph Class
@@ -59,11 +55,14 @@ public:
 	using StoreList = llvm::simple_ilist<WriteLabel>;
 	using LocMap = std::unordered_map<SAddr, StoreList>;
 	using InitValGetter = std::function<SVal(const AAccess &)>;
+	using PoList = llvm::simple_ilist<EventLabel, llvm::ilist_tag<po_tag>>;
+	using PoLists = std::vector<PoList>;
 
 	ExecutionGraph(InitValGetter f) : initValGetter_(std::move(f))
 	{
 		/* Create an entry for main() and push the "initializer" label */
-		events.push_back({});
+		events.emplace_back();
+		poLists.emplace_back();
 		auto *iLab = addLabelToGraph(InitLabel::create());
 		iLab->setCalculated({{}});
 		iLab->setViews({{}});
@@ -89,6 +88,8 @@ public:
 
 	using label_iterator = llvm::simple_ilist<EventLabel>::iterator;
 	using const_label_iterator = llvm::simple_ilist<EventLabel>::const_iterator;
+	using reverse_label_iterator = llvm::simple_ilist<EventLabel>::reverse_iterator;
+	using const_reverse_label_iterator = llvm::simple_ilist<EventLabel>::const_reverse_iterator;
 
 	using co_iterator = StoreList::iterator;
 	using const_co_iterator = StoreList::const_iterator;
@@ -98,15 +99,20 @@ public:
 	using initrf_iterator = InitLabel::rf_iterator;
 	using const_initrf_iterator = InitLabel::const_rf_iterator;
 
-	iterator begin() { return events.begin(); };
-	iterator end() { return events.end(); };
-	const_iterator begin() const { return events.begin(); };
-	const_iterator end() const { return events.end(); };
+	using po_iterator = PoList::iterator;
+	using const_po_iterator = PoList::const_iterator;
+	using reverse_po_iterator = PoList::reverse_iterator;
+	using const_reverse_po_iterator = PoList::const_reverse_iterator;
 
-	reverse_iterator rbegin() { return events.rbegin(); };
-	reverse_iterator rend() { return events.rend(); };
-	const_reverse_iterator rbegin() const { return events.rbegin(); };
-	const_reverse_iterator rend() const { return events.rend(); };
+	auto begin() -> iterator { return events.begin(); };
+	auto end() -> iterator { return events.end(); };
+	auto begin() const -> const_iterator { return events.begin(); };
+	auto end() const -> const_iterator { return events.end(); };
+
+	auto rbegin() -> reverse_iterator { return events.rbegin(); };
+	auto rend() -> reverse_iterator { return events.rend(); };
+	auto rbegin() const -> const_reverse_iterator { return events.rbegin(); };
+	auto rend() const -> const_reverse_iterator { return events.rend(); };
 
 	auto label_begin() const { return insertionOrder.begin(); }
 	auto label_end() const { return insertionOrder.end(); }
@@ -117,195 +123,194 @@ public:
 	auto labels() { return std::views::all(insertionOrder); }
 
 	auto thr_ids() const { return std::views::iota(0, (int)getNumThreads()); }
-	auto thr_ids() { return std::views::iota(0, (int)getNumThreads()); }
 
-	auto po(int tid) const
-	{
-		return std::views::all(events[tid]) | std::ranges::views::transform(indirect);
-	}
-	auto po(int tid)
-	{
-		return std::views::all(events[tid]) | std::ranges::views::transform(indirect);
-	}
+	auto po(int tid) const { return std::views::all(poLists[tid]); }
+	auto po(int tid) { return std::views::all(poLists[tid]); }
 
 	auto po_succs(const EventLabel *lab) const
 	{
-		const auto &thr = events[lab->getThread()];
-		return std::ranges::subrange(thr.begin() + lab->getIndex() + 1, thr.end()) |
-		       std::ranges::views::transform(indirect);
+		auto begIt = std::next(const_po_iterator(lab));
+		auto endIt = poLists[lab->getThread()].end();
+		return std::ranges::subrange(begIt, endIt);
 	}
 	auto po_succs(EventLabel *lab)
 	{
-		auto &thr = events[lab->getThread()];
-		return std::ranges::subrange(thr.begin() + lab->getIndex() + 1, thr.end()) |
-		       std::ranges::views::transform(indirect);
+		auto begIt = std::next(po_iterator(lab));
+		auto endIt = poLists[lab->getThread()].end();
+		return std::ranges::subrange(begIt, endIt);
 	}
 
 	auto po_preds(const EventLabel *lab) const
 	{
-		const auto &thr = events[lab->getThread()];
-		return std::ranges::subrange(thr.begin(), thr.begin() + lab->getIndex()) |
-		       std::views::reverse | std::ranges::views::transform(indirect);
+		auto begIt = std::next(const_reverse_po_iterator(lab));
+		auto endIt = poLists[lab->getThread()].rend();
+		return std::ranges::subrange(begIt, endIt);
 	}
 	auto po_preds(EventLabel *lab)
 	{
-		const auto &thr = events[lab->getThread()];
-		return std::ranges::subrange(thr.begin(), thr.begin() + lab->getIndex()) |
-		       std::views::reverse | std::ranges::views::transform(indirect);
+		auto begIt = std::next(reverse_po_iterator(lab));
+		auto endIt = poLists[lab->getThread()].rend();
+		return std::ranges::subrange(begIt, endIt);
 	}
 
 	/* Returns the label in the previous position of E.
 	 * Returns nullptr if E is the first event of a thread */
 	auto po_imm_pred(const EventLabel *lab) const -> const EventLabel *
 	{
-		return lab->getIndex() == 0 ? nullptr
-					    : events[lab->getThread()][lab->getIndex() - 1].get();
+		auto labIt = const_po_iterator(lab);
+		auto begIt = poLists[lab->getThread()].begin();
+		return labIt == begIt ? nullptr : &*std::prev(labIt);
 	}
 	auto po_imm_pred(EventLabel *lab) -> EventLabel *
 	{
-		// NOLINTBEGIN(cppcoreguidelines-pro-type-const-cast)
 		return const_cast<EventLabel *>(
 			static_cast<const ExecutionGraph &>(*this).po_imm_pred(lab));
-		// NOLINTEND(cppcoreguidelines-pro-type-const-cast)
 	}
 
 	/* Returns the label in the next position of E.
 	 * Returns nullptr if E is the last event of a thread */
 	auto po_imm_succ(const EventLabel *lab) const -> const EventLabel *
 	{
-		return lab->getIndex() == getThreadSize(lab->getThread()) - 1
-			       ? nullptr
-			       : events[lab->getThread()][lab->getIndex() + 1].get();
+		auto rLabIt = const_reverse_po_iterator(lab);
+		auto rBegIt = poLists[lab->getThread()].rbegin();
+		return rLabIt == rBegIt ? nullptr : &*std::prev(rLabIt);
 	}
 	auto po_imm_succ(EventLabel *lab) -> EventLabel *
 	{
-		// NOLINTBEGIN(cppcoreguidelines-pro-type-const-cast)
 		return const_cast<EventLabel *>(
 			static_cast<const ExecutionGraph &>(*this).po_imm_succ(lab));
-		// NOLINTEND(cppcoreguidelines-pro-type-const-cast)
 	}
 
-	loc_iterator loc_begin() { return coherence.begin(); }
-	const_loc_iterator loc_begin() const { return coherence.begin(); };
-	loc_iterator loc_end() { return coherence.end(); }
-	const_loc_iterator loc_end() const { return coherence.end(); }
+	auto loc_begin() -> loc_iterator { return coherence.begin(); }
+	auto loc_begin() const -> const_loc_iterator { return coherence.begin(); };
+	auto loc_end() -> loc_iterator { return coherence.end(); }
+	auto loc_end() const -> const_loc_iterator { return coherence.end(); }
 
-	co_iterator co_begin(SAddr addr) { return coherence[addr].begin(); }
-	const_co_iterator co_begin(SAddr addr) const { return coherence.at(addr).begin(); };
-	co_iterator co_end(SAddr addr) { return coherence[addr].end(); }
-	const_co_iterator co_end(SAddr addr) const { return coherence.at(addr).end(); }
+	auto co_begin(SAddr addr) -> co_iterator { return coherence[addr].begin(); }
+	auto co_begin(SAddr addr) const -> const_co_iterator { return coherence.at(addr).begin(); };
+	auto co_end(SAddr addr) -> co_iterator { return coherence[addr].end(); }
+	auto co_end(SAddr addr) const -> const_co_iterator { return coherence.at(addr).end(); }
 	auto co(SAddr addr) { return std::views::all(coherence[addr]); }
 	auto co(SAddr addr) const { return std::views::all(coherence.at(addr)); }
 
-	reverse_co_iterator co_rbegin(SAddr addr) { return coherence[addr].rbegin(); }
-	const_reverse_co_iterator co_rbegin(SAddr addr) const
+	auto co_rbegin(SAddr addr) -> reverse_co_iterator { return coherence[addr].rbegin(); }
+	auto co_rbegin(SAddr addr) const -> const_reverse_co_iterator
 	{
 		return coherence.at(addr).rbegin();
 	};
-	reverse_co_iterator co_rend(SAddr addr) { return coherence[addr].rend(); }
-	const_reverse_co_iterator co_rend(SAddr addr) const { return coherence.at(addr).rend(); }
+	auto co_rend(SAddr addr) -> reverse_co_iterator { return coherence[addr].rend(); }
+	auto co_rend(SAddr addr) const -> const_reverse_co_iterator
+	{
+		return coherence.at(addr).rend();
+	}
 	auto rco(SAddr addr) { return std::views::all(coherence[addr]) | std::views::reverse; }
 	auto rco(SAddr addr) const
 	{
 		return std::views::all(coherence.at(addr)) | std::views::reverse;
 	}
 
-	initrf_iterator init_rf_begin(SAddr addr) { return getInitLabel()->rf_begin(addr); }
-	const_initrf_iterator init_rf_begin(SAddr addr) const
+	auto init_rf_begin(SAddr addr) -> initrf_iterator { return getInitLabel()->rf_begin(addr); }
+	auto init_rf_begin(SAddr addr) const -> const_initrf_iterator
 	{
 		return getInitLabel()->rf_begin(addr);
 	};
-	initrf_iterator init_rf_end(SAddr addr) { return getInitLabel()->rf_end(addr); }
-	const_initrf_iterator init_rf_end(SAddr addr) const { return getInitLabel()->rf_end(addr); }
+	auto init_rf_end(SAddr addr) -> initrf_iterator { return getInitLabel()->rf_end(addr); }
+	auto init_rf_end(SAddr addr) const -> const_initrf_iterator
+	{
+		return getInitLabel()->rf_end(addr);
+	}
 
-	co_iterator co_succ_begin(WriteLabel *lab) { return ++co_iterator(lab); }
-	const_co_iterator co_succ_begin(const WriteLabel *lab) const
+	auto co_succ_begin(WriteLabel *lab) -> co_iterator { return ++co_iterator(lab); }
+	auto co_succ_begin(const WriteLabel *lab) const -> const_co_iterator
 	{
 		return ++const_co_iterator(lab);
 	}
-	co_iterator co_succ_end(WriteLabel *lab) { return co_end(lab->getAddr()); }
-	const_co_iterator co_succ_end(const WriteLabel *lab) const
+	auto co_succ_end(WriteLabel *lab) -> co_iterator { return co_end(lab->getAddr()); }
+	auto co_succ_end(const WriteLabel *lab) const -> const_co_iterator
 	{
 		return co_end(lab->getAddr());
 	}
-	const WriteLabel *co_imm_succ(const WriteLabel *lab) const
+	auto co_imm_succ(const WriteLabel *lab) const -> const WriteLabel *
 	{
 		auto it = co_succ_begin(lab);
 		return it == co_succ_end(lab) ? nullptr : &*it;
 	}
 
-	reverse_co_iterator co_pred_begin(WriteLabel *lab) { return ++reverse_co_iterator(lab); }
-	const_reverse_co_iterator co_pred_begin(const WriteLabel *lab) const
+	auto co_pred_begin(WriteLabel *lab) -> reverse_co_iterator
+	{
+		return ++reverse_co_iterator(lab);
+	}
+	auto co_pred_begin(const WriteLabel *lab) const -> const_reverse_co_iterator
 	{
 		return ++const_reverse_co_iterator(lab);
 	}
-	reverse_co_iterator co_pred_end(WriteLabel *lab) { return co_rend(lab->getAddr()); }
-	const_reverse_co_iterator co_pred_end(const WriteLabel *lab) const
+	auto co_pred_end(WriteLabel *lab) -> reverse_co_iterator { return co_rend(lab->getAddr()); }
+	auto co_pred_end(const WriteLabel *lab) const -> const_reverse_co_iterator
 	{
 		return co_rend(lab->getAddr());
 	}
-	const WriteLabel *co_imm_pred(const WriteLabel *lab) const
+	auto co_imm_pred(const WriteLabel *lab) const -> const WriteLabel *
 	{
 		auto it = co_pred_begin(lab);
 		return it == co_pred_end(lab) ? nullptr : &*(it);
 	}
-	WriteLabel *co_imm_pred(WriteLabel *lab)
+	auto co_imm_pred(WriteLabel *lab) -> WriteLabel *
 	{
 		return const_cast<WriteLabel *>(
 			static_cast<const ExecutionGraph &>(*this).co_imm_pred(lab));
 	}
 
-	const EventLabel *co_max(SAddr addr) const
+	auto co_max(SAddr addr) const -> const EventLabel *
 	{
 		return co_begin(addr) == co_end(addr) ? (EventLabel *)getInitLabel()
 						      : (EventLabel *)&*co_rbegin(addr);
 	}
-	EventLabel *co_max(SAddr addr)
+	auto co_max(SAddr addr) -> EventLabel *
 	{
 		return const_cast<EventLabel *>(
 			static_cast<const ExecutionGraph &>(*this).co_max(addr));
 	}
 
-	co_iterator fr_succ_begin(ReadLabel *rLab)
+	auto fr_succ_begin(ReadLabel *rLab) -> co_iterator
 	{
 		auto *wLab = llvm::dyn_cast<WriteLabel>(rLab->getRf());
 		return wLab ? co_succ_begin(wLab) : co_begin(rLab->getAddr());
 	}
-	const_co_iterator fr_succ_begin(const ReadLabel *rLab) const
+	auto fr_succ_begin(const ReadLabel *rLab) const -> const_co_iterator
 	{
 		auto *wLab = llvm::dyn_cast<WriteLabel>(rLab->getRf());
 		return wLab ? co_succ_begin(wLab) : co_begin(rLab->getAddr());
 	}
-	co_iterator fr_succ_end(ReadLabel *rLab) { return co_end(rLab->getAddr()); }
-	const_co_iterator fr_succ_end(const ReadLabel *rLab) const
+	auto fr_succ_end(ReadLabel *rLab) -> co_iterator { return co_end(rLab->getAddr()); }
+	auto fr_succ_end(const ReadLabel *rLab) const -> const_co_iterator
 	{
 		return co_end(rLab->getAddr());
 	}
-	const WriteLabel *fr_imm_succ(const ReadLabel *rLab) const
+	auto fr_imm_succ(const ReadLabel *rLab) const -> const WriteLabel *
 	{
 		auto it = fr_succ_begin(rLab);
 		return it == fr_succ_end(rLab) ? nullptr : &*it;
 	}
 
-	WriteLabel::rf_iterator fr_imm_pred_begin(WriteLabel *wLab)
+	auto fr_imm_pred_begin(WriteLabel *wLab) -> WriteLabel::rf_iterator
 	{
 		return co_pred_begin(wLab) == co_pred_end(wLab)
 			       ? init_rf_begin(wLab->getAddr())
 			       : (*co_pred_begin(wLab)).readers_begin();
 	}
-	WriteLabel::const_rf_iterator fr_imm_pred_begin(const WriteLabel *wLab) const
+	auto fr_imm_pred_begin(const WriteLabel *wLab) const -> WriteLabel::const_rf_iterator
 	{
 		return co_pred_begin(wLab) == co_pred_end(wLab)
 			       ? init_rf_begin(wLab->getAddr())
 			       : (*co_pred_begin(wLab)).readers_begin();
 	}
-	WriteLabel::rf_iterator fr_imm_pred_end(WriteLabel *wLab)
+	auto fr_imm_pred_end(WriteLabel *wLab) -> WriteLabel::rf_iterator
 	{
 		return co_pred_begin(wLab) == co_pred_end(wLab)
 			       ? init_rf_end(wLab->getAddr())
 			       : (*co_pred_begin(wLab)).readers_end();
 	}
-	WriteLabel::const_rf_iterator fr_imm_pred_end(const WriteLabel *wLab) const
+	auto fr_imm_pred_end(const WriteLabel *wLab) const -> WriteLabel::const_rf_iterator
 	{
 		return co_pred_begin(wLab) == co_pred_end(wLab)
 			       ? init_rf_end(wLab->getAddr())
@@ -315,77 +320,58 @@ public:
 	/* Thread-related methods */
 
 	/* Creates a new thread in the execution graph */
-	void addNewThread() { events.push_back({}); };
+	void addNewThread()
+	{
+		events.emplace_back();
+		poLists.emplace_back();
+	};
 
 	/* Pers: Add/remove a thread for the recovery procedure */
 	void addRecoveryThread()
 	{
 		recoveryTID = events.size();
-		events.push_back({});
+		events.emplace_back();
+		poLists.emplace_back();
 	};
 	void delRecoveryThread()
 	{
 		events.pop_back();
+		poLists.pop_back();
 		recoveryTID = -1;
 	};
 
 	/* Returns the tid of the recovery routine.
 	 * If not in recovery mode, returns -1 */
-	int getRecoveryRoutineId() const { return recoveryTID; };
+	auto getRecoveryRoutineId() const -> int { return recoveryTID; };
 
 	/* Returns the number of threads currently in the graph */
-	unsigned int getNumThreads() const { return events.size(); };
+	auto getNumThreads() const -> unsigned int { return events.size(); };
 
 	/* Returns the size of the thread tid */
-	unsigned int getThreadSize(int tid) const { return events[tid].size(); };
+	auto getThreadSize(int tid) const -> unsigned int { return events[tid].size(); };
 
 	/* Returns true if the thread tid is empty */
-	bool isThreadEmpty(int tid) const { return getThreadSize(tid) == 0; };
+	auto isThreadEmpty(int tid) const -> bool { return getThreadSize(tid) == 0; };
 
 	/* Event addition/removal methods */
 
-	const InitLabel *getInitLabel() const
+	auto getInitLabel() const -> const InitLabel *
 	{
 		return static_cast<const InitLabel *>(getEventLabel(Event(0, 0)));
 	}
-	InitLabel *getInitLabel()
+	auto getInitLabel() -> InitLabel *
 	{
 		return const_cast<InitLabel *>(
 			static_cast<const ExecutionGraph &>(*this).getInitLabel());
 	}
 
 	/* Returns the maximum stamp used */
-	Stamp getMaxStamp() const { return timestamp; }
+	auto getMaxStamp() const -> Stamp { return timestamp; }
 
 	/* Adds LAB to the graph. If a label exists in the respective
 	 * position, it is replaced.
 	 * (Maintains well-formedness for read removals.) */
-	EventLabel *addLabelToGraph(std::unique_ptr<EventLabel> lab);
-
-	void addStoreToCOBefore(WriteLabel *wLab, WriteLabel *succLab)
-	{
-		coherence[wLab->getAddr()].insert(co_iterator(succLab), *wLab);
-	}
-	void addStoreToCOAfter(WriteLabel *wLab, EventLabel *predLab)
-	{
-		auto *predLabW = llvm::dyn_cast<WriteLabel>(predLab);
-		coherence[wLab->getAddr()].insert(
-			predLabW ? ++co_iterator(*predLabW) : co_begin(wLab->getAddr()), *wLab);
-	}
-
-	void removeStoreFromCO(WriteLabel *wLab) { coherence[wLab->getAddr()].remove(*wLab); }
-
-	void moveStoreCOBefore(WriteLabel *wLab, WriteLabel *succLab)
-	{
-		removeStoreFromCO(wLab);
-		addStoreToCOBefore(wLab, succLab);
-	}
-
-	void moveStoreCOAfter(WriteLabel *wLab, EventLabel *predLab)
-	{
-		removeStoreFromCO(wLab);
-		addStoreToCOAfter(wLab, predLab);
-	}
+	auto addLabelToGraph(std::unique_ptr<EventLabel> lab) -> EventLabel *;
 
 	/* Removes the last event from THREAD.
 	 * If it is a read, updates the rf-lists.
@@ -395,8 +381,11 @@ public:
 	/* Event getter methods */
 
 	/* Returns the label in the position denoted by event e */
-	const EventLabel *getEventLabel(Event e) const { return events[e.thread][e.index].get(); }
-	EventLabel *getEventLabel(Event e)
+	auto getEventLabel(Event e) const -> const EventLabel *
+	{
+		return events[e.thread][e.index].get();
+	}
+	auto getEventLabel(Event e) -> EventLabel *
 	{
 		return const_cast<EventLabel *>(
 			static_cast<const ExecutionGraph &>(*this).getEventLabel(e));
@@ -404,11 +393,11 @@ public:
 
 	/* Returns a label as a ReadLabel.
 	 * If the passed event is not a read, returns nullptr  */
-	const ReadLabel *getReadLabel(Event e) const
+	auto getReadLabel(Event e) const -> const ReadLabel *
 	{
 		return llvm::dyn_cast<ReadLabel>(getEventLabel(e));
 	}
-	ReadLabel *getReadLabel(Event e)
+	auto getReadLabel(Event e) -> ReadLabel *
 	{
 		return const_cast<ReadLabel *>(
 			static_cast<const ExecutionGraph &>(*this).getReadLabel(e));
@@ -416,87 +405,72 @@ public:
 
 	/* Returns a label as a WriteLabel.
 	 * If the passed event is not a write, returns nullptr  */
-	const WriteLabel *getWriteLabel(Event e) const
+	auto getWriteLabel(Event e) const -> const WriteLabel *
 	{
 		return llvm::dyn_cast<WriteLabel>(getEventLabel(e));
 	}
-	WriteLabel *getWriteLabel(Event e)
+	auto getWriteLabel(Event e) -> WriteLabel *
 	{
 		return const_cast<WriteLabel *>(
 			static_cast<const ExecutionGraph &>(*this).getWriteLabel(e));
 	}
 
 	/* Returns the first label in the thread tid */
-	const ThreadStartLabel *getFirstThreadLabel(int tid) const
+	auto getFirstThreadLabel(int tid) const -> const ThreadStartLabel *
 	{
 		return llvm::dyn_cast<ThreadStartLabel>(getEventLabel(Event(tid, 0)));
 	}
-	ThreadStartLabel *getFirstThreadLabel(int tid)
+	auto getFirstThreadLabel(int tid) -> ThreadStartLabel *
 	{
 		return const_cast<ThreadStartLabel *>(
 			static_cast<const ExecutionGraph &>(*this).getFirstThreadLabel(tid));
 	}
 
 	/* Returns the last label in the thread tid */
-	const EventLabel *getLastThreadLabel(int thread) const
+	auto getLastThreadLabel(int thread) const -> const EventLabel *
 	{
-		return getEventLabel(Event(thread, getThreadSize(thread) - 1));
+		return poLists[thread].empty() ? nullptr : &poLists[thread].back();
 	}
-	EventLabel *getLastThreadLabel(int thread)
+	auto getLastThreadLabel(int thread) -> EventLabel *
 	{
 		return const_cast<EventLabel *>(
 			static_cast<const ExecutionGraph &>(*this).getLastThreadLabel(thread));
 	}
 
-	/* Given a write label sLab that is part of an RMW, returns
-	 * another RMW that reads from the same write. If no such event
-	 * exists, it returns INIT. If there are multiple such events,
-	 * returns the one with the smallest stamp */
-	Event getPendingRMW(const WriteLabel *sLab) const;
-
-	/* Returns a list of loads that can be revisited */
-	virtual std::vector<ReadLabel *> getRevisitable(WriteLabel *sLab, const VectorClock &pporf);
-
 	/* Boolean helper functions */
 
-	SVal getInitVal(const AAccess &access) const { return initValGetter_(access); }
+	auto getInitVal(const AAccess &access) const -> SVal { return initValGetter_(access); }
 
 	void setInitValGetter(InitValGetter f) { initValGetter_ = std::move(f); }
 
-	bool isLocEmpty(SAddr addr) const { return co_begin(addr) == co_end(addr); }
+	auto isLocEmpty(SAddr addr) const -> bool { return co_begin(addr) == co_end(addr); }
 
 	/* Whether a location has more than one store */
-	bool hasLocMoreThanOneStore(SAddr addr) const
+	auto hasLocMoreThanOneStore(SAddr addr) const -> bool
 	{
 		return !isLocEmpty(addr) && ++co_begin(addr) != co_end(addr);
 	}
 
 	/* Returns true if the graph contains e */
-	bool containsPos(const Event &e) const
+	auto containsPos(const Event &e) const -> bool
 	{
 		return e.thread >= 0 && e.thread < getNumThreads() && e.index >= 0 &&
 		       e.index < getThreadSize(e.thread);
 	}
-	bool containsLab(const EventLabel *lab) const
+	auto containsLab(const EventLabel *lab) const -> bool
 	{
 		return containsPos(lab->getPos()) && getEventLabel(lab->getPos()) == lab;
 	}
 
 	/* Returns true if the graph contains e, and the label is not EMPTY */
-	bool containsPosNonEmpty(const Event &e) const
+	auto containsPosNonEmpty(const Event &e) const -> bool
 	{
 		return containsPos(e) && !llvm::isa<EmptyLabel>(getEventLabel(e));
 	}
 
-	/* Returns true if the addition of SLAB violates atomicity in the graph */
-	bool violatesAtomicity(const WriteLabel *sLab)
-	{
-		return sLab->isRMW() && !getPendingRMW(sLab).isInitializer();
-	}
-
 	/* Debugging methods */
 
-	void validate(void);
+	void validate();
 
 	/* Graph modification methods */
 
@@ -505,7 +479,7 @@ public:
 	/* Prefix saving and restoring */
 
 	/* Returns a vector clock representing the events added before e */
-	std::unique_ptr<VectorClock> getPredsView(Event e) const
+	auto getPredsView(Event e) const -> std::unique_ptr<VectorClock>
 	{
 		auto stamp = getEventLabel(e)->getStamp();
 		return getViewFromStamp(stamp);
@@ -514,7 +488,7 @@ public:
 	/* Graph cutting */
 
 	/* Returns a view of the graph representing events with stamp <= st */
-	virtual std::unique_ptr<VectorClock> getViewFromStamp(Stamp st) const;
+	virtual auto getViewFromStamp(Stamp st) const -> std::unique_ptr<VectorClock>;
 
 	/* Cuts a graph so that it only contains events with stamp <= st */
 	virtual void cutToStamp(Stamp st);
@@ -524,24 +498,24 @@ public:
 	 * 1) Copy graph structure (calculators, constant members, etc)
 	 * 2) Copy events => these should notify calculators so that calcs populate their structures
 	 */
-	virtual std::unique_ptr<ExecutionGraph> getCopyUpTo(const VectorClock &v) const;
+	virtual auto getCopyUpTo(const VectorClock &v) const -> std::unique_ptr<ExecutionGraph>;
 
-	std::unique_ptr<ExecutionGraph> clone() const
+	auto clone() const -> std::unique_ptr<ExecutionGraph>
 	{
 		return getCopyUpTo(*getViewFromStamp(getMaxStamp()));
 	}
 
 	/* Overloaded operators */
-	friend llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const ExecutionGraph &g);
+	friend auto operator<<(llvm::raw_ostream &s, const ExecutionGraph &g)
+		-> llvm::raw_ostream &;
 
 protected:
+	friend class WriteLabel;
+
 	static auto indirect(const std::unique_ptr<EventLabel> &ptr) -> EventLabel &
 	{
 		return *ptr;
 	}
-
-	void resizeThread(unsigned int tid, unsigned int size) { events[tid].resize(size); };
-	void resizeThread(Event pos) { resizeThread(pos.thread, pos.index); }
 
 	void setEventLabel(Event e, std::unique_ptr<EventLabel> lab)
 	{
@@ -549,14 +523,15 @@ protected:
 	};
 
 	/* Returns the next available stamp (and increases the counter) */
-	Stamp nextStamp() { return timestamp++; }
+	auto nextStamp() -> Stamp { return timestamp++; }
 
 	/* Resets the next available stamp to the specified value */
 	void resetStamp(Stamp val) { timestamp = val; }
 
 	/* Returns the event with the minimum stamp in ES.
 	 * If ES is empty, returns INIT */
-	Event getMinimumStampEvent(const std::vector<Event> &es) const;
+	[[nodiscard]] auto getMinimumStampEvent(const std::vector<const EventLabel *> &es) const
+		-> const EventLabel *;
 
 	void trackCoherenceAtLoc(SAddr addr);
 
@@ -572,7 +547,7 @@ protected:
 
 	void removeAfter(const VectorClock &preds);
 
-	static std::unique_ptr<EmptyLabel> createHoleLabel(Event pos)
+	static auto createHoleLabel(Event pos) -> std::unique_ptr<EmptyLabel>
 	{
 		auto lab = EmptyLabel::create(pos);
 		lab->setViews({{}});
@@ -580,16 +555,17 @@ protected:
 		return lab;
 	}
 
-protected:
 	/* A collection of threads and the events for each threads */
-	ThreadList events{};
+	ThreadList events;
 
 	/* The next available timestamp */
 	Stamp timestamp = 0;
 
-	LocMap coherence{};
+	LocMap coherence;
 
-	llvm::simple_ilist<EventLabel> insertionOrder{};
+	llvm::simple_ilist<EventLabel> insertionOrder;
+
+	PoLists poLists{};
 
 	/* Pers: The ID of the recovery routine.
 	 * It should be -1 if not in recovery mode, or have the
@@ -609,14 +585,13 @@ template <> struct hash<ExecutionGraph> {
 		hash_combine(hash, g.getNumThreads());
 		for (auto i = 0U; i < g.getNumThreads(); i++) {
 			hash_combine(hash, g.getThreadSize(i));
-			for (auto j = 0U; j < g.getThreadSize(i); j++) {
-				auto *lab = g.getEventLabel(Event(i, j));
-				if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab)) {
+			for (const auto &lab : g.po(i)) {
+				if (const auto *rLab = llvm::dyn_cast<ReadLabel>(&lab)) {
 					hash_combine(hash, rLab->getRf() ? rLab->getRf()->getPos()
 									 : Event::getBottom());
 				}
-				if (auto *wLab = llvm::dyn_cast<WriteLabel>(lab)) {
-					auto *pLab = g.co_imm_pred(wLab);
+				if (const auto *wLab = llvm::dyn_cast<WriteLabel>(&lab)) {
+					const auto *pLab = g.co_imm_pred(wLab);
 					hash_combine(hash,
 						     pLab ? pLab->getPos() : Event::getInit());
 				}
@@ -626,5 +601,7 @@ template <> struct hash<ExecutionGraph> {
 	}
 };
 } // namespace std
+
+// NOLINTEND(cppcoreguidelines-pro-type-const-cast)
 
 #endif /* GENMC_EXECUTION_GRAPH_HPP */

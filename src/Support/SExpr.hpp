@@ -43,7 +43,7 @@
  **                           SExpr Class (Abstract)
  ******************************************************************************/
 
-/*
+/**
  * An abstract class that models expressions containing symbolic variables.
  * Contains some things all subclasses provide (e.g., the kids for this node).
  * Currently supports expressions with integers only.
@@ -128,16 +128,16 @@ protected:
 public:
 	virtual ~SExpr() {}
 
-	/* The kind of this node (LLVM-style RTTI) */
+	/** The kind of this node (LLVM-style RTTI) */
 	Kind getKind() const { return kind; }
 
-	/* The width of this integer (in bits) */
+	/** The width of this integer (in bits) */
 	Width getWidth() const { return width; }
 
-	/* The kids of this node */
+	/** The kids of this node */
 	size_t getNumKids() const { return kids.size(); }
 
-	/* Fetches the i-th kid */
+	/** Fetches the i-th kid */
 	const SExpr<T> *getKid(unsigned i) const
 	{
 		BUG_ON(i >= kids.size() && "Index out of bounds!");
@@ -149,7 +149,7 @@ public:
 		return kids[i].get();
 	}
 
-	/* Sets the i-th kid to e */
+	/** Sets the i-th kid to e */
 	void setKid(unsigned i, std::unique_ptr<SExpr> &&e)
 	{
 		BUG_ON(i >= kids.size() && "Index out of bounds!");
@@ -168,10 +168,10 @@ protected:
 	template <typename U> friend class SExprEvaluator;
 	template <typename U> friend class SExprTransformer;
 
-	/* Returns a container with this node's kids */
+	/** Returns a container with this node's kids */
 	const std::vector<std::unique_ptr<SExpr<T>>> &getKids() const { return kids; }
 
-	/* This function is necessary because we cannot move from initializer lists,
+	/** This function is necessary because we cannot move from initializer lists,
 	 * and also cannot copy unique_ptr<>s. We do need a way to construct a vector
 	 * of unique_ptr<>s from its elements though... */
 	void addKid(std::unique_ptr<SExpr<T>> &&k) { kids.push_back(std::move(k)); }
@@ -182,7 +182,7 @@ private:
 	std::vector<std::unique_ptr<SExpr<T>>> kids;
 };
 
-/* Helper class to clone SExprs w/ value_ptr<>s */
+/** Helper class to clone SExprs w/ value_ptr<>s */
 template <typename T> struct SExprCloner {
 	SExpr<T> *operator()(SExpr<T> const &x) const { return x.clone().release(); }
 	// SExpr *operator()(SExpr &&x) const { return new SExpr(std::move(x)); }
@@ -192,7 +192,7 @@ template <typename T> struct SExprCloner {
  **                           ConcreteExpr Class
  ******************************************************************************/
 
-/*
+/**
  * Represents a constant. For the time being, only integer constants are supported.
  */
 
@@ -205,7 +205,7 @@ protected:
 	ConcreteExpr(Width w, SVal val) : SExpr<T>(Kind::Concrete, w), value(val) {}
 
 public:
-	/* Returns the constant value */
+	/** Returns the constant value */
 	const SVal &getValue() const { return value; }
 
 	template <typename... Ts> static std::unique_ptr<ConcreteExpr<T>> create(Ts &&...params)
@@ -237,7 +237,7 @@ private:
  **                            RegisterExpr Class
  ******************************************************************************/
 
-/*
+/**
  * Represents a register the value of which is still unknown (symbolic variable).
  * Each register is (uniquely) represented using a void *. This class is completely
  * oblivious to what the void * actually points to and does not use/dereference it.
@@ -257,10 +257,10 @@ protected:
 	{}
 
 public:
-	/* Returns an identifier to this register */
+	/** Returns an identifier to this register */
 	const T &getRegister() const { return reg; }
 
-	/* Returns the name of this register (in LLVM-IR) */
+	/** Returns the name of this register (in LLVM-IR) */
 	const std::string &getName() const { return name; }
 
 	template <typename... Ts> static std::unique_ptr<RegisterExpr<T>> create(Ts &&...params)
@@ -278,13 +278,13 @@ public:
 	static bool classof(const SExpr<T> *E) { return E->getKind() == Kind::Register; }
 
 private:
-	/* Unique identifier for the symbolic variable */
+	/** Unique identifier for the symbolic variable */
 	T reg;
 
-	/* The name of this symbolic variable */
+	/** The name of this symbolic variable */
 	const std::string name;
 
-	/* Counter used when creating names for symbolic vars */
+	/** Counter used when creating names for symbolic vars */
 	static unsigned regCount;
 };
 
@@ -292,7 +292,7 @@ private:
  **                            SelectExpr Class
  ******************************************************************************/
 
-/*
+/**
  * Represents a select instruction. Equivalently, this can be thought of as
  * an 'if-then-else' statement, where if the condition (0th kid) holds
  * the expression takes the value of the first child, and if it does not
@@ -341,7 +341,7 @@ public:
  **                        LogicalExpr Class (Abstract)
  ******************************************************************************/
 
-/*
+/**
  * Represents a logical operation (e.g., AND, OR). These do not correspond to LLVM-IR
  * instructions, but may be useful if we ever decide to construct such expressions.
  * They always have a width of 1, irrespective of the widths of their arguments.
@@ -362,7 +362,7 @@ protected:
 		: LogicalExpr(k, SExpr<T>::BoolWidth, std::move(es))
 	{}
 
-	/* For convenience */
+	/** For convenience */
 	LogicalExpr(Kind k, std::unique_ptr<SExpr<T>> &&e) : SExpr<T>(k, SExpr<T>::BoolWidth)
 	{
 		this->addKid(std::move(e));
@@ -430,6 +430,7 @@ LOGICAL_EXPR_CLASS(Conjunction)
 
 LOGICAL_EXPR_CLASS(Disjunction)
 
+/** Represents a boolean negation */
 template <typename T> class NotExpr : public LogicalExpr<T> {
 
 protected:
@@ -455,7 +456,7 @@ public:
  **                           CastExpr Class (Abstract)
  ******************************************************************************/
 
-/*
+/**
  * Represents a cast instruction (e.g., zext, trunc).
  */
 
@@ -518,11 +519,10 @@ CAST_EXPR_CLASS(Trunc)
  **                           BinaryExpr Class (Abstract)
  ******************************************************************************/
 
-/*
+/**
  * Represents a binary instruction.
  * (In LLVM-IR such instructions are used also to e.g., negate a number.)
  */
-
 template <typename T> class BinaryExpr : public SExpr<T> {
 
 protected:
@@ -547,7 +547,7 @@ public:
 	}
 };
 
-/* Arithmetic/Bit Exprs */
+/** Arithmetic/Bit Exprs */
 #define ARITHMETIC_EXPR_CLASS(_class_kind)                                                         \
 	template <typename T> class _class_kind##Expr : public BinaryExpr<T> {                     \
                                                                                                    \
@@ -608,7 +608,7 @@ ARITHMETIC_EXPR_CLASS(LShr)
 
 ARITHMETIC_EXPR_CLASS(AShr)
 
-/* Comparison Exprs */
+/** Comparison Expressions */
 template <typename T> class CmpExpr : public BinaryExpr<T> {
 
 protected:

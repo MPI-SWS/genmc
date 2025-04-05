@@ -23,9 +23,9 @@
 
 #include <llvm/IR/Value.h>
 
-/*
- * IDInfo struct -- Contains (unique) identification information for
- * some of the module's crucial components (e.g., GVs, functions, etc)
+/**
+ * Contains (unique) identification information for some of the module's
+ * crucial components (e.g., GVs, functions, etc)
  */
 struct ModuleID {
 	using ID = unsigned int;

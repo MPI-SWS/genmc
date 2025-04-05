@@ -21,7 +21,7 @@
 #include "ADT/DepView.hpp"
 #include "Support/Error.hpp"
 
-bool DepView::contains(const Event e) const
+auto DepView::contains(const Event e) const -> bool
 {
 	return e.index <= getMax(e.thread) &&
 	       (e.index == 0 || (e.thread < holes_.size() && !holes_[e.thread].count(e.index)));
@@ -49,14 +49,14 @@ void DepView::removeHolesInRange(Event start, int endIdx)
 		removeHole(Event(start.thread, i));
 }
 
-View &DepView::update(const View &v) { BUG(); }
+auto DepView::update(const View &v) -> View & { BUG(); }
 
-DepView &DepView::update(const DepView &v)
+auto DepView::update(const DepView &v) -> DepView &
 {
 	if (v.empty())
 		return *this;
 
-	for (auto i = 0u; i < v.size(); i++) {
+	for (auto i = 0U; i < v.size(); i++) {
 		auto isec = holes_[i].intersectWith(v.holes_[i]);
 		if (getMax(i) < v.getMax(i)) {
 			isec.insert(std::lower_bound(v.holes_[i].begin(), v.holes_[i].end(),
@@ -73,9 +73,9 @@ DepView &DepView::update(const DepView &v)
 	return *this;
 }
 
-VectorClock &DepView::update(const VectorClock &vc)
+auto DepView::update(const VectorClock &vc) -> VectorClock &
 {
-	if (auto *v = llvm::dyn_cast<DepView>(&vc))
+	if (const auto *v = llvm::dyn_cast<DepView>(&vc))
 		return this->update(*v);
 	BUG();
 }
@@ -83,9 +83,9 @@ VectorClock &DepView::update(const VectorClock &vc)
 void DepView::printData(llvm::raw_ostream &s) const
 {
 	s << "[\n";
-	for (auto i = 0u; i < size(); i++) {
+	for (auto i = 0U; i < size(); i++) {
 		s << "\t" << i << ": " << getMax(i) << " ( ";
-		for (auto &h : this->holes_[i])
+		for (const auto &h : this->holes_[i])
 			s << h << " ";
 		s << ")\n";
 	}

@@ -21,18 +21,16 @@
 #ifndef GENMC_MEM_ACCESS_HPP
 #define GENMC_MEM_ACCESS_HPP
 
-#include "Error.hpp"
 #include "SAddr.hpp"
 #include "config.h"
 
 #include <climits>
-#include <cstdint>
 
 /*******************************************************************************
  **                             AType Enum
  ******************************************************************************/
 
-/*
+/**
  * Represents the type of an access: pointer, signed integer, unsigned integer
  */
 enum class AType { Pointer, Signed, Unsigned };
@@ -41,7 +39,7 @@ enum class AType { Pointer, Signed, Unsigned };
  **                             AAccess Class
  ******************************************************************************/
 
-/*
+/**
  * An AAccess comprises an address, a size and a type
  */
 class AAccess {
@@ -58,7 +56,7 @@ public:
 	[[nodiscard]] auto isUnsigned() const -> bool { return getType() == AType::Unsigned; }
 	[[nodiscard]] auto isSigned() const -> bool { return getType() == AType::Signed; }
 
-	/* Whether the access contains a given address */
+	/** Whether the access contains a given address */
 	[[nodiscard]] auto contains(SAddr addr) const -> bool
 	{
 		if (!getAddr().sameStorageAs(addr))
@@ -66,7 +64,7 @@ public:
 		return getAddr() <= addr && addr < getAddr() + getSize();
 	}
 
-	/* Whether the access overlaps with another access */
+	/** Whether the access overlaps with another access */
 	[[nodiscard]] auto overlaps(const AAccess &other) const -> bool
 	{
 		if (!getAddr().sameStorageAs(other.getAddr()))

@@ -39,7 +39,7 @@
  **                           GlobalWorkQueue Class
  ******************************************************************************/
 
-/* Represents the global workqueue shared among threads. */
+/** Represents the global workqueue shared among threads. */
 class GlobalWorkQueue {
 
 public:
@@ -53,21 +53,21 @@ public:
 
 	/*** Queue operations ***/
 
-	/* Returns true if the queue is empty */
+	/** Returns true if the queue is empty */
 	bool empty()
 	{
 		std::lock_guard<std::mutex> lock(qMutex);
 		return queue.empty();
 	}
 
-	/* Adds a new item to the queue */
+	/** Adds a new item to the queue */
 	void push(ItemT item)
 	{
 		std::lock_guard<std::mutex> lock(qMutex);
 		queue.push_back(std::move(item));
 	}
 
-	/* Tries to pop an item from the queue */
+	/** Tries to pop an item from the queue */
 	ItemT tryPop()
 	{
 		std::lock_guard<std::mutex> lock(qMutex);
@@ -79,10 +79,10 @@ public:
 	}
 
 private:
-	/* The actual queue data structure */
+	/** The actual queue data structure */
 	QueueT queue;
 
-	/* Protection against unsynchronized accesses */
+	/** Protection against unsynchronized accesses */
 	std::mutex qMutex;
 };
 
@@ -90,7 +90,7 @@ private:
  **                           ThreadJoiner Class
  ******************************************************************************/
 
-/* A class responsible for joining a bunch of threads */
+/** A class responsible for joining a bunch of threads */
 class ThreadJoiner {
 
 public:
@@ -109,7 +109,7 @@ public:
 	}
 
 private:
-	/* The threads to join */
+	/** The threads to join */
 	std::vector<std::thread> &threads;
 };
 
@@ -117,7 +117,7 @@ private:
  **                            ThreadPool Class
  ******************************************************************************/
 
-/*
+/**
  * A class responsible for creating and managing a pool of threads, with tasks
  * submitted dynamically to the threads for execution. Each thread will have
  * each own exploration driver so that they will able to execute the submitted
@@ -137,7 +137,7 @@ public:
 	{
 		numWorkers_ = conf->threads;
 
-		/* Set global variables before spawning the threads */
+		/** Set global variables before spawning the threads */
 		shouldHalt_.store(false);
 		remainingTasks_.store(0);
 
@@ -149,7 +149,7 @@ public:
 			auto dw = GenMCDriver::create(conf, std::move(newmod), std::move(newMI),
 						      this);
 			if (i == 0)
-				submit(std::move(dw->extractState()));
+				submit(dw->extractState());
 			addWorker(i, std::move(dw));
 		}
 	}
@@ -159,32 +159,32 @@ public:
 
 	/*** Getters/setters ***/
 
-	/* Returns the (current) number of threads in the pool
+	/** Returns the (current) number of threads in the pool
 	 * (may be called before all threads have been added) */
 	size_t size() const { return workers_.size(); }
 
-	/* Returnst the number of workers that will be added in the pool */
+	/** Returnst the number of workers that will be added in the pool */
 	unsigned int getNumWorkers() const { return numWorkers_; }
 
-	/* Returns the index of the calling thread */
+	/** Returns the index of the calling thread */
 	unsigned int getIndex() const { return index_; }
 
-	/* Sets the index of the calling thread */
+	/** Sets the index of the calling thread */
 	void setIndex(unsigned int i) { index_ = i; }
 
 	/*** Tasks-related ***/
 
-	/* Submits a task to be executed by a worker */
+	/** Submits a task to be executed by a worker */
 	void submit(TaskT task);
 
-	/* Notify the pool about the addition/completion of a task */
+	/** Notify the pool about the addition/completion of a task */
 	unsigned incRemainingTasks() { return ++remainingTasks_; }
 	unsigned decRemainingTasks() { return --remainingTasks_; }
 	unsigned getRemainingTasks() { return remainingTasks_.load(); }
 
 	bool shouldHalt() const { return shouldHalt_.load(); }
 
-	/* Stops all threads */
+	/** Stops all threads */
 	void halt()
 	{
 		std::lock_guard<std::mutex> lock(stateMtx_);
@@ -192,7 +192,7 @@ public:
 		stateCV_.notify_all();
 	}
 
-	/* Waits for all tasks to complete */
+	/** Waits for all tasks to complete */
 	std::vector<std::future<GenMCDriver::Result>> waitForTasks();
 
 	/*** Destructor ***/
@@ -200,49 +200,49 @@ public:
 	~ThreadPool() { halt(); }
 
 private:
-	/* Adds a worker thread to the pool */
+	/** Adds a worker thread to the pool */
 	void addWorker(unsigned int index, std::unique_ptr<GenMCDriver> driver);
 
-	/* Tries to pop a task from the global queue */
+	/** Tries to pop a task from the global queue */
 	TaskT tryPopPoolQueue();
 
-	/* Tries to steal a task from another thread */
+	/** Tries to steal a task from another thread */
 	TaskT tryStealOtherQueue();
 
-	/* Pops the next task to be executed by a thread */
+	/** Pops the next task to be executed by a thread */
 	TaskT popTask();
 
 	std::vector<std::unique_ptr<llvm::LLVMContext>> contexts_;
 
-	/* Result of each thread */
+	/** Result of each thread */
 	std::vector<std::future<GenMCDriver::Result>> results_;
 
-	/* Whether the pool is active (i.e., accepting more jobs) or not */
+	/** Whether the pool is active (i.e., accepting more jobs) or not */
 	std::atomic<bool> shouldHalt_;
 
-	/* The number of workers the pool should reach */
+	/** The number of workers the pool should reach */
 	unsigned int numWorkers_;
 
-	/* The worker threads */
+	/** The worker threads */
 	std::vector<std::thread> workers_;
 
-	/* A queue where tasks are stored */
+	/** A queue where tasks are stored */
 	GlobalQueueT queue_;
 
-	/* Number of tasks that need to be executed across threads */
+	/** Number of tasks that need to be executed across threads */
 	std::atomic<unsigned> remainingTasks_;
 
-	/* The index of a worker thread */
+	/** The index of a worker thread */
 	static thread_local unsigned int index_;
 
-	/* Mutex+CV to determine whether the pool state has changed:
+	/** Mutex+CV to determine whether the pool state has changed:
 	 * a new task has been submitted or all tasks have been completed */
 	std::mutex stateMtx_;
 	std::condition_variable stateCV_;
 
 	ThreadPinner pinner_;
 
-	/* The thread joiner */
+	/** The thread joiner */
 	ThreadJoiner joiner_;
 };
 

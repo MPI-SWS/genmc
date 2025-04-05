@@ -44,7 +44,7 @@ void ThreadPool::addWorker(unsigned int i, std::unique_ptr<GenMCDriver> d)
 				break;
 			}
 		}
-		return driver->getResult();
+		return std::move(driver->getResult());
 	});
 
 	results_.push_back(std::move(t.get_future()));

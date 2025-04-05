@@ -1,0 +1,5 @@
+-DRTN=2 -DWTN=2 -include tests/correct/data-structures/treiber-stack-dynamic/my_stack.c
+-DRTN=3 -DWTN=2 -include tests/correct/data-structures/treiber-stack-dynamic/my_stack.c
+-DRTN=3 -DWTN=3 -include tests/correct/data-structures/treiber-stack-dynamic/my_stack.c
+-DRTN=3 -DWTN=4 -include tests/correct/data-structures/treiber-stack-dynamic/my_stack.c
+-DRTN=4 -DWTN=4 -include tests/correct/data-structures/treiber-stack-dynamic/my_stack.c

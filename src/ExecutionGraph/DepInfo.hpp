@@ -29,7 +29,7 @@ n * You should have received a copy of the GNU General Public License
  **                             DepInfo Class
  ******************************************************************************/
 
-/*
+/**
  * A class to model the dependencies (of some kind) of an event. Each DepInfo
  * objects holds a collection of events on which some events depend on. In
  * principle, such an object should be used for each dependency kind of
@@ -41,25 +41,24 @@ protected:
 	using Set = VSet<Event>;
 
 public:
-	/* Constructors */
+	/** Constructors */
 	DepInfo() : set_() {}
 	DepInfo(Event e) : set_({e}) {}
 
-	/* Updates this object based on the dependencies of dep (union) */
+	/** Updates this object based on the dependencies of dep (union) */
 	void update(const DepInfo &dep) { set_.insert(dep.set_); }
 
-	/* Clears all the stored dependencies */
+	/** Clears all the stored dependencies */
 	void clear() { set_.clear(); }
 
-	/* Returns true if e is contained in the dependencies */
+	/** Returns true if e is contained in the dependencies */
 	bool contains(Event e) const { return set_.count(e); }
 
-	/* Returns true if there are no dependencies */
+	/** Returns true if there are no dependencies */
 	bool empty() const { return set_.empty(); }
 
-	/* Iterators */
+	/** Iterators */
 	using const_iterator = typename Set::const_iterator;
-	using const_reverse_iterator = typename Set::const_reverse_iterator;
 
 	const_iterator begin() const { return set_.begin(); };
 	const_iterator end() const { return set_.end(); };
@@ -68,7 +67,7 @@ public:
 	friend llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const DepInfo &dep);
 
 private:
-	/* The actual container for the dependencies */
+	/** The actual container for the dependencies */
 	Set set_;
 };
 
@@ -76,7 +75,7 @@ private:
  **                             EventDeps Class
  ******************************************************************************/
 
-/*
+/**
  * Packs together all the dependencies of a given event.
  *
  * Dependencies have one of the following types:

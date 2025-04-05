@@ -27,9 +27,7 @@
 #include <memory>
 #include <vector>
 
-/*
- * WorkList class - Represents a list of TODOs for the driver.
- */
+/** Represents a list of TODOs for the driver */
 class WorkList {
 
 public:
@@ -54,7 +52,6 @@ public:
 		return std::move(item);
 	}
 
-	/* Overloaded operators */
 	friend auto operator<<(llvm::raw_ostream &s, const WorkList &wlist) -> llvm::raw_ostream &;
 
 private:

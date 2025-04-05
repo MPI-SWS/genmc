@@ -1,4 +1,4 @@
-AC_INIT([GenMC], [0.10.3], [michalis.kokologiannakis@inf.ethz.ch], [genmc], [https://plv.mpi-sws.org/genmc])
+AC_INIT([GenMC], [0.11.0], [michalis.kokologiannakis@inf.ethz.ch], [genmc], [https://plv.mpi-sws.org/genmc])
 
 m4_include([m4/ax_llvm.m4])
 m4_include([m4/ax_clang.m4])
@@ -11,7 +11,7 @@ AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 AM_SILENT_RULES([yes])
 
 AC_PROG_CXX
-AX_CXX_COMPILE_STDCXX([20], [noext], [mandatory])
+AX_CXX_COMPILE_STDCXX([23], [noext], [mandatory])
 
 AC_PROG_RANLIB
 AM_PROG_AR

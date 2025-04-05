@@ -35,6 +35,21 @@ class MallocLabel;
 class EventLabel;
 class ExecutionGraph;
 
+/** Returns true if the addition of SLAB violates atomicity in the graph */
+auto violatesAtomicity(const WriteLabel *sLab) -> bool;
+
+/** Given a write SLAB, if SLAB is an RMW, returns the write of a conflicting RMW.
+ * If SLAB is not an RMW or no conflicting RMW exists, returns nullptr.
+ * If multiple conflicting RMWs exist, returns the one with the smallest stamp.
+ * (The latter case might only occur as part of some tiebraking condition.) */
+auto findPendingRMW(WriteLabel *sLab) -> WriteLabel *;
+auto findPendingRMW(const WriteLabel *sLab) -> const WriteLabel *;
+
+/** Returns the allocating event for ADDR.
+ * Assumes that only one such event may exist */
+auto findAllocatingLabel(ExecutionGraph &g, const SAddr &addr) -> MallocLabel *;
+auto findAllocatingLabel(const ExecutionGraph &g, const SAddr &addr) -> const MallocLabel *;
+
 /** Returns true if MLAB is protected by a hazptr */
 auto isHazptrProtected(const MemAccessLabel *mLab) -> bool;
 
@@ -50,11 +65,6 @@ auto findMatchingUnlock(const CasWriteLabel *lLab) -> const UnlockWriteLabel *;
  * is not matched. If no such event exists, returns nullptr. */
 auto findMatchingSpeculativeRead(const ReadLabel *cLab, const EventLabel *&scLab)
 	-> const SpeculativeReadLabel *;
-
-/** Returns the allocating event for ADDR.
- * Assumes that only one such event may exist */
-auto findAllocatingLabel(ExecutionGraph &g, const SAddr &addr) -> MallocLabel *;
-auto findAllocatingLabel(const ExecutionGraph &g, const SAddr &addr) -> const MallocLabel *;
 
 /** Returns the initializing value for a barrier event.
  * Assumes there is exactly one such event */

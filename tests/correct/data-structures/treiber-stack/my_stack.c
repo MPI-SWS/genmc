@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdlib.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -43,6 +44,9 @@ static unsigned int new_node()
 	assert(0);
 	return 0;
 }
+
+
+void clear_stack(mystack_t *s, int num_threads) { }
 
 /* Place this node index back on this thread's free list */
 static void reclaim(unsigned int node)

@@ -2,6 +2,17 @@
 
 ## Code conventions
 
+### Classes
+
+- Declaration order within a class (public -> protected -> private):
+  1. Types and type aliases
+  2. Static constants/functions (e.g., factories)
+  3. Ctors, assignment operators and dtor
+  4. All other functions (ending with operators and friends)
+  5. Data members (static -> nonstatic)
+
+### Naming
+
 - CamelCase for everything apart from things mimicking STL
   functionality (LLVM utilities remain unmodified)
 - Names start with a lowercase letter

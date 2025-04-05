@@ -1,0 +1,4 @@
+-DRTN=2 -DWTN=2 -DSYNC_INS -include tests/correct/data-structures/treiber-stack-dynamic/my_stack.c
+-DRTN=2 -DWTN=2 -DSYNC_REM -include tests/correct/data-structures/treiber-stack-dynamic/my_stack.c
+-DRTN=3 -DWTN=3 -DSYNC_INS -include tests/correct/data-structures/treiber-stack-dynamic/my_stack.c
+-DRTN=3 -DWTN=3 -DSYNC_REM -include tests/correct/data-structures/treiber-stack-dynamic/my_stack.c

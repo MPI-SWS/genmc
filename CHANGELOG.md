@@ -7,7 +7,22 @@ released.
 
 ## [Unreleased]
 
-- Merge of Relinche [POPL'25] into mainline GenMC
+- Merge of MIXER [POPL'25] into mainline GenMC
+
+## [0.11.0] - 2025.04.05
+### Added
+- Support for LLVM 20
+- Support for (bounded) linearizability checking via Relinche
+- Documentation for Relinche and state-space bounding
+
+### Fixes
+
+- Converted comments into doxygen comments
+
+### Removed
+
+- Test suite no longer depends on `getopt`
+- Support for LLVM-{10,11,12}
 
 ## [0.10.3] - 2025.02.26
 ### Added

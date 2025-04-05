@@ -31,7 +31,7 @@
  **                             SAddr Class
  ******************************************************************************/
 
-/*
+/**
  * Represents a memory address. An address is a bitfield with the
  * following structure:
  *
@@ -84,7 +84,7 @@ public:
 	SAddr(Width addr) : addr(addr) {}
 	SAddr(void *addr) : addr((Width)addr) {}
 
-	/* Helper methods to create a new address */
+	/** Helper methods to create a new address */
 	template <typename... Ts> static auto createStatic(Ts &&...params) -> SAddr
 	{
 		return create(staticMask, std::forward<Ts>(params)...);
@@ -98,7 +98,7 @@ public:
 		return create(automaticMask, std::forward<Ts>(params)...);
 	}
 
-	/* Return information regarding the address */
+	/** Return information regarding the address */
 	[[nodiscard]] auto isStatic() const -> bool { return addr & staticMask; }
 	[[nodiscard]] auto isDynamic() const -> bool { return !isStatic(); }
 	[[nodiscard]] auto isAutomatic() const -> bool { return addr & automaticMask; }
@@ -109,13 +109,13 @@ public:
 	[[nodiscard]] auto isVolatile() const -> bool { return !isDurable(); }
 	[[nodiscard]] auto isNull() const -> bool { return addr == 0; }
 
-	/* Whether two addresses are on the same storage */
+	/** Whether two addresses are on the same storage */
 	[[nodiscard]] auto sameStorageAs(const SAddr &other) const -> bool
 	{
 		return (addr & storageMask) == (other.addr & storageMask);
 	}
 
-	/* Return an address aligned to the previous word boundary */
+	/** Return an address aligned to the previous word boundary */
 	[[nodiscard]] auto align() const -> SAddr
 	{
 		return ((Width)(addr >> wordSize) << wordSize);
@@ -154,7 +154,7 @@ public:
 	friend auto operator<<(llvm::raw_ostream &rhs, const SAddr &addr) -> llvm::raw_ostream &;
 
 private:
-	/* The actual address */
+	/** The actual address */
 	Width addr;
 };
 

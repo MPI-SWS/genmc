@@ -65,7 +65,7 @@ protected:
 	llvm::raw_string_ostream buffer_;
 };
 
-/* A logger that logs each message only once */
+/** A logger that logs each message only once */
 template <typename U> class LoggerOnce : public Logger<U> {
 
 public:

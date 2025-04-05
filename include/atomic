@@ -642,8 +642,8 @@ template <typename _Tp> _Tp __create();
 template <typename _Tp, typename _Td>
 typename enable_if<sizeof(_Tp()->__a_value = __create<_Td>()), char>::type
     __test_atomic_assignable(int);
-template <typename _Tp, typename _Up>
-__two __test_atomic_assignable(...);
+//template <typename _Tp, typename _Up>
+//__two __test_atomic_assignable(...);
 
 template <typename _Tp, typename _Td>
 struct __can_assign {

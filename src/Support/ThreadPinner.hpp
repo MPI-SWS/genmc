@@ -32,7 +32,7 @@
  **                           ThreadPinner Class
  ******************************************************************************/
 
-/* A class responsible for pinning threads to CPUs */
+/** A class responsible for pinning threads to CPUs */
 
 #ifdef HAVE_LIBHWLOC
 

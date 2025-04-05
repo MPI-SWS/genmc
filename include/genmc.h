@@ -281,6 +281,35 @@ void __VERIFIER_recovery_routine(void) __attribute__ ((__nothrow__));
  */
 void __VERIFIER_pbarrier(void) __attribute__ ((__nothrow__));
 
+/* Markers for method boundaries */
+extern void __VERIFIER_method_begin(const char *name, int32_t argVal) __attribute__ ((__nothrow__));
+extern void __VERIFIER_method_end(const char *name, int32_t retval) __attribute__ ((__nothrow__));
+
+/*
+ * Datatype for the partial-lock specification device (Lahav et al. 2023).
+ * Should only be used along with the --collect-spec flag
+ */
+typedef struct __VERIFIER_plock __VERIFIER_plock_t;
+
+/* Lock/unlock utilities for the partial lock */
+__attribute__ ((__nothrow__, always_inline)) static inline
+int __VERIFIER_plock_lock(__VERIFIER_plock_t *plock)
+{
+	__VERIFIER_annotate_begin(GENMC_ATTR_PLOCK);
+	int __res = __VERIFIER_mutex_lock(&plock->lock);
+	__VERIFIER_annotate_end(GENMC_ATTR_PLOCK);
+	return __res;
+}
+
+ __attribute__ ((__nothrow__, always_inline ))static inline
+int __VERIFIER_plock_unlock(__VERIFIER_plock_t *plock)
+{
+	__VERIFIER_annotate_begin(GENMC_ATTR_PLOCK);
+	 int __res = __VERIFIER_mutex_unlock(&plock->lock);
+	__VERIFIER_annotate_end(GENMC_ATTR_PLOCK);
+	return __res;
+}
+
 #ifdef __cplusplus
 }
 #endif

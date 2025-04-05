@@ -24,6 +24,7 @@
 #include "BoundDecider.hpp"
 #include "ExecutionGraph/Event.hpp"
 
+/** Bound the number of round-robin scheduling rounds */
 class RoundBoundDecider : public BoundDecider {
 
 public:

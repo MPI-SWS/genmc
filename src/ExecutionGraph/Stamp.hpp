@@ -26,7 +26,7 @@
 
 #include <cstdint>
 
-/*
+/**
  * Represents a label stamp (positive number).
  */
 class Stamp {
@@ -58,7 +58,7 @@ public:
 	Stamp operator _op(uint32_t v) const                                                       \
 	{                                                                                          \
 		Stamp n(*this);                                                                    \
-		n += v;                                                                            \
+		n _op##= v;                                                                            \
 		return n;                                                                          \
 	}
 
@@ -86,7 +86,6 @@ public:
 	auto operator()() const -> uint32_t { return get(); }
 
 	friend auto operator<<(llvm::raw_ostream &rhs, const Stamp &s) -> llvm::raw_ostream &;
-
 private:
 	Value value;
 };

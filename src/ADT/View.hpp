@@ -23,66 +23,62 @@
 
 #include "ADT/VectorClock.hpp"
 #include "ExecutionGraph/Event.hpp"
-#include "Support/Error.hpp"
 #include <llvm/ADT/IndexedMap.h>
 #include <llvm/Support/raw_ostream.h>
 
-#include <algorithm>
-
-/*******************************************************************************
- **                             View Class
- ******************************************************************************/
-
-/*
+/**
  * An instantiation of a vector clock where it is assumed that if an index
  * is contained in the clock, all of its po-predecessors are also contained
  * in the clock.
  */
 class View : public VectorClock {
 private:
-	typedef llvm::IndexedMap<int> EventView;
+	using EventView = llvm::IndexedMap<int>;
 	EventView view_;
 
 public:
-	/* Constructors */
+	/** Constructors */
 	View() : VectorClock(VectorClock::VectorClockKind::VC_View), view_(EventView(0)) {}
 
-	/* Iterators */
+	/** Iterators */
 	using iterator = int *;
 	using const_iterator = const int *;
 
-	iterator begin() { return &view_[0]; };
-	iterator end() { return &view_[0] + size(); }
-	const_iterator begin() const { return empty() ? nullptr : &view_[0]; }
-	const_iterator end() const { return empty() ? nullptr : &view_[0] + size(); }
+	auto begin() -> iterator { return &view_[0]; };
+	auto end() -> iterator { return &view_[0] + size(); }
+	[[nodiscard]] auto begin() const -> const_iterator { return empty() ? nullptr : &view_[0]; }
+	[[nodiscard]] auto end() const -> const_iterator
+	{
+		return empty() ? nullptr : &view_[0] + size();
+	}
 
-	/* Returns the size of this view (i.e., number of threads seen) */
-	unsigned int size() const override { return view_.size(); }
+	/** Returns the size of this view (i.e., number of threads seen) */
+	[[nodiscard]] auto size() const -> unsigned int override;
 
-	/* Returns true if this view is empty */
-	bool empty() const { return size() == 0; }
+	/** Returns true if this view is empty */
+	[[nodiscard]] auto empty() const -> bool;
 
 	void clear() override { view_.clear(); }
 
-	/* Returns true if e is contained in the clock */
-	bool contains(const Event e) const override { return e.index <= getMax(e.thread); }
+	/** Returns true if e is contained in the clock */
+	[[nodiscard]] auto contains(Event e) const -> bool override;
 
-	/* Updates the view based on another vector clock. We can
+	/** Updates the view based on another vector clock. We can
 	 * only update the current view given another View (and not
 	 * some other subclass of VectorClock) */
-	View &update(const View &v) override;
-	DepView &update(const DepView &dv) override;
-	VectorClock &update(const VectorClock &vc) override;
+	auto update(const View &v) -> View & override;
+	auto update(const DepView &dv) -> DepView & override;
+	auto update(const VectorClock &vc) -> VectorClock & override;
 
-	/* Makes the maximum event seen in e's thread equal to e */
-	View &updateIdx(Event e) override
+	/** Makes the maximum event seen in e's thread equal to e */
+	auto updateIdx(Event e) -> View & override
 	{
 		if (getMax(e.thread) < e.index)
 			setMax(e);
 		return *this;
 	}
 
-	int getMax(int thread) const override
+	[[nodiscard]] auto getMax(int thread) const -> int override
 	{
 		if (thread < (int)view_.size())
 			return view_[thread];
@@ -98,7 +94,7 @@ public:
 
 	void printData(llvm::raw_ostream &s) const override;
 
-	static bool classof(const VectorClock *vc) { return vc->getKind() == VC_View; }
+	static auto classof(const VectorClock *vc) -> bool { return vc->getKind() == VC_View; }
 };
 
 #endif /* GENMC_VIEW_HPP */

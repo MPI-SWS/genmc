@@ -28,11 +28,7 @@
 #include <llvm/ADT/IndexedMap.h>
 #include <llvm/Support/raw_ostream.h>
 
-/*******************************************************************************
- **                             View Class
- ******************************************************************************/
-
-/*
+/**
  * An instantiation of a vector clock where if an event is contained in the clock,
  * it is _not_ guaranteed that all of its po-predecessors are also contained in
  * the clock.
@@ -47,18 +43,18 @@ private:
 	public:
 		HoleView() : hs_(Holes()) {}
 
-		unsigned int size() const { return hs_.size(); }
+		[[nodiscard]] auto size() const -> unsigned int { return hs_.size(); }
 
 		void clear() { hs_.clear(); }
 
-		inline const Holes &operator[](int idx) const
+		auto operator[](int idx) const -> const Holes &
 		{
 			if (idx < hs_.size())
 				return hs_[idx];
 			BUG();
 		}
 
-		inline Holes &operator[](int idx)
+		auto operator[](int idx) -> Holes &
 		{
 			hs_.grow(idx);
 			return hs_[idx];
@@ -66,14 +62,14 @@ private:
 	};
 
 public:
-	/* Constructors */
-	DepView() : VectorClock(VectorClock::VectorClockKind::VC_DepView), view_(), holes_() {}
+	/** Constructors */
+	DepView() : VectorClock(VectorClock::VectorClockKind::VC_DepView) {}
 
-	/* Returns the size of the depview (i.e., number of threads seen) */
-	unsigned int size() const override { return view_.size(); }
+	/** Returns the size of the depview (i.e., number of threads seen) */
+	[[nodiscard]] auto size() const -> unsigned int override { return view_.size(); }
 
-	/* Returns true if the clock is empty */
-	bool empty() const { return size() == 0; }
+	/** Returns true if the clock is empty */
+	[[nodiscard]] auto empty() const -> bool { return size() == 0; }
 
 	void clear() override
 	{
@@ -81,10 +77,10 @@ public:
 		holes_.clear();
 	}
 
-	/* Returns true if the clock contains e */
-	bool contains(const Event e) const override;
+	/** Returns true if the clock contains e */
+	[[nodiscard]] auto contains(Event e) const -> bool override;
 
-	DepView &updateIdx(Event e) override
+	auto updateIdx(Event e) -> DepView & override
 	{
 		auto old = view_.getMax(e.thread);
 		if (e.index > old) {
@@ -96,7 +92,7 @@ public:
 		return *this;
 	}
 
-	int getMax(int thread) const override { return view_.getMax(thread); }
+	[[nodiscard]] auto getMax(int thread) const -> int override { return view_.getMax(thread); }
 
 	void setMax(Event e) override
 	{
@@ -110,43 +106,43 @@ public:
 			removeHolesInRange(e, old + 1);
 	}
 
-	/* Returns true if there's a hole in E's position */
-	bool hasHole(const Event e) const
+	/** Returns true if there's a hole in E's position */
+	[[nodiscard]] auto hasHole(const Event e) const -> bool
 	{
 		return e.thread < holes_.size() && !holes_[e.thread].count(e.index);
 	}
 
-	/* Records that the event in the index of e has not been
+	/** Records that the event in the index of e has not been
 	 * seen in the respective thread */
-	void addHole(const Event e);
+	void addHole(Event e);
 
-	/* Similar to addHole(), but records that a range has not been seen */
+	/** Similar to addHole(), but records that a range has not been seen */
 	void addHolesInRange(Event start, int endIdx);
 
-	/* Marks event e as seen */
-	void removeHole(const Event e);
+	/** Marks event e as seen */
+	void removeHole(Event e);
 
-	/* Marks all events of "thread" as seen */
+	/** Marks all events of "thread" as seen */
 	void removeAllHoles(int thread);
 
-	/* Marks all events in a range as seen */
+	/** Marks all events in a range as seen */
 	void removeHolesInRange(Event start, int endIdx);
 
-	/* Updates the view based on another clock. The update is valid
+	/** Updates the view based on another clock. The update is valid
 	 * only if the other clock provided is also a DepView */
-	View &update(const View &v) override;
-	DepView &update(const DepView &v) override;
-	VectorClock &update(const VectorClock &vc) override;
+	auto update(const View &v) -> View & override;
+	auto update(const DepView &v) -> DepView & override;
+	auto update(const VectorClock &vc) -> VectorClock & override;
 
 	void printData(llvm::raw_ostream &s) const override;
 
-	static bool classof(const VectorClock *vc) { return vc->getKind() == VC_DepView; }
+	static auto classof(const VectorClock *vc) -> bool { return vc->getKind() == VC_DepView; }
 
 private:
-	/* A view containing the highest index seen for each thread */
+	/** A view containing the highest index seen for each thread */
 	View view_;
 
-	/* A view of holes, showing which events are not seen for each thread */
+	/** A view of holes, showing which events are not seen for each thread */
 	HoleView holes_;
 };
 

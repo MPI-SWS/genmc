@@ -1,0 +1,3 @@
+-DRTN=2 -DWTN=2 -include tests/correct/data-structures/ms-queue-dynamic/my_queue.c
+-DRTN=2 -DWTN=2 -DSYNC_INS -include tests/correct/data-structures/ms-queue-dynamic/my_queue.c
+-DRTN=2 -DWTN=2 -DSYNC_REM -include tests/correct/data-structures/ms-queue-dynamic/my_queue.c

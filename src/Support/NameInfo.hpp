@@ -26,7 +26,7 @@
 
 #include <string>
 
-/*
+/**
  * Represents naming information for a specific type/allocation
  */
 class NameInfo {
@@ -34,16 +34,16 @@ class NameInfo {
 public:
 	NameInfo() = default;
 
-	/* Mark name at offset O as N */
+	/** Mark name at offset O as N */
 	void addOffsetInfo(unsigned int o, std::string n);
 
-	/* Returns name at offset O */
+	/** Returns name at offset O */
 	std::string getNameAtOffset(unsigned int o) const;
 
-	/* Returns the number of different offset information registered */
+	/** Returns the number of different offset information registered */
 	size_t size() const { return info.size(); }
 
-	/* Whether we have any information stored */
+	/** Whether we have any information stored */
 	bool empty() const { return info.empty(); }
 
 	friend llvm::raw_ostream &operator<<(llvm::raw_ostream &rhs, const NameInfo &info);
@@ -57,7 +57,7 @@ private:
 	 */
 	using OffsetInfo = std::vector<std::pair<unsigned, std::string>>;
 
-	/* Naming information at different offsets */
+	/** Naming information at different offsets */
 	OffsetInfo info;
 };
 

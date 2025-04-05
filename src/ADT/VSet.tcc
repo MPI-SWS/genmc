@@ -20,9 +20,7 @@
 
 #include <algorithm>
 
-template<typename T>
-template<typename ITER>
-VSet<T>::VSet(ITER begin, ITER end)
+template <typename T> template <typename ITER> VSet<T>::VSet(ITER begin, ITER end)
 {
 	for (; begin != end; ++begin) {
 		if (size() && max() < *begin) {
@@ -33,8 +31,7 @@ VSet<T>::VSet(ITER begin, ITER end)
 	}
 }
 
-template<typename T>
-VSet<T>::VSet(std::initializer_list<T> il)
+template <typename T> VSet<T>::VSet(std::initializer_list<T> il)
 {
 	for (auto it = il.begin(); it != il.end(); ++it) {
 		if (size() && max() < *it) {
@@ -45,35 +42,26 @@ VSet<T>::VSet(std::initializer_list<T> il)
 	}
 }
 
-template<typename T>
-VSet<T>::VSet(VSet<T> &&s) : vset_(std::move(s.vset_)) { }
-
-template<typename T>
-VSet<T> &VSet<T>::operator=(VSet<T> &&s)
-{
-	if (this != &s){
-		vset_ = std::move(s.vset_);
-	}
-	return *this;
-}
-
-template<typename T>
-typename VSet<T>::const_iterator VSet<T>::find(const T &el) const
+template <typename T> auto VSet<T>::find(const T &el) const -> typename VSet<T>::const_iterator
 {
 	auto it = std::lower_bound(begin(), end(), el);
 	return (it == end() || *it != el) ? end() : it;
 }
 
-template<typename T>
-int VSet<T>::count(const T &el) const
+template <typename T> auto VSet<T>::count(const T &el) const -> int
 {
 	return (find(el) != end()) ? 1 : 0;
 }
 
-template<typename T>
-std::pair<typename VSet<T>::const_iterator, bool> VSet<T>::insert(const T &el)
+template <typename T> auto VSet<T>::contains(const T &el) const -> bool
 {
-	auto it = std::lower_bound(begin(), end(), el);
+	return find(el) != end();
+}
+
+template <typename T>
+auto VSet<T>::insert(const T &el) -> std::pair<typename VSet<T>::const_iterator, bool>
+{
+	auto it = std::lower_bound(vset_.begin(), vset_.end(), el);
 	if (it == end() || *it != el)
 		return std::make_pair(vset_.insert(it, el), true);
 	return std::make_pair(it, false);
@@ -83,8 +71,7 @@ std::pair<typename VSet<T>::const_iterator, bool> VSet<T>::insert(const T &el)
  * A slightly optimized function for bulk insertions, that takes
  * into account the structure of a VSet
  */
-template<typename T>
-int VSet<T>::insert(const VSet<T> &s)
+template <typename T> auto VSet<T>::insert(const VSet<T> &s) -> int
 {
 	/* Simply copy the contents of s if the current set is empty */
 	if (empty()) {
@@ -159,9 +146,7 @@ int VSet<T>::insert(const VSet<T> &s)
 	return count;
 }
 
-template<typename T>
-template<typename ITER>
-void VSet<T>::insert(ITER begin, ITER end)
+template <typename T> template <typename ITER> void VSet<T>::insert(ITER begin, ITER end)
 {
 	for (; begin != end; ++begin) {
 		if (size() && max() < *begin) {
@@ -172,8 +157,7 @@ void VSet<T>::insert(ITER begin, ITER end)
 	}
 }
 
-template<typename T>
-int VSet<T>::erase(const T &el)
+template <typename T> auto VSet<T>::erase(const T &el) -> int
 {
 	auto it = std::lower_bound(begin(), end(), el);
 
@@ -185,15 +169,14 @@ int VSet<T>::erase(const T &el)
 }
 
 /* A slightly optimized function for bulk deletion */
-template<typename T>
-int VSet<T>::erase(const VSet<T> &s)
+template <typename T> auto VSet<T>::erase(const VSet<T> &s) -> int
 {
 	if (empty() || s.empty())
 		return 0;
 
 	auto erased = 0;
-	auto a = 0; /* index in this */
-	auto b = 0; /* index in other */
+	auto a = 0;    /* index in this */
+	auto b = 0;    /* index in other */
 	auto aMov = 0; /* Next position of this set to be filled */
 
 	/* While iterating over the two sets, fill a appropriately */
@@ -234,8 +217,7 @@ int VSet<T>::erase(const VSet<T> &s)
 	return erased;
 }
 
-template<typename T>
-bool VSet<T>::subsetOf(const VSet<T> &s) const
+template <typename T> auto VSet<T>::subsetOf(const VSet<T> &s) const -> bool
 {
 	if (size() > s.size())
 		return false;
@@ -260,12 +242,11 @@ bool VSet<T>::subsetOf(const VSet<T> &s) const
 	return true;
 }
 
-template<typename T>
-bool VSet<T>::intersects(const VSet<T> &s) const
+template <typename T> auto VSet<T>::intersects(const VSet<T> &s) const -> bool
 {
 	auto a = begin();
 	auto b = s.begin();
-	while(a != end() && b != s.end()) {
+	while (a != end() && b != s.end()) {
 		if (*a == *b)
 			return true;
 
@@ -277,14 +258,13 @@ bool VSet<T>::intersects(const VSet<T> &s) const
 	return false;
 }
 
-template<typename T>
-VSet<T> VSet<T>::intersectWith(const VSet<T> &s) const
+template <typename T> auto VSet<T>::intersectWith(const VSet<T> &s) const -> VSet<T>
 {
 	VSet<T> result;
 
 	auto a = begin();
 	auto b = s.begin();
-	while(a != end() && b != s.end()) {
+	while (a != end() && b != s.end()) {
 		if (*a == *b) {
 			result.insert(*a);
 			++a;
@@ -298,8 +278,19 @@ VSet<T> VSet<T>::intersectWith(const VSet<T> &s) const
 	return result;
 }
 
+template <class T> auto VSet<T>::diff(const VSet<T> &s) const -> VSet<T>
+{
+	// TODO: optimize via a two-pointer algorithm
+	VSet<T> result;
+	for (const auto &e : vset_) {
+		if (auto it = s.find(e); it == s.end())
+			result.insert(e);
+	}
+	return result;
+}
+
 template <typename T>
-llvm::raw_ostream& operator<<(llvm::raw_ostream& s, const VSet<T>& set)
+auto operator<<(llvm::raw_ostream &s, const VSet<T> &set) -> llvm::raw_ostream &
 {
 	s << "[ ";
 	for (auto i = 0u; i < set.size(); i++)

@@ -35,7 +35,7 @@
  **                           SExprVisitor Class
  ******************************************************************************/
 
-/*
+/**
  * Visitor for SExpr objects. The pattern is implemented using CRTP (LLVM-style)
  * so as to avoid virtual call overhead.
  *
@@ -158,7 +158,7 @@ public:
  **                           SExprPrinter Class
  ******************************************************************************/
 
-/*
+/**
  * Prints an expression to a string.
  */
 
@@ -214,7 +214,7 @@ public:
 	void visitSExpr(SExpr<T> &e) { output += "unhandled"; }
 
 private:
-	/* Returns the output constructed so far */
+	/** Returns the output constructed so far */
 	const std::string &getOutput() const { return output; }
 
 	std::string output;
@@ -224,7 +224,7 @@ private:
  **                           SExprEvaluator Class
  ******************************************************************************/
 
-/*
+/**
  * Evaluates an expression. Assumes that there is only 1 symbolic variable
  * (the value of which will be replaced by the concrete value provided),
  * and that are no registers (these should have been concretized).
@@ -240,7 +240,7 @@ public:
 	using RetTy = SVal;
 	using VMap = std::unordered_map<T, RetTy>;
 
-	/* BFE: Evaluates the given expression replacing _all_ symbolic variables with v */
+	/** BFE: Evaluates the given expression replacing _all_ symbolic variables with v */
 	RetTy evaluate(const SExpr<T> *e, SVal v, size_t *numUnknown = nullptr)
 	{
 		bruteForce = true;
@@ -254,7 +254,7 @@ public:
 		return res;
 	}
 
-	/* NBFE: Evaluates according to a given mapping */
+	/** NBFE: Evaluates according to a given mapping */
 	RetTy evaluate(const SExpr<T> *e, const VMap &map, size_t *numUnknown = nullptr)
 	{
 		valueMapping = &map;
@@ -302,31 +302,31 @@ public:
 	RetTy visitSExpr(SExpr<T> &e) { BUG(); }
 
 private:
-	/* NBFE: Checks whether a symbolic variable has a mapping */
+	/** NBFE: Checks whether a symbolic variable has a mapping */
 	bool hasKnownMapping(const T &reg) const
 	{
 		return valueMapping && valueMapping->count(reg);
 	}
 
-	/* NBFE: Returns the value of a symbolic variable */
+	/** NBFE: Returns the value of a symbolic variable */
 	RetTy getMappingFor(const T &reg) const
 	{
 		return (hasKnownMapping(reg)) ? valueMapping->at(reg) : SVal(42);
 	}
 
-	/* BFE: Returns the value we are evaluating with in a brute-force eval */
+	/** BFE: Returns the value we are evaluating with in a brute-force eval */
 	RetTy getVal() const { return val; }
 
-	/* NBFE: Value mapping we are evaluating with */
+	/** NBFE: Value mapping we are evaluating with */
 	const std::unordered_map<T, RetTy> *valueMapping;
 
-	/* BFE: Value we are evaluating with */
+	/** BFE: Value we are evaluating with */
 	RetTy val;
 
-	/* Whether this is a BFE */
+	/** Whether this is a BFE */
 	bool bruteForce = false;
 
-	/* Unknown symbolic variables seen during an evaluation */
+	/** Unknown symbolic variables seen during an evaluation */
 	VSet<T> unknown;
 };
 
@@ -334,14 +334,14 @@ private:
  **                           SExprRegSubstitutor Class
  ******************************************************************************/
 
-/*
+/**
  * Replaces all occurrences of a given register with a given expression.
  */
 
 template <typename T> class SExprRegSubstitutor : public SExprVisitor<SExprRegSubstitutor, T> {
 
 public:
-	/* Performs the substitution (returns a new expression) */
+	/** Performs the substitution (returns a new expression) */
 	std::unique_ptr<SExpr<T>> substitute(const SExpr<T> *orig, T &&reg, const SExpr<T> *r)
 	{
 		auto e = orig->clone();
@@ -377,7 +377,7 @@ private:
  **                           SExprConcretizer Class
  ******************************************************************************/
 
-/*
+/**
  * Applies a given mapping "register->values" to a given expression
  */
 
@@ -386,7 +386,7 @@ template <typename T> class SExprConcretizer : public SExprVisitor<SExprConcreti
 public:
 	using ReplaceMap = std::map<T, std::pair<SVal, ASize>>;
 
-	/* Performs the concretization (returns a new expression) */
+	/** Performs the concretization (returns a new expression) */
 	std::unique_ptr<SExpr<T>> concretize(const SExpr<T> *orig, const ReplaceMap &rMap)
 	{
 		replaceMap = &rMap;
@@ -427,7 +427,7 @@ private:
  **                           SExprTransformer Class
  ******************************************************************************/
 
-/*
+/**
  * Given a function F: T -> ModuleID::ID, transforms an SExpr<T> to a SExpr<ModuleID::ID>.
  */
 
@@ -438,7 +438,7 @@ class SExprTransformer
 public:
 	using RetTy = std::unique_ptr<SExpr<ModuleID::ID>>;
 
-	/* Performs the transformation (returns a new expression) */
+	/** Performs the transformation (returns a new expression) */
 	template <typename F> RetTy transform(SExpr<T> *orig, F &&fun)
 	{
 		transformer = fun;

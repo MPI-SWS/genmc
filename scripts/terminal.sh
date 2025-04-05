@@ -14,6 +14,7 @@ BLUE=$(tput setaf 4)
 MAGENTA=$(tput setaf 5)
 CYAN=$(tput setaf 6)
 WHITE=$(tput setaf 7)
+ORANGE=$(tput setaf 9)
 BRIGHT=$(tput bold)
 NC=$(tput sgr0)
 BLINK=$(tput blink)
@@ -22,5 +23,5 @@ UNDERLINE=$(tput smul)
 
 # Various printing utilities
 printline() {
-    for _ in {0..64}; do echo -n '-'; done; echo ''
+    for _ in {0..67}; do echo -n '-'; done; echo ''
 }

@@ -25,11 +25,7 @@
 #include <memory>
 #include <vector>
 
-/*
- * This class defines a generic trie structure with the only
- * restriction being that trie keys need to be sequences that
- * support random access iterators, and that have comparable
- * elements.
+/** A generic trie for random-access sequences of comparable elements.
  *
  * Inspired by the Trie class in LLVM 2.9.
  */
@@ -48,34 +44,34 @@ public:
 		using iterator = typename NodeVectorType::iterator;
 		using const_iterator = typename NodeVectorType::const_iterator;
 
+		Node(Node &&) = delete;
+		auto operator=(Node &&) -> Node & = delete;
 		Node(const Node &) = delete;
-		Node &operator=(const Node &) = delete;
+		auto operator=(const Node &) -> Node & = delete;
 
-		inline explicit Node(const Payload &data, const Seq &label = {})
-			: lab(label), dat(data)
-		{}
-		inline explicit Node(Payload &&data, Seq &&label = {})
+		explicit Node(const Payload &data, const Seq &label = {}) : lab(label), dat(data) {}
+		explicit Node(Payload &&data, Seq &&label = {})
 			: lab(std::move(label)), dat(std::move(data))
 		{}
 
-		inline iterator begin() { return children.begin(); }
-		inline const_iterator begin() const { return children.begin(); }
-		inline iterator end() { return children.end(); }
-		inline const_iterator end() const { return children.end(); }
+		auto begin() -> iterator { return children.begin(); }
+		auto begin() const -> const_iterator { return children.begin(); }
+		auto end() -> iterator { return children.end(); }
+		auto end() const -> const_iterator { return children.end(); }
 
-		inline size_t size() const { return children.size(); }
-		inline bool empty() const { return children.empty(); }
-		inline const Node *&front() const { return children.front(); }
-		inline Node *&front() { return children.front(); }
-		inline const Node *&back() const { return children.back(); }
-		inline Node *&back() { return children.back(); }
+		[[nodiscard]] auto size() const -> size_t { return children.size(); }
+		[[nodiscard]] auto empty() const -> bool { return children.empty(); }
+		auto front() const -> const Node *& { return children.front(); }
+		auto front() -> Node *& { return children.front(); }
+		auto back() const -> const Node *& { return children.back(); }
+		auto back() -> Node *& { return children.back(); }
 
-		inline const Payload &data() const { return dat; }
-		inline void setData(Payload &&data) { dat = std::move(data); }
+		auto data() const -> const Payload & { return dat; }
+		void setData(Payload &&data) { dat = std::move(data); }
 
-		inline const Seq &label() const { return lab; }
+		auto label() const -> const Seq & { return lab; }
 
-		inline Node *getEdge(value_type id)
+		auto getEdge(value_type id) -> Node *
 		{
 			Node *fNode = NULL;
 			auto it = std::lower_bound(begin(), end(), id, NodeCmp());
@@ -85,7 +81,7 @@ public:
 		}
 
 #if ENABLE_GENMC_DEBUG
-		inline void dump()
+		void dump()
 		{
 			llvm::dbgs() << "Node: " << this << "\n"
 				     << "Label: " << format(label()) << "\n"
@@ -102,22 +98,22 @@ public:
 			StringIsPrefix = -2,
 			LabelIsPrefix = -1,
 			DontMatch = 0,
-			HaveCommonPart
+			HaveCommonPart /* purposefully non-zero */
 		};
 
-		/* Node comparators */
+		/** Node comparators */
 		struct NodeCmp {
-			bool operator()(const Node *n1, const Node *n2)
+			auto operator()(const Node *n1, const Node *n2) -> bool
 			{
 				return ValCmp()(n1->label()[0], n2->label()[0]);
 			}
-			bool operator()(const Node *n, value_type id)
+			auto operator()(const Node *n, value_type id) -> bool
 			{
 				return ValCmp()(n->label()[0], id);
 			}
 		};
 
-		inline void addEdge(Node *n)
+		void addEdge(Node *n)
 		{
 			if (this->empty())
 				children.push_back(n);
@@ -128,7 +124,7 @@ public:
 			}
 		}
 
-		inline void setEdge(Node *n)
+		void setEdge(Node *n)
 		{
 			auto id = n->label()[0];
 			auto it = std::lower_bound(begin(), end(), id, NodeCmp());
@@ -136,14 +132,14 @@ public:
 			*it = n;
 		}
 
-		QueryResult query(typename Seq::const_iterator sBeg,
-				  typename Seq::const_iterator sEnd) const
+		auto query(typename Seq::const_iterator sBeg,
+			   typename Seq::const_iterator sEnd) const -> QueryResult
 		{
 			unsigned i, l;
 			unsigned l1 = std::distance(sBeg, sEnd);
 			unsigned l2 = label().size();
 
-			/* Find the length of common part */
+			/** Find the length of common part */
 			l = std::min(l1, l2);
 			i = 0;
 			while ((i < l) && (*(sBeg + i) == label()[i]))
@@ -152,12 +148,12 @@ public:
 			if (i == l) { // One is prefix of another, find who is who
 				if (l1 == l2)
 					return QueryResult::Same;
-				else if (i == l1)
+				if (i == l1)
 					return QueryResult::StringIsPrefix;
-				else
-					return QueryResult::LabelIsPrefix;
-			} else // s and Label have common (possible empty) part, return its length
-				return static_cast<QueryResult>(i);
+				return QueryResult::LabelIsPrefix;
+			}
+			// s and Label have common (possible empty) part, return its length
+			return static_cast<QueryResult>(i);
 		}
 
 		Seq lab;
@@ -165,21 +161,21 @@ public:
 		NodeVectorType children;
 	};
 
-	inline Trie()
+	Trie()
 	{
 		addNode(Payload()); // FIXME
 	}
-	inline explicit Trie(const Payload &root) { addNode(root); }
-	inline explicit Trie(Payload &&root) { addNode(root); }
+	explicit Trie(const Payload &root) { addNode(root); }
+	explicit Trie(Payload &&root) { addNode(root); }
 
-	inline ~Trie() = default;
+	~Trie() = default;
 
 	Trie(const Trie &) = delete;
-	Trie &operator=(const Trie &) = delete;
+	auto operator=(const Trie &) -> Trie & = delete;
 	Trie(Trie &&) = default;
-	Trie &operator=(Trie &&) = default;
+	auto operator=(Trie &&) -> Trie & = default;
 
-	bool addSeq(const Seq &s, Payload &&data)
+	auto addSeq(const Seq &s, Payload &&data) -> bool
 	{
 		Node *cNode = getRoot();
 		Node *tNode = NULL;
@@ -227,7 +223,7 @@ public:
 		return true;
 	}
 
-	unsigned findLongestCommonPrefix(const Seq &s) const
+	auto findLongestCommonPrefix(const Seq &s) const -> unsigned
 	{
 		Node *cNode = getRoot();
 		Node *tNode = nullptr;
@@ -268,7 +264,7 @@ public:
 		return result;
 	}
 
-	const Payload *lookup(const Seq &s) const
+	auto lookup(const Seq &s) const -> const Payload *
 	{
 		Node *cNode = getRoot();
 		Node *tNode = nullptr;
@@ -305,12 +301,12 @@ public:
 		return &tNode->data();
 	}
 
-	Payload *lookup(const Seq &s)
+	auto lookup(const Seq &s) -> Payload *
 	{
 		return const_cast<Payload *>(static_cast<const Trie &>(*this).lookup(s));
 	}
 
-	bool setData(const Seq &s, Payload &&data)
+	auto setData(const Seq &s, Payload &&data) -> bool
 	{
 		auto *load = lookup(s);
 		if (!load)
@@ -320,7 +316,7 @@ public:
 	}
 
 #if ENABLE_GENMC_DEBUG
-	inline void dump()
+	void dump()
 	{
 		for (auto &n : nodes)
 			n->dump();
@@ -328,16 +324,16 @@ public:
 #endif
 
 private:
-	inline Node *getRoot() const { return &*nodes[0]; }
+	auto getRoot() const -> Node * { return &*nodes[0]; }
 
-	inline Node *addNode(Payload &&data, const Seq &label = {})
+	auto addNode(Payload &&data, const Seq &label = {}) -> Node *
 	{
 		auto nUP = std::make_unique<Node>(std::move(data), Seq(label));
 		nodes.push_back(std::move(nUP));
 		return &*nodes.back();
 	}
 
-	inline Node *splitEdge(Node *n, value_type id, size_t index)
+	auto splitEdge(Node *n, value_type id, size_t index) -> Node *
 	{
 		auto *eNode = n->getEdge(id);
 		BUG_ON(!eNode && "Node doesn't exist");

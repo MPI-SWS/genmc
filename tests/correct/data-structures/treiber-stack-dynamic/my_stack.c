@@ -37,6 +37,16 @@ void init_stack(mystack_t *s, int num_threads)
 	atomic_init(&s->top, 0);
 }
 
+void clear_stack(mystack_t *s, int num_threads)
+{
+	node_t *next;
+	while (s->top != 0) {
+		next = s->top->next;
+		free(s->top);
+		s->top = next;
+	}
+}
+
 void push(mystack_t *s, unsigned int val)
 {
 	node_t *node = new_node();
@@ -58,8 +68,10 @@ unsigned int pop(mystack_t *s)
 	__VERIFIER_hp_t *hp = __VERIFIER_hp_alloc();
 	while (true) {
 		top = __VERIFIER_hp_protect(hp, &s->top);
-		if (top == NULL)
+		if (top == NULL) {
+			__VERIFIER_hp_free(hp);
 			return 0;
+		}
 
 		node_t *next = atomic_load_explicit(&top->next, relaxed);
 		if(atomic_compare_exchange_strong_explicit(&s->top, &top, next, release, relaxed))
@@ -68,5 +80,6 @@ unsigned int pop(mystack_t *s)
 	val = top->value;
 	/* Reclaim the used slot */
 	reclaim(top);
+	__VERIFIER_hp_free(hp);
 	return val;
 }

@@ -28,7 +28,7 @@
 #include <unordered_map>
 #include <vector>
 
-/*
+/**
  * ChoiceMap class - Maintains alternative exploration options encountered
  * across an execution.
  */

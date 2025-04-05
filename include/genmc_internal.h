@@ -27,6 +27,10 @@ typedef long __VERIFIER_condattr_t;
 typedef struct { int __private; } __VERIFIER_mutex_t;
 typedef long __VERIFIER_mutexattr_t;
 
+typedef struct __VERIFIER_plock {
+	__VERIFIER_mutex_t lock;
+} __VERIFIER_plock_t;
+
 #define __VERIFIER_MUTEX_INITIALIZER { 0 }
 #define __VERIFIER_COND_INITIALIZER { 0 }
 
@@ -188,6 +192,7 @@ extern int __VERIFIER_barrier_destroy (__VERIFIER_barrier_t *__barrier) __attrib
 #define GENMC_KIND_HELPING 0x00040000
 #define GENMC_KIND_SPECUL  0x00080000
 #define GENMC_KIND_CONFIRM 0x00100000
+#define GENMC_ATTR_PLOCK   0x00200000
 
 void __VERIFIER_assume(bool) __attribute__ ((__nothrow__));
 

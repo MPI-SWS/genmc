@@ -43,8 +43,8 @@ print_debug_header() {
 
     # Print table's header
     printline
-    printf "| ${CYAN}%-17s${NC} | ${CYAN}%-6s${NC} | ${CYAN}%-10s${NC} | ${CYAN}%-8s${NC} | ${CYAN}%-8s${NC} |\n" \
-	   "Testcase" "Result" "Executions" "Blocked" "Avg.time"
+    printf "| ${CYAN}%-22s${NC} | ${CYAN}%-17s${NC} | ${CYAN}%-8s${NC} | ${CYAN}%-8s${NC} |\n" \
+	   "Testcase" "Result" "Variants" "Avg.time"
     printline
 }
 
@@ -93,25 +93,25 @@ printfooter() {
 print_variant_info() {
     if test -n "${debug_mode}"
     then
-	printf "| ${POWDER_BLUE}%-17s${NC} | " "${dir##*/}${n}"
+	printf "| ${POWDER_BLUE}%-22s${NC} | " "${dir##*/}${n}"
     fi
 }
 
 print_variant_debug_results() {
     if test -n "${outcome_failure}"
     then
-	printf "${RED}%-15s${NC} | %-6s | % 13s |\n" \
+	printf "${RED}%-17s${NC} | %8s | % 8s |\n" \
 	       "BUG NOT FOUND" "${vars}" "${average_time}"
 	echo "${output}" # also print the output in this case
 	echo "Return status: ${failure_status}"
 	result=1
     elif test -n "${failure}"
     then
-	printf "${LIME_YELLOW}%-15s${NC} | %-6s | % 13s |\n" \
+	printf "${LIME_YELLOW}%-17s${NC} | %8s | % 8s |\n" \
 	       "TRACE DIFF" "${vars}" "${average_time}"
 	result=1
     else
-	printf "${GREEN}%-15s${NC} | %-6s | % 13s |\n" \
+	printf "${GREEN}%-17s${NC} | %8s | % 8s |\n" \
 	       "BUG FOUND" "${vars}" "${average_time}"
     fi
 }

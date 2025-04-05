@@ -70,13 +70,13 @@ struct DECLSPEC_EMPTY_BASES compressed_ptr : std::unique_ptr<T, Deleter>, T2 {
 	compressed_ptr(const T2 &a2) : T2(a2) {}
 	template <typename A1>
 	compressed_ptr(A1 &&a1)
-		: compressed_ptr(std::forward<A1>(a1), class_tag<typename std::decay<A1>::type>(),
-				 spacer(), spacer())
+		: compressed_ptr(std::forward<A1>(a1), class_tag<std::decay_t<A1>>(), spacer(),
+				 spacer())
 	{}
 	template <typename A1, typename A2>
 	compressed_ptr(A1 &&a1, A2 &&a2)
 		: compressed_ptr(std::forward<A1>(a1), std::forward<A2>(a2),
-				 class_tag<typename std::decay<A2>::type>(), spacer())
+				 class_tag<std::decay_t<A2>>(), spacer())
 	{}
 	template <typename A1, typename A2, typename A3>
 	compressed_ptr(A1 &&a1, A2 &&a2, A3 &&a3)
@@ -100,18 +100,18 @@ struct DECLSPEC_EMPTY_BASES compressed_ptr : std::unique_ptr<T, Deleter>, T2 {
 
 template <typename T> struct default_clone {
 	default_clone() = default;
-	T *operator()(T const &x) const { return new T(x); }
-	T *operator()(T &&x) const { return new T(std::move(x)); }
+	auto operator()(T const &x) const -> T * { return new T(x); }
+	auto operator()(T &&x) const -> T * { return new T(std::move(x)); }
 };
 
 template <class T, class Cloner = default_clone<T>, class Deleter = std::default_delete<T>>
 class value_ptr {
 	::detail::compressed_ptr<T, Deleter, Cloner> ptr_;
 
-	std::unique_ptr<T, Deleter> &ptr() { return ptr_; }
-	std::unique_ptr<T, Deleter> const &ptr() const { return ptr_; }
+	auto ptr() -> std::unique_ptr<T, Deleter> & { return ptr_; }
+	auto ptr() const -> std::unique_ptr<T, Deleter> const & { return ptr_; }
 
-	T *clone(T const &x) const { return get_cloner()(x); }
+	auto clone(T const &x) const -> T * { return get_cloner()(x); }
 
 public:
 	using pointer = T *;
@@ -125,7 +125,7 @@ public:
 	value_ptr(T &&value) : ptr_(cloner_type()(std::move(value))) {}
 
 	value_ptr(const Cloner &value) : ptr_(value) {}
-	value_ptr(Cloner &&value) : ptr_(value) {}
+	value_ptr(Cloner &&value) : ptr_(std::move(value)) {}
 
 	template <typename V, typename ClonerOrDeleter>
 	value_ptr(V &&value, ClonerOrDeleter &&a2)
@@ -146,46 +146,46 @@ public:
 	value_ptr(value_ptr &&v) = default;
 
 	explicit value_ptr(pointer value) : ptr_(value) {}
-	pointer release() { return ptr().release(); }
+	auto release() -> pointer { return ptr().release(); }
 
 	value_ptr(std::nullptr_t) noexcept : ptr_() {}
 
-	T *get() noexcept { return ptr().get(); }
-	T const *get() const noexcept { return ptr().get(); }
+	auto get() noexcept -> T * { return ptr().get(); }
+	auto get() const noexcept -> T const * { return ptr().get(); }
 
-	Cloner &get_cloner() noexcept { return ptr_; }
-	Cloner const &get_cloner() const noexcept { return ptr_; };
+	auto get_cloner() noexcept -> Cloner & { return ptr_; }
+	auto get_cloner() const noexcept -> Cloner const & { return ptr_; };
 
-	Deleter &get_deleter() noexcept { return ptr_; }
-	Deleter const &get_deleter() const noexcept { return ptr_; }
+	auto get_deleter() noexcept -> Deleter & { return ptr_; }
+	auto get_deleter() const noexcept -> Deleter const & { return ptr_; }
 
-	T &operator*() { return *get(); }
-	T const &operator*() const { return *get(); }
+	auto operator*() -> T & { return *get(); }
+	auto operator*() const -> T const & { return *get(); }
 
-	T const *operator->() const noexcept { return get(); }
-	T *operator->() noexcept { return get(); }
+	auto operator->() const noexcept -> T const * { return get(); }
+	auto operator->() noexcept -> T * { return get(); }
 
-	value_ptr<T, Cloner, Deleter> &operator=(value_ptr &&v)
+	auto operator=(value_ptr &&v) -> value_ptr<T, Cloner, Deleter> &
 	{
 		ptr() = std::move(v.ptr());
 		get_cloner() = std::move(v.get_cloner());
 		return *this;
 	}
 
-	value_ptr<T, Cloner, Deleter> &operator=(value_ptr const &v)
+	auto operator=(value_ptr const &v) -> value_ptr<T, Cloner, Deleter> &
 	{
 		ptr().reset(v.get_cloner()(*v));
 		get_cloner() = v.get_cloner();
 		return *this;
 	}
 
-	value_ptr<T, Cloner, Deleter> &operator=(std::nullptr_t) noexcept
+	auto operator=(std::nullptr_t) noexcept -> value_ptr<T, Cloner, Deleter> &
 	{
 		ptr().reset();
 		return *this;
 	}
 
-	value_ptr<T, Cloner, Deleter> &operator=(std::unique_ptr<T, Deleter> p)
+	auto operator=(std::unique_ptr<T, Deleter> p) -> value_ptr<T, Cloner, Deleter> &
 	{
 		ptr() = std::move(p);
 		return *this;

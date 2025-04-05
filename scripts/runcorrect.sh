@@ -43,8 +43,8 @@ print_debug_header() {
 
     # Print table's header
     printline
-    printf "| ${CYAN}%-17s${NC} | ${CYAN}%-6s${NC} | ${CYAN}%-10s${NC} | ${CYAN}%-8s${NC} | ${CYAN}%-8s${NC} |\n" \
-	   "Testcase" "Result" "Executions" "Blocked" "Avg.time"
+    printf "| ${CYAN}%-22s${NC} | ${CYAN}%-6s${NC} | ${CYAN}%-8s${NC} | ${CYAN}%-8s${NC} | ${CYAN}%-8s${NC} |\n" \
+	   "Testcase" "Result" "Execs" "Blocked" "Avg.time"
     printline
 }
 
@@ -94,7 +94,7 @@ printfooter() {
 print_variant_info() {
     if test -n "${debug_mode}"
     then
-	printf "| ${POWDER_BLUE}%-17s${NC} | " "${dir##*/}${n}"
+	printf "| ${POWDER_BLUE}%-22s${NC} | " "${dir##*/}${n}"
     fi
 }
 
@@ -118,7 +118,7 @@ print_variant_debug_results() {
     else
 	outcome="${GREEN}SAFE  ${NC}"
     fi
-    printf "${outcome} | % 10s | % 8s | % 8s |\n" \
+    printf "${outcome} | % 8s | % 8s | % 8s |\n" \
 	   "${explored}" "${blocked}" "${average_time}"
 
     if test -n "${failure}" -o -n "${outcome_failure}"

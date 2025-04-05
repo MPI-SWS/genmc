@@ -165,7 +165,7 @@ typedef struct {
 ({					                \
 	__typeof__(old) __old = (old);			\
 	atomic_compare_exchange_strong_explicit(ptr,	\
-				&__old, new, ord, ord);	\
+				&__old, new, ord, mo_relaxed);	\
 	__old;						\
 })
 #define cmpxchg_relaxed(...) __cmpxchg(__VA_ARGS__, mo_relaxed)

@@ -146,6 +146,7 @@ inline bool hasGlobalLoadSemantics(const std::string &name)
 #define GENMC_KIND_HELPING 0x00040000
 #define GENMC_KIND_SPECUL 0x00080000
 #define GENMC_KIND_CONFIRM 0x00100000
+#define GENMC_KIND_PLOCK 0x00200000
 
 #define GENMC_ATTR(flags) ((flags) & (0x0000ffff))
 #define GENMC_KIND(flags) ((flags) & (0xffff0000))

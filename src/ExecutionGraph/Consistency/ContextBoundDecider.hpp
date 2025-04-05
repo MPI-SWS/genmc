@@ -24,6 +24,7 @@
 #include "ADT/View.hpp"
 #include "BoundDecider.hpp"
 
+/** Bound the number of pre-emptive context switches */
 class ContextBoundDecider : public BoundDecider {
 
 public:

@@ -21,79 +21,93 @@
 #ifndef GENMC_VSET_HPP
 #define GENMC_VSET_HPP
 
-#include <functional>
-#include <initializer_list>
 #include <llvm/Support/raw_ostream.h>
+
+#include <initializer_list>
 #include <vector>
 
+/** A set implemented as a sorted vector */
 template <class T> class VSet {
 
-protected:
+public:
 	/* Pre: Set needs to support random_access iterators */
 	using Set = std::vector<T>;
-	Set vset_;
 
-public:
-	VSet() : vset_(){};
-
-	/* Pre: v is sorted and distinct */
-	VSet(const std::vector<T> &v) : vset_(v){};
-
-	/* Pre: v is sorted and distinct */
-	VSet(std::vector<T> &&v) : vset_(std::move(v)){};
+	VSet() : vset_() {};
 
 	template <typename ITER> VSet(ITER begin, ITER end);
+
+	VSet(const std::vector<T> &v) : VSet(v.begin(), v.end()) {}
+
+	VSet(std::vector<T> &&v) : vset_(std::move(v)) { std::sort(vset_.begin(), vset_.end()); }
 
 	VSet(std::initializer_list<T> il);
 
 	VSet(const VSet &) = default;
 
-	VSet(VSet &&);
+	VSet(VSet &&) = default;
 
-	VSet &operator=(const VSet &) = default;
+	auto operator=(const VSet &) -> VSet & = default;
 
-	VSet &operator=(VSet &&);
+	auto operator=(VSet &&) -> VSet & = default;
 
-	virtual ~VSet(){};
+	virtual ~VSet() = default;
 
 	using const_iterator = typename Set::const_iterator;
 	using const_reverse_iterator = typename Set::const_reverse_iterator;
 
-	const_iterator begin() const { return vset_.cbegin(); };
-	const_iterator end() const { return vset_.cend(); };
-	const_reverse_iterator rbegin() const { return vset_.crbegin(); };
-	const_reverse_iterator rend() const { return vset_.crend(); };
+	auto begin() const -> const_iterator { return vset_.begin(); };
+	auto end() const -> const_iterator { return vset_.end(); };
+	auto rbegin() const -> const_reverse_iterator { return vset_.rbegin(); };
+	auto rend() const -> const_reverse_iterator { return vset_.rend(); };
 
-	std::pair<const_iterator, bool> insert(const T &t);
-	int insert(const VSet<T> &s);
+	auto insert(const T &el) -> std::pair<const_iterator, bool>;
+	auto insert(const VSet<T> &s) -> int;
 	template <typename ITER> void insert(ITER begin, ITER end);
 
-	int erase(const T &t);
+	auto erase(const T &el) -> int;
+	auto erase(const VSet<T> &S) -> int;
 
-	int erase(const VSet<T> &S);
+	/** Return the number of elements in the set */
+	auto count(const T &el) const -> int;
 
-	int count(const T &t) const;
+	/** Returns whether the set contains EL */
+	auto contains(const T &el) const -> bool;
 
-	const_iterator find(const T &t) const;
+	auto find(const T &el) const -> const_iterator;
 
-	size_t size() const { return vset_.size(); };
+	[[nodiscard]] auto size() const -> size_t { return vset_.size(); };
 
-	bool empty() const { return vset_.empty(); };
+	/** Returns whether the set empty */
+	[[nodiscard]] auto empty() const -> bool { return vset_.empty(); };
 
+	/** Empties the set */
 	void clear() { vset_.clear(); };
 
-	bool subsetOf(const VSet<T> &s) const;
+	/** Returns whether THIS is a subset of S */
+	auto subsetOf(const VSet<T> &s) const -> bool;
 
-	bool intersects(const VSet<T> &s) const;
-	VSet<T> intersectWith(const VSet<T> &s) const;
+	/** Returns whether the intersection of THIS with S is non-empty */
+	auto intersects(const VSet<T> &s) const -> bool;
 
-	const T &min() const { return vset_[0]; };
-	const T &max() const { return vset_.back(); };
+	/** Returns the intersection of THIS and S */
+	auto intersectWith(const VSet<T> &s) const -> VSet<T>;
 
-	inline const T &operator[](int i) const { return vset_[i]; };
+	/** Returns the set THIS\S */
+	auto diff(const VSet<T> &s) const -> VSet<T>;
+
+	auto min() const -> const T & { return vset_[0]; };
+	auto max() const -> const T & { return vset_.back(); };
+
+	auto operator[](int i) const -> const T & { return vset_[i]; };
+
+	auto operator<=>(const VSet<T> &other) const = default;
 
 	template <typename U>
-	friend llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const VSet<U> &set);
+	friend auto operator<<(llvm::raw_ostream &s, const VSet<U> &set) -> llvm::raw_ostream &;
+
+private:
+	Set vset_;
 };
 
 #include "VSet.tcc"

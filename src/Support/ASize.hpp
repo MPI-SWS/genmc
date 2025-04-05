@@ -31,7 +31,7 @@
  **                             ASize Class
  ******************************************************************************/
 
-/*
+/**
  * Represents the size (in bytes) of an atomic memory access
  */
 class ASize {
@@ -41,14 +41,14 @@ protected:
 	using Size = uint32_t;
 
 public:
-	/* Constructors/destructors */
+	/** Constructors/destructors */
 	ASize() = delete;
 	ASize(Size s) : size(s) {}
 
-	/* Returns the number of bytes this Size occupies */
+	/** Returns the number of bytes this Size occupies */
 	[[nodiscard]] auto get() const -> Size { return size; }
 
-	/* Returns the number of bits this Size occupies */
+	/** Returns the number of bits this Size occupies */
 	[[nodiscard]] auto getBits() const -> Size { return size * CHAR_BIT; }
 
 	inline auto operator<=>(const ASize &other) const = default;
@@ -57,7 +57,7 @@ public:
 	friend auto operator<<(llvm::raw_ostream &rhs, const ASize &s) -> llvm::raw_ostream &;
 
 private:
-	/* The actual size */
+	/** The actual size */
 	Size size;
 };
 

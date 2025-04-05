@@ -26,7 +26,7 @@
 class EventLabel;
 class ExecutionGraph;
 
-/*
+/**
  * SPORE utilities --- a collection of MM-independent consistency checks.
  *
  * Currently this does not need to be a class. The only reason it is is

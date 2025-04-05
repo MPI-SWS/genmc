@@ -80,8 +80,8 @@ using namespace llvm;
 	({                                                                                         \
 		llvm::GenericValue __result;                                                       \
 		if (auto *iTyp = llvm::dyn_cast<IntegerType>(typ))                                 \
-			__result.IntVal =                                                          \
-				APInt(iTyp->getBitWidth(), (val).get(), iTyp->getSignBit());       \
+			__result.IntVal = APInt(iTyp->getBitWidth(), (val).get(),                  \
+						iTyp->getSignBit() APINT_NOCHECK);                 \
 		else                                                                               \
 			__result.PointerVal = (void *)(val).get();                                 \
 		__result;                                                                          \
@@ -216,6 +216,22 @@ EventLabel::EventLabelKind getReadKind(LoadInst &I)
 	BUG();
 }
 
+EventLabel::EventLabelKind getUnlockKind(Instruction &I)
+{
+	using Kind = EventLabel::EventLabelKind;
+
+	auto *md = I.getMetadata("genmc.attr");
+	if (!md)
+		return Kind::UnlockWrite;
+
+	auto *op = dyn_cast<ConstantAsMetadata>(md->getOperand(0));
+	BUG_ON(!op);
+
+	auto flags = dyn_cast<ConstantInt>(op->getValue())->getZExtValue();
+	BUG_ON(GENMC_KIND(flags) != GENMC_KIND_PLOCK);
+	return Kind::AbstractUnlockWrite;
+}
+
 constexpr unsigned int switchPair(EventLabel::EventLabelKind a, EventLabel::EventLabelKind b)
 {
 	return (unsigned(a) << 16) + b;
@@ -244,10 +260,28 @@ std::pair<EventLabel::EventLabelKind, EventLabel::EventLabelKind> getCasKinds(At
 
 	if (GENMC_KIND(flags) == GENMC_KIND_HELPED)
 		return std::make_pair(Kind::HelpedCasRead, Kind::HelpedCasWrite);
-	else if (GENMC_KIND(flags) == GENMC_KIND_HELPING)
+	if (GENMC_KIND(flags) == GENMC_KIND_HELPING)
 		return std::make_pair(Kind::HelpingCas, Kind::HelpingCas);
 	BUG_ON(GENMC_KIND(flags) != GENMC_KIND_CONFIRM);
 	return std::make_pair(Kind::ConfirmingCasRead, Kind::ConfirmingCasWrite);
+}
+
+std::pair<EventLabel::EventLabelKind, EventLabel::EventLabelKind> getLockKinds(Instruction &I)
+{
+	using Kind = EventLabel::EventLabelKind;
+
+	auto *md = I.getMetadata("genmc.attr");
+	if (!md)
+		return std::make_pair(Kind::LockCasRead, Kind::LockCasWrite);
+
+	auto *op = dyn_cast<ConstantAsMetadata>(md->getOperand(0));
+	BUG_ON(!op);
+
+	auto flags = dyn_cast<ConstantInt>(op->getValue())->getZExtValue();
+	if (!GENMC_KIND(flags))
+		return std::make_pair(Kind::LockCasRead, Kind::LockCasWrite);
+	BUG_ON(GENMC_KIND(flags) != GENMC_KIND_PLOCK);
+	return std::make_pair(Kind::AbstractLockCasRead, Kind::AbstractLockCasWrite);
 }
 
 std::pair<EventLabel::EventLabelKind, EventLabel::EventLabelKind> getFaiKinds(AtomicRMWInst &I)
@@ -318,7 +352,7 @@ void *Interpreter::getInodeAddrFromName(const std::string &filename) const
 	 GENMC_O_APPEND | GENMC_O_SYNC | GENMC_O_DSYNC)
 
 #define GENMC_O_ACCMODE 00000003
-#define GENMC_ACC_MODE(x) ("\004\002\006\006"[(x)&GENMC_O_ACCMODE])
+#define GENMC_ACC_MODE(x) ("\004\002\006\006"[(x) & GENMC_O_ACCMODE])
 #define GENMC_OPEN_FMODE(flag) (((flag + 1) & GENMC_O_ACCMODE))
 
 #define GENMC_FMODE_READ 0x1
@@ -1598,6 +1632,7 @@ void Interpreter::visitLoadInst(LoadInst &I)
 	Type *typ = I.getType();
 	auto size = getTypeSize(typ);
 	auto atyp = TYPE_TO_ATYPE(typ);
+	auto ord = fromLLVMOrdering(I.getOrdering());
 
 	/* If this is a thread-local access it is not recorded in the graph,
 	 * so just perform the load. */
@@ -1614,8 +1649,8 @@ void Interpreter::visitLoadInst(LoadInst &I)
 #define IMPLEMENT_READ_VISIT(__kind)                                                               \
 	case EventLabel::EventLabelKind::__kind: {                                                 \
 		val = CALL_DRIVER_RESET_IF_NONE(                                                   \
-			handleLoad, __kind##Label::create(currPos(), I.getOrdering(), ptr, size,   \
-							  atyp, GET_DEPS(deps)));                  \
+			handleLoad,                                                                \
+			__kind##Label::create(currPos(), ord, ptr, size, atyp, GET_DEPS(deps)));   \
 		break;                                                                             \
 	}
 
@@ -1648,6 +1683,7 @@ void Interpreter::visitStoreInst(StoreInst &I)
 	auto *ptr = (GenericValue *)GVTOP(src);
 	auto asize = getTypeSize(typ);
 	auto atyp = TYPE_TO_ATYPE(typ);
+	auto ord = fromLLVMOrdering(I.getOrdering());
 
 	/* Do not bother with thread-local accesses */
 	if (thr.tls.count(ptr)) {
@@ -1662,8 +1698,8 @@ void Interpreter::visitStoreInst(StoreInst &I)
 
 	/* Inform the Driver about the newly interpreter store */
 	CALL_DRIVER(handleStore,
-		    WriteLabel::create(currPos(), I.getOrdering(), ptr, asize, atyp,
-				       GV_TO_SVAL(val, typ), getWriteAttr(I), GET_DEPS(deps)));
+		    WriteLabel::create(currPos(), ord, ptr, asize, atyp, GV_TO_SVAL(val, typ),
+				       getWriteAttr(I), GET_DEPS(deps)));
 	updateAddrPoDeps(getCurThr().id, I.getPointerOperand());
 	return;
 }
@@ -1671,8 +1707,8 @@ void Interpreter::visitStoreInst(StoreInst &I)
 void Interpreter::visitFenceInst(FenceInst &I)
 {
 	auto deps = makeEventDeps(nullptr, nullptr, getCtrlDeps(getCurThr().id), nullptr, nullptr);
-	CALL_DRIVER(handleFence, FenceLabel::create(currPos(), I.getOrdering(), GET_DEPS(deps)));
-	return;
+	CALL_DRIVER(handleFence, FenceLabel::create(currPos(), fromLLVMOrdering(I.getOrdering()),
+						    GET_DEPS(deps)));
 }
 
 void Interpreter::visitAtomicCmpXchgInst(AtomicCmpXchgInst &I)
@@ -1708,9 +1744,10 @@ void Interpreter::visitAtomicCmpXchgInst(AtomicCmpXchgInst &I)
 	case switchPair(EventLabel::EventLabelKind::nameR, EventLabel::EventLabelKind::nameW): {   \
 		ret = CALL_DRIVER_RESET_IF_NONE(                                                   \
 			handleLoad,                                                                \
-			nameR##Label::create(currPos(), I.getSuccessOrdering(), ptr, size, atyp,   \
-					     GV_TO_SVAL(cmpVal, typ), GV_TO_SVAL(newVal, typ),     \
-					     getWriteAttr(I), GET_DEPS(lDeps)));                   \
+			nameR##Label::create(currPos(), fromLLVMOrdering(I.getSuccessOrdering()),  \
+					     ptr, size, atyp, GV_TO_SVAL(cmpVal, typ),             \
+					     GV_TO_SVAL(newVal, typ), getWriteAttr(I),             \
+					     GET_DEPS(lDeps)));                                    \
 		if (!ret.has_value())                                                              \
 			return;                                                                    \
 		cmpRes = *ret == GV_TO_SVAL(cmpVal, typ);                                          \
@@ -1722,8 +1759,9 @@ void Interpreter::visitAtomicCmpXchgInst(AtomicCmpXchgInst &I)
 				getDataDeps(getCurThr().id, I.getNewValOperand()),                 \
 				getCtrlDeps(getCurThr().id), getAddrPoDeps(thr.id), nullptr);      \
 			CALL_DRIVER(handleStore,                                                   \
-				    nameW##Label::create(currPos(), I.getSuccessOrdering(), ptr,   \
-							 size, atyp, GV_TO_SVAL(newVal, typ),      \
+				    nameW##Label::create(currPos(),                                \
+							 fromLLVMOrdering(I.getSuccessOrdering()), \
+							 ptr, size, atyp, GV_TO_SVAL(newVal, typ), \
 							 getWriteAttr(I), GET_DEPS(sDeps)));       \
 		}                                                                                  \
 		break;                                                                             \
@@ -1739,8 +1777,9 @@ void Interpreter::visitAtomicCmpXchgInst(AtomicCmpXchgInst &I)
 	case switchPair(EventLabel::HelpingCas, EventLabel::HelpingCas):
 		if (!CALL_DRIVER_RESET_IF_FALSE(
 			    handleHelpingCas,
-			    HelpingCasLabel::create(currPos(), I.getSuccessOrdering(), ptr, size,
-						    atyp, GV_TO_SVAL(cmpVal, typ),
+			    HelpingCasLabel::create(currPos(),
+						    fromLLVMOrdering(I.getSuccessOrdering()), ptr,
+						    size, atyp, GV_TO_SVAL(cmpVal, typ),
 						    GV_TO_SVAL(newVal, typ), GET_DEPS(lDeps))))
 			return;
 		break;
@@ -1752,47 +1791,6 @@ void Interpreter::visitAtomicCmpXchgInst(AtomicCmpXchgInst &I)
 	result.AggregateVal.push_back(INT_TO_GV(Type::getInt1Ty(I.getContext()), cmpRes));
 	SetValue(&I, result, ECStack().back());
 	return;
-}
-
-SVal Interpreter::executeAtomicRMWOperation(SVal oldVal, SVal val, ASize size,
-					    AtomicRMWInst::BinOp op)
-{
-	switch (op) {
-	case AtomicRMWInst::Xchg:
-		WARN_ON_ONCE(
-			getDepTracker(), "unsupported-xchg-deps",
-			"Atomic xchg support is experimental under dependency-tracking models!\n");
-		return val;
-	case AtomicRMWInst::Add:
-		return (oldVal + val);
-	case AtomicRMWInst::Sub:
-		return (oldVal - val);
-	case AtomicRMWInst::And:
-		return oldVal & val;
-	case AtomicRMWInst::Nand:
-		return ~(oldVal & val);
-	case AtomicRMWInst::Or:
-		return oldVal | val;
-	case AtomicRMWInst::Xor:
-		return oldVal ^ val;
-	case AtomicRMWInst::Max:
-		return SVal(oldVal).signExtendBottom(size.getBits())
-				       .sgt(SVal(val).signExtendBottom(size.getBits()))
-			       ? oldVal
-			       : val;
-	case AtomicRMWInst::Min:
-		return SVal(oldVal).signExtendBottom(size.getBits())
-				       .slt(SVal(val).signExtendBottom(size.getBits()))
-			       ? oldVal
-			       : val;
-	case AtomicRMWInst::UMax:
-		return oldVal.ugt(val) ? oldVal : val;
-	case AtomicRMWInst::UMin:
-		return oldVal.ult(val) ? oldVal : val;
-	default:
-		WARN_ONCE("invalid-rmw-op", "Unsupported operation in RMW instruction!\n");
-		return val;
-	}
 }
 
 void Interpreter::visitAtomicRMWInst(AtomicRMWInst &I)
@@ -1808,10 +1806,14 @@ void Interpreter::visitAtomicRMWInst(AtomicRMWInst &I)
 
 	BUG_ON(!typ->isIntegerTy());
 
+	WARN_ON_ONCE(I.getOperation() == AtomicRMWInst::BinOp::Xchg && getDepTracker(),
+		     "unsupported-xchg-deps",
+		     "Atomic xchg support is experimental under dependency-tracking models!\n");
+
 	if (thr.tls.count(ptr)) {
 		GenericValue oldVal = thr.tls[ptr];
-		auto newVal = executeAtomicRMWOperation(GV_TO_SVAL(oldVal, typ), val, size,
-							I.getOperation());
+		auto newVal = executeRMWBinOp(GV_TO_SVAL(oldVal, typ), val, size,
+					      fromLLVMBinOp(I.getOperation()));
 		thr.tls[ptr] = SVAL_TO_GV(newVal, typ);
 		SetValue(&I, oldVal, SF);
 		return;
@@ -1824,19 +1826,20 @@ void Interpreter::visitAtomicRMWInst(AtomicRMWInst &I)
 #define IMPLEMENT_FAI_VISIT(nameR, nameW)                                                          \
 	case switchPair(EventLabel::EventLabelKind::nameR, EventLabel::EventLabelKind::nameW): {   \
 		ret = CALL_DRIVER_RESET_IF_NONE(                                                   \
-			handleLoad, nameR##Label::create(currPos(), I.getOrdering(), ptr, size,    \
-							 atyp, I.getOperation(), val,              \
-							 getWriteAttr(I), GET_DEPS(deps)));        \
+			handleLoad,                                                                \
+			nameR##Label::create(currPos(), fromLLVMOrdering(I.getOrdering()), ptr,    \
+					     size, atyp, fromLLVMBinOp(I.getOperation()), val,     \
+					     getWriteAttr(I), GET_DEPS(deps)));                    \
 		if (!ret.has_value())                                                              \
 			return;                                                                    \
 		updateDataDeps(getCurThr().id, &I, currPos());                                     \
 		updateAddrPoDeps(getCurThr().id, I.getPointerOperand());                           \
-		auto newVal = executeAtomicRMWOperation(*ret, val, size, I.getOperation());        \
+		auto newVal = executeRMWBinOp(*ret, val, size, fromLLVMBinOp(I.getOperation()));   \
 		if (!getCurThr().isBlocked()) {                                                    \
 			CALL_DRIVER(handleStore,                                                   \
-				    nameW##Label::create(currPos(), I.getOrdering(), ptr, size,    \
-							 atyp, newVal, getWriteAttr(I),            \
-							 GET_DEPS(deps)));                         \
+				    nameW##Label::create(                                          \
+					    currPos(), fromLLVMOrdering(I.getOrdering()), ptr,     \
+					    size, atyp, newVal, getWriteAttr(I), GET_DEPS(deps))); \
 		}                                                                                  \
 		break;                                                                             \
 	}
@@ -2311,7 +2314,7 @@ GenericValue Interpreter::executePtrToIntInst(Value *SrcVal, Type *DstTy, Execut
 	GenericValue Dest, Src = getOperandValue(SrcVal, SF);
 	assert(SrcVal->getType()->isPointerTy() && "Invalid PtrToInt instruction");
 
-	Dest.IntVal = APInt(DBitWidth, (intptr_t)Src.PointerVal);
+	Dest.IntVal = APInt(DBitWidth, (intptr_t)Src.PointerVal, false APINT_NOCHECK);
 	return Dest;
 }
 
@@ -2992,7 +2995,7 @@ void Interpreter::handleSystemError(SystemError code, const std::string &msg)
 	} else {
 		WARN_ONCE(errorList.at(code), msg + "\n");
 		CALL_DRIVER(handleStore,
-			    WriteLabel::create(currPos(), AtomicOrdering::Monotonic, errnoAddr,
+			    WriteLabel::create(currPos(), MemOrdering::Relaxed, errnoAddr,
 					       getTypeSize(errnoTyp), AType::Signed,
 					       SVal(static_cast<uint64_t>(code))));
 	}
@@ -3016,18 +3019,29 @@ void Interpreter::handleLock(SAddr addr, ASize size, const EventDeps *deps)
 			RegisterExpr<AnnotID>::create(size.getBits(), MI->idInfo.VID.at(I)),
 			ConcreteExpr<AnnotID>::create(size.getBits(), SVal(1)))
 			.release());
-	auto ret = CALL_DRIVER_RESET_IF_NONE(
-		handleLoad,
-		LockCasReadLabel::create(currPos(), addr, size, std::move(annot), GET_DEPS(deps)));
-	if (!ret.has_value())
-		return;
 
-	if (!getCurThr().isBlocked()) {
-		if (ret == SVal(0))
-			CALL_DRIVER(handleStore, LockCasWriteLabel::create(currPos(), addr, size,
-									   GET_DEPS(deps)));
-		else
-			CALL_DRIVER(handleBlock, LockNotAcqBlockLabel::create(currPos()));
+#define IMPLEMENT_LOCK_VISIT(nameR, nameW)                                                         \
+	case switchPair(EventLabel::EventLabelKind::nameR, EventLabel::EventLabelKind::nameW): {   \
+		ret = CALL_DRIVER_RESET_IF_NONE(                                                   \
+			handleLoad, nameR##Label::create(currPos(), addr, size, std::move(annot),  \
+							 GET_DEPS(deps)));                         \
+		if (!ret.has_value() || getCurThr().isBlocked())                                   \
+			return;                                                                    \
+		if (ret == SVal(0)) {                                                              \
+			CALL_DRIVER(handleStore,                                                   \
+				    nameW##Label::create(currPos(), addr, size, GET_DEPS(deps)));  \
+		} else {                                                                           \
+			CALL_DRIVER(handleBlock, LockNotAcqBlockLabel::create(currPos()));         \
+		}                                                                                  \
+		break;                                                                             \
+	}
+
+	std::optional<SVal> ret;
+	switch (switchPair(getLockKinds(*I))) {
+		IMPLEMENT_LOCK_VISIT(LockCasRead, LockCasWrite);
+		IMPLEMENT_LOCK_VISIT(AbstractLockCasRead, AbstractLockCasWrite);
+	default:
+		BUG();
 	}
 }
 
@@ -3044,7 +3058,7 @@ void Interpreter::handleUnlock(SAddr addr, ASize size, const EventDeps *deps)
 	// }
 
 	CALL_DRIVER(handleStore,
-		    UnlockWriteLabel::create(currPos(), AtomicOrdering::Release, addr, size,
+		    UnlockWriteLabel::create(currPos(), MemOrdering::Release, addr, size,
 					     AType::Signed, SVal(0), GET_DEPS(deps)));
 }
 
@@ -3068,7 +3082,8 @@ void Interpreter::callOptBegin(Function *F, const std::vector<GenericValue> &Arg
 	updateCtrlDeps(getCurThr().id, currPos()); // add a ctrl dep on optionals
 
 	GenericValue result;
-	result.IntVal = APInt(F->getReturnType()->getIntegerBitWidth(), expand, true); // signed
+	result.IntVal = APInt(F->getReturnType()->getIntegerBitWidth(), expand,
+			      true APINT_NOCHECK); // signed
 	returnValueToCaller(F->getReturnType(), result);
 	return;
 }
@@ -3312,8 +3327,8 @@ void Interpreter::callMutexInit(Function *F, const std::vector<GenericValue> &Ar
 		WARN_ONCE("pthread-mutex-init-arg",
 			  "Ignoring non-null argument given to pthread_mutex_init.\n");
 
-	CALL_DRIVER(handleStore, WriteLabel::create(currPos(), AtomicOrdering::NotAtomic, lock,
-						    size, atyp, SVal(0), GET_DEPS(specialDeps)));
+	CALL_DRIVER(handleStore, WriteLabel::create(currPos(), MemOrdering::NotAtomic, lock, size,
+						    atyp, SVal(0), GET_DEPS(specialDeps)));
 
 	GenericValue result;
 	result.IntVal = APInt(typ->getIntegerBitWidth(), 0);
@@ -3324,6 +3339,7 @@ void Interpreter::callMutexLock(Function *F, const std::vector<GenericValue> &Ar
 				const std::unique_ptr<EventDeps> &specialDeps)
 {
 	GenericValue *ptr = (GenericValue *)GVTOP(ArgVals[0]);
+	// return type carries type of the mutex location (workaround of opaque ptr)
 	Type *typ = F->getReturnType();
 	GenericValue result;
 
@@ -3343,6 +3359,7 @@ void Interpreter::callMutexUnlock(Function *F, const std::vector<GenericValue> &
 				  const std::unique_ptr<EventDeps> &specialDeps)
 {
 	GenericValue *ptr = (GenericValue *)GVTOP(ArgVals[0]);
+	// return type carries type of the mutex location (workaround of opaque ptr)
 	Type *typ = F->getReturnType();
 	GenericValue result;
 
@@ -3392,8 +3409,8 @@ void Interpreter::callMutexDestroy(Function *F, const std::vector<GenericValue> 
 	auto size = getTypeSize(typ);
 	auto atyp = TYPE_TO_ATYPE(typ);
 
-	CALL_DRIVER(handleStore, WriteLabel::create(currPos(), AtomicOrdering::NotAtomic, lock,
-						    size, atyp, SVal(-1), GET_DEPS(specialDeps)));
+	CALL_DRIVER(handleStore, WriteLabel::create(currPos(), MemOrdering::NotAtomic, lock, size,
+						    atyp, SVal(-1), GET_DEPS(specialDeps)));
 
 	GenericValue result;
 	result.IntVal = APInt(typ->getIntegerBitWidth(), 0);
@@ -3414,9 +3431,8 @@ void Interpreter::callBarrierInit(Function *F, const std::vector<GenericValue> &
 	if (attr)
 		WARN_ONCE("pthread-barrier-init-arg",
 			  "Ignoring non-null argument given to pthread_barrier_init.\n");
-	CALL_DRIVER(handleStore,
-		    BInitWriteLabel::create(currPos(), AtomicOrdering::NotAtomic, barrier, size,
-					    atyp, value, GET_DEPS(specialDeps)));
+	CALL_DRIVER(handleStore, BInitWriteLabel::create(currPos(), MemOrdering::NotAtomic, barrier,
+							 size, atyp, value, GET_DEPS(specialDeps)));
 
 	/* Just return 0 */
 	GenericValue result;
@@ -3434,21 +3450,21 @@ void Interpreter::callBarrierWait(Function *F, const std::vector<GenericValue> &
 	auto atyp = TYPE_TO_ATYPE(typ);
 
 	auto oldVal = CALL_DRIVER_RESET_IF_NONE(
-		handleLoad, BIncFaiReadLabel::create(
-				    currPos(), AtomicOrdering::AcquireRelease, barrier, asize, atyp,
-				    AtomicRMWInst::BinOp::Sub, SVal(1), GET_DEPS(specialDeps)));
+		handleLoad,
+		BIncFaiReadLabel::create(currPos(), MemOrdering::AcquireRelease, barrier, asize,
+					 atyp, RMWBinOp::Sub, SVal(1), GET_DEPS(specialDeps)));
 
 	/* If the barrier was uninitialized and we blocked, abort */
 	if (!oldVal.has_value() || oldVal->getSigned() <= 0 || getCurThr().isBlocked())
 		return;
 
-	auto newVal = executeAtomicRMWOperation(*oldVal, SVal(1), asize, AtomicRMWInst::BinOp::Sub);
+	auto newVal = executeRMWBinOp(*oldVal, SVal(1), asize, RMWBinOp::Sub);
 
 	CALL_DRIVER(handleStore,
-		    BIncFaiWriteLabel::create(currPos(), AtomicOrdering::AcquireRelease, barrier,
+		    BIncFaiWriteLabel::create(currPos(), MemOrdering::AcquireRelease, barrier,
 					      asize, atyp, newVal, GET_DEPS(specialDeps)));
 
-	CALL_DRIVER(handleLoad, BWaitReadLabel::create(currPos(), AtomicOrdering::Acquire, barrier,
+	CALL_DRIVER(handleLoad, BWaitReadLabel::create(currPos(), MemOrdering::Acquire, barrier,
 						       asize, atyp, GET_DEPS(specialDeps)));
 
 	auto result = (newVal != SVal(0)) ? INT_TO_GV(typ, 0)
@@ -3466,7 +3482,7 @@ void Interpreter::callBarrierDes(Function *F, const std::vector<GenericValue> &A
 	auto atyp = TYPE_TO_ATYPE(typ);
 
 	CALL_DRIVER(handleStore,
-		    BDestroyWriteLabel::create(currPos(), AtomicOrdering::NotAtomic, barrier, size,
+		    BDestroyWriteLabel::create(currPos(), MemOrdering::NotAtomic, barrier, size,
 					       atyp, SVal(0), GET_DEPS(specialDeps)));
 
 	/* Just return 0 */
@@ -3489,8 +3505,8 @@ void Interpreter::callCondVarInit(Function *F, const std::vector<GenericValue> &
 		WARN_ONCE("pthread-cvar-init-arg",
 			  "Ignoring non-null argument given to pthread_cond_init.\n");
 
-	CALL_DRIVER(handleStore, WriteLabel::create(currPos(), AtomicOrdering::NotAtomic, cvar,
-						    size, atyp, SVal(0), GET_DEPS(specialDeps)));
+	CALL_DRIVER(handleStore, WriteLabel::create(currPos(), MemOrdering::NotAtomic, cvar, size,
+						    atyp, SVal(0), GET_DEPS(specialDeps)));
 
 	GenericValue result;
 	result.IntVal = APInt(typ->getIntegerBitWidth(), 0);
@@ -3512,9 +3528,9 @@ void Interpreter::callCondVarWait(Function *F, const std::vector<GenericValue> &
 			RegisterExpr<AnnotID>::create(ASize(size).getBits(), MI->idInfo.VID.at(I)),
 			ConcreteExpr<AnnotID>::create(ASize(size).getBits(), SVal(0)))
 			.release());
-	auto val = CALL_DRIVER(handleLoad, CondVarWaitReadLabel::create(
-						   currPos(), AtomicOrdering::Monotonic, cvar, size,
-						   atyp, GET_DEPS(specialDeps)))
+	auto val = CALL_DRIVER(handleLoad,
+			       CondVarWaitReadLabel::create(currPos(), MemOrdering::Relaxed, cvar,
+							    size, atyp, GET_DEPS(specialDeps)))
 			   .value();
 
 	returnValueToCaller(typ, SVAL_TO_GV(val, typ));
@@ -3530,8 +3546,8 @@ void Interpreter::callCondVarSignal(Function *F, const std::vector<GenericValue>
 	auto atyp = TYPE_TO_ATYPE(typ);
 
 	CALL_DRIVER(handleStore,
-		    CondVarSignalWriteLabel::create(currPos(), AtomicOrdering::Monotonic, cvar,
-						    size, atyp, SVal(1), GET_DEPS(specialDeps)));
+		    CondVarSignalWriteLabel::create(currPos(), MemOrdering::Relaxed, cvar, size,
+						    atyp, SVal(1), GET_DEPS(specialDeps)));
 
 	GenericValue result;
 	result.IntVal = APInt(typ->getIntegerBitWidth(), 0);
@@ -3548,7 +3564,7 @@ void Interpreter::callCondVarBcast(Function *F, const std::vector<GenericValue> 
 	auto atyp = TYPE_TO_ATYPE(typ);
 
 	CALL_DRIVER(handleStore,
-		    CondVarBcastWriteLabel::create(currPos(), AtomicOrdering::Monotonic, cvar, size,
+		    CondVarBcastWriteLabel::create(currPos(), MemOrdering::Relaxed, cvar, size,
 						   atyp, SVal(1), GET_DEPS(specialDeps)));
 
 	GenericValue result;
@@ -3566,8 +3582,8 @@ void Interpreter::callCondVarDestroy(Function *F, const std::vector<GenericValue
 	auto atyp = TYPE_TO_ATYPE(typ);
 
 	CALL_DRIVER(handleStore,
-		    CondVarDestroyWriteLabel::create(currPos(), AtomicOrdering::Monotonic, cvar,
-						     size, atyp, SVal(-1), GET_DEPS(specialDeps)));
+		    CondVarDestroyWriteLabel::create(currPos(), MemOrdering::Relaxed, cvar, size,
+						     atyp, SVal(-1), GET_DEPS(specialDeps)));
 
 	GenericValue result;
 	result.IntVal = APInt(typ->getIntegerBitWidth(), 0);
@@ -3600,14 +3616,14 @@ void Interpreter::callHazptrProtect(Function *F, const std::vector<GenericValue>
 void Interpreter::callHazptrClear(Function *F, const std::vector<GenericValue> &ArgVals,
 				  const std::unique_ptr<EventDeps> &specialDeps)
 {
-	auto *typ = Type::getVoidTy(F->getParent()->getContext())->getPointerTo();
+	auto *typ = PointerType::getUnqual(F->getParent()->getContext());
 	auto asize = getTypeSize(typ);
 	auto atyp = TYPE_TO_ATYPE(typ);
 	auto *hp = GVTOP(ArgVals[0]);
 
 	/* FIXME: Should this be an internal null? */
-	CALL_DRIVER(handleStore, WriteLabel::create(currPos(), AtomicOrdering::Release, hp, asize,
-						    atyp, SVal()));
+	CALL_DRIVER(handleStore,
+		    WriteLabel::create(currPos(), MemOrdering::Release, hp, asize, atyp, SVal()));
 	return;
 }
 
@@ -3626,6 +3642,22 @@ void Interpreter::callHazptrRetire(Function *F, const std::vector<GenericValue> 
 				  getAddrPoDeps(getCurThr().id), nullptr);
 	CALL_DRIVER(handleFree,
 		    HpRetireLabel::create(currPos(), GVTOP(ArgVals[0]), GET_DEPS(deps)));
+}
+
+void Interpreter::callMethodBegin(Function * /*F*/, const std::vector<GenericValue> &ArgVals,
+				  const std::unique_ptr<EventDeps> & /*specialDeps*/)
+{
+	auto methodName = static_cast<const char *>(getStaticAddr(GVTOP(ArgVals[0])));
+	int32_t argVal = ArgVals.size() > 1 ? ArgVals[1].IntVal.getLimitedValue() : 0;
+	CALL_DRIVER(handleDummy, MethodBeginLabel::create(currPos(), methodName, argVal));
+}
+
+void Interpreter::callMethodEnd(Function * /*F*/, const std::vector<GenericValue> &ArgVals,
+				const std::unique_ptr<EventDeps> & /*specialDeps*/)
+{
+	auto methodName = static_cast<const char *>(getStaticAddr(GVTOP(ArgVals[0])));
+	int32_t retVal = ArgVals.size() > 1 ? ArgVals[1].IntVal.getLimitedValue() : 0;
+	CALL_DRIVER(handleDummy, MethodEndLabel::create(currPos(), methodName, retVal));
 }
 
 /* These should be eliminated before they are called */

@@ -21,23 +21,29 @@
 #include "ADT/View.hpp"
 #include "Support/Error.hpp"
 
-View &View::update(const View &v)
+auto View::size() const -> unsigned int { return view_.size(); }
+
+auto View::empty() const -> bool { return size() == 0; }
+
+auto View::contains(const Event e) const -> bool { return e.index <= getMax(e.thread); }
+
+auto View::update(const View &v) -> View &
 {
 	if (v.empty())
 		return *this;
 
 	auto size = std::max(this->size(), v.size());
-	for (auto i = 0u; i < size; i++)
+	for (auto i = 0U; i < size; i++)
 		if (getMax(i) < v.getMax(i))
 			setMax(Event(i, v.getMax(i)));
 	return *this;
 }
 
-DepView &View::update(const DepView &v) { BUG(); }
+auto View::update(const DepView &v) -> DepView & { BUG(); }
 
-VectorClock &View::update(const VectorClock &vc)
+auto View::update(const VectorClock &vc) -> VectorClock &
 {
-	if (auto *v = llvm::dyn_cast<View>(&vc))
+	if (const auto *v = llvm::dyn_cast<View>(&vc))
 		return this->update(*v);
 	BUG();
 }
@@ -45,7 +51,7 @@ VectorClock &View::update(const VectorClock &vc)
 void View::printData(llvm::raw_ostream &s) const
 {
 	s << "[ ";
-	for (auto i = 0u; i < size(); i++)
+	for (auto i = 0U; i < size(); i++)
 		s << i << ":" << getMax(i) << " ";
 	s << "]";
 }

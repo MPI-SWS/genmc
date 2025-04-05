@@ -45,28 +45,8 @@ LLVM_VERSION=`cat ${DIR}/../config.h | awk '/LLVM_VERSION/ {gsub(/"/, "", $3); p
 arrtest[0]='test' ||
     (echo 'Failure: arrays not supported in this version of bash.' && exit 2)
 
-# test whether getopt works
-getopt --test > /dev/null
-if [[ $? -ne 4 ]]; then
-    echo "`getopt --test` failed in this environment."
-    exit 1
-fi
-
-# command-line arguments
-SHORT=f,o,v:
-LONG=debug,fast,verbose:
-
-# temporarily store output to be able to check for errors
-PARSED=$(getopt --options $SHORT --longoptions $LONG --name "$0" -- "$@")
-if [[ $? -ne 0 ]]; then
-    # getopt has complained about wrong arguments to stdout
-    exit 2
-fi
-# use eval with "$PARSED" to properly handle the quoting
-eval set -- "$PARSED"
-
-# actually parse the options until we see --
-while true; do
+# parse the options until we see --
+while [[ $# -gt 0 ]]; do
     case "$1" in
 	-f|--fast)
 	    fastrun=1

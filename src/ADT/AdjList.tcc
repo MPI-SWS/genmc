@@ -20,8 +20,7 @@
 
 #include "Support/Error.hpp"
 
-template<typename T, typename H>
-void AdjList<T, H>::addNode(T a)
+template <typename T, typename H> void AdjList<T, H>::addNode(T a)
 {
 	auto id = elems.size();
 
@@ -32,11 +31,9 @@ void AdjList<T, H>::addNode(T a)
 
 	calculatedTransC = false;
 	transC.push_back(llvm::BitVector(id));
-	return;
 }
 
-template<typename T, typename H>
-void AdjList<T, H>::addEdge(NodeId a, NodeId b)
+template <typename T, typename H> void AdjList<T, H>::addEdge(NodeId a, NodeId b)
 {
 	/* If edge already exists, nothing to do */
 	if ((*this)(a, b))
@@ -46,17 +43,14 @@ void AdjList<T, H>::addEdge(NodeId a, NodeId b)
 	transC[a].set(b);
 	++inDegree[b];
 	calculatedTransC = false;
-	return;
 }
 
-template<typename T, typename H>
-void AdjList<T, H>::addEdge(T a, T b)
+template <typename T, typename H> void AdjList<T, H>::addEdge(T a, T b)
 {
 	addEdge(getIndex(a), getIndex(b));
-	return;
 }
 
-template<typename T, typename H>
+template <typename T, typename H>
 void AdjList<T, H>::addEdgesFromTo(const std::vector<T> &froms, const std::vector<T> &tos)
 {
 	for (auto &f : froms)
@@ -64,28 +58,26 @@ void AdjList<T, H>::addEdgesFromTo(const std::vector<T> &froms, const std::vecto
 			addEdge(f, t);
 }
 
-template<typename T, typename H>
-const std::vector<int> &AdjList<T, H>::getInDegrees() const
+template <typename T, typename H>
+auto AdjList<T, H>::getInDegrees() const -> const std::vector<int> &
 {
 	return inDegree;
 }
 
-template<typename T, typename H>
-template<typename FVB, typename FET, typename FEB,
-	 typename FEF, typename FVE>
+template <typename T, typename H>
+template <typename FVB, typename FET, typename FEB, typename FEF, typename FVE>
 void AdjList<T, H>::dfsUtil(NodeId i, Timestamp &t, std::vector<NodeStatus> &m,
 			    std::vector<NodeId> &p, std::vector<Timestamp> &d,
-			    std::vector<Timestamp> &f, FVB&& atEntryV, FET&& atTreeE,
-			    FEB&& atBackE, FEF&& atForwE, FVE&& atExitV) const
+			    std::vector<Timestamp> &f, FVB &&atEntryV, FET &&atTreeE, FEB &&atBackE,
+			    FEF &&atForwE, FVE &&atExitV) const
 {
 	m[i] = NodeStatus::entered;
 	d[i] = ++t;
 	atEntryV(i, t, m, p, d, f);
-	for (auto &j : nodeSucc[i]) {
+	for (const auto &j : nodeSucc[i]) {
 		if (m[j] == NodeStatus::unseen) {
 			p[j] = i;
-			dfsUtil(j, t, m, p, d, f, atEntryV, atTreeE,
-				atBackE, atForwE, atExitV);
+			dfsUtil(j, t, m, p, d, f, atEntryV, atTreeE, atBackE, atForwE, atExitV);
 			atTreeE(i, j, t, m, p, d, f);
 		} else if (m[j] == NodeStatus::entered) {
 			atBackE(i, j, t, m, p, d, f);
@@ -96,84 +88,72 @@ void AdjList<T, H>::dfsUtil(NodeId i, Timestamp &t, std::vector<NodeStatus> &m,
 	m[i] = NodeStatus::left;
 	f[i] = ++t;
 	atExitV(i, t, m, p, d, f);
-	return;
 }
 
-template<typename T, typename H>
-template<typename FVB, typename FET, typename FEB,
-	 typename FEF, typename FVE, typename FEND>
-void AdjList<T, H>::dfs(FVB&& atEntryV, FET&& atTreeE, FEB&& atBackE,
-			FEF&& atForwE, FVE&& atExitV, FEND&& atEnd) const
+template <typename T, typename H>
+template <typename FVB, typename FET, typename FEB, typename FEF, typename FVE, typename FEND>
+void AdjList<T, H>::dfs(FVB &&atEntryV, FET &&atTreeE, FEB &&atBackE, FEF &&atForwE, FVE &&atExitV,
+			FEND &&atEnd) const
 {
 	Timestamp t = 0;
 	std::vector<NodeStatus> m(nodeSucc.size(), NodeStatus::unseen); /* Node status */
-	std::vector<NodeId> p(nodeSucc.size(), -42);                    /* Node parent */
-	std::vector<Timestamp> d(nodeSucc.size(), 0);                   /* First visit */
-	std::vector<Timestamp> f(nodeSucc.size(), 0);                   /* Last visit */
+	std::vector<NodeId> p(nodeSucc.size(), -42);			/* Node parent */
+	std::vector<Timestamp> d(nodeSucc.size(), 0);			/* First visit */
+	std::vector<Timestamp> f(nodeSucc.size(), 0);			/* Last visit */
 
 	for (auto i = 0u; i < nodeSucc.size(); i++) {
 		if (m[i] == NodeStatus::unseen)
-			dfsUtil(i, t, m, p, d, f, atEntryV, atTreeE,
-				atBackE, atForwE, atExitV);
+			dfsUtil(i, t, m, p, d, f, atEntryV, atTreeE, atBackE, atForwE, atExitV);
 	}
 	atEnd(t, m, p, d, f);
-	return;
 }
 
-template<typename T, typename H>
-template<typename FVB, typename FET, typename FEB,
-	 typename FEF, typename FVE, typename FEND>
-void AdjList<T, H>::visitReachable(T a, FVB&& atEntryV, FET&& atTreeE, FEB&& atBackE,
-				   FEF&& atForwE, FVE&& atExitV, FEND&& atEnd) const
+template <typename T, typename H>
+template <typename FVB, typename FET, typename FEB, typename FEF, typename FVE, typename FEND>
+void AdjList<T, H>::visitReachable(T a, FVB &&atEntryV, FET &&atTreeE, FEB &&atBackE, FEF &&atForwE,
+				   FVE &&atExitV, FEND &&atEnd) const
 {
 	Timestamp t = 0;
 	std::vector<NodeStatus> m(nodeSucc.size(), NodeStatus::unseen); /* Node status */
-	std::vector<NodeId> p(nodeSucc.size(), -42);                    /* Node parent */
-	std::vector<Timestamp> d(nodeSucc.size(), 0);                   /* First visit */
-	std::vector<Timestamp> f(nodeSucc.size(), 0);                   /* Last visit */
+	std::vector<NodeId> p(nodeSucc.size(), -42);			/* Node parent */
+	std::vector<Timestamp> d(nodeSucc.size(), 0);			/* First visit */
+	std::vector<Timestamp> f(nodeSucc.size(), 0);			/* Last visit */
 
 	dfsUtil(getIndex(a), t, m, p, d, f, atEntryV, atTreeE, atBackE, atForwE, atExitV);
 	atEnd(t, m, p, d, f);
-	return;
 }
 
-template<typename T, typename H>
-std::vector<T> AdjList<T, H>::topoSort()
+template <typename T, typename H> auto AdjList<T, H>::topoSort() -> std::vector<T>
 {
 	std::vector<T> sort;
 
-	dfs([&](NodeId i, Timestamp &t, std::vector<NodeStatus> &m,
-		std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		std::vector<Timestamp> &f){ return; }, /* atEntryV */
+	dfs([&](NodeId i, Timestamp &t, std::vector<NodeStatus> &m, std::vector<NodeId> &p,
+		std::vector<Timestamp> &d, std::vector<Timestamp> &f) { return; }, /* atEntryV */
 	    [&](NodeId i, NodeId j, Timestamp &t, std::vector<NodeStatus> &m,
 		std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		std::vector<Timestamp> &f){ return; }, /* atTreeE */
+		std::vector<Timestamp> &f) { return; }, /* atTreeE */
 	    [&](NodeId i, NodeId j, Timestamp &t, std::vector<NodeStatus> &m,
 		std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		std::vector<Timestamp> &f){ BUG(); }, /* atBackE */
+		std::vector<Timestamp> &f) { BUG(); }, /* atBackE */
 	    [&](NodeId i, NodeId j, Timestamp &t, std::vector<NodeStatus> &m,
 		std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		std::vector<Timestamp> &f){ return; }, /* atForwE*/
-	    [&](NodeId i, Timestamp &t, std::vector<NodeStatus> &m,
-		std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		std::vector<Timestamp> &f){ /* atExitV */
-		    sort.push_back(elems[i]);
-		    return;
+		std::vector<Timestamp> &f) { return; }, /* atForwE*/
+	    [&](NodeId i, Timestamp &t, std::vector<NodeStatus> &m, std::vector<NodeId> &p,
+		std::vector<Timestamp> &d, std::vector<Timestamp> &f) { /* atExitV */
+									sort.push_back(elems[i]);
+									return;
 	    },
-	    [&](Timestamp &t, std::vector<NodeStatus> &m,
-		std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		std::vector<Timestamp> &f){ return; }); /* atEnd */
+	    [&](Timestamp &t, std::vector<NodeStatus> &m, std::vector<NodeId> &p,
+		std::vector<Timestamp> &d, std::vector<Timestamp> &f) { return; }); /* atEnd */
 
 	std::reverse(sort.begin(), sort.end());
 	return sort;
 }
 
-template<typename T, typename H>
-template<typename F>
-bool AdjList<T, H>::allTopoSortUtil(std::vector<T> &current,
-				    std::vector<bool> visited,
-				    std::vector<int> &inDegree,
-				    F&& prop, bool &found) const
+template <typename T, typename H>
+template <typename F>
+auto AdjList<T, H>::allTopoSortUtil(std::vector<T> &current, std::vector<bool> visited,
+				    std::vector<int> &inDegree, F &&prop, bool &found) const -> bool
 {
 	/* If we have already found a sorting satisfying "prop", return */
 	if (found)
@@ -224,9 +204,9 @@ bool AdjList<T, H>::allTopoSortUtil(std::vector<T> &current,
 	return found;
 }
 
-template<typename T, typename H>
-template<typename F>
-bool AdjList<T, H>::allTopoSort(F&& prop) const
+template <typename T, typename H>
+template <typename F>
+auto AdjList<T, H>::allTopoSort(F &&prop) const -> bool
 {
 	std::vector<bool> visited(elems.size(), false);
 	std::vector<T> current;
@@ -236,11 +216,12 @@ bool AdjList<T, H>::allTopoSort(F&& prop) const
 	return allTopoSortUtil(current, visited, inDegree, prop, found);
 }
 
-template<typename T, typename H>
-template<typename F>
-bool AdjList<T, H>::combineAllTopoSortUtil(unsigned int index, std::vector<std::vector<T>> &current,
-					   bool &found, const std::vector<AdjList<T, H> *> &toCombine,
-					   F&& prop)
+template <typename T, typename H>
+template <typename F>
+auto AdjList<T, H>::combineAllTopoSortUtil(unsigned int index, std::vector<std::vector<T>> &current,
+					   bool &found,
+					   const std::vector<AdjList<T, H> *> &toCombine, F &&prop)
+	-> bool
 {
 	/* If we have found a valid combination already, return */
 	if (found)
@@ -255,18 +236,19 @@ bool AdjList<T, H>::combineAllTopoSortUtil(unsigned int index, std::vector<std::
 	}
 
 	/* Otherwise, we have more matrices to extend */
-	return toCombine[index]->allTopoSort([&](std::vector<T> &sorting){
-			current.push_back(sorting);
-			if (combineAllTopoSortUtil(index + 1, current, found, toCombine, prop))
-				return true;
-			current.pop_back();
-			return false;
-		});
+	return toCombine[index]->allTopoSort([&](std::vector<T> &sorting) {
+		current.push_back(sorting);
+		if (combineAllTopoSortUtil(index + 1, current, found, toCombine, prop))
+			return true;
+		current.pop_back();
+		return false;
+	});
 }
 
-template<typename T, typename H>
-template<typename F>
-bool AdjList<T, H>::combineAllTopoSort(const std::vector<AdjList<T, H> *> &toCombine, F&& prop)
+template <typename T, typename H>
+template <typename F>
+auto AdjList<T, H>::combineAllTopoSort(const std::vector<AdjList<T, H> *> &toCombine, F &&prop)
+	-> bool
 {
 	std::vector<std::vector<T>> current; /* The current sorting for each matrix */
 	bool found = false;
@@ -274,42 +256,36 @@ bool AdjList<T, H>::combineAllTopoSort(const std::vector<AdjList<T, H> *> &toCom
 	return combineAllTopoSortUtil(0, current, found, toCombine, prop);
 }
 
-template<typename T, typename H>
-void AdjList<T, H>::transClosure()
+template <typename T, typename H> void AdjList<T, H>::transClosure()
 {
 	if (calculatedTransC)
 		return;
 
-	dfs([&](NodeId i, Timestamp &t, std::vector<NodeStatus> &m,
-		std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		std::vector<Timestamp> &f){ return; }, /* atEntryV */
+	dfs([&](NodeId i, Timestamp &t, std::vector<NodeStatus> &m, std::vector<NodeId> &p,
+		std::vector<Timestamp> &d, std::vector<Timestamp> &f) { return; }, /* atEntryV */
 	    [&](NodeId i, NodeId j, Timestamp &t, std::vector<NodeStatus> &m,
 		std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		std::vector<Timestamp> &f){ return; }, /* atTreeE */
+		std::vector<Timestamp> &f) { return; }, /* atTreeE */
 	    [&](NodeId i, NodeId j, Timestamp &t, std::vector<NodeStatus> &m,
 		std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		std::vector<Timestamp> &f){ return; }, /* atBackE*/
+		std::vector<Timestamp> &f) { return; }, /* atBackE*/
 	    [&](NodeId i, NodeId j, Timestamp &t, std::vector<NodeStatus> &m,
 		std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		std::vector<Timestamp> &f){ return; }, /* atForwE*/
-	    [&](NodeId i, Timestamp &t, std::vector<NodeStatus> &m,
-		std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		std::vector<Timestamp> &f){
+		std::vector<Timestamp> &f) { return; }, /* atForwE*/
+	    [&](NodeId i, Timestamp &t, std::vector<NodeStatus> &m, std::vector<NodeId> &p,
+		std::vector<Timestamp> &d, std::vector<Timestamp> &f) {
 		    for (auto &j : nodeSucc[i]) {
 			    transC[i] |= transC[j];
 			    transC[i].set(j);
 		    }
 	    }, /* atExitV*/
-	    [&](Timestamp &t, std::vector<NodeStatus> &m,
-		std::vector<NodeId> &p, std::vector<Timestamp> &d,
-		std::vector<Timestamp> &f){ return; }); /* atEnd */
+	    [&](Timestamp &t, std::vector<NodeStatus> &m, std::vector<NodeId> &p,
+		std::vector<Timestamp> &d, std::vector<Timestamp> &f) { return; }); /* atEnd */
 
 	calculatedTransC = true;
-	return;
 }
 
-template<typename T, typename H>
-bool AdjList<T, H>::isIrreflexive()
+template <typename T, typename H> auto AdjList<T, H>::isIrreflexive() -> bool
 {
 	for (auto i = 0u; i < getElems().size(); i++)
 		if (transC[i][i])
@@ -317,8 +293,8 @@ bool AdjList<T, H>::isIrreflexive()
 	return true;
 }
 
-template<typename T, typename H>
-llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const AdjList<T, H> &l)
+template <typename T, typename H>
+auto operator<<(llvm::raw_ostream &s, const AdjList<T, H> &l) -> llvm::raw_ostream &
 {
 	auto &elems = l.getElems();
 
@@ -327,7 +303,7 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const AdjList<T, H> &l)
 		s << e << " ";
 	s << "\n";
 
-	for (auto i = 0u; i < elems.size(); i++) {
+	for (auto i = 0U; i < elems.size(); i++) {
 		s << elems[i] << " -> ";
 		for (auto &j : l.nodeSucc[i])
 			s << elems[j] << " ";
@@ -338,9 +314,9 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream &s, const AdjList<T, H> &l)
 		return s;
 
 	s << "Transitive closure:\n";
-	for (auto i = 0u; i < elems.size(); i++) {
+	for (auto i = 0U; i < elems.size(); i++) {
 		s << elems[i] << " -> ";
-		for (auto j = 0u; j < l.transC[i].size(); j++)
+		for (auto j = 0U; j < l.transC[i].size(); j++)
 			if (l.transC[i][j])
 				s << elems[j] << " ";
 		s << "\n";

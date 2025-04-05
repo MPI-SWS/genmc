@@ -111,12 +111,8 @@ inline const WriteLabel *co_imm_pred(const ExecutionGraph &G, const EventLabel *
  **                         po-iteration utilities
  ******************************************************************************/
 
-using const_po_iterator = decltype(std::declval<const ExecutionGraph>()
-					   .po_succs(std::declval<const EventLabel *>())
-					   .begin());
-using const_reverse_po_iterator = decltype(std::declval<const ExecutionGraph>()
-						   .po_preds(std::declval<const EventLabel *>())
-						   .begin());
+using const_po_iterator = ExecutionGraph::const_po_iterator;
+using const_reverse_po_iterator = ExecutionGraph::const_reverse_po_iterator;
 
 inline auto po_succs(const ExecutionGraph &G, const EventLabel *lab) { return G.po_succs(lab); }
 
@@ -472,8 +468,7 @@ inline const ThreadStartLabel *tc_succ(const ExecutionGraph &G, const EventLabel
 inline const ThreadCreateLabel *tc_pred(const ExecutionGraph &G, const EventLabel *lab)
 {
 	auto *tsLab = llvm::dyn_cast<ThreadStartLabel>(lab);
-	return tsLab ? llvm::dyn_cast<ThreadCreateLabel>(G.getEventLabel(tsLab->getParentCreate()))
-		     : nullptr;
+	return tsLab ? tsLab->getCreate() : nullptr;
 }
 
 /*******************************************************************************
@@ -489,10 +484,9 @@ inline const ThreadJoinLabel *tj_succ(const ExecutionGraph &G, const EventLabel 
 inline const ThreadFinishLabel *tj_pred(const ExecutionGraph &G, const EventLabel *lab)
 {
 	auto *tjLab = llvm::dyn_cast<ThreadJoinLabel>(lab);
-	return (tjLab && llvm::isa<ThreadFinishLabel>(G.getLastThreadLabel(tjLab->getChildId())))
-		       ? static_cast<const ThreadFinishLabel *>(
-				 G.getLastThreadLabel(tjLab->getChildId()))
-		       : nullptr;
+	return tjLab ? llvm::dyn_cast_or_null<ThreadFinishLabel>(
+			       G.getLastThreadLabel(tjLab->getChildId()))
+		     : nullptr;
 }
 
 /*******************************************************************************
@@ -652,7 +646,7 @@ inline const MallocLabel *alloc_pred(const ExecutionGraph &G, const EventLabel *
 }
 
 /*******************************************************************************
- **                         alloc-iteration utilities
+ **                         free-iteration utilities
  ******************************************************************************/
 
 inline const FreeLabel *free_succ(const ExecutionGraph &G, const EventLabel *lab)
@@ -665,6 +659,33 @@ inline const MallocLabel *free_pred(const ExecutionGraph &G, const EventLabel *l
 {
 	auto *dLab = llvm::dyn_cast<FreeLabel>(lab);
 	return (!dLab || !dLab->getAlloc()) ? nullptr : dLab->getAlloc();
+}
+
+/*******************************************************************************
+ **                         lin-iteration utilities
+ ******************************************************************************/
+
+namespace detail {
+inline const std::vector<MethodBeginLabel *> sentinelSuccs;
+inline const std::vector<MethodEndLabel *> sentinelPreds;
+
+inline auto indirectBegin(MethodBeginLabel *lab) -> MethodBeginLabel & { return *lab; }
+inline auto indirectEnd(MethodEndLabel *lab) -> MethodEndLabel & { return *lab; }
+
+}; // namespace detail
+
+inline auto lin_succs(const ExecutionGraph &G, const EventLabel *lab)
+{
+	const auto *endLab = llvm::dyn_cast<MethodEndLabel>(lab);
+	return (endLab ? endLab->lin_succs() : std::views::all(::detail::sentinelSuccs)) |
+	       std::views::transform(::detail::indirectBegin);
+}
+
+inline auto lin_preds(const ExecutionGraph &G, const EventLabel *lab)
+{
+	const auto *begLab = llvm::dyn_cast<MethodBeginLabel>(lab);
+	return (begLab ? begLab->lin_preds() : std::views::all(::detail::sentinelPreds)) |
+	       std::views::transform(::detail::indirectEnd);
 }
 
 #endif /* GENMC_GRAPH_ITERATORS_HPP */

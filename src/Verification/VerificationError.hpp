@@ -27,7 +27,7 @@
 #include <string>
 #include <unordered_map>
 
-/* Some basic system error codes for the user -- should match include/errno.h */
+/** Some basic system error codes for the user -- should match include/errno.h */
 enum class SystemError {
 	SE_EPERM = 1,
 	SE_ENOENT = 2,
@@ -43,7 +43,7 @@ enum class SystemError {
 	SE_ESPIPE = 29,
 };
 
-/* Different errors that might be encountered during verification.
+/** Different errors that might be encountered during verification.
  * Public to enable the interpreter utilize it */
 enum class VerificationError {
 	VE_NonErrorBegin,
@@ -74,6 +74,7 @@ enum class VerificationError {
 	VE_InvalidTruncate,
 	VE_Annotation,
 	VE_MixedSize,
+	VE_LinearizabilityError,
 	VE_SystemError,
 };
 

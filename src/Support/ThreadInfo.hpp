@@ -24,12 +24,13 @@
 #include "SVal.hpp"
 #include "config.h"
 
+/** Information about a thread (thread id, SR, etc.) */
 struct ThreadInfo {
-	int id;
-	int parentId;
-	unsigned int funId;
-	SVal arg;
-	int symmId = -1;
+	int id;		    /**< Thread identifier */
+	int parentId;	    /**< ID of parent thread */
+	unsigned int funId; /**< ID for thread body (function argument to pthread_create) */
+	SVal arg;	    /**< parameter argument to pthread_create */
+	int symmId = -1;    /**< ID of previous symmetric thread if any, -1 otherwise */
 
 	ThreadInfo() = default;
 	ThreadInfo(int id, int parentId, unsigned funId, SVal arg, int symm = -1)

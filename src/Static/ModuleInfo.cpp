@@ -64,7 +64,7 @@ void ModuleInfo::collectIDs()
 	return;
 }
 
-ModuleInfo::ModuleInfo(const llvm::Module &mod) : mod(mod), varInfo(), annotInfo(), fsInfo()
+ModuleInfo::ModuleInfo(const llvm::Module &mod) : varInfo(), annotInfo(), fsInfo(), mod(mod)
 {
 	collectIDs();
 	return;

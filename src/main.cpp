@@ -24,17 +24,30 @@
 #include "Verification/GenMCDriver.hpp"
 #include "config.h"
 
+#include <llvm/Support/FileSystem.h>
+
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
-#include <fstream>
-#include <iostream>
 #include <memory>
-#include <numeric>
-#include <set>
 #include <unistd.h>
 
-auto getOutFilename(const std::shared_ptr<const Config> & /*conf*/) -> std::string
+namespace fs = llvm::sys::fs;
+
+static auto durationToMill(const std::chrono::high_resolution_clock::duration &duration)
+{
+	static constexpr long double secToMillFactor = 1e-3L;
+	return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() *
+	       secToMillFactor;
+}
+
+static auto getElapsedSecs(const std::chrono::high_resolution_clock::time_point &begin)
+	-> long double
+{
+	return durationToMill(std::chrono::high_resolution_clock::now() - begin);
+}
+
+static auto getOutFilename(const std::shared_ptr<const Config> & /*conf*/) -> std::string
 {
 	static char filenameTemplate[] = "/tmp/__genmc.ll.XXXXXX";
 	static bool createdFilename = false;
@@ -46,7 +59,7 @@ auto getOutFilename(const std::shared_ptr<const Config> & /*conf*/) -> std::stri
 	return {filenameTemplate};
 }
 
-auto buildCompilationArgs(const std::shared_ptr<const Config> &conf) -> std::string
+static auto buildCompilationArgs(const std::shared_ptr<const Config> &conf) -> std::string
 {
 	std::string args;
 
@@ -67,9 +80,9 @@ auto buildCompilationArgs(const std::shared_ptr<const Config> &conf) -> std::str
 	return args;
 }
 
-auto compileInput(const std::shared_ptr<const Config> &conf,
-		  const std::unique_ptr<llvm::LLVMContext> &ctx,
-		  std::unique_ptr<llvm::Module> &module) -> bool
+static auto compileInput(const std::shared_ptr<const Config> &conf,
+			 const std::unique_ptr<llvm::LLVMContext> &ctx,
+			 std::unique_ptr<llvm::Module> &module) -> bool
 {
 	const auto *path = CLANGPATH;
 	auto command = path + buildCompilationArgs(conf);
@@ -80,7 +93,8 @@ auto compileInput(const std::shared_ptr<const Config> &conf,
 	return true;
 }
 
-void transformInput(const std::shared_ptr<Config> &conf, llvm::Module &module, ModuleInfo &modInfo)
+static void transformInput(const std::shared_ptr<Config> &conf, llvm::Module &module,
+			   ModuleInfo &modInfo)
 {
 	LLVMModule::transformLLVMModule(module, modInfo, conf);
 	if (!conf->transformFile.empty())
@@ -97,17 +111,9 @@ void transformInput(const std::shared_ptr<Config> &conf, llvm::Module &module, M
 	}
 }
 
-auto getElapsedSecs(const std::chrono::high_resolution_clock::time_point &begin) -> long double
-{
-	static constexpr long double secToMillFactor = 1e-3L;
-	auto now = std::chrono::high_resolution_clock::now();
-	return std::chrono::duration_cast<std::chrono::milliseconds>(now - begin).count() *
-	       secToMillFactor;
-}
-
-void printEstimationResults(const std::shared_ptr<const Config> &conf,
-			    const std::chrono::high_resolution_clock::time_point &begin,
-			    const GenMCDriver::Result &res)
+static void printEstimationResults(const std::shared_ptr<const Config> &conf,
+				   const std::chrono::high_resolution_clock::time_point &begin,
+				   const GenMCDriver::Result &res)
 {
 	PRINT(VerbosityLevel::Error) << res.message;
 	PRINT(VerbosityLevel::Error)
@@ -127,9 +133,8 @@ void printEstimationResults(const std::shared_ptr<const Config> &conf,
 			    << "Estimation complete: " << res.explored << "\n";);
 }
 
-void printVerificationResults(const std::shared_ptr<const Config> &conf,
-			      const std::chrono::high_resolution_clock::time_point &begin,
-			      const GenMCDriver::Result &res)
+static void printVerificationResults(const std::shared_ptr<const Config> &conf,
+				     const GenMCDriver::Result &res)
 {
 	PRINT(VerbosityLevel::Error) << res.message;
 	PRINT(VerbosityLevel::Error)
@@ -165,9 +170,32 @@ void printVerificationResults(const std::shared_ptr<const Config> &conf,
 			if (!executions)
 				PRINT(VerbosityLevel::Error) << " 0";
 		});
+	if (conf->checkLinSpec) {
+		PRINT(VerbosityLevel::Error)
+			<< "\nNumber of checked hints: " << res.relincheResult.hintsChecked;
+		GENMC_DEBUG(PRINT(VerbosityLevel::Error) << llvm::format(
+				    "\nRelinche time: %.2Lfs",
+				    durationToMill(res.relincheResult.analysisTime)););
+	}
+}
+
+static void calculateHintsAndSaveSpec(const std::shared_ptr<const Config> &conf,
+				      const GenMCDriver::Result &res)
+{
+	auto spec = std::move(*res.specification);
+	spec.calculateHints();
+
+	PRINT(VerbosityLevel::Error) << "\n*** Specification analysis complete.\n";
 	PRINT(VerbosityLevel::Error)
-		<< "\nTotal wall-clock time: " << llvm::format("%.2Lf", getElapsedSecs(begin))
-		<< "s\n";
+		<< "Number of collected outcomes: " << spec.getNumOutcomes()
+		<< " (synchronizations: " << spec.getNumObservations() << ")\n";
+	PRINT(VerbosityLevel::Error) << "Number of hints found: " << spec.getNumHints();
+
+	std::error_code err;
+	llvm::raw_fd_ostream specFile(*conf->collectLinSpec, err, fs::CD_CreateAlways, fs::FA_Write,
+				      fs::OF_None);
+	handleFSError(err, "during save specification file");
+	serialize(specFile, spec);
 }
 
 auto main(int argc, char **argv) -> int
@@ -175,7 +203,7 @@ auto main(int argc, char **argv) -> int
 	auto begin = std::chrono::high_resolution_clock::now();
 	auto conf = std::make_shared<Config>();
 
-	conf->getConfigOptions(argc, argv);
+	parseConfig(argc, argv, *conf);
 
 	PRINT(VerbosityLevel::Error)
 		<< PACKAGE_NAME " v" PACKAGE_VERSION << " (LLVM " LLVM_VERSION ")\n"
@@ -207,7 +235,15 @@ auto main(int argc, char **argv) -> int
 
 	/* Go ahead and try to verify */
 	auto res = GenMCDriver::verify(conf, std::move(module), std::move(modInfo));
-	printVerificationResults(conf, begin, res);
+	printVerificationResults(conf, res);
+
+	/* Serialize spec if in analysis mode */
+	if (conf->collectLinSpec)
+		calculateHintsAndSaveSpec(conf, res);
+
+	PRINT(VerbosityLevel::Error)
+		<< "\nTotal wall-clock time: " << llvm::format("%.2Lf", getElapsedSecs(begin))
+		<< "s\n";
 
 	/* TODO: Check globalContext.destroy() and llvm::shutdown() */
 	return res.status == VerificationError::VE_OK ? 0 : EVERIFY;

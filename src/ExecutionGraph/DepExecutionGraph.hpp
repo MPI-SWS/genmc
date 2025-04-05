@@ -21,13 +21,14 @@
 #ifndef GENMC_DEP_EXECUTION_GRAPH_HPP
 #define GENMC_DEP_EXECUTION_GRAPH_HPP
 
+#include "ADT/DepView.hpp"
 #include "ExecutionGraph.hpp"
 
 /*******************************************************************************
  **                        DepExecutionGraph Class
  ******************************************************************************/
 
-/*
+/**
  * A specialized type of graph that also tracks dependencies. It also takes
  * these dependencies into account when restricting the graph, or when
  * calculating the prefix of an event to save.
@@ -39,9 +40,6 @@ public:
 	{
 		getEventLabel(Event::getInit())->setPrefixView(std::make_unique<DepView>());
 	}
-
-	auto getRevisitable(WriteLabel *sLab, const VectorClock &pporf)
-		-> std::vector<ReadLabel *> override;
 
 	std::unique_ptr<VectorClock> getViewFromStamp(Stamp) const override;
 

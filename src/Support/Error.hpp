@@ -22,12 +22,11 @@
 #define GENMC_ERROR_HPP
 
 #include "Logger.hpp"
+#include "config.h"
 #include <llvm/Support/Debug.h>
 #include <llvm/Support/Format.h>
 #include <llvm/Support/raw_ostream.h>
-#include <sstream>
 #include <string>
-#include <vector>
 
 #define ECOMPILE 5
 #define EGENMC 7
@@ -57,17 +56,28 @@
 			ERROR(msg);                                                                \
 		}                                                                                  \
 	})
+
+#ifdef ENABLE_GENMC_DEBUG
 #define BUG()                                                                                      \
 	do {                                                                                       \
-		LOG(VerbosityLevel::Error) << "BUG: Failure at " << __FILE__ ":" << __LINE__       \
-					   << "/" << __func__ << "()!\n";                          \
-		exit(EGENMC);                                                                      \
+		LOG(VerbosityLevel::Error) << "BUG: Internal failure at " << __FILE__ ":"          \
+					   << __LINE__ << "/" << __func__ << "()!\n";              \
+		abort();                                                                           \
 	} while (0)
+#else
+#define BUG() __builtin_unreachable()
+#endif
+#ifdef ENABLE_GENMC_DEBUG
 #define BUG_ON(condition)                                                                          \
 	do {                                                                                       \
 		if (condition)                                                                     \
 			BUG();                                                                     \
 	} while (0)
+#else
+#define BUG_ON(condition)                                                                          \
+	do {                                                                                       \
+	} while (0)
+#endif
 
 #ifdef ENABLE_GENMC_DEBUG
 #define PRINT_BUGREPORT_INFO_ONCE(id, msg) BUG()
@@ -117,6 +127,12 @@ template <typename T1, typename T2> auto format(const std::pair<T1, T2> &p) -> s
 	llvm::raw_string_ostream out(str);
 	print(out, p);
 	return out.str();
+}
+
+inline void handleFSError(std::error_code const &err, std::string const &details = "")
+{
+	ERROR_ON(err,
+		 "Filesystem error: " + err.message() + "\n" + (!details.empty() ? details : ""));
 }
 
 #endif /* GENMC_ERROR_HPP */

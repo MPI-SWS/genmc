@@ -27,6 +27,7 @@
 
 using namespace llvm;
 
+/** Convert spinloops to assume statements */
 class SpinAssumePass : public PassInfoMixin<SpinAssumePass> {
 public:
 	SpinAssumePass(bool markStarts = false) : markStarts_(markStarts) {}
@@ -34,7 +35,7 @@ public:
 	auto run(Module &M, ModuleAnalysisManager &MAM) -> PreservedAnalyses;
 
 private:
-	/* Whether we should mark spinloop starts */
+	/** Whether we should mark spinloop starts */
 	bool markStarts_{};
 };
 

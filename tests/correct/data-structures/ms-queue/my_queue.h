@@ -1,4 +1,4 @@
-#define MAX_NODES			0xf
+#define MAX_NODES			0xff
 
 typedef unsigned long long pointer;
 typedef atomic_ullong pointer_t;
@@ -24,6 +24,7 @@ typedef struct {
 } queue_t;
 
 void init_queue(queue_t *q, int num_threads);
+void clear_queue(queue_t *q, int num_threads);
 void enqueue(queue_t *q, unsigned int val);
 bool dequeue(queue_t *q, unsigned int *retVal);
 int get_thread_num();

@@ -43,14 +43,16 @@ private:
 	};
 
 public:
-	SCChecker() {};
+	SCChecker(const Config *conf) : ConsistencyChecker(conf) {};
 
 private:
 	bool isConsistent(const EventLabel *lab) const override;
+	bool isConsistent(const ExecutionGraph &g) const override;
+	bool isCoherentRelinche(const ExecutionGraph &g) const override;
 	VerificationError checkErrors(const EventLabel *lab, const EventLabel *&race) const;
 	std::vector<VerificationError> checkWarnings(const EventLabel *lab, const VSet<VerificationError> &reported, std::vector<const EventLabel *> &races) const override;
 	std::vector<EventLabel *> getCoherentStores(ReadLabel *rLab) override;
-	std::vector<ReadLabel *> getCoherentRevisits(WriteLabel *sLab, const VectorClock &pporf) override;
+	void filterCoherentRevisits(WriteLabel *sLab, std::vector<ReadLabel *> &ls) override;
 	std::vector<EventLabel *> getCoherentPlacings(WriteLabel *sLab) override;
 	void updateMMViews(EventLabel *lab) override;
 	std::unique_ptr<VectorClock> calculatePrefixView(const EventLabel *lab) const override;
@@ -60,20 +62,6 @@ private:
 	void calculateViews(EventLabel *lab);
 	mutable const EventLabel *cexLab{};
 
-	mutable std::vector<NodeStatus> visitedCalc57_0;
-	mutable std::vector<NodeStatus> visitedCalc57_1;
-	mutable std::vector<NodeStatus> visitedCalc57_2;
-	mutable std::vector<NodeStatus> visitedCalc57_3;
-
-	bool visitCalc57_0(const EventLabel *lab, View &calcRes) const;
-	bool visitCalc57_1(const EventLabel *lab, View &calcRes) const;
-	bool visitCalc57_2(const EventLabel *lab, View &calcRes) const;
-	bool visitCalc57_3(const EventLabel *lab, View &calcRes) const;
-
-	View visitCalc57(const EventLabel *lab) const;
-	const View&getHbStableView(const EventLabel *lab) const { return lab->view(0); }
-
-	auto checkCalc57(const EventLabel *lab) const;
 	mutable std::vector<NodeStatus> visitedCalc62_0;
 	mutable std::vector<NodeStatus> visitedCalc62_1;
 	mutable std::vector<NodeStatus> visitedCalc62_2;
@@ -85,19 +73,56 @@ private:
 	bool visitCalc62_3(const EventLabel *lab, View &calcRes) const;
 
 	View visitCalc62(const EventLabel *lab) const;
-	const View&getPorfStableView(const EventLabel *lab) const { return lab->view(1); }
+	const View&getPorfStableView(const EventLabel *lab) const { return lab->view(0); }
 
 	auto checkCalc62(const EventLabel *lab) const;
-	mutable std::vector<NodeVisitStatus> visitedCoherence_0;
-	mutable std::vector<NodeVisitStatus> visitedCoherence_1;
-	mutable std::vector<NodeVisitStatus> visitedCoherence_2;
-	mutable uint32_t visitedCoherenceAccepting;
+	mutable std::vector<NodeStatus> visitedCalc63_0;
+	mutable std::vector<NodeStatus> visitedCalc63_1;
+	mutable std::vector<NodeStatus> visitedCalc63_2;
+	mutable std::vector<NodeStatus> visitedCalc63_3;
 
-	bool visitCoherence_0(const EventLabel *lab) const;
-	bool visitCoherence_1(const EventLabel *lab) const;
-	bool visitCoherence_2(const EventLabel *lab) const;
+	bool visitCalc63_0(const EventLabel *lab, View &calcRes) const;
+	bool visitCalc63_1(const EventLabel *lab, View &calcRes) const;
+	bool visitCalc63_2(const EventLabel *lab, View &calcRes) const;
+	bool visitCalc63_3(const EventLabel *lab, View &calcRes) const;
 
-	bool visitCoherenceFull(const ExecutionGraph &g) const;
+	View visitCalc63(const EventLabel *lab) const;
+	const View&getHbStableView(const EventLabel *lab) const { return lab->view(1); }
+
+	auto checkCalc63(const EventLabel *lab) const;
+	mutable std::vector<NodeStatus> visitedCalc64_0;
+	mutable std::vector<NodeStatus> visitedCalc64_1;
+	mutable std::vector<NodeStatus> visitedCalc64_2;
+	mutable std::vector<NodeStatus> visitedCalc64_3;
+	mutable std::vector<NodeStatus> visitedCalc64_4;
+
+	bool visitCalc64_0(const EventLabel *lab, View &calcRes) const;
+	bool visitCalc64_1(const EventLabel *lab, View &calcRes) const;
+	bool visitCalc64_2(const EventLabel *lab, View &calcRes) const;
+	bool visitCalc64_3(const EventLabel *lab, View &calcRes) const;
+	bool visitCalc64_4(const EventLabel *lab, View &calcRes) const;
+
+	View visitCalc64(const EventLabel *lab) const;
+	const View&getHbRelincheView(const EventLabel *lab) const { return lab->view(2); }
+
+	auto checkCalc64(const EventLabel *lab) const;
+	mutable std::vector<NodeStatus> visitedCoherence_0;
+	mutable std::vector<NodeStatus> visitedCoherence_1;
+	mutable std::vector<NodeStatus> visitedCoherence_2;
+	mutable std::vector<NodeStatus> visitedCoherence_3;
+	mutable std::vector<NodeStatus> visitedCoherence_4;
+	mutable std::vector<NodeStatus> visitedCoherence_5;
+	mutable std::vector<NodeStatus> visitedCoherence_6;
+
+	bool visitCoherence_0(const EventLabel *lab, const EventLabel *initLab) const;
+	bool visitCoherence_1(const EventLabel *lab, const EventLabel *initLab) const;
+	bool visitCoherence_2(const EventLabel *lab, const EventLabel *initLab) const;
+	bool visitCoherence_3(const EventLabel *lab, const EventLabel *initLab) const;
+	bool visitCoherence_4(const EventLabel *lab, const EventLabel *initLab) const;
+	bool visitCoherence_5(const EventLabel *lab, const EventLabel *initLab) const;
+	bool visitCoherence_6(const EventLabel *lab, const EventLabel *initLab) const;
+
+	bool visitCoherenceRelinche(const ExecutionGraph &g) const;
 
 	mutable std::vector<NodeVisitStatus> visitedConsAcyclic1_0;
 	mutable uint32_t visitedConsAcyclic1Accepting;
@@ -110,6 +135,7 @@ private:
 
 	bool checkUnlessConsAcyclic1(const EventLabel *lab) { return false; }
 	bool checkConsAcyclic1(const EventLabel *lab) const;
+	bool checkConsAcyclic1(const ExecutionGraph &g) const;
 	bool visitError2(const EventLabel *lab) const;
 	mutable std::vector<NodeStatus> visitedLHSUnlessError2_0;
 	mutable std::vector<NodeStatus> visitedLHSUnlessError2_1;

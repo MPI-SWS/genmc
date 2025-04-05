@@ -26,16 +26,14 @@
 #include <llvm/ADT/Hashing.h>
 #include <llvm/Support/raw_ostream.h>
 
-#include <compare>
-
 /**
  * Represents the position of a given label in an execution graph.
  */
 struct Event {
-	Event() : thread(DEF_IDX), index(DEF_IDX){};
+	Event() : thread(DEF_IDX), index(DEF_IDX) {};
 
 	/** Constructs an event at the given position */
-	Event(int tid, int idx) : thread(tid), index(idx){};
+	Event(int tid, int idx) : thread(tid), index(idx) {};
 
 	/** Returns the INIT event */
 	static auto getInit() -> Event { return {0, 0}; };
@@ -55,30 +53,25 @@ struct Event {
 	/** Returns the po-successor. No bounds checking is performed  */
 	[[nodiscard]] auto next() const -> Event { return {thread, index + 1}; };
 
-	[[nodiscard]] inline auto operator==(const Event &) const -> bool = default;
-	[[nodiscard]] inline auto operator<=>(const Event &other) const -> std::partial_ordering
-	{
-		return this->thread == other.thread ? this->index <=> other.index
-						    : std::partial_ordering::unordered;
-	}
+	[[nodiscard]] auto operator<=>(const Event &other) const = default;
 
-	inline auto operator++() -> Event &
+	auto operator++() -> Event &
 	{
 		++index;
 		return *this;
 	}
-	inline auto operator++(int) -> Event
+	auto operator++(int) -> Event
 	{
 		auto tmp = *this;
 		operator++();
 		return tmp;
 	}
-	inline auto operator--() -> Event &
+	auto operator--() -> Event &
 	{
 		--index;
 		return *this;
 	}
-	inline auto operator--(int) -> Event
+	auto operator--(int) -> Event
 	{
 		auto tmp = *this;
 		operator--();
@@ -101,6 +94,8 @@ private:
 };
 
 auto operator<<(llvm::raw_ostream &s, Event e) -> llvm::raw_ostream &;
+
+using Edge = std::pair<Event, Event>;
 
 namespace std {
 template <> struct hash<Event> {

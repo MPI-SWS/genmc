@@ -155,70 +155,72 @@ HANDLE_PURE_FUNCTION(12, "__VERIFIER_annotate_begin", AnnotateBegin)
 HANDLE_PURE_FUNCTION(13, "__VERIFIER_annotate_end", AnnotateEnd)
 HANDLE_PURE_FUNCTION(14, "__VERIFIER_hazptr_protect", HazptrProtect)
 HANDLE_PURE_FUNCTION(15, "__VERIFIER_hazptr_clear", HazptrClear)
-LAST_PURE_FUNCTION(15)
+HANDLE_PURE_FUNCTION(16, "__VERIFIER_method_begin", MethodBegin)
+HANDLE_PURE_FUNCTION(17, "__VERIFIER_method_end", MethodEnd)
+LAST_PURE_FUNCTION(17)
 
 /*
  * Mutex functions - these denote some mutex operation.
  * Useful to distinguish for tracking dependencies.
  */
-FIRST_MUTEX_FUNCTION(16)
-HANDLE_MUTEX_FUNCTION(16, "__VERIFIER_mutex_init", MutexInit)
-HANDLE_MUTEX_FUNCTION(17, "__VERIFIER_mutex_lock", MutexLock)
-HANDLE_MUTEX_FUNCTION(18, "__VERIFIER_mutex_unlock", MutexUnlock)
-HANDLE_MUTEX_FUNCTION(19, "__VERIFIER_mutex_trylock", MutexTrylock)
-HANDLE_MUTEX_FUNCTION(20, "__VERIFIER_mutex_destroy", MutexDestroy)
-LAST_MUTEX_FUNCTION(20)
+FIRST_MUTEX_FUNCTION(18)
+HANDLE_MUTEX_FUNCTION(18, "__VERIFIER_mutex_init", MutexInit)
+HANDLE_MUTEX_FUNCTION(19, "__VERIFIER_mutex_lock", MutexLock)
+HANDLE_MUTEX_FUNCTION(20, "__VERIFIER_mutex_unlock", MutexUnlock)
+HANDLE_MUTEX_FUNCTION(21, "__VERIFIER_mutex_trylock", MutexTrylock)
+HANDLE_MUTEX_FUNCTION(22, "__VERIFIER_mutex_destroy", MutexDestroy)
+LAST_MUTEX_FUNCTION(22)
 
 /*
  * Barrier functions - for barrier operations
  */
-FIRST_BARRIER_FUNCTION(21)
-HANDLE_BARRIER_FUNCTION(21, "__VERIFIER_barrier_init", BarrierInit)
-HANDLE_BARRIER_FUNCTION(22, "__VERIFIER_barrier_wait", BarrierWait)
-HANDLE_BARRIER_FUNCTION(23, "__VERIFIER_barrier_destroy", BarrierDes)
-LAST_BARRIER_FUNCTION(23)
+FIRST_BARRIER_FUNCTION(23)
+HANDLE_BARRIER_FUNCTION(23, "__VERIFIER_barrier_init", BarrierInit)
+HANDLE_BARRIER_FUNCTION(24, "__VERIFIER_barrier_wait", BarrierWait)
+HANDLE_BARRIER_FUNCTION(25, "__VERIFIER_barrier_destroy", BarrierDes)
+LAST_BARRIER_FUNCTION(25)
 
 /*
  * Condvar functions - for condition variables.
  */
-FIRST_CONDVAR_FUNCTION(24)
-HANDLE_CONDVAR_FUNCTION(24, "__VERIFIER_cond_init", CondVarInit)
-HANDLE_CONDVAR_FUNCTION(45, "__VERIFIER_cond_wait", CondVarWait)
-HANDLE_CONDVAR_FUNCTION(26, "__VERIFIER_cond_signal", CondVarSignal)
-HANDLE_CONDVAR_FUNCTION(27, "__VERIFIER_cond_broadcast", CondVarBcast)
-HANDLE_CONDVAR_FUNCTION(28, "__VERIFIER_cond_destroy", CondVarDestroy)
-LAST_CONDVAR_FUNCTION(28)
+FIRST_CONDVAR_FUNCTION(26)
+HANDLE_CONDVAR_FUNCTION(26, "__VERIFIER_cond_init", CondVarInit)
+HANDLE_CONDVAR_FUNCTION(27, "__VERIFIER_cond_wait", CondVarWait)
+HANDLE_CONDVAR_FUNCTION(28, "__VERIFIER_cond_signal", CondVarSignal)
+HANDLE_CONDVAR_FUNCTION(29, "__VERIFIER_cond_broadcast", CondVarBcast)
+HANDLE_CONDVAR_FUNCTION(30, "__VERIFIER_cond_destroy", CondVarDestroy)
+LAST_CONDVAR_FUNCTION(30)
 
 /*
  * Alloc functions - for memory allocation.
  */
-FIRST_ALLOC_FUNCTION(29)
-HANDLE_ALLOC_FUNCTION(29, "__VERIFIER_malloc", Malloc)
-HANDLE_ALLOC_FUNCTION(30, "__VERIFIER_malloc_aligned", MallocAligned)
-HANDLE_ALLOC_FUNCTION(31, "__VERIFIER_palloc", PMalloc)
-HANDLE_ALLOC_FUNCTION(32, "__VERIFIER_hazptr_alloc", HazptrAlloc)
-LAST_ALLOC_FUNCTION(32)
+FIRST_ALLOC_FUNCTION(31)
+HANDLE_ALLOC_FUNCTION(31, "__VERIFIER_malloc", Malloc)
+HANDLE_ALLOC_FUNCTION(32, "__VERIFIER_malloc_aligned", MallocAligned)
+HANDLE_ALLOC_FUNCTION(33, "__VERIFIER_palloc", PMalloc)
+HANDLE_ALLOC_FUNCTION(34, "__VERIFIER_hazptr_alloc", HazptrAlloc)
+LAST_ALLOC_FUNCTION(34)
 
 /*
  * Free functions - for memory deallocation.
  */
-FIRST_FREE_FUNCTION(33)
-HANDLE_FREE_FUNCTION(33, "__VERIFIER_free", Free)
-HANDLE_FREE_FUNCTION(34, "__VERIFIER_hazptr_free", HazptrFree)
-HANDLE_FREE_FUNCTION(35, "__VERIFIER_hazptr_retire", HazptrRetire)
-LAST_FREE_FUNCTION(35)
+FIRST_FREE_FUNCTION(35)
+HANDLE_FREE_FUNCTION(35, "__VERIFIER_free", Free)
+HANDLE_FREE_FUNCTION(36, "__VERIFIER_hazptr_free", HazptrFree)
+HANDLE_FREE_FUNCTION(37, "__VERIFIER_hazptr_retire", HazptrRetire)
+LAST_FREE_FUNCTION(37)
 
 /*
  * Other functions - other function calls (w/ side effects)
  * that GenMC needs to track.
  */
-FIRST_OTHER_FUNCTION(36)
-HANDLE_OTHER_FUNCTION(36, "__VERIFIER_thread_create", ThreadCreate)
-HANDLE_OTHER_FUNCTION(37, "__VERIFIER_thread_create_symmetric", ThreadCreateSymmetric)
-HANDLE_OTHER_FUNCTION(38, "__VERIFIER_thread_join", ThreadJoin)
-HANDLE_OTHER_FUNCTION(39, "__VERIFIER_thread_exit", ThreadExit)
-HANDLE_OTHER_FUNCTION(40, "__VERIFIER_atexit", AtExit)
-LAST_OTHER_FUNCTION(40)
+FIRST_OTHER_FUNCTION(38)
+HANDLE_OTHER_FUNCTION(38, "__VERIFIER_thread_create", ThreadCreate)
+HANDLE_OTHER_FUNCTION(39, "__VERIFIER_thread_create_symmetric", ThreadCreateSymmetric)
+HANDLE_OTHER_FUNCTION(40, "__VERIFIER_thread_join", ThreadJoin)
+HANDLE_OTHER_FUNCTION(41, "__VERIFIER_thread_exit", ThreadExit)
+HANDLE_OTHER_FUNCTION(42, "__VERIFIER_atexit", AtExit)
+LAST_OTHER_FUNCTION(42)
 
 #undef FIRST_PURE_FUNCTION
 #undef HANDLE_PURE_FUNCTION
