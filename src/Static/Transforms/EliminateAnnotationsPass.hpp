@@ -17,17 +17,23 @@
 #include <llvm/Passes/PassBuilder.h>
 
 using namespace llvm;
-class Config;
 
 class EliminateAnnotationsPass : public PassInfoMixin<EliminateAnnotationsPass> {
 public:
-	EliminateAnnotationsPass(const Config *conf) : conf_(conf) {}
+	struct AnnotationOptions {
+		bool annotHelper{};
+		bool annotConf{};
+		bool annotFinal{};
+	};
+
+	EliminateAnnotationsPass(AnnotationOptions options) : options_(options) {}
+
 	auto run(Function &F, FunctionAnalysisManager &FAM) -> PreservedAnalyses;
 
 private:
-	[[nodiscard]] auto getConf() const -> const Config * { return conf_; }
+	[[nodiscard]] auto getOptions() const -> const AnnotationOptions & { return options_; }
 
-	const Config *conf_;
+	AnnotationOptions options_;
 };
 
 #endif /* GENMC_ELIMINATE_ANNOTATIONS_PASS_HPP */

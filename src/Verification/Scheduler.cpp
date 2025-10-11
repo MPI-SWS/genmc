@@ -13,12 +13,12 @@
 
 #include "Verification/Scheduler.hpp"
 #include "ADT/View.hpp"
-#include "Config/Config.hpp"
 #include "ExecutionGraph/Event.hpp"
 #include "ExecutionGraph/EventLabel.hpp"
 #include "ExecutionGraph/GraphIterators.hpp"
 #include "ExecutionGraph/GraphUtils.hpp"
 #include "Support/Error.hpp"
+#include "Verification/Config.hpp"
 
 #include <llvm/Support/Casting.h>
 
@@ -114,13 +114,6 @@ void Scheduler::resetExplorationOptions(const ExecutionGraph &g)
 		const auto *rLab = llvm::dyn_cast<ReadLabel>(g.getLastThreadLabel(tid));
 		if (!rLab)
 			continue;
-
-		if (llvm::isa<LockCasReadLabel>(rLab) &&
-		    llvm::isa_and_nonnull<LockNotAcqBlockLabel>(g.po_imm_succ(rLab)) &&
-		    !getConf()->bound.has_value()) {
-			prioritize(rLab->getRf()->getPos());
-			return;
-		}
 
 		auto rpreds = po_preds(g, rLab);
 		auto oLabIt = std::ranges::find_if(

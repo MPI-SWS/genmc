@@ -40,8 +40,8 @@ typedef __VERIFIER_barrierattr_t pthread_barrierattr_t;
 typedef __VERIFIER_mutex_t pthread_mutex_t;
 typedef __VERIFIER_mutexattr_t pthread_mutexattr_t;
 /* typedef int pthread_once_t; */
-/* typedef struct { int __private; } pthread_rwlock_t; */
-/* typedef struct { int __private; } pthread_rwlockattr_t; */
+typedef __VERIFIER_rwlock_t pthread_rwlock_t;
+typedef __VERIFIER_rwlockattr_t pthread_rwlockattr_t;
 /* typedef struct { int __private; } pthread_spinlock_t; */
 typedef __VERIFIER_thread_t pthread_t;
 
@@ -442,36 +442,88 @@ int pthread_mutex_unlock(pthread_mutex_t *__mutex)
 /* 					     int __prioceiling) ; */
 
 
-/* /\* Functions for handling read-write locks.  *\/ */
+/* Functions for handling read-write locks.  */
 
-/* /\* Initialize read-write lock RWLOCK using attributes ATTR, or use */
-/*    the default values if later is NULL.  *\/ */
-/* extern int pthread_rwlock_init (pthread_rwlock_t *__restrict __rwlock, */
-/* 				const pthread_rwlockattr_t *__restrict */
-/* 				__attr) ; */
+static __thread bool __VERIFIER_rwlock_reader = false;
 
-/* /\* Destroy read-write lock RWLOCK.  *\/ */
-/* extern int pthread_rwlock_destroy (pthread_rwlock_t *__rwlock) */
-/*      ; */
+/* Initialize read-write lock RWLOCK using attributes ATTR, or use
+   the default values if later is NULL.  */
+__attribute__((always_inline)) static inline int
+pthread_rwlock_init(pthread_rwlock_t *__restrict __rwlock,
+		    const pthread_rwlockattr_t *__restrict __attr)
+{
+	for (int i = 0U; i < __VERIFIER_MAX_THREAD_NUM; i++)
+		__VERIFIER_mutex_init(&__rwlock->__private[i], NULL);
+	return 0;
+}
 
-/* /\* Acquire read lock for RWLOCK.  *\/ */
-/* extern int pthread_rwlock_rdlock (pthread_rwlock_t *__rwlock) */
-/*      ; */
+/* Destroy read-write lock RWLOCK.  */
+__attribute__ ((always_inline)) static inline
+int pthread_rwlock_destroy (pthread_rwlock_t *__rwlock)
+{
+	for (int i = 0U; i < __VERIFIER_MAX_THREAD_NUM; i++)
+		__VERIFIER_mutex_destroy(&__rwlock->__private[i]);
+	return 0;
+}
 
-/* /\* Try to acquire read lock for RWLOCK.  *\/ */
-/* extern int pthread_rwlock_tryrdlock (pthread_rwlock_t *__rwlock) */
-/*   ; */
+/* Acquire read lock for RWLOCK.  */
+__attribute__ ((always_inline)) static inline
+int pthread_rwlock_rdlock (pthread_rwlock_t *__rwlock)
+{
+	long self = __VERIFIER_thread_self();
+	assert(self < __VERIFIER_MAX_THREAD_NUM &&
+	       "Max supported thread number for rwlocks exceeded! Use -D__VERIFIER_MAX_THREAD_NUM "
+	       "to set a different limit.");
+	__VERIFIER_rwlock_reader = true;
+	return __VERIFIER_mutex_lock(&__rwlock->__private[self]);
+}
 
-/* /\* Acquire write lock for RWLOCK.  *\/ */
-/* extern int pthread_rwlock_wrlock (pthread_rwlock_t *__rwlock) */
-/*      ; */
+/* Try to acquire read lock for RWLOCK.  */
+__attribute__ ((always_inline)) static inline
+int pthread_rwlock_tryrdlock (pthread_rwlock_t *__rwlock)
+{
+	long self = __VERIFIER_thread_self();
+	assert(self < __VERIFIER_MAX_THREAD_NUM &&
+	       "Max supported thread number for rwlocks exceeded! Use -D__VERIFIER_MAX_THREAD_NUM "
+	       "to set a different limit.");
+	__VERIFIER_rwlock_reader = true;
+	return __VERIFIER_mutex_trylock(&__rwlock->__private[self]);
+}
+
+/* Acquire write lock for RWLOCK.  */
+__attribute__ ((always_inline)) static inline
+int pthread_rwlock_wrlock (pthread_rwlock_t *__rwlock)
+{
+	long self = __VERIFIER_thread_self();
+	assert(self < __VERIFIER_MAX_THREAD_NUM &&
+	       "Max supported thread number for rwlocks exceeded! Use -D__VERIFIER_MAX_THREAD_NUM "
+	       "to set a different limit.");
+	__VERIFIER_rwlock_reader = false;
+	for (int i = 0U; i < __VERIFIER_MAX_THREAD_NUM; i++)
+		__VERIFIER_mutex_lock(&__rwlock->__private[i]);
+	return 0;
+}
 
 /* /\* Try to acquire write lock for RWLOCK.  *\/ */
-/* extern int pthread_rwlock_trywrlock (pthread_rwlock_t *__rwlock) */
+/* __attribute__ ((always_inline)) static inline */
+/* int pthread_rwlock_trywrlock (pthread_rwlock_t *__rwlock) */
 /*      ; */
 
-/* /\* Unlock RWLOCK.  *\/ */
-/* extern int pthread_rwlock_unlock (pthread_rwlock_t *__rwlock); */
+/* Unlock RWLOCK.  */
+__attribute__((always_inline)) static inline int pthread_rwlock_unlock(pthread_rwlock_t *__rwlock)
+{
+	long self = __VERIFIER_thread_self();
+	assert(self < __VERIFIER_MAX_THREAD_NUM &&
+	       "Max supported thread number for rwlocks exceeded! Use -D__VERIFIER_MAX_THREAD_NUM "
+	       "to set a different limit.");
+
+	if (__VERIFIER_rwlock_reader)
+		return __VERIFIER_mutex_unlock(&__rwlock->__private[self]);
+
+	for (int i = 0U; i < __VERIFIER_MAX_THREAD_NUM; i++)
+		__VERIFIER_mutex_unlock(&__rwlock->__private[i]);
+	return 0;
+}
 
 
 /* /\* Functions for handling read-write lock attributes.  *\/ */

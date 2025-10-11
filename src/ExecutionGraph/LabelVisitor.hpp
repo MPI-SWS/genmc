@@ -72,14 +72,6 @@ public:
 	{
 		return DELEGATE_LABEL(BlockLabel);
 	}
-	void visitLockNotAcqBlockLabel(const LockNotAcqBlockLabel &lab)
-	{
-		return DELEGATE_LABEL(BlockLabel);
-	}
-	void visitLockNotRelBlockLabel(const LockNotRelBlockLabel &lab)
-	{
-		return DELEGATE_LABEL(BlockLabel);
-	}
 	void visitBarrierBlockLabel(const BarrierBlockLabel &lab)
 	{
 		return DELEGATE_LABEL(BlockLabel);
@@ -230,6 +222,7 @@ public:
 		return DELEGATE_LABEL(EventLabel);
 	}
 	void visitMethodEndLabel(const MethodEndLabel &lab) { return DELEGATE_LABEL(EventLabel); }
+	void visitOutputLabel(const OutputLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 
 	/* Matchers for abstract classes */
 
@@ -353,6 +346,12 @@ public:
 	{
 		DELEGATE_LABEL(EventLabel);
 		out << " (\"" << lab.getName() << "\", " << lab.getResult() << ")";
+	}
+
+	void visitOutputLabel(const OutputLabel &lab)
+	{
+		DELEGATE_LABEL(EventLabel);
+		out << ": " << lab.getMsg();
 	}
 
 	/* Generic handlers */

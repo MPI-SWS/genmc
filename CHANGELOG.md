@@ -10,6 +10,18 @@ released.
 - Merge of MIXER [POPL'25] into mainline GenMC
 - Documentation for LLVM-based Rust frontend
 
+
+## [0.13.1] - 2025.10.11
+### Added
+
+- Experimental support for `pthread_rwlock`
+- `__VERIFIER_output` primitive to add user info to printed graphs
+
+### Fixes
+
+- Bug fixes
+
+
 ## [0.13.0] - 2025.08.05
 ### Changes
 
@@ -18,6 +30,7 @@ released.
 ### Fixes
 
 - Minor comments and bug fixes
+
 
 ## [0.12.0] - 2025.07.24
 ### Added

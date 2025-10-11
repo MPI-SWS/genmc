@@ -40,7 +40,7 @@ pub fn main() {
     }
 
     for j in 0..NUM_THREADS {
-        unsafe { threads[j].assume_init_mut() }.join_keep().unwrap();
+        unsafe { threads[j].assume_init_mut().join_keep().unwrap() };
     }
 
     //let h1 = std::thread::spawn_f(threadW0);

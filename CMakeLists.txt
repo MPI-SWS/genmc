@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12...4.0)
-project(genmc VERSION 0.13.0 LANGUAGES CXX C)
+project(genmc VERSION 0.13.1 LANGUAGES CXX C)
 
 enable_testing()
 include(CTest)
@@ -40,24 +40,28 @@ execute_process(COMMAND "${LLVM_CONFIG_PATH}" --build-mode OUTPUT_VARIABLE LLVM_
 
 
 # Find Rust-installations in path given by the user
-find_program(RUSTC_PATH rustc PATHS ${RUST_BIN_PATH} NO_CACHE NO_DEFAULT_PATH)
-find_program(CARGO_PATH cargo PATHS ${RUST_BIN_PATH} NO_CACHE NO_DEFAULT_PATH)
-if(NOT RUSTC_PATH)
-  message(STATUS "Could NOT find Rust, skipping...")
-else()
-  # Determine the LLVM-version used by Rust, reject if it's a different major version
-  execute_process(COMMAND "${RUSTC_PATH}" -vV OUTPUT_VARIABLE RUSTC_VERSION)
-  string(REGEX MATCH "LLVM version: (([0-9]+)\\.[0-9]+\\.[0-9]+)" _ ${RUSTC_VERSION})
-  set(RUSTC_LLVM_VERSION "${CMAKE_MATCH_1}")
-  set(RUSTC_LLVM_VERSION_MAJOR "${CMAKE_MATCH_2}")
-
-  message(STATUS "Found rustc ${RUSTC_PATH} (LLVM-version: ${RUSTC_LLVM_VERSION})")
-  message(STATUS "Found cargo ${CARGO_PATH}")
-  if(LLVM_PACKAGE_VERSION MATCHES "${RUSTC_LLVM_VERSION_MAJOR}\\.[0-9]+\\.[0-9]+")
-    set(CONFIG_RUSTC_PATH "${RUSTC_PATH}")
-    set(CONFIG_CARGO_PATH "${CARGO_PATH}")
+option(ENABLE_RUST "Enable compiling using Rust inputs" OFF)
+if(ENABLE_RUST)
+  message(STATUS "Rust enabled!")
+  find_program(RUSTC_PATH rustc HINTS ${CMAKE_PREFIX_PATH} NO_CACHE NO_DEFAULT_PATH)
+  find_program(CARGO_PATH cargo HINTS ${CMAKE_PREFIX_PATH} NO_CACHE NO_DEFAULT_PATH)
+  if(NOT RUSTC_PATH)
+    message(FATAL_ERROR "Could not find a Rust installation")
   else()
-    message(STATUS "Rust using different major LLVM-version, skipping...")
+    # Determine the LLVM-version used by Rust, reject if it's a different major version
+    execute_process(COMMAND "${RUSTC_PATH}" -vV OUTPUT_VARIABLE RUSTC_VERSION)
+    string(REGEX MATCH "LLVM version: (([0-9]+)\\.[0-9]+\\.[0-9]+)" _ ${RUSTC_VERSION})
+    set(RUSTC_LLVM_VERSION "${CMAKE_MATCH_1}")
+    set(RUSTC_LLVM_VERSION_MAJOR "${CMAKE_MATCH_2}")
+
+    message(STATUS "Found rustc ${RUSTC_PATH} (LLVM-version: ${RUSTC_LLVM_VERSION})")
+    message(STATUS "Found cargo ${CARGO_PATH}")
+    if(LLVM_PACKAGE_VERSION MATCHES "${RUSTC_LLVM_VERSION_MAJOR}\\.[0-9]+\\.[0-9]+")
+      set(CONFIG_RUSTC_PATH "${RUSTC_PATH}")
+      set(CONFIG_CARGO_PATH "${CARGO_PATH}")
+    else()
+      message(FATAL_ERROR "Rust using different major LLVM-version then GenMC!")
+    endif()
   endif()
 endif()
 

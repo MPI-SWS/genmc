@@ -478,8 +478,6 @@ BLOCK_PURE_SUBCLASS(FaiZNEBlock);
 BLOCK_PURE_SUBCLASS(LockZNEBlock);
 BLOCK_PURE_SUBCLASS(HelpedCASBlock);
 BLOCK_PURE_SUBCLASS(ConfirmationBlock);
-BLOCK_PURE_SUBCLASS(LockNotAcqBlock);
-BLOCK_PURE_SUBCLASS(LockNotRelBlock);
 BLOCK_PURE_SUBCLASS(BarrierBlock);
 BLOCK_PURE_SUBCLASS(ErrorBlock);
 BLOCK_PURE_SUBCLASS(UserBlock);
@@ -1907,6 +1905,25 @@ private:
 	std::string name_;
 	int32_t result_;
 	std::vector<MethodBeginLabel *> linSuccs_;
+};
+
+/*******************************************************************************
+ **                           OutputLabel Class
+ ******************************************************************************/
+
+/** Prints a string in the execution graph **/
+class OutputLabel : public EventLabel {
+
+public:
+	OutputLabel(Event pos, std::string msg)
+		: EventLabel(Output, pos, MemOrdering::NotAtomic), msg_(std::move(msg))
+	{}
+
+	[[nodiscard]] auto getMsg() const -> const std::string & { return msg_; }
+
+	DEFINE_STANDARD_MEMBERS(Output)
+private:
+	std::string msg_;
 };
 
 /*******************************************************************************

@@ -32,8 +32,6 @@ SystemError systemErrorNumber;
 llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const VerificationError &st)
 {
 	switch (st) {
-	case VerificationError::VE_OK:
-		return s << "OK";
 	case VerificationError::VE_Safety:
 		return s << "Safety violation";
 	case VerificationError::VE_Recovery:

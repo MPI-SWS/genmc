@@ -18,10 +18,10 @@ fn consumer(queue: &Queue<u32>) {
 
 pub fn main() {
     let q: Queue<u32> = Queue::new();
-    let producer1 = std::thread::spawn_f_args(producer, &q);
-    let producer2 = std::thread::spawn_f_args(producer, &q);
-    let consumer1 = std::thread::spawn_f_args(consumer, &q);
-    let consumer2 = std::thread::spawn_f_args(consumer, &q);
+    let producer1 = unsafe { std::thread::spawn_f_args(producer, &q) };
+    let producer2 = unsafe { std::thread::spawn_f_args(producer, &q) };
+    let consumer1 = unsafe { std::thread::spawn_f_args(consumer, &q) };
+    let consumer2 = unsafe { std::thread::spawn_f_args(consumer, &q) };
 
     producer1.join().unwrap();
     producer2.join().unwrap();

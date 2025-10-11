@@ -2,8 +2,6 @@ set(SOURCES
   ADT/DepView.cpp
   ADT/VectorClock.cpp
   ADT/View.cpp
-  Config/Config.cpp
-  Config/Verbosity.cpp
   ExecutionGraph/DepExecutionGraph.cpp
   ExecutionGraph/DepInfo.cpp
   ExecutionGraph/Event.cpp
@@ -63,7 +61,9 @@ set(SOURCES
   Support/SVal.cpp
   Support/ThreadPinner.cpp
   Support/ThreadPool.cpp
+  Support/Verbosity.cpp
   Verification/ChoiceMap.cpp
+  Verification/Config.cpp
   Verification/GenMCDriver.cpp
   Verification/WorkList.cpp
   Verification/VerificationError.cpp

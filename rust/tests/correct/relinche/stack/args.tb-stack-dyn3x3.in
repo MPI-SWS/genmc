@@ -1,1 +1,1 @@
--link-with=../rust/tests/correct/data-structures/treiber-stack-dynamic/c_interface.rs|-DRTN=3 -DWTN=3 -include /tests/correct/data-structures/treiber-stack-dynamic/my_stack.h
+-extra-input=../rust/tests/correct/data-structures/treiber-stack-dynamic/c_interface.rs|-DRTN=3 -DWTN=3 -include /tests/correct/data-structures/treiber-stack-dynamic/my_stack.h

@@ -1,6 +1,6 @@
 //Source: https://github.com/sujalsin/concurrent-verification/blob/main/src/main.rs
 //test_concurrent_operations
-//LOOP_BOUND1
+//LOOP_BOUND2 (1000s)
 
 #[path = "../array_queue.rs"]
 mod array_queue;
@@ -19,10 +19,10 @@ fn consumer(queue: &ArrayQueue<u32>) {
 
 pub fn main() {
     let q: ArrayQueue<u32> = ArrayQueue::new(5);
-    let producer1 = std::thread::spawn_f_args(producer, &q);
-    let producer2 = std::thread::spawn_f_args(producer, &q);
-    let consumer1 = std::thread::spawn_f_args(consumer, &q);
-    let consumer2 = std::thread::spawn_f_args(consumer, &q);
+    let producer1 = unsafe { std::thread::spawn_f_args(producer, &q) };
+    let producer2 = unsafe { std::thread::spawn_f_args(producer, &q) };
+    let consumer1 = unsafe { std::thread::spawn_f_args(consumer, &q) };
+    let consumer2 = unsafe { std::thread::spawn_f_args(consumer, &q) };
 
     producer1.join().unwrap();
     producer2.join().unwrap();

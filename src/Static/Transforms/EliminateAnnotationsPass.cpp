@@ -12,10 +12,10 @@
  */
 
 #include "EliminateAnnotationsPass.hpp"
-#include "Config/Config.hpp"
 #include "Runtime/InterpreterEnumAPI.hpp"
 #include "Static/LLVMUtils.hpp"
 #include "Support/Error.hpp"
+#include "Verification/Config.hpp"
 
 #include <llvm/Analysis/PostDominators.h>
 #include <llvm/IR/Constants.h>
@@ -26,6 +26,7 @@
 #include <llvm/IR/Module.h>
 
 using namespace llvm;
+using AnnotationOptions = EliminateAnnotationsPass::AnnotationOptions;
 
 #define POSTDOM_PASS PostDominatorTreeWrapperPass
 #define GET_POSTDOM_PASS() getAnalysis<POSTDOM_PASS>().getPostDomTree();
@@ -75,7 +76,7 @@ static auto getAnnotationValue(CallInst *ci) -> uint64_t
 	return funArg->getValue().getLimitedValue();
 }
 
-static auto shouldAnnotate(const Config *conf, uint64_t annotType) -> bool
+static auto shouldAnnotate(const AnnotationOptions &options, uint64_t annotType) -> bool
 {
 	auto isHelperAnnot = [](uint64_t annotType) {
 		return annotType == GENMC_KIND_HELPED || annotType == GENMC_KIND_HELPING;
@@ -84,16 +85,17 @@ static auto shouldAnnotate(const Config *conf, uint64_t annotType) -> bool
 		return annotType == GENMC_KIND_CONFIRM || annotType == GENMC_KIND_SPECUL;
 	};
 
-	if (isHelperAnnot(annotType) && !conf->helper)
+	if (isHelperAnnot(annotType) && !options.annotHelper)
 		return false;
-	if (isConfAnnot(annotType) && !conf->confirmation)
+	if (isConfAnnot(annotType) && !options.annotConf)
 		return false;
-	if (annotType == GENMC_ATTR_FINAL && !conf->finalWrite)
+	if (annotType == GENMC_ATTR_FINAL && !options.annotFinal)
 		return false;
 	return true;
 }
 
-static auto annotateInstructions(CallInst *begin, CallInst *end, const Config *conf) -> bool
+static auto annotateInstructions(CallInst *begin, CallInst *end, const AnnotationOptions &options)
+	-> bool
 {
 	if (!begin || !end)
 		return false;
@@ -113,7 +115,7 @@ static auto annotateInstructions(CallInst *begin, CallInst *end, const Config *c
 			if (!opcode)
 				opcode = i.getOpcode();
 			BUG_ON(opcode != i.getOpcode()); /* annotations across paths must match */
-			if (shouldAnnotate(conf, annotType))
+			if (shouldAnnotate(options, annotType))
 				annotateInstruction(&i, "genmc.attr", annotType);
 		}
 		/* stop when the begin is found; reset vars for next path */
@@ -162,7 +164,7 @@ auto EliminateAnnotationsPass::run(Function &F, FunctionAnalysisManager &FAM) ->
 	for (auto *bi : begins) {
 		auto *ei = findMatchingEnd(bi, ends, DT, PDT);
 		BUG_ON(!ei);
-		changed |= annotateInstructions(bi, ei, getConf());
+		changed |= annotateInstructions(bi, ei, getOptions());
 		toDelete.insert(bi);
 		toDelete.insert(ei);
 	}

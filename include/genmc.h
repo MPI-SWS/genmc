@@ -10,6 +10,12 @@ extern "C"
 #endif
 
 /*
+ * printf() replacement that adds a string node to the execution graph
+ */
+__attribute__((__nothrow__)) extern
+void __VERIFIER_output(const char *msg);
+
+/*
  * Blocks the current execution if the argument is false
  */
 #define __VERIFIER_assume(cond) __VERIFIER_assume_internal(cond, GENMC_ASSUME_USER)
@@ -299,18 +305,18 @@ typedef struct __VERIFIER_plock __VERIFIER_plock_t;
 __attribute__ ((__nothrow__, always_inline)) static inline
 int __VERIFIER_plock_lock(__VERIFIER_plock_t *plock)
 {
-	__VERIFIER_annotate_begin(GENMC_ATTR_PLOCK);
+	__VERIFIER_annotate_begin(GENMC_KIND_PLOCK);
 	int __res = __VERIFIER_mutex_lock(&plock->lock);
-	__VERIFIER_annotate_end(GENMC_ATTR_PLOCK);
+	__VERIFIER_annotate_end(GENMC_KIND_PLOCK);
 	return __res;
 }
 
  __attribute__ ((__nothrow__, always_inline ))static inline
 int __VERIFIER_plock_unlock(__VERIFIER_plock_t *plock)
 {
-	__VERIFIER_annotate_begin(GENMC_ATTR_PLOCK);
+	__VERIFIER_annotate_begin(GENMC_KIND_PLOCK);
 	 int __res = __VERIFIER_mutex_unlock(&plock->lock);
-	__VERIFIER_annotate_end(GENMC_ATTR_PLOCK);
+	__VERIFIER_annotate_end(GENMC_KIND_PLOCK);
 	return __res;
 }
 

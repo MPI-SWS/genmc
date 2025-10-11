@@ -65,7 +65,7 @@ public:
 	}
 
 	virtual auto checkErrors(const EventLabel *lab, const EventLabel *&race) const
-		-> VerificationError = 0;
+		-> std::optional<VerificationError> = 0;
 
 	virtual auto checkWarnings(const EventLabel *lab, const VSet<VerificationError> &reported,
 				   std::vector<const EventLabel *> &races) const

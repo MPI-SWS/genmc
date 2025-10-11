@@ -97,11 +97,8 @@ do
     for testdir in "${CORRECT_DIRS[@]}"
     do
 	cat="${testdir##*/}"
-	if [[ ("${model}" == "lkmm" && "${cat}" != "lkmm" && "${cat}" != "fs") ||
-		  ("${model}" != "lkmm" && "${cat}" == "lkmm") ]]
-	then
-	    continue
-	fi
+
+	# skip certain combinations
 	if [[ "${cat}" == "helper" && "${GENMCFLAGS}" =~ "policy=arbitrary" ]]
 	then
 	    continue
@@ -110,6 +107,7 @@ do
 	then
 	    continue
 	fi
+
 	check_blocked="" && [[ "${cat}" == "saver" || "${cat}" == "helper" ]] &&
 	    [[ (! "${GENMCFLAGS}" =~ "policy=arbitrary") ]] && check_blocked="yes"
 	if [[ "${cat}" == "ipr" && "${model}" != "imm" ]]

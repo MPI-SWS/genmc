@@ -15,11 +15,11 @@
 #define GENMC_MODULE_INFO_HPP
 
 #include "ADT/VSet.hpp"
-#include "Config/Config.hpp"
 #include "ExecutionGraph/LoadAnnotation.hpp"
 #include "Static/ModuleID.hpp"
 #include "Support/NameInfo.hpp"
 #include "Support/SExpr.hpp"
+#include "Verification/Config.hpp"
 #include <llvm/ADT/BitVector.h>
 #include <llvm/ADT/IndexedMap.h>
 #include <llvm/IR/DerivedTypes.h>

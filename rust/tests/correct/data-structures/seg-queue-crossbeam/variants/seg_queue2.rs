@@ -19,10 +19,10 @@ fn consumer(queue: &SegQueue<u32>) {
 
 pub fn main() {
     let q: SegQueue<u32> = SegQueue::new();
-    let producer1 = std::thread::spawn_f_args(producer, &q);
-    let producer2 = std::thread::spawn_f_args(producer, &q);
-    let consumer1 = std::thread::spawn_f_args(consumer, &q);
-    let consumer2 = std::thread::spawn_f_args(consumer, &q);
+    let producer1 = unsafe { std::thread::spawn_f_args(producer, &q) };
+    let producer2 = unsafe { std::thread::spawn_f_args(producer, &q) };
+    let consumer1 = unsafe { std::thread::spawn_f_args(consumer, &q) };
+    let consumer2 = unsafe { std::thread::spawn_f_args(consumer, &q) };
 
     producer1.join().unwrap();
     producer2.join().unwrap();

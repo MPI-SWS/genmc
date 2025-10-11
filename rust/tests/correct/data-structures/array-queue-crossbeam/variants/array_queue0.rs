@@ -40,8 +40,8 @@ fn main_task(arg: Args) {
 pub fn main() {
 	let q = ArrayQueue::new(5);
 
-	let h1 = std::thread::spawn_f_args(main_task, Args {pid: 0usize, queue: &q});
-	let h2 = std::thread::spawn_f_args(main_task, Args {pid: 1usize, queue: &q});
+	let h1 = unsafe { std::thread::spawn_f_args(main_task, Args {pid: 0usize, queue: &q}) };
+	let h2 = unsafe { std::thread::spawn_f_args(main_task, Args {pid: 1usize, queue: &q}) };
 
 	h1.join().unwrap();
 	h2.join().unwrap();

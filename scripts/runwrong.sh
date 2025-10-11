@@ -107,6 +107,10 @@ print_variant_debug_results() {
 	printf "${GREEN}%-17s${NC} | %8s | % 8s |\n" \
 	       "BUG FOUND" "${vars}" "${average_time}"
     fi
+    if test -n "${outcome_failure}" -a -n "${failure}"
+    then
+	printf "Test command: ${cmd}\n"
+    fi
 }
 
 print_variant_condensed_results() {

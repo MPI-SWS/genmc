@@ -16,6 +16,7 @@
 
 #include "ExecutionGraph/DepExecutionGraph.hpp"
 #include "Runtime/Interpreter.h"
+#include "Runtime/LLIConfig.hpp"
 #include "Static/LLVMModule.hpp"
 #include "Support/ThreadPinner.hpp"
 #include "Verification/GenMCDriver.hpp"
@@ -138,10 +139,10 @@ public:
 	ThreadPool() = delete;
 	ThreadPool(const ThreadPool &) = delete; /* non-copyable to avoid rcs for now */
 	ThreadPool(ThreadPool &&) = delete;
-	ThreadPool(const std::shared_ptr<const Config> &conf,
+	ThreadPool(const LLIConfig &lliConfig, const std::shared_ptr<const Config> &conf,
 		   const std::unique_ptr<llvm::Module> &mod, const std::unique_ptr<ModuleInfo> &MI,
 		   TFunT threadFun)
-		: numWorkers_(conf->threads), pinner_(numWorkers_), joiner_(workers_)
+		: numWorkers_(lliConfig.threads), pinner_(numWorkers_), joiner_(workers_)
 	{
 
 		/* Set global variables before spawning the threads */
@@ -167,9 +168,8 @@ public:
 			auto dw = GenMCDriver::create(conf, this);
 			std::string buf;
 			auto EE = llvm::Interpreter::create(std::move(newmod), std::move(newMI),
-							    &*dw, dw->getConf(),
+							    &*dw, &lliConfig,
 							    dw->getExec().getAllocator(), &buf);
-			dw->setEE(&*EE);
 			addWorker(i, std::move(dw), std::move(EE), threadFun);
 		}
 	}

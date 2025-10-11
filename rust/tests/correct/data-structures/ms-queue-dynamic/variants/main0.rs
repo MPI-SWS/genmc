@@ -14,19 +14,19 @@ pub fn main() {
 
     let mut param = 0;
     for i in 0..WRITERS {
-        let _h = std::thread::spawn_f_args(threadW, param + i);
+        let _h = unsafe { std::thread::spawn_f_args(threadW, param + i) };
     }
-    //(0..WRITERS).map(|i| std::thread::spawn_f_args(threadW, param + i));
+    //(0..WRITERS).map(|i| unsafe { std::thread::spawn_f_args(threadW, param + i) });
 
     param += WRITERS;
     for i in 0..READERS {
-        let _h = std::thread::spawn_f_args(threadR, param + i);
+        let _h = unsafe { std::thread::spawn_f_args(threadR, param + i) };
     }
-    //(0..READERS).map(|i| std::thread::spawn_f_args(threadR, param + i));
+    //(0..READERS).map(|i| unsafe { std::thread::spawn_f_args(threadR, param + i) });
 
     param += READERS;
     for i in 0..RDWR {
-        let _h = std::thread::spawn_f_args(threadRW, param + i);
+        let _h = unsafe { std::thread::spawn_f_args(threadRW, param + i) };
     }
-    //(0..READERS).map(|i| std::thread::spawn_f_args(threadRW, param + i));
+    //(0..READERS).map(|i| unsafe { std::thread::spawn_f_args(threadRW, param + i) });
 }

@@ -365,7 +365,13 @@ public:
 	auto getThreadSize(int tid) const -> unsigned int { return events[tid].size(); };
 
 	/* Returns true if the thread tid is empty */
-	auto isThreadEmpty(int tid) const -> bool { return getThreadSize(tid) == 0; };
+	auto isThreadEmpty(int tid) const -> bool { return events[tid].empty(); };
+
+	/** Returns true if TID is blocked */
+	auto isThreadBlocked(int tid) const -> bool
+	{
+		return !isThreadEmpty(tid) && llvm::isa<BlockLabel>(getLastThreadLabel(tid));
+	}
 
 	/* Event addition/removal methods */
 
@@ -452,6 +458,13 @@ public:
 	}
 
 	/* Boolean helper functions */
+
+	/** A graph is blocked if any of its threads is blocked */
+	auto isBlocked() const -> bool
+	{
+		return std::ranges::any_of(thr_ids(),
+					   [this](auto tid) { return isThreadBlocked(tid); });
+	}
 
 	auto getInitVal(const AAccess &access) const -> SVal { return initValGetter_(access); }
 

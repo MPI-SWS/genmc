@@ -31,9 +31,9 @@ fn thread_c(q: &ArrayQueue<u32>) { //Producer and Consumer
 pub fn main() {
 	let q = ArrayQueue::new(5);
 
-	let h1 = std::thread::spawn_f_args(thread_a, &q);
-	let h2 = std::thread::spawn_f_args(thread_b, &q);
-	let h3 = std::thread::spawn_f_args(thread_c, &q);
+	let h1 = unsafe { std::thread::spawn_f_args(thread_a, &q) };
+	let h2 = unsafe { std::thread::spawn_f_args(thread_b, &q) };
+	let h3 = unsafe { std::thread::spawn_f_args(thread_c, &q) };
 
 	h1.join().unwrap();
 	h2.join().unwrap();

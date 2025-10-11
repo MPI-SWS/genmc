@@ -14,30 +14,20 @@
 #ifndef GENMC_CONFIG_HPP
 #define GENMC_CONFIG_HPP
 
-#include "ADT/VSet.hpp"
-#include "Config/MemoryModel.hpp"
-#include "Config/Verbosity.hpp"
-#include "Runtime/InterpreterEnumAPI.hpp"
+#include "Verification/MemoryModel.hpp"
 
 #include <cstdint>
 #include <optional>
 #include <string>
 
 enum class SchedulePolicy : std::uint8_t { LTR, WF, WFR, Arbitrary };
-enum class BoundType : std::uint8_t { context, round };
-enum class InputType : std::uint8_t { clang, cargo, rust, llvmir };
+enum class BoundType : std::uint8_t { context, round, none };
 
 struct Config {
-	/*** General syntax ***/
-	std::vector<std::string> cflags;
-	std::string inputFile;
-	InputType lang;
-
 	/*** Exploration options ***/
 	ModelType model{};
 	bool estimate{};
 	bool isDepTrackingModel{};
-	unsigned int threads{};
 	std::optional<unsigned int> bound;
 	BoundType boundType{};
 	bool LAPOR{};
@@ -52,25 +42,12 @@ struct Config {
 	bool disableRaceDetection{};
 	bool disableBAM{};
 	bool ipr{};
-	bool disableStopOnSystemError{};
 	bool warnUnfreedMemory{};
 	std::optional<std::string> collectLinSpec;
 	std::optional<std::string> checkLinSpec;
 	unsigned int maxExtSize{};
 	bool dotPrintOnlyClientEvents{};
 	bool replayCompletedThreads{};
-
-	/*** Transformation options ***/
-	std::optional<unsigned> unroll;
-	VSet<std::string> noUnrollFuns;
-	bool castElimination{};
-	bool inlineFunctions{};
-	bool loopJumpThreading{};
-	bool spinAssume{};
-	bool codeCondenser{};
-	bool loadAnnot{};
-	bool assumePropagation{};
-	bool mmDetector{};
 
 	/*** Debugging options ***/
 	unsigned int estimationMax{};
@@ -81,13 +58,7 @@ struct Config {
 	SchedulePolicy schedulePolicy{};
 	std::string randomScheduleSeed;
 	bool printRandomScheduleSeed{};
-	std::string outputLlvmBefore;
-	std::string outputLlvmAfter;
-	bool disableGenmcStdRebuild{};
-	std::string linkWith;
-	std::string programEntryFun;
 	unsigned int warnOnGraphSize{};
-	VerbosityLevel vLevel{};
 #ifdef ENABLE_GENMC_DEBUG
 	bool printStamps{};
 	bool colorAccesses{};
@@ -100,10 +71,7 @@ struct Config {
 #endif
 };
 
-/* Parses CLI options and initializes a Config object */
-void parseConfig(int argc, char **argv, Config &conf);
-
-/* Returns the language of the input file */
-InputType determineLang(std::string inputFile);
+/* Check validity of config options. */
+void checkConfig(Config &conf);
 
 #endif /* GENMC_CONFIG_HPP */

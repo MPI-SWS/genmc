@@ -32,7 +32,6 @@
 
 #include "ADT/View.hpp"
 #include "ADT/value_ptr.hpp"
-#include "Config/Config.hpp"
 #include "ExecutionGraph/LoadAnnotation.hpp"
 #include "Runtime/DepTracker.hpp"
 #include "Runtime/InterpreterEnumAPI.hpp"
@@ -43,6 +42,7 @@
 #include "Support/SAddrAllocator.hpp"
 #include "Support/SVal.hpp"
 #include "Support/ThreadInfo.hpp"
+#include "Verification/InterpreterCallbacks.hpp"
 #include "Verification/VerificationError.hpp"
 
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
@@ -94,6 +94,7 @@
 	})
 
 class GenMCDriver;
+class LLIConfig;
 
 namespace llvm {
 
@@ -148,8 +149,6 @@ enum class BlockageType {
 	HelpedCas,
 	Confirmation,
 	ReadOptBlock,
-	LockNotAcq,
-	LockNotRel,
 	Barrier,
 	Cons,
 	Error,
@@ -219,7 +218,6 @@ struct DynamicComponents {
 	value_ptr<DepTracker, DepTrackerCloner> depTracker = nullptr;
 
 	/* Information about the interpreter's state */
-	ExecutionState execState = ExecutionState::Normal;
 	ProgramState programState = ProgramState::Main; /* Pers */
 
 	GenericValue ExitValue; // The return value of the called function
@@ -281,7 +279,8 @@ protected:
 
 public:
 	explicit Interpreter(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> MI,
-			     GenMCDriver *driver, const Config *userConf, SAddrAllocator &alloctor);
+			     GenMCDriver *driver, const LLIConfig *userConf,
+			     SAddrAllocator &alloctor);
 	virtual ~Interpreter();
 
 	std::unique_ptr<InterpreterState> saveState();
@@ -324,7 +323,7 @@ public:
 	({                                                                                         \
 		incPos();                                                                          \
 		auto ret = driver->method(__VA_ARGS__);                                            \
-		if (!ret.has_value() && getExecState() != ExecutionState::Replay) {                \
+		if (std::holds_alternative<GenMCDriver::Reset>(ret)) {                             \
 			decPos();                                                                  \
 			--ECStack().back().CurInst;                                                \
 		}                                                                                  \
@@ -396,7 +395,6 @@ public:
 
 	/* Query interpreter's state */
 	ProgramState getProgramState() const { return dynState.programState; }
-	ExecutionState getExecState() const { return dynState.execState; }
 
 	/* Annotation information */
 
@@ -418,9 +416,11 @@ public:
 
 	/// create - Create an interpreter ExecutionEngine. This can never fail.
 	///
-	static std::unique_ptr<Interpreter>
-	create(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> MI, GenMCDriver *driver,
-	       const Config *userConf, SAddrAllocator &alloctor, std::string *ErrorStr = nullptr);
+	static std::unique_ptr<Interpreter> create(std::unique_ptr<Module> M,
+						   std::unique_ptr<ModuleInfo> MI,
+						   GenMCDriver *driver, const LLIConfig *userConf,
+						   SAddrAllocator &alloctor,
+						   std::string *ErrorStr = nullptr);
 
 /// run - Start execution with the specified function and arguments.
 ///
@@ -464,6 +464,18 @@ public:
 		return SVal(result.IntVal.getLimitedValue());
 	}
 
+	InterpreterCallbacks getCallbacks()
+	{
+		return InterpreterCallbacks{
+			.isStaticallyAllocated =
+				[this](SAddr addr) { return this->isStaticallyAllocated(addr); },
+			.getStaticName = [this](SAddr addr) { return this->getStaticName(addr); },
+			.initValGetter =
+				[this](const AAccess &a) { return this->getLocInitVal(a); },
+			.skipUninitLoadChecks = [](const MemAccessLabel *mLab) { return false; },
+		};
+	}
+
 	unsigned int getTypeSize(Type *typ) const;
 
 	// Methods used to execute code:
@@ -480,7 +492,7 @@ public:
 	void run(); // Execute instructions until nothing left to do
 
 	/* run() wrappers */
-	int runAsMain(const std::string &main);
+	int runMain();
 
 	// Opcode Implementations
 	void visitReturnInst(ReturnInst &I);
@@ -590,7 +602,6 @@ private: // Helper functions
 	void handleSystemError(SystemError code, const std::string &msg);
 
 	void setProgramState(ProgramState s) { dynState.programState = s; }
-	void setExecState(ExecutionState s) { dynState.execState = s; }
 
 	void handleLock(SAddr addr, ASize size, const EventDeps *deps);
 	void handleUnlock(SAddr addr, ASize size, const EventDeps *deps);
@@ -612,7 +623,7 @@ private: // Helper functions
 	void collectStaticAddresses(SAddrAllocator &alloctor);
 
 	/* Sets up how some errors will be reported to the user */
-	void setupErrorPolicy(Module *M, const Config *userConf);
+	void setupErrorPolicy(Module *M, const LLIConfig *userConf);
 
 	/* Sets-up the specified thread for execution */
 	void scheduleThread(int tid) { dynState.currentThread = tid; }

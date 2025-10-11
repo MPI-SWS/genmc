@@ -1,4 +1,4 @@
---link-with=/rust/tests/correct/data-structures/ms-queue-dynamic/my_queue.rs | -DMSQUEUE -DRTN=3 -DWTN=3 -include /rust/tests/correct/relinche/queue/empty_queue.h
---link-with=/rust/tests/correct/data-structures/ms-queue-dynamic/my_queue.rs | -DMSQUEUE -DRTN=3 -DWTN=3 -DSYNC_INS -include /rust/tests/correct/relinche/queue/empty_queue.h
---link-with=/rust/tests/correct/data-structures/ms-queue-dynamic/my_queue.rs | -DMSQUEUE -DRTN=3 -DWTN=3 -DSYNC_REM -include /rust/tests/correct/relinche/queue/empty_queue.h
---link-with=/rust/tests/correct/data-structures/ms-queue-dynamic/my_queue.rs | -DMSQUEUE -DRTN=3 -DWTN=3 -DSYNC_INS -DSYNC_REM -include /rust/tests/correct/relinche/queue/empty_queue.h
+--extra-input=/rust/tests/correct/data-structures/ms-queue-dynamic/my_queue.rs | -DMSQUEUE -DRTN=3 -DWTN=3 -include /rust/tests/correct/relinche/queue/empty_queue.h
+--extra-input=/rust/tests/correct/data-structures/ms-queue-dynamic/my_queue.rs | -DMSQUEUE -DRTN=3 -DWTN=3 -DSYNC_INS -include /rust/tests/correct/relinche/queue/empty_queue.h
+--extra-input=/rust/tests/correct/data-structures/ms-queue-dynamic/my_queue.rs | -DMSQUEUE -DRTN=3 -DWTN=3 -DSYNC_REM -include /rust/tests/correct/relinche/queue/empty_queue.h
+--extra-input=/rust/tests/correct/data-structures/ms-queue-dynamic/my_queue.rs | -DMSQUEUE -DRTN=3 -DWTN=3 -DSYNC_INS -DSYNC_REM -include /rust/tests/correct/relinche/queue/empty_queue.h

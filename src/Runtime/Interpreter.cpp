@@ -29,8 +29,8 @@
  *     https://opensource.org/licenses/MIT
  */
 
-#include "Interpreter.h"
-#include "Config/Config.hpp"
+#include "Runtime/Interpreter.h"
+#include "Runtime/LLIConfig.hpp"
 #include "Static/LLVMUtils.hpp"
 #include "Support/Error.hpp"
 #include <cstring>
@@ -47,7 +47,7 @@ extern "C" void LLVMLinkInInterpreter() {}
 ///
 std::unique_ptr<Interpreter> Interpreter::create(std::unique_ptr<Module> M,
 						 std::unique_ptr<ModuleInfo> MI,
-						 GenMCDriver *driver, const Config *userConf,
+						 GenMCDriver *driver, const LLIConfig *userConf,
 						 SAddrAllocator &alloctor, std::string *ErrStr)
 {
 	// Tell this Module to materialize everything and release the GVMaterializer.
@@ -201,7 +201,7 @@ void Interpreter::collectStaticAddresses(SAddrAllocator &alloctor)
 		InitializeMemory(p.first->getInitializer(), p.second);
 }
 
-void Interpreter::setupErrorPolicy(Module *M, const Config *userConf)
+void Interpreter::setupErrorPolicy(Module *M, const LLIConfig *userConf)
 {
 	stopOnSystemErrors = !userConf->disableStopOnSystemError;
 
@@ -288,7 +288,7 @@ void Interpreter::updateInternalFunRetDeps(unsigned int tid, Function *F, Instru
 // Interpreter ctor - Initialize stuff
 //
 Interpreter::Interpreter(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> MI,
-			 GenMCDriver *driver, const Config *userConf, SAddrAllocator &alloctor)
+			 GenMCDriver *driver, const LLIConfig *userConf, SAddrAllocator &alloctor)
 	: ExecutionEngine(std::move(M)), MI(std::move(MI)), driver(driver)
 {
 
@@ -313,7 +313,7 @@ Interpreter::Interpreter(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> 
 	setupErrorPolicy(mod, userConf);
 
 	/* Setup the interpreter for the exploration */
-	mainFun = mod->getFunction(userConf->programEntryFun);
+	mainFun = FindFunctionNamed(userConf->programEntryFun);
 	ERROR_ON(!mainFun, "Could not find program's entry point function!\n");
 
 	createAddMainThread();

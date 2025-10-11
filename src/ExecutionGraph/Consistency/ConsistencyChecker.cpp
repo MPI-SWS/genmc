@@ -12,12 +12,12 @@
  */
 
 #include "ExecutionGraph/Consistency/ConsistencyChecker.hpp"
-#include "Config/Config.hpp"
 #include "ExecutionGraph/Consistency/IMMChecker.hpp"
 #include "ExecutionGraph/Consistency/RAChecker.hpp"
 #include "ExecutionGraph/Consistency/RC11Checker.hpp"
 #include "ExecutionGraph/Consistency/SCChecker.hpp"
 #include "ExecutionGraph/Consistency/TSOChecker.hpp"
+#include "Verification/Config.hpp"
 
 auto ConsistencyChecker::create(const Config *conf) -> std::unique_ptr<ConsistencyChecker>
 {

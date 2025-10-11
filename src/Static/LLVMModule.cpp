@@ -12,6 +12,7 @@
  */
 
 #include "LLVMModule.hpp"
+#include "Runtime/LLIConfig.hpp"
 #include "Static/Transforms/BarrierResultCheckerPass.hpp"
 #include "Static/Transforms/BisimilarityCheckerPass.hpp"
 #include "Static/Transforms/CallInfoCollectionPass.hpp"
@@ -185,8 +186,7 @@ void initializeModuleInfo(ModuleInfo &MI, PassModuleInfo &PI)
 	MI.barrierResultsUsed = PI.barrierResultsUsed;
 }
 
-auto transformLLVMModule(llvm::Module &mod, ModuleInfo &MI,
-			 const std::shared_ptr<const Config> &conf) -> bool
+auto transformLLVMModule(llvm::Module &mod, ModuleInfo &MI, const LLIConfig *conf) -> bool
 {
 	PassModuleInfo PI;
 
@@ -221,10 +221,8 @@ auto transformLLVMModule(llvm::Module &mod, ModuleInfo &MI,
 	basicOptsMGR.addPass(DeclareInternalsPass());
 	basicOptsMGR.addPass(DefineLibcFunsPass());
 	basicOptsMGR.addPass(MDataCollectionPass(PI));
-	if (conf->lang == InputType::rust || conf->lang == InputType::cargo ||
-	    !conf->linkWith.empty()) {
+	if (conf->rust)
 		basicOptsMGR.addPass(RustPrepPass());
-	}
 	if (conf->inlineFunctions)
 		basicOptsMGR.addPass(FunctionInlinerPass());
 	{
@@ -248,12 +246,14 @@ auto transformLLVMModule(llvm::Module &mod, ModuleInfo &MI,
 	{
 		llvm::FunctionPassManager fpm;
 		fpm.addPass(LocalSimplifyCFGPass());
-		fpm.addPass(EliminateAnnotationsPass(&*conf));
+		fpm.addPass(EliminateAnnotationsPass({.annotHelper = conf->helper,
+						      .annotConf = conf->confirmation,
+						      .annotFinal = conf->finalWrite}));
 		fpm.addPass(EliminateRedundantInstPass());
 		basicOptsMGR.addPass(llvm::createModuleToFunctionPassAdaptor(std::move(fpm)));
 	}
 
-	if (!conf->disableBAM)
+	if (!conf->bam)
 		basicOptsMGR.addPass(BarrierResultCheckerPass(PI));
 	if (conf->mmDetector)
 		basicOptsMGR.addPass(MMDetectorPass(PI));
@@ -267,14 +267,14 @@ auto transformLLVMModule(llvm::Module &mod, ModuleInfo &MI,
 		fpm.addPass(EliminateCASPHIsPass());
 		fpm.addPass(llvm::JumpThreadingPass());
 		fpm.addPass(EliminateUnusedCodePass());
-		if (conf->codeCondenser && !conf->checkLiveness)
+		if (conf->codeCondenser && !conf->liveness)
 			fpm.addPass(CodeCondenserPass());
 		if (conf->loopJumpThreading)
 			fpm.addPass(createFunctionToLoopPassAdaptor(LoopJumpThreadingPass()));
 		loopOptsMGR.addPass(llvm::createModuleToFunctionPassAdaptor(std::move(fpm)));
 	}
 	if (conf->spinAssume)
-		loopOptsMGR.addPass(SpinAssumePass(conf->checkLiveness));
+		loopOptsMGR.addPass(SpinAssumePass(conf->liveness));
 	if (conf->unroll.has_value())
 		loopOptsMGR.addPass(
 			createModuleToFunctionPassAdaptor(createFunctionToLoopPassAdaptor(

@@ -15,12 +15,13 @@
 #define GENMC_GENMC_DRIVER_HPP
 
 #include "ADT/Trie.hpp"
-#include "Config/Config.hpp"
 #include "ExecutionGraph/EventLabel.hpp"
 #include "ExecutionGraph/ExecutionGraph.hpp"
 #include "Support/Hash.hpp"
 #include "Support/SAddrAllocator.hpp"
 #include "Verification/ChoiceMap.hpp"
+#include "Verification/Config.hpp"
+#include "Verification/InterpreterCallbacks.hpp"
 #include "Verification/Relinche/LinearizabilityChecker.hpp"
 #include "Verification/Relinche/Specification.hpp"
 #include "Verification/Scheduler.hpp"
@@ -43,6 +44,7 @@ class Interpreter;
 }
 class ModuleInfo;
 class ThreadPool;
+class LLIConfig;
 class BoundDecider;
 class ConsistencyChecker;
 class SymmetryChecker;
@@ -100,6 +102,12 @@ public:
 		Event lastAdded = Event::getInit();
 	};
 
+	/** Handler Result Types */
+	struct Reset {};
+	struct Invalid {};
+	template <typename T>
+	using HandleResult = std::variant<T, VerificationError, Reset, Invalid>;
+
 	/** Details for an error to be reported */
 	struct ErrorDetails {
 		ErrorDetails() = default;
@@ -144,54 +152,94 @@ public:
 	/*** Instruction handling ***/
 
 	/** A thread has just finished execution, nothing for the interpreter */
-	void handleThreadFinish(std::unique_ptr<ThreadFinishLabel> eLab);
+	void handleThreadFinish(Event pos, SVal val);
 
 	/** A thread has terminated abnormally */
-	void handleThreadKill(std::unique_ptr<ThreadKillLabel> lab);
+	void handleThreadKill(Event pos);
 
 	/** This method blocks the current thread  */
-	void handleBlock(std::unique_ptr<BlockLabel> bLab);
+	void handleAssume(Event pos, AssumeType type);
 
 	/** Returns the value this load reads */
-	std::optional<SVal> handleLoad(std::unique_ptr<ReadLabel> rLab);
+	template <EventLabel::EventLabelKind k, typename... Ts>
+	HandleResult<SVal> handleLoad(Event pos, Ts &&...params)
+	{
+		auto &g = getExec().getGraph();
+		if (isExecutionDrivenByGraph(pos)) {
+			return getReadRetValue(llvm::dyn_cast<ReadLabel>(g.getEventLabel(pos)));
+		}
+#define HANDLE_LABEL(NAME)                                                                         \
+	if constexpr (k == EventLabel::EventLabelKind::NAME) {                                     \
+		return handleLoad(NAME##Label::create(pos, std::forward<Ts>(params)...));          \
+	} else
+#include "ExecutionGraph/EventLabel.def"
+		static_assert(false, "Unhandled load label kind");
+	}
 
 	/** A store has been interpreted, nothing for the interpreter */
-	void handleStore(std::unique_ptr<WriteLabel> wLab);
+	template <EventLabel::EventLabelKind k, typename... Ts>
+	HandleResult<std::monostate> handleStore(Event pos, Ts &&...params)
+	{
+		if (isExecutionDrivenByGraph(pos))
+			return {};
+#define HANDLE_LABEL(NAME)                                                                         \
+	if constexpr (k == EventLabel::EventLabelKind::NAME) {                                     \
+		return handleStore(NAME##Label::create(pos, std::forward<Ts>(params)...));         \
+	} else
+#include "ExecutionGraph/EventLabel.def"
+		static_assert(false, "Unhandled store label kind");
+	}
 
 	/** A fence has been interpreted, nothing for the interpreter */
-	void handleFence(std::unique_ptr<FenceLabel> fLab);
+	void handleFence(Event pos, MemOrdering ord, const EventDeps &deps);
 
 	/** Returns an appropriate result for malloc() */
-	SVal handleMalloc(std::unique_ptr<MallocLabel> aLab);
+	template <typename... Ts> SVal handleMalloc(Event pos, Ts &&...params)
+	{
+		auto &g = getExec().getGraph();
+		if (isExecutionDrivenByGraph(pos)) {
+			auto *lab = llvm::dyn_cast<MallocLabel>(g.getEventLabel(pos));
+			BUG_ON(!lab);
+			return SVal(lab->getAllocAddr().get());
+		}
+		return handleMalloc(MallocLabel::create(pos, std::forward<Ts>(params)...));
+	}
 
 	/** A call to free() has been interpreted, nothing for the intepreter */
-	void handleFree(std::unique_ptr<FreeLabel> dLab);
+	std::optional<VerificationError> handleFree(Event pos, SAddr loc, const EventDeps &deps);
+	std::optional<VerificationError> handleRetire(Event pos, SAddr loc, const EventDeps &deps);
 
 	/** Returns the TID of the newly created thread */
-	int handleThreadCreate(std::unique_ptr<ThreadCreateLabel> tcLab);
+	int handleThreadCreate(Event pos, ThreadInfo info, const EventDeps &deps);
 
 	/** Returns an appropriate result for pthread_join() */
-	std::optional<SVal> handleThreadJoin(std::unique_ptr<ThreadJoinLabel> jLab);
+	HandleResult<SVal> handleThreadJoin(Event pos, unsigned int childTid,
+					    const EventDeps &deps);
 
 	/** A helping CAS operation has been interpreter.
 	 * Returns whether the helped CAS is present. */
-	bool handleHelpingCas(std::unique_ptr<HelpingCasLabel> hLab);
+	bool handleHelpingCas(Event pos, MemOrdering ord, SAddr loc, ASize size, AType type,
+			      SVal cmpVal, SVal newVal, const EventDeps &deps);
 
 	/** A call to __VERIFIER_opt_begin() has been interpreted.
 	 * Returns whether the block should expand */
-	bool handleOptional(std::unique_ptr<OptionalLabel> lab);
+	bool handleOptional(Event pos);
 
 	/** A call to __VERIFIER_spin_start() has been interpreted */
-	void handleSpinStart(std::unique_ptr<SpinStartLabel> lab);
+	void handleSpinStart(Event pos);
 
 	/** A call to __VERIFIER_faiZNE_spin_end() has been interpreted */
-	void handleFaiZNESpinEnd(std::unique_ptr<FaiZNESpinEndLabel> lab);
+	void handleFaiZNESpinEnd(Event pos);
 
 	/** A call to __VERIFIER_lockZNE_spin_end() has been interpreted */
-	void handleLockZNESpinEnd(std::unique_ptr<LockZNESpinEndLabel> lab);
+	void handleLockZNESpinEnd(Event pos);
 
-	/** A generic helper for dummy events */
-	void handleDummy(std::unique_ptr<EventLabel> lab);
+	/** Helpers for dummy events */
+	void handleLoopBegin(Event pos);
+	void handleHpProtect(Event pos, SAddr hpAddr, SAddr protAddr);
+	void handleMethodBegin(Event pos, std::string methodName, int32_t argVal);
+	void handleMethodEnd(Event pos, std::string methodName, int32_t retVal);
+	void handleOutput(Event pos, std::string msg);
 
 	/** This method either blocks the offending thread (e.g., if the
 	 * execution is invalid), or aborts the exploration */
@@ -207,12 +255,14 @@ protected:
 	friend class Scheduler;
 	friend class ArbitraryScheduler;
 	friend class ThreadPool;
+	friend class DriverHandlerDispatcher;
 	friend void run(GenMCDriver *driver, llvm::Interpreter *EE);
-	friend auto estimate(std::shared_ptr<const Config> conf,
+	friend auto estimate(const LLIConfig &lliConfig, std::shared_ptr<const Config> conf,
 			     const std::unique_ptr<llvm::Module> &mod,
 			     const std::unique_ptr<ModuleInfo> &modInfo) -> VerificationResult;
-	friend auto verify(std::shared_ptr<const Config> conf, std::unique_ptr<llvm::Module> mod,
-			   std::unique_ptr<ModuleInfo> modInfo) -> VerificationResult;
+	friend auto verify(const LLIConfig &lliConfig, std::shared_ptr<const Config> conf,
+			   std::unique_ptr<llvm::Module> mod, std::unique_ptr<ModuleInfo> modInfo)
+		-> VerificationResult;
 
 	GenMCDriver(std::shared_ptr<const Config> conf, ThreadPool *pool = nullptr,
 		    Mode = VerificationMode{});
@@ -229,6 +279,9 @@ protected:
 
 	/** Sets pointer to the interpreter */
 	void setEE(llvm::Interpreter *interp) { EE = interp; }
+
+	/** Set the callbacks for querying the interpreter. */
+	void setInterpCallbacks(InterpreterCallbacks interpCallbacks);
 
 	/** Returns a reference to the current execution */
 	Execution &getExec() { return execStack.back(); }
@@ -274,7 +327,7 @@ protected:
 	/** Returns the value that a read is reading. This function should be
 	 * used when calculating the value that we should return to the
 	 * interpreter. */
-	std::optional<SVal> getReadRetValue(const ReadLabel *rLab);
+	HandleResult<SVal> getReadRetValue(const ReadLabel *rLab);
 	SVal getRecReadRetValue(const ReadLabel *rLab);
 
 	/** Est: Returns true if we are currently running in estimation mode */
@@ -295,6 +348,25 @@ protected:
 	}
 
 private:
+	/*** Instruction handling (EventLabel) ***/
+
+	void handleThreadFinish(std::unique_ptr<ThreadFinishLabel> eLab);
+	void handleThreadKill(std::unique_ptr<ThreadKillLabel> lab);
+	void handleBlock(std::unique_ptr<BlockLabel> bLab);
+	HandleResult<SVal> handleLoad(std::unique_ptr<ReadLabel> rLab);
+	HandleResult<std::monostate> handleStore(std::unique_ptr<WriteLabel> wLab);
+	void handleFence(std::unique_ptr<FenceLabel> fLab);
+	SVal handleMalloc(std::unique_ptr<MallocLabel> aLab);
+	std::optional<VerificationError> handleFree(std::unique_ptr<FreeLabel> dLab);
+	int handleThreadCreate(std::unique_ptr<ThreadCreateLabel> tcLab);
+	HandleResult<SVal> handleThreadJoin(std::unique_ptr<ThreadJoinLabel> jLab);
+	bool handleHelpingCas(std::unique_ptr<HelpingCasLabel> hLab);
+	bool handleOptional(std::unique_ptr<OptionalLabel> lab);
+	void handleSpinStart(std::unique_ptr<SpinStartLabel> lab);
+	void handleFaiZNESpinEnd(std::unique_ptr<FaiZNESpinEndLabel> lab);
+	void handleLockZNESpinEnd(std::unique_ptr<LockZNESpinEndLabel> lab);
+	void handleDummy(std::unique_ptr<EventLabel> lab);
+
 	/*** Exploration-related ***/
 
 	/** Returns whether a revisit results to a valid execution
@@ -314,25 +386,22 @@ private:
 	/** Blocks thread at POS with type T. Tries to moot afterward */
 	void blockThreadTryMoot(std::unique_ptr<BlockLabel> bLab);
 
-	/** Returns whether the current execution is blocked */
-	bool isExecutionBlocked() const;
-
 	/** If LAB accesses a valid location, reports an error  */
-	VerificationError checkAccessValidity(const MemAccessLabel *lab);
+	std::optional<VerificationError> checkAccessValidity(const MemAccessLabel *lab);
 
 	/** If LAB accesses an uninitialized location, reports an error */
-	VerificationError checkInitializedMem(const ReadLabel *lab);
+	std::optional<VerificationError> checkInitializedMem(const ReadLabel *lab);
 
 	/** If LAB accesses improperly initialized memory, reports an error */
-	VerificationError checkInitializedMem(const WriteLabel *lab);
+	std::optional<VerificationError> checkInitializedMem(const WriteLabel *lab);
 
 	/** If LAB is an IPR read in a location with WW-races, reports an error */
-	VerificationError checkIPRValidity(const ReadLabel *rLab);
+	std::optional<VerificationError> checkIPRValidity(const ReadLabel *rLab);
 
 	/** Checks whether final annotations are used properly in a program:
 	 * if there are more than one stores annotated as final at the time WLAB
 	 * is added, reports an error */
-	VerificationError checkFinalAnnotations(const WriteLabel *wLab);
+	std::optional<VerificationError> checkFinalAnnotations(const WriteLabel *wLab);
 
 	/** Liveness: Reports an error on liveness violations */
 	void checkLiveness();
@@ -341,10 +410,14 @@ private:
 	void checkUnfreedMemory();
 
 	/** Returns true if the exploration is guided by a graph */
-	bool isExecutionDrivenByGraph(const EventLabel *lab);
+	bool isExecutionDrivenByGraph(Event pos);
 
-	/** Returns true if we are currently replaying a graph */
-	bool inReplay() const;
+	/** Returns true if we are in error-replaying mode */
+	[[nodiscard]] auto inReplay() const -> bool { return inReplay_; }
+
+	/** Helpers for error replaying (TODO: remove) */
+	void startReplay();
+	void endReplay();
 
 	/** Opt: Caches LAB to optimize scheduling next time */
 	void cacheEventLabel(const EventLabel *lab);
@@ -478,6 +551,8 @@ private:
 	/** IPR: Performs BR in-place */
 	void revisitInPlace(const BackwardRevisit &br);
 
+	void repairDanglingReads(ExecutionGraph &g);
+
 	/** Opt: Finds the last memory access that is visible to other threads;
 	 * return nullptr if no such access is found */
 	const MemAccessLabel *getPreviousVisibleAccessLabel(const EventLabel *start) const;
@@ -559,7 +634,7 @@ private:
 			    const EventLabel *racyLab = nullptr, bool printObservation = false);
 
 	void updateLabelViews(EventLabel *lab);
-	VerificationError checkForRaces(const EventLabel *lab);
+	std::optional<VerificationError> checkForRaces(const EventLabel *lab);
 
 	/** Returns an approximation of consistent rfs for RLAB.
 	 * The rfs are ordered according to CO */
@@ -620,8 +695,14 @@ private:
 	/** Whether we are stopping the exploration (e.g., due to an error found) */
 	bool shouldHalt = false;
 
+	/** Whether we are in error replaying */
+	bool inReplay_ = false;
+
 	/** Dbg: Random-number generators for estimation randomization */
 	MyRNG estRng;
+
+	/** Callbacks for querying information from the interpreter. */
+	InterpreterCallbacks interpreterCallbacks_;
 };
 
 #endif /* GENMC_GENMC_DRIVER_HPP */

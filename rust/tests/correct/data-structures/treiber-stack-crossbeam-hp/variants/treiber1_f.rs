@@ -20,10 +20,10 @@ pub fn main() {
     s.push(2);
     s.push(3);
 
-    let h1 = std::thread::spawn_f_args(thread, &s);
-    let h2 = std::thread::spawn_f_args(thread, &s);
-    let h3 = std::thread::spawn_f_args(thread, &s);
-    let h4 = std::thread::spawn_f_args(thread, &s);
+    let h1 = unsafe { std::thread::spawn_f_args(thread, &s) };
+    let h2 = unsafe { std::thread::spawn_f_args(thread, &s) };
+    let h3 = unsafe { std::thread::spawn_f_args(thread, &s) };
+    let h4 = unsafe { std::thread::spawn_f_args(thread, &s) };
 
     h1.join().unwrap();
     h2.join().unwrap();

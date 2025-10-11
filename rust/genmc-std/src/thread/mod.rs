@@ -32,21 +32,19 @@ unsafe impl<T> Sync for JoinHandle<T> {}
 
 impl<T> JoinInner<T> {
     pub fn join(self) -> Result<T> {
-        self.join_keep()
+        unsafe { self.join_keep() }
     }
 
     /// Custom (non-std) function: Join non-consuming
-    pub fn join_keep(&self) -> Result<T> {
+    pub unsafe fn join_keep(&self) -> Result<T> {
         let t_id: u64 = self.native.id;
 
-        unsafe {
-            let retval: *mut T = __VERIFIER_join(t_id) as *mut T; // Get the pointer to the return-value
-            // Using a Box here allows for threads returning non-Sized elements,
-            // like the unit type for threads returning nothing: ().
-            // These 0-byte types get instantiated by Box without reading from memory.
-            let val = Box::from_raw(retval);
-            std::thread::Result::Ok(*val)
-        }
+        let retval: *mut T = __VERIFIER_join(t_id) as *mut T; // Get the pointer to the return-value
+        // Using a Box here allows for threads returning non-Sized elements,
+        // like the unit type for threads returning nothing: ().
+        // These 0-byte types get instantiated by Box without reading from memory.
+        let val = Box::from_raw(retval);
+        std::thread::Result::Ok(*val)
     }
 }
 
@@ -59,12 +57,12 @@ impl<T> JoinHandle<T> {
     }
 
     /// Custom (non_std) function: Join non-consuming
-    pub fn join_keep(&self) -> Result<T> {
+    pub unsafe fn join_keep(&self) -> Result<T> {
         self.0.join_keep()
     }
 
     /// Custom (non_std) function: Join by tid
-    pub fn join_tid(t_id: u64) -> Result<T> {
+    pub unsafe fn join_tid(t_id: u64) -> Result<T> {
         let inner = JoinInner {
             native: ThreadNative { id: t_id },
             ret_type: PhantomData::<T>
@@ -73,12 +71,12 @@ impl<T> JoinHandle<T> {
     }
 
     /// Custom (non_std) function: Get the tid
-    pub fn get_tid(&self) -> u64 {
+    pub unsafe fn get_tid(&self) -> u64 {
         self.0.native.id
     }
 
     /// Custom (non_std) function: Get a dummy JoinHandle
-    pub const fn dummy() -> JoinHandle<T> {
+    pub const unsafe fn dummy() -> JoinHandle<T> {
         JoinHandle(JoinInner { native: ThreadNative { id: std::u64::MAX }, ret_type: PhantomData::<T> })
     }
 }
@@ -157,9 +155,9 @@ where
 /// }
 ///
 /// pub fn main() {
-///	    let h1 = std::thread::spawn_f(my_thread);
-///	    let h2 = std::thread::spawn_f(my_thread);
-///	    let h3 = std::thread::spawn_f(my_thread);
+///	    let h1 = unsafe { std::thread::spawn_f(my_thread) };
+///	    let h2 = unsafe { std::thread::spawn_f(my_thread) };
+///	    let h3 = unsafe { std::thread::spawn_f(my_thread) };
 ///
 ///	    h1.join().unwrap();
 ///	    h2.join().unwrap();
@@ -167,7 +165,7 @@ where
 ///
 /// }
 /// ```
-pub fn spawn_f<T>(f: fn() -> T) -> JoinHandle<T>
+pub unsafe fn spawn_f<T>(f: fn() -> T) -> JoinHandle<T>
 where T: Send + 'static {
     unsafe {
         JoinHandle::<T>(JoinInner::<T> {
@@ -193,9 +191,9 @@ where T: Send + 'static {
 ///	    //Notice: We can pass &q directly here as ownership is not moved
 ///	    //Make sure q is used (alive after joining), such that it
 ///	    //doesn't get dropped too early.
-///	    let h1 = std::thread::spawn_f_args(my_thread, &q);
-///	    let h2 = std::thread::spawn_f_args(my_thread, &q);
-///	    let h3 = std::thread::spawn_f_args(my_thread, &q);
+///	    let h1 = unsafe { std::thread::spawn_f_args(my_thread, &q) };
+///	    let h2 = unsafe { std::thread::spawn_f_args(my_thread, &q) };
+///	    let h3 = unsafe { std::thread::spawn_f_args(my_thread, &q) };
 ///
 ///	    h1.join().unwrap();
 ///	    h2.join().unwrap();
@@ -210,7 +208,7 @@ where T: Send + 'static {
 /// by GenMC. spawn_f_args allows for multiple threads to still access
 /// the same underlying datastructure of the client application to be
 /// verified, with maximal parallelism.
-pub fn spawn_f_args<A, T>(f: fn(A) -> T, arg: A) -> JoinHandle<T>
+pub unsafe fn spawn_f_args<A, T>(f: fn(A) -> T, arg: A) -> JoinHandle<T>
 where
     T: Send + 'static,
     A: Copy

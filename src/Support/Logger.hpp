@@ -14,7 +14,7 @@
 #ifndef GENMC_LOGGER_HPP
 #define GENMC_LOGGER_HPP
 
-#include "Config/Verbosity.hpp"
+#include "Support/Verbosity.hpp"
 #include <llvm/Support/raw_ostream.h>
 #include <set>
 

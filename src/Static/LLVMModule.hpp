@@ -11,12 +11,13 @@
  *     https://opensource.org/licenses/MIT
  */
 
-#include "Config/Config.hpp"
 #include "Static/ModuleInfo.hpp"
 
 #include <filesystem>
 #include <llvm/IR/Module.h>
 #include <memory>
+
+class LLIConfig;
 
 namespace LLVMModule {
 
@@ -37,8 +38,7 @@ std::unique_ptr<llvm::Module> cloneModule(const std::unique_ptr<llvm::Module> &m
 					  const std::unique_ptr<llvm::LLVMContext> &ctx);
 
 /** Transforms MOD according to CONF. Collected info are stored in MI */
-bool transformLLVMModule(llvm::Module &mod, ModuleInfo &MI,
-			 const std::shared_ptr<const Config> &conf);
+bool transformLLVMModule(llvm::Module &mod, ModuleInfo &MI, const LLIConfig *conf);
 
 /** Prints MOD to the file FILENAME */
 void printLLVMModule(llvm::Module &mod, const std::string &filename);

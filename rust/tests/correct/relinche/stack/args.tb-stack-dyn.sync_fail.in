@@ -1,4 +1,4 @@
--link-with=../rust/tests/correct/data-structures/treiber-stack-dynamic/c_interface.rs|-DRTN=2 -DWTN=2 -DSYNC_INS -include /tests/correct/data-structures/treiber-stack-dynamic/my_stack.h
--link-with=../rust/tests/correct/data-structures/treiber-stack-dynamic/c_interface.rs|-DRTN=2 -DWTN=2 -DSYNC_REM -include /tests/correct/data-structures/treiber-stack-dynamic/my_stack.h
--link-with=../rust/tests/correct/data-structures/treiber-stack-dynamic/c_interface.rs|-DRTN=3 -DWTN=3 -DSYNC_INS -include /tests/correct/data-structures/treiber-stack-dynamic/my_stack.h
--link-with=../rust/tests/correct/data-structures/treiber-stack-dynamic/c_interface.rs|-DRTN=3 -DWTN=3 -DSYNC_REM -include /tests/correct/data-structures/treiber-stack-dynamic/my_stack.h
+-extra-input=../rust/tests/correct/data-structures/treiber-stack-dynamic/c_interface.rs|-DRTN=2 -DWTN=2 -DSYNC_INS -include /tests/correct/data-structures/treiber-stack-dynamic/my_stack.h
+-extra-input=../rust/tests/correct/data-structures/treiber-stack-dynamic/c_interface.rs|-DRTN=2 -DWTN=2 -DSYNC_REM -include /tests/correct/data-structures/treiber-stack-dynamic/my_stack.h
+-extra-input=../rust/tests/correct/data-structures/treiber-stack-dynamic/c_interface.rs|-DRTN=3 -DWTN=3 -DSYNC_INS -include /tests/correct/data-structures/treiber-stack-dynamic/my_stack.h
+-extra-input=../rust/tests/correct/data-structures/treiber-stack-dynamic/c_interface.rs|-DRTN=3 -DWTN=3 -DSYNC_REM -include /tests/correct/data-structures/treiber-stack-dynamic/my_stack.h

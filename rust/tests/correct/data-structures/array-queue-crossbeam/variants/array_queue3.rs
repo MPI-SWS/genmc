@@ -1,28 +1,24 @@
 //Source: https://github.com/sujalsin/concurrent-verification/blob/main/src/main.rs
 //test_memory_safety
-//LOOP_BOUND2 (1000s)
-// Failing
+//LOOP_BOUND4
 
 #[path = "../array_queue.rs"]
 mod array_queue;
 use array_queue::*;
 
-use std::sync::Arc;
-use std::thread::spawn;
+fn thread(args: (&ArrayQueue<i32>, i32)) {
+    let (queue, id) = args;
+    assert!( queue.push(id).is_ok() );
+    let _ = queue.pop();
+}
 
 pub fn main() {
-    let queue = Arc::new(ArrayQueue::new(5));
+    let queue = ArrayQueue::new(5);
 
-    // Multiple threads accessing the same memory
     let handles: Vec<_> = (0..3)
         .map(|i| {
-            let queue = Arc::clone(&queue);
-            spawn(move || {
-                assert!( queue.push(i).is_ok() );
-                let _ = queue.pop();
-            })
-        })
-        .collect();
+            unsafe { std::thread::spawn_f_args(thread, (&queue, i)) }
+        }).collect();
 
     for handle in handles {
         handle.join().unwrap();

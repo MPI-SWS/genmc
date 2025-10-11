@@ -30,6 +30,15 @@ typedef long __VERIFIER_condattr_t;
 typedef struct { int __private; } __VERIFIER_mutex_t;
 typedef long __VERIFIER_mutexattr_t;
 
+#ifndef __VERIFIER_MAX_THREAD_NUM
+ #define __VERIFIER_MAX_THREAD_NUM 8
+#endif
+
+typedef struct {
+	__VERIFIER_mutex_t __private[__VERIFIER_MAX_THREAD_NUM];
+} __VERIFIER_rwlock_t;
+typedef long __VERIFIER_rwlockattr_t;
+
 typedef struct __VERIFIER_plock {
 	__VERIFIER_mutex_t lock;
 } __VERIFIER_plock_t;
@@ -123,7 +132,7 @@ extern int __VERIFIER_barrier_destroy (__VERIFIER_barrier_t *__barrier) __attrib
 #define GENMC_KIND_HELPING 0x00040000
 #define GENMC_KIND_SPECUL  0x00080000
 #define GENMC_KIND_CONFIRM 0x00100000
-#define GENMC_ATTR_PLOCK   0x00200000
+#define GENMC_KIND_PLOCK   0x00200000
 #define GENMC_KIND_BARRIER 0x00400000
 
 /* Need to match Execution.cpp and GenMC's AssumeType */

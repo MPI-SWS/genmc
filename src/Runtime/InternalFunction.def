@@ -124,19 +124,20 @@ HANDLE_PURE_FUNCTION(14, "__VERIFIER_hazptr_protect", HazptrProtect)
 HANDLE_PURE_FUNCTION(15, "__VERIFIER_hazptr_clear", HazptrClear)
 HANDLE_PURE_FUNCTION(16, "__VERIFIER_method_begin", MethodBegin)
 HANDLE_PURE_FUNCTION(17, "__VERIFIER_method_end", MethodEnd)
-LAST_PURE_FUNCTION(17)
+HANDLE_PURE_FUNCTION(18, "__VERIFIER_output", Output)
+LAST_PURE_FUNCTION(18)
 
 /*
  * Mutex functions - these denote some mutex operation.
  * Useful to distinguish for tracking dependencies.
  */
-FIRST_MUTEX_FUNCTION(18)
-HANDLE_MUTEX_FUNCTION(18, "__VERIFIER_mutex_init", MutexInit)
-HANDLE_MUTEX_FUNCTION(19, "__VERIFIER_mutex_lock", MutexLock)
-HANDLE_MUTEX_FUNCTION(20, "__VERIFIER_mutex_unlock", MutexUnlock)
-HANDLE_MUTEX_FUNCTION(21, "__VERIFIER_mutex_trylock", MutexTrylock)
-HANDLE_MUTEX_FUNCTION(22, "__VERIFIER_mutex_destroy", MutexDestroy)
-LAST_MUTEX_FUNCTION(22)
+FIRST_MUTEX_FUNCTION(19)
+HANDLE_MUTEX_FUNCTION(19, "__VERIFIER_mutex_init", MutexInit)
+HANDLE_MUTEX_FUNCTION(20, "__VERIFIER_mutex_lock", MutexLock)
+HANDLE_MUTEX_FUNCTION(21, "__VERIFIER_mutex_unlock", MutexUnlock)
+HANDLE_MUTEX_FUNCTION(22, "__VERIFIER_mutex_trylock", MutexTrylock)
+HANDLE_MUTEX_FUNCTION(23, "__VERIFIER_mutex_destroy", MutexDestroy)
+LAST_MUTEX_FUNCTION(23)
 
 /*
  * Condvar functions - for condition variables.

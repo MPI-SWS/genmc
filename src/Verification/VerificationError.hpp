@@ -39,7 +39,6 @@ enum class SystemError {
  * Public to enable the interpreter utilize it */
 enum class VerificationError {
 	VE_NonErrorBegin,
-	VE_OK,
 	VE_WWRace,
 	VE_UnfreedMemory,
 	VE_NonErrorLast,

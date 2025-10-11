@@ -52,8 +52,6 @@ HANDLE_LABEL(FaiZNEBlock)
 HANDLE_LABEL(LockZNEBlock)
 HANDLE_LABEL(HelpedCASBlock)
 HANDLE_LABEL(ConfirmationBlock)
-HANDLE_LABEL(LockNotAcqBlock)
-HANDLE_LABEL(LockNotRelBlock)
 HANDLE_LABEL(BarrierBlock)
 HANDLE_LABEL(ErrorBlock)
 HANDLE_LABEL(UserBlock)
@@ -172,7 +170,8 @@ HANDLE_LABEL(LockZNESpinEnd)
 HANDLE_LABEL(Empty)
 HANDLE_LABEL(MethodBegin)
 HANDLE_LABEL(MethodEnd)
-LAST_LABEL(Other, MethodEnd)
+HANDLE_LABEL(Output)
+LAST_LABEL(Other, Output)
 
 #undef FIRST_LABEL
 #undef LAST_LABEL

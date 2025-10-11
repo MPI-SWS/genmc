@@ -14,8 +14,8 @@ pub fn main() {
     s.push(1);
     s.push(2);
 
-    let h1 = std::thread::spawn_f_args(consumer, &s);
-    let h2 = std::thread::spawn_f_args(consumer, &s);
+    let h1 = unsafe { std::thread::spawn_f_args(consumer, &s) };
+    let h2 = unsafe { std::thread::spawn_f_args(consumer, &s) };
 
     h1.join().unwrap();
     h2.join().unwrap();

@@ -11,7 +11,7 @@
 #include <utility>
 
 struct VerificationResult {
-	VerificationError status = VerificationError::VE_OK; /**< Whether the verification
+	std::optional<VerificationError> status{}; /**< Whether the verification
 				    completed successfully */
 	unsigned explored{};		  /**< Number of complete executions explored */
 	unsigned exploredBlocked{};	  /**< Number of blocked executions explored */
@@ -34,7 +34,7 @@ struct VerificationResult {
 	auto operator+=(VerificationResult &&other) -> VerificationResult &
 	{
 		/* Propagate latest error */
-		if (other.status != VerificationError::VE_OK)
+		if (other.status.has_value())
 			status = other.status;
 		message += other.message;
 		explored += other.explored;

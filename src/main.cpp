@@ -11,14 +11,18 @@
  *     https://opensource.org/licenses/MIT
  */
 
-#include "Config/Config.hpp"
 #include "Runtime/Interpreter.h"
+#include "Runtime/LLIConfig.hpp"
 #include "Static/LLVMModule.hpp"
 #include "Support/Error.hpp"
 #include "Support/ThreadPool.hpp"
+#include "Verification/Config.hpp"
 #include "Verification/GenMCDriver.hpp"
 
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FileSystem.h>
+#include <llvm/Support/raw_ostream.h>
 
 #include <chrono>
 #include <cmath>
@@ -30,20 +34,456 @@
 
 namespace fs = llvm::sys::fs;
 
-static auto durationToMill(const std::chrono::high_resolution_clock::duration &duration)
+enum class InputLanguage : std::uint8_t { clang, cargo, rust, llvmir };
+
+// NOLINTBEGIN
+
+/*******************************************************************************
+ **                     Command-line arguments
+ ******************************************************************************/
+
+/*** Command-line argument categories ***/
+
+static llvm::cl::OptionCategory clGeneral("Exploration Options");
+static llvm::cl::OptionCategory clTransformation("Transformation Options");
+static llvm::cl::OptionCategory clDebugging("Debugging Options");
+
+/*** General syntax ***/
+
+static llvm::cl::list<std::string> clCFLAGS(llvm::cl::Positional, llvm::cl::ZeroOrMore,
+					    llvm::cl::desc("-- [compiler flags]"));
+
+static llvm::cl::opt<std::string> clInputFile(llvm::cl::Positional, llvm::cl::Required,
+					      llvm::cl::desc("<input file>"));
+
+/*** Exploration options ***/
+
+static llvm::cl::opt<ModelType> clModelType(
+	llvm::cl::values(clEnumValN(ModelType::SC, "sc", "SC memory model"),
+			 clEnumValN(ModelType::TSO, "tso", "TSO memory model"),
+			 clEnumValN(ModelType::RA, "ra", "RA+RLX memory model"),
+			 clEnumValN(ModelType::RC11, "rc11", "RC11 memory model (default)"),
+			 clEnumValN(ModelType::IMM, "imm", "IMM memory model")),
+	llvm::cl::cat(clGeneral), llvm::cl::init(ModelType::RC11),
+	llvm::cl::desc("Choose model type:"));
+
+static llvm::cl::opt<bool> clDisableEstimation(
+	"disable-estimation", llvm::cl::cat(clGeneral),
+	llvm::cl::desc("Do not estimate the state-space size before verifying the program"));
+
+static llvm::cl::opt<unsigned int>
+	clThreads("nthreads", llvm::cl::cat(clGeneral), llvm::cl::init(1),
+		  llvm::cl::desc("Number of threads to be used in the exploration"));
+
+static llvm::cl::opt<int>
+	clBound("bound", llvm::cl::cat(clGeneral), llvm::cl::init(-1), llvm::cl::value_desc("N"),
+		llvm::cl::desc("Do not explore executions exceeding given bound"));
+
+static llvm::cl::opt<BoundType>
+	clBoundType("bound-type", llvm::cl::cat(clGeneral), llvm::cl::init(BoundType::round),
+		    llvm::cl::desc("Choose type for -bound:"),
+		    llvm::cl::values(clEnumValN(BoundType::context, "context", "Context bound"),
+				     clEnumValN(BoundType::round, "round", "Round-robin bound")));
+
+#ifdef ENABLE_GENMC_DEBUG
+static llvm::cl::opt<bool> clBoundsHistogram("bounds-histogram", llvm::cl::cat(clDebugging),
+					     llvm::cl::desc("Produce bounds histogram"));
+#endif /* ifdef ENABLE_GENMC_DEBUG */
+
+static llvm::cl::opt<bool>
+	clLAPOR("lapor", llvm::cl::cat(clGeneral),
+		llvm::cl::desc("Enable Lock-Aware Partial Order Reduction (LAPOR)"));
+
+static llvm::cl::opt<bool> clDisableSymmetryReduction("disable-sr", llvm::cl::cat(clGeneral),
+						      llvm::cl::desc("Disable symmetry reduction"));
+
+static llvm::cl::opt<bool> clDisableHelper("disable-helper", llvm::cl::cat(clGeneral),
+					   llvm::cl::desc("Disable helping pattern optimization"));
+
+static llvm::cl::opt<bool>
+	clConfirmation("confirmation", llvm::cl::cat(clGeneral),
+		       llvm::cl::desc("Enable confirmation pattern optimization"));
+
+static llvm::cl::opt<bool> clDisableFinalWrite("disable-final-write", llvm::cl::cat(clGeneral),
+					       llvm::cl::desc("Disable final write optimization"));
+
+static llvm::cl::opt<bool> clPrintErrorTrace("print-error-trace", llvm::cl::cat(clGeneral),
+					     llvm::cl::desc("Print error trace"));
+
+static llvm::cl::opt<std::string>
+	clDotGraphFile("dump-error-graph", llvm::cl::init(""), llvm::cl::value_desc("file"),
+		       llvm::cl::cat(clGeneral),
+		       llvm::cl::desc("Dump an error graph to a file (DOT format)"));
+
+static llvm::cl::opt<bool> clCheckLiveness("check-liveness", llvm::cl::cat(clGeneral),
+					   llvm::cl::desc("Check for liveness violations"));
+
+static llvm::cl::opt<bool> clDisableInstructionCaching(
+	"disable-instruction-caching", llvm::cl::cat(clGeneral),
+	llvm::cl::desc("Disable instruction caching (pure stateless exploration)"));
+
+static llvm::cl::opt<bool> clDisableRaceDetection("disable-race-detection",
+						  llvm::cl::cat(clGeneral),
+						  llvm::cl::desc("Disable race detection"));
+
+static llvm::cl::opt<bool> clDisableBAM("disable-bam", llvm::cl::cat(clGeneral),
+					llvm::cl::desc("Disable optimized barrier handling (BAM)"));
+static llvm::cl::opt<bool> clDisableIPR("disable-ipr", llvm::cl::cat(clGeneral),
+					llvm::cl::desc("Disable in-place revisiting"));
+static llvm::cl::opt<bool>
+	clDisableStopOnSystemError("disable-stop-on-system-error", llvm::cl::cat(clGeneral),
+				   llvm::cl::desc("Do not stop verification on system errors"));
+static llvm::cl::opt<bool>
+	clDisableWarnUnfreedMemory("disable-warn-on-unfreed-memory", llvm::cl::cat(clGeneral),
+				   llvm::cl::desc("Do not warn about unfreed memory"));
+
+static llvm::cl::opt<std::string>
+	clCollectLinSpec("collect-lin-spec", llvm::cl::init(""), llvm::cl::value_desc("file"),
+			 llvm::cl::cat(clGeneral),
+			 llvm::cl::desc("Collect linearizability specification into a file"));
+
+static llvm::cl::opt<std::string>
+	clCheckLinSpec("check-lin-spec", llvm::cl::init(""), llvm::cl::value_desc("file"),
+		       llvm::cl::cat(clGeneral),
+		       llvm::cl::desc("Check implementation refinement of specification file"));
+
+static llvm::cl::opt<bool>
+	clDotPrintOnlyClientEvents("dot-print-only-client-events", llvm::cl::cat(clGeneral),
+				   llvm::cl::desc("Omit library events in the DOT file"));
+
+static llvm::cl::opt<unsigned int> clMaxExtSize(
+	"max-hint-size", llvm::cl::init(std::numeric_limits<unsigned int>::max()),
+	llvm::cl::cat(clDebugging),
+	llvm::cl::desc("Limit the number of edges in hints to be considered (for debugging)"));
+
+/*** Transformation options ***/
+
+static llvm::cl::opt<int> clLoopUnroll("unroll", llvm::cl::init(-1), llvm::cl::value_desc("N"),
+				       llvm::cl::cat(clTransformation),
+				       llvm::cl::desc("Unroll loops N times"));
+
+static llvm::cl::list<std::string> clNoUnrollFuns("no-unroll", llvm::cl::value_desc("fun_name"),
+						  llvm::cl::cat(clTransformation),
+						  llvm::cl::desc("Do not unroll this function"));
+
+static llvm::cl::opt<bool>
+	clDisableLoopJumpThreading("disable-loop-jump-threading", llvm::cl::cat(clTransformation),
+				   llvm::cl::desc("Disable loop-jump-threading transformation"));
+
+static llvm::cl::opt<bool>
+	clDisableCastElimination("disable-cast-elimination", llvm::cl::cat(clTransformation),
+				 llvm::cl::desc("Disable cast-elimination transformation"));
+
+static llvm::cl::opt<bool>
+	clDisableFunctionInliner("disable-function-inliner", llvm::cl::cat(clTransformation),
+				 llvm::cl::desc("Disable function-inlining transformation"));
+
+static llvm::cl::opt<bool>
+	clDisableSpinAssume("disable-spin-assume", llvm::cl::cat(clTransformation),
+			    llvm::cl::desc("Disable spin-assume transformation"));
+
+static llvm::cl::opt<bool>
+	clDisableCodeCondenser("disable-code-condenser", llvm::cl::cat(clTransformation),
+			       llvm::cl::desc("Disable code-condenser transformation"));
+
+static llvm::cl::opt<bool>
+	clDisableLoadAnnot("disable-load-annotation", llvm::cl::cat(clTransformation),
+			   llvm::cl::desc("Disable load-annotation transformation"));
+
+static llvm::cl::opt<bool>
+	clDisableAssumePropagation("disable-assume-propagation", llvm::cl::cat(clTransformation),
+				   llvm::cl::desc("Disable assume-propagation transformation"));
+
+static llvm::cl::opt<bool> clDisableMMDetector("disable-mm-detector",
+					       llvm::cl::cat(clTransformation),
+					       llvm::cl::desc("Disable MM detector pass"));
+
+/*** Debugging options ***/
+
+static llvm::cl::opt<unsigned int> clEstimationMax(
+	"estimation-max", llvm::cl::init(1000), llvm::cl::value_desc("N"),
+	llvm::cl::cat(clDebugging),
+	llvm::cl::desc("Number of maximum allotted rounds for state-space estimation"));
+
+static llvm::cl::opt<unsigned int> clEstimationMin(
+	"estimation-min", llvm::cl::init(10), llvm::cl::value_desc("N"), llvm::cl::cat(clDebugging),
+	llvm::cl::desc("Number of minimum alloted round for state-space estimation"));
+
+static llvm::cl::opt<unsigned int> clEstimationSdThreshold(
+	"estimation-threshold", llvm::cl::init(10), llvm::cl::value_desc("N"),
+	llvm::cl::cat(clDebugging),
+	llvm::cl::desc("Deviation threshold % under which estimation is deemed good enough"));
+
+static llvm::cl::opt<std::string> clProgramEntryFunction(
+	"program-entry-function", llvm::cl::init("main"), llvm::cl::value_desc("fun_name"),
+	llvm::cl::cat(clDebugging),
+	llvm::cl::desc("Function used as program entrypoint (default: main())"));
+
+static llvm::cl::opt<std::string> clOutputLlvmBefore(
+	"output-llvm-before", llvm::cl::init(""), llvm::cl::value_desc("file"),
+	llvm::cl::cat(clDebugging),
+	llvm::cl::desc("Output the LLVM code to file before applying transformations"));
+static llvm::cl::opt<std::string> clOutputLlvmAfter(
+	"output-llvm-after", llvm::cl::init(""), llvm::cl::value_desc("file"),
+	llvm::cl::cat(clDebugging),
+	llvm::cl::desc("Output the LLVM code to file after applying transformations"));
+
+static llvm::cl::opt<bool> clSkipGenmcStdBuild(
+	"skip-genmc-std-build", llvm::cl::cat(clDebugging),
+	llvm::cl::desc("Don't build the genmc-std crate while verifying .rs files "
+		       "if a build is already present"));
+
+static llvm::cl::list<std::string>
+	clExtraInput("extra-input", llvm::cl::value_desc("file"),
+		   llvm::cl::cat(clDebugging),
+		   llvm::cl::desc("Build this file seperately and link the result into the build"));
+
+static llvm::cl::opt<unsigned int>
+	clWarnOnGraphSize("warn-on-graph-size", llvm::cl::init(1024), llvm::cl::value_desc("N"),
+			  llvm::cl::cat(clDebugging),
+			  llvm::cl::desc("Warn about graphs larger than N"));
+static llvm::cl::opt<SchedulePolicy> clSchedulePolicy(
+	"schedule-policy", llvm::cl::cat(clDebugging), llvm::cl::init(SchedulePolicy::WF),
+	llvm::cl::desc("Choose the scheduling policy:"),
+	llvm::cl::values(clEnumValN(SchedulePolicy::LTR, "ltr", "Left-to-right"),
+			 clEnumValN(SchedulePolicy::WF, "wf", "Writes-first (default)"),
+			 clEnumValN(SchedulePolicy::WFR, "wfr", "Writes-first-random"),
+			 clEnumValN(SchedulePolicy::Arbitrary, "arbitrary", "Arbitrary")));
+
+static llvm::cl::opt<bool> clPrintArbitraryScheduleSeed(
+	"print-schedule-seed", llvm::cl::cat(clDebugging),
+	llvm::cl::desc("Print the seed used for arbitrary scheduling"));
+
+static llvm::cl::opt<std::string>
+	clArbitraryScheduleSeed("schedule-seed", llvm::cl::init(""), llvm::cl::value_desc("seed"),
+				llvm::cl::cat(clDebugging),
+				llvm::cl::desc("Seed to be used for arbitrary scheduling"));
+
+static llvm::cl::opt<bool> clPrintExecGraphs("print-exec-graphs", llvm::cl::cat(clDebugging),
+					     llvm::cl::desc("Print explored execution graphs"));
+
+static llvm::cl::opt<bool> clPrintBlockedExecs("print-blocked-execs", llvm::cl::cat(clDebugging),
+					       llvm::cl::desc("Print blocked execution graphs"));
+
+static llvm::cl::opt<VerbosityLevel> clVLevel(
+	llvm::cl::cat(clDebugging), llvm::cl::init(VerbosityLevel::Tip),
+	llvm::cl::desc("Choose verbosity level:"),
+	llvm::cl::values(clEnumValN(VerbosityLevel::Quiet, "v0", "Quiet (no logging)"),
+			 clEnumValN(VerbosityLevel::Error, "v1", "Print errors only"),
+			 clEnumValN(VerbosityLevel::Warning, "v2", "Print warnings"),
+			 clEnumValN(VerbosityLevel::Tip, "v3", "Print tips (default)")
+#ifdef ENABLE_GENMC_DEBUG
+				 ,
+			 clEnumValN(VerbosityLevel::Debug1, "v4", "Print revisits considered"),
+			 clEnumValN(VerbosityLevel::Debug2, "v5",
+				    "Print graph after each memory access"),
+			 clEnumValN(VerbosityLevel::Debug3, "v6", "Print rf options considered")
+#endif /* ifdef ENABLE_GENMC_DEBUG */
+				 ));
+
+#ifdef ENABLE_GENMC_DEBUG
+static llvm::cl::opt<bool> clPrintStamps("print-stamps", llvm::cl::cat(clDebugging),
+					 llvm::cl::desc("Print stamps in execution graphs"));
+
+static llvm::cl::opt<bool>
+	clColorAccesses("color-accesses", llvm::cl::cat(clDebugging),
+			llvm::cl::desc("Color accesses depending on revisitability"));
+
+static llvm::cl::opt<bool>
+	clValidateExecGraphs("validate-exec-graphs", llvm::cl::cat(clDebugging),
+			     llvm::cl::desc("Validate the execution graphs in each step"));
+
+static llvm::cl::opt<bool>
+	clCountDuplicateExecs("count-duplicate-execs", llvm::cl::cat(clDebugging),
+			      llvm::cl::desc("Count duplicate executions (adds runtime overhead)"));
+
+static llvm::cl::opt<bool> clCountMootExecs("count-moot-execs", llvm::cl::cat(clDebugging),
+					    llvm::cl::desc("Count moot executions"));
+
+static llvm::cl::opt<bool> clPrintEstimationStats("print-estimation-stats",
+						  llvm::cl::cat(clDebugging),
+						  llvm::cl::desc("Prints estimations statistics"));
+
+static llvm::cl::opt<bool> clRelincheDebug("relinche-debug", llvm::cl::cat(clDebugging),
+					   llvm::cl::desc("Enable debug printing for Relinche"));
+#endif /* ENABLE_GENMC_DEBUG */
+
+// NOLINTEND
+
+static void printVersion(llvm::raw_ostream &s)
 {
-	static constexpr long double secToMillFactor = 1e-3L;
-	return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() *
-	       secToMillFactor;
+	s << PACKAGE_NAME " (" PACKAGE_URL "):\n"
+	  << "  " PACKAGE_NAME " v" PACKAGE_VERSION
+#ifdef GIT_COMMIT
+	  << " (commit #" GIT_COMMIT ")"
+#endif
+	  << "\n  Built with LLVM " LLVM_VERSION " (" LLVM_BUILDMODE ")\n";
 }
 
-static auto getElapsedSecs(const std::chrono::high_resolution_clock::time_point &begin)
-	-> long double
+static auto determineLang(const std::string &inputFile) -> InputLanguage
 {
-	return durationToMill(std::chrono::high_resolution_clock::now() - begin);
+	std::filesystem::path inputFilePath(inputFile);
+
+	if (inputFilePath.extension() == ".toml")
+		return InputLanguage::cargo;
+	if (inputFilePath.extension() == ".rs")
+		return InputLanguage::rust;
+	if (inputFilePath.extension() == ".ll")
+		return InputLanguage::llvmir;
+	return InputLanguage::clang; /* default: C/C++ */
 }
 
-static auto getOutFilename(const std::shared_ptr<const Config> & /*conf*/) -> std::string
+/* Check whether files exist and if settings are correct for the given file type. */
+static void checkLLIConfig(const LLIConfig &lliConfig)
+{
+	/* Make sure -skip-genmc-std-build is used only on Rust builds */
+	if (lliConfig.skipGenmcStdBuild && !lliConfig.rust) {
+		ERROR("-skip-genmc-std-build used on non-Rust input.\n");
+	}
+}
+
+static void saveConfigOptions(Config &conf, LLIConfig &lliConfig)
+{
+	/* LLI */
+	lliConfig.cflags.insert(lliConfig.cflags.end(), clCFLAGS.begin(), clCFLAGS.end());
+	lliConfig.inputFile = std::move(clInputFile);
+	lliConfig.threads = clThreads;
+	lliConfig.disableStopOnSystemError = clDisableStopOnSystemError;
+	lliConfig.collectLinSpec = clCollectLinSpec.empty()
+					   ? std::nullopt
+					   : std::optional(clCollectLinSpec.getValue());
+	lliConfig.checkLinSpec = clCheckLinSpec.empty() ? std::nullopt
+							: std::optional(clCheckLinSpec.getValue());
+
+	lliConfig.unroll = clLoopUnroll >= 0 ? std::optional(clLoopUnroll.getValue())
+					     : std::nullopt;
+	lliConfig.noUnrollFuns.insert(clNoUnrollFuns.begin(), clNoUnrollFuns.end());
+	lliConfig.loopJumpThreading = !clDisableLoopJumpThreading;
+	lliConfig.castElimination = !clDisableCastElimination;
+	lliConfig.inlineFunctions = !clDisableFunctionInliner;
+	lliConfig.spinAssume = !clDisableSpinAssume;
+	lliConfig.codeCondenser = !clDisableCodeCondenser;
+	lliConfig.loadAnnot = !clDisableLoadAnnot;
+	lliConfig.assumePropagation = !clDisableAssumePropagation;
+	lliConfig.mmDetector = !clDisableMMDetector;
+	lliConfig.helper = !clDisableHelper;
+	lliConfig.confirmation = clConfirmation; /* could be two options: pass + annot */
+	lliConfig.finalWrite = !clDisableFinalWrite;
+	lliConfig.liveness = clCheckLiveness;
+	lliConfig.bam = !clDisableBAM;
+	auto lang = determineLang(lliConfig.inputFile);
+	lliConfig.rust = lang == InputLanguage::rust || lang == InputLanguage::cargo;
+
+	lliConfig.outputLlvmBefore = std::move(clOutputLlvmBefore);
+	lliConfig.outputLlvmAfter = std::move(clOutputLlvmAfter);
+	lliConfig.skipGenmcStdBuild = clSkipGenmcStdBuild;
+	for (const auto extraInput : clExtraInput){
+		auto extraLang = determineLang(extraInput);
+		lliConfig.extraInput.insert(extraInput);
+		lliConfig.rust |= extraLang == InputLanguage::rust || extraLang == InputLanguage::cargo;
+	}
+	lliConfig.programEntryFun = std::move(clProgramEntryFunction);
+	lliConfig.isDepTrackingModel = (clModelType == ModelType::IMM);
+
+	/* Exploration */
+	conf.dotFile = std::move(clDotGraphFile);
+	conf.model = clModelType;
+	conf.estimate = !clDisableEstimation;
+	conf.estimationMax = clEstimationMax;
+	conf.estimationMin = clEstimationMin;
+	conf.sdThreshold = clEstimationSdThreshold;
+	conf.isDepTrackingModel = lliConfig.isDepTrackingModel;
+
+	conf.bound = clBound >= 0 ? std::optional(clBound.getValue()) : std::nullopt;
+	conf.boundType = clBoundType.getNumOccurrences() > 0 ? clBoundType : BoundType::none;
+	conf.LAPOR = clLAPOR;
+	conf.symmetryReduction = !clDisableSymmetryReduction;
+	conf.helper = !clDisableHelper;
+	conf.confirmation = clConfirmation;
+	conf.finalWrite = !clDisableFinalWrite;
+	conf.printErrorTrace = clPrintErrorTrace;
+	conf.checkLiveness = clCheckLiveness;
+	conf.instructionCaching = !clDisableInstructionCaching;
+	conf.disableRaceDetection = clDisableRaceDetection;
+	conf.disableBAM = clDisableBAM;
+	conf.ipr = !clDisableIPR;
+
+	conf.warnUnfreedMemory = !clDisableWarnUnfreedMemory;
+	conf.collectLinSpec = lliConfig.collectLinSpec;
+	conf.checkLinSpec = lliConfig.checkLinSpec;
+	conf.dotPrintOnlyClientEvents = clDotPrintOnlyClientEvents;
+	conf.maxExtSize = clMaxExtSize;
+
+	/* Save debugging options */
+	conf.warnOnGraphSize = clWarnOnGraphSize;
+	conf.schedulePolicy = clSchedulePolicy;
+	conf.printRandomScheduleSeed = clPrintArbitraryScheduleSeed;
+	conf.randomScheduleSeed = std::move(clArbitraryScheduleSeed);
+	conf.printExecGraphs = clPrintExecGraphs;
+	conf.printBlockedExecs = clPrintBlockedExecs;
+#ifdef ENABLE_GENMC_DEBUG
+	conf.printStamps = clPrintStamps;
+	conf.colorAccesses = clColorAccesses;
+	conf.validateExecGraphs = clValidateExecGraphs;
+	conf.countDuplicateExecs = clCountDuplicateExecs;
+	conf.countMootExecs = clCountMootExecs;
+	conf.printEstimationStats = clPrintEstimationStats;
+	conf.boundsHistogram = clBoundsHistogram;
+	conf.relincheDebug = clRelincheDebug;
+#endif
+}
+
+static void adjustConfig(const ModuleInfo &modInfo, Config &conf)
+{
+	/* Warn if BAM is enabled and barrier results might be used */
+	if (!conf.disableBAM && modInfo.barrierResultsUsed.has_value() &&
+	    *modInfo.barrierResultsUsed == BarrierRetResult::Used) {
+		LOG(VerbosityLevel::Warning)
+			<< "Could not determine whether barrier_wait() result is used."
+			<< " Use -disable-bam if the order in which threads reach the barrier "
+			   "matters.\n";
+	}
+
+	/* Perhaps override the MM under which verification will take place */
+	if (modInfo.determinedMM.has_value() && isStrongerThan(*modInfo.determinedMM, conf.model)) {
+		conf.model = *modInfo.determinedMM;
+		conf.isDepTrackingModel = (conf.model == ModelType::IMM);
+		LOG(VerbosityLevel::Tip)
+			<< "Automatically adjusting memory model to " << conf.model
+			<< ". You can disable this behavior with -disable-mm-detector.\n";
+	}
+}
+
+static void parseConfig(int argc, char **argv, Config &conf, LLIConfig &lliConfig)
+{
+	/* Option categories printed */
+	const llvm::cl::OptionCategory *cats[] = {&clGeneral, &clDebugging, &clTransformation};
+
+	llvm::cl::SetVersionPrinter(printVersion);
+
+	/* Hide unrelated LLVM options and parse user configuration */
+	llvm::cl::HideUnrelatedOptions(cats);
+	llvm::cl::ParseCommandLineOptions(argc, argv,
+					  "GenMC -- "
+					  "Model Checking for C programs");
+
+	/* Save the config options and do some sanity-checks. */
+	saveConfigOptions(conf, lliConfig);
+	checkConfig(conf);
+	checkLLIConfig(lliConfig);
+
+	/* Set (global) log state */
+	logLevel = clVLevel;
+
+	llvm::cl::ResetAllOptionOccurrences();
+	clInputFile.removeArgument();
+}
+
+/*******************************************************************************
+ **                         Compilation
+ ******************************************************************************/
+
+static auto getOutFilename(const LLIConfig & /* lliConfig */) -> std::string
 {
 	static char filenameTemplate[] = "/tmp/__genmc.ll.XXXXXX";
 	static bool createdFilename = false;
@@ -55,7 +495,7 @@ static auto getOutFilename(const std::shared_ptr<const Config> & /*conf*/) -> st
 	return {filenameTemplate};
 }
 
-static auto buildCompilationArgs(const std::shared_ptr<const Config> &conf) -> std::string
+static auto buildCompilationArgs(const LLIConfig &lliConfig) -> std::string
 {
 	std::string args;
 
@@ -63,35 +503,34 @@ static auto buildCompilationArgs(const std::shared_ptr<const Config> &conf) -> s
 	args += " -Xclang";
 	args += " -disable-O0-optnone";
 	/* We may be linking with Rust which uses dwarf-4 */
-	args += !conf->linkWith.empty() ? " -gdwarf-4" : " -g";
-	for (const auto &f : conf->cflags)
+	args += lliConfig.rust ? " -gdwarf-4" : " -g";
+	for (const auto &f : lliConfig.cflags)
 		args += " " + f;
 	args += " -I" SRC_INCLUDE_DIR;
 	args += " -I" INCLUDE_DIR;
 	args += " -S -emit-llvm";
-	args += " -o " + getOutFilename(conf);
-	args += " " + conf->inputFile;
+	args += " -o " + getOutFilename(lliConfig);
+	args += " " + lliConfig.inputFile;
 
 	return args;
 }
 
-static auto compileInput(const std::shared_ptr<const Config> &conf,
-			 const std::unique_ptr<llvm::LLVMContext> &ctx,
+static auto compileInput(const LLIConfig &lliConfig, const std::unique_ptr<llvm::LLVMContext> &ctx,
 			 std::unique_ptr<llvm::Module> &module) -> bool
 {
 	const auto *path = CLANGPATH;
-	auto command = path + buildCompilationArgs(conf);
+	auto command = path + buildCompilationArgs(lliConfig);
 	if (std::system(command.c_str()) != 0)
 		return false;
 
-	module = LLVMModule::parseLLVMModule(getOutFilename(conf), ctx);
+	module = LLVMModule::parseLLVMModule(getOutFilename(lliConfig), ctx);
 	return true;
 }
 
 /**
  * Clean + build a given Cargo crate
  */
-static auto buildCargoProject(std::string &cargoPath, std::filesystem::path projectPath,
+static auto buildCargoProject(std::string &cargoPath, const std::filesystem::path &projectPath,
 			      bool skipBuild = false) -> bool
 {
 	if (skipBuild)
@@ -124,12 +563,12 @@ static auto buildCargoProject(std::string &cargoPath, std::filesystem::path proj
  * file as a prelude (--extern) when building our .rs file with rustc. Link the llvm-ir output files
  * produced by genmc-std into it seperately.
  */
-static auto compileRustInput(const std::shared_ptr<const Config> &conf,
+static auto compileRustInput(const LLIConfig &lliConfig,
 			     const std::unique_ptr<llvm::LLVMContext> &ctx,
 			     std::unique_ptr<llvm::Module> &module) -> bool
 {
 #ifndef RUSTC_PATH
-	ERROR("Rust not linked, use cmake with '-DRUST_BIN_PATH=...' and rebuild GenMC to use "
+	ERROR("Rust not linked, use cmake with '-DENABLE_RUST=ON' and rebuild GenMC to use "
 	      "Rust.");
 #define RUSTC_PATH ""
 #define CARGO_PATH ""
@@ -142,7 +581,7 @@ static auto compileRustInput(const std::shared_ptr<const Config> &conf,
 	std::filesystem::path pathRlib = pathDebug / "libgenmc_std.rlib";
 
 	/* Build genmc-std, skip if a build exists that we're allowed to use */
-	bool skipBuild = conf->disableGenmcStdRebuild && std::filesystem::exists(pathRlib);
+	bool skipBuild = lliConfig.skipGenmcStdBuild && std::filesystem::exists(pathRlib);
 	bool buildSuccessful =
 		buildCargoProject(cargoPath, RUST_DIR + std::string("/genmc-std"), skipBuild);
 	if (!buildSuccessful)
@@ -152,11 +591,11 @@ static auto compileRustInput(const std::shared_ptr<const Config> &conf,
 	std::string args;
 	args += " --emit=llvm-bc";
 	args += " -Copt-level=0";
-	for (const auto &f : conf->cflags)
+	for (const auto &f : lliConfig.cflags)
 		args += " " + f;
 	args += " --extern std=" + pathRlib.string();
 	args += " -o rustc_out.bc";
-	args += " " + conf->inputFile;
+	args += " " + lliConfig.inputFile;
 
 	/* Build the rustc file */
 	std::string rustcCommand = rustcPath + args;
@@ -180,17 +619,17 @@ static auto compileRustInput(const std::shared_ptr<const Config> &conf,
 /**
  * Compilation for Cargo-crate input types.
  */
-static auto compileCargoInput(const std::shared_ptr<const Config> &conf,
+static auto compileCargoInput(const LLIConfig &lliConfig,
 			      const std::unique_ptr<llvm::LLVMContext> &ctx,
 			      std::unique_ptr<llvm::Module> &module) -> bool
 {
 #ifndef RUSTC_PATH
-	ERROR("Rust not linked, use cmake with '-DRUST_BIN_PATH=...' and rebuild GenMC to use "
+	ERROR("Rust not linked, use cmake with '-DENABLE_RUST=ON' and rebuild GenMC to use "
 	      "Rust.");
 #define CARGO_PATH ""
 #endif
 	std::string cargoPath = std::string(CARGO_PATH);
-	std::filesystem::path inputFilePath(conf->inputFile);
+	std::filesystem::path inputFilePath(lliConfig.inputFile);
 
 	/* Save current working directory */
 	const std::filesystem::path origWD = std::filesystem::current_path();
@@ -208,51 +647,53 @@ static auto compileCargoInput(const std::shared_ptr<const Config> &conf,
 	return true;
 }
 
-static auto compileToModule(const std::shared_ptr<const Config> &conf,
+static auto compileToModule(const LLIConfig &lliConfig,
 			    const std::unique_ptr<llvm::LLVMContext> &ctx)
 	-> std::unique_ptr<llvm::Module>
 {
+	/* Make sure filename is a regular file */
+	if (!llvm::sys::fs::is_regular_file(lliConfig.inputFile))
+		ERROR("Input file is neither a regular file, nor a directory!\n");
+
 	std::unique_ptr<llvm::Module> module;
-	if (conf->lang == InputType::llvmir) {
-		module = LLVMModule::parseLLVMModule(conf->inputFile, ctx);
-	} else if (conf->lang == InputType::clang && !compileInput(conf, ctx, module)) {
+	auto lang = determineLang(lliConfig.inputFile);
+	if (lang == InputLanguage::llvmir) {
+		module = LLVMModule::parseLLVMModule(lliConfig.inputFile, ctx);
+	} else if (lang == InputLanguage::clang && !compileInput(lliConfig, ctx, module)) {
 		std::exit(ECOMPILE);
-	} else if (conf->lang == InputType::cargo && !compileCargoInput(conf, ctx, module)) {
+	} else if (lang == InputLanguage::cargo && !compileCargoInput(lliConfig, ctx, module)) {
 		std::exit(ECOMPILE);
-	} else if (conf->lang == InputType::rust && !compileRustInput(conf, ctx, module)) {
+	} else if (lang == InputLanguage::rust && !compileRustInput(lliConfig, ctx, module)) {
 		std::exit(ECOMPILE);
 	}
 	return std::move(module);
 }
 
-static void transformInput(const std::shared_ptr<Config> &conf, llvm::Module &module,
-			   ModuleInfo &modInfo)
+static void transformInput(const LLIConfig &lliConfig, llvm::Module &module, ModuleInfo &modInfo)
 {
-	if (!conf->outputLlvmBefore.empty())
-		LLVMModule::printLLVMModule(module, conf->outputLlvmBefore);
+	if (!lliConfig.outputLlvmBefore.empty())
+		LLVMModule::printLLVMModule(module, lliConfig.outputLlvmBefore);
 
-	LLVMModule::transformLLVMModule(module, modInfo, conf);
-	if (!conf->outputLlvmAfter.empty())
-		LLVMModule::printLLVMModule(module, conf->outputLlvmAfter);
+	LLVMModule::transformLLVMModule(module, modInfo, &lliConfig);
+	if (!lliConfig.outputLlvmAfter.empty())
+		LLVMModule::printLLVMModule(module, lliConfig.outputLlvmAfter);
+}
 
-	/* Warn if BAM is enabled and barrier results might be used */
-	if (!conf->disableBAM && modInfo.barrierResultsUsed.has_value() &&
-	    *modInfo.barrierResultsUsed == BarrierRetResult::Used) {
-		LOG(VerbosityLevel::Warning)
-			<< "Could not determine whether barrier_wait() result is used."
-			<< " Use -disable-bam if the order in which threads reach the barrier "
-			   "matters.\n";
-	}
+/*******************************************************************************
+ **                       Running/result printing
+ ******************************************************************************/
 
-	/* Perhaps override the MM under which verification will take place */
-	if (conf->mmDetector && modInfo.determinedMM.has_value() &&
-	    isStrongerThan(*modInfo.determinedMM, conf->model)) {
-		conf->model = *modInfo.determinedMM;
-		conf->isDepTrackingModel = (conf->model == ModelType::IMM);
-		LOG(VerbosityLevel::Tip)
-			<< "Automatically adjusting memory model to " << conf->model
-			<< ". You can disable this behavior with -disable-mm-detector.\n";
-	}
+static auto durationToMill(const std::chrono::high_resolution_clock::duration &duration)
+{
+	static constexpr long double secToMillFactor = 1e-3L;
+	return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() *
+	       secToMillFactor;
+}
+
+static auto getElapsedSecs(const std::chrono::high_resolution_clock::time_point &begin)
+	-> long double
+{
+	return durationToMill(std::chrono::high_resolution_clock::now() - begin);
 }
 
 static void printEstimationResults(const std::shared_ptr<const Config> &conf,
@@ -261,8 +702,8 @@ static void printEstimationResults(const std::shared_ptr<const Config> &conf,
 {
 	PRINT(VerbosityLevel::Error) << res.message;
 	PRINT(VerbosityLevel::Error)
-		<< (res.status == VerificationError::VE_OK ? "*** Estimation complete.\n"
-							   : "*** Estimation unsuccessful.\n");
+		<< (!res.status.has_value() ? "*** Estimation complete.\n"
+					    : "*** Estimation unsuccessful.\n");
 
 	auto mean = std::llround(res.estimationMean);
 	auto sd = std::llround(std::sqrt(res.estimationVariance));
@@ -282,7 +723,7 @@ static void printVerificationResults(const std::shared_ptr<const Config> &conf,
 {
 	PRINT(VerbosityLevel::Error) << res.message;
 	PRINT(VerbosityLevel::Error)
-		<< (res.status == VerificationError::VE_OK
+		<< (!res.status.has_value()
 			    ? "*** Verification complete.\nNo errors were detected.\n"
 			    : "*** Verification unsuccessful.\n");
 
@@ -355,6 +796,8 @@ static auto createExecutionContext(const ExecutionGraph &g) -> std::vector<Threa
 
 void run(GenMCDriver *driver, llvm::Interpreter *EE)
 {
+	driver->setEE(&*EE);
+	driver->setInterpCallbacks(EE->getCallbacks());
 	do {
 		driver->handleExecutionStart();
 		if (driver->runFromCache()) {
@@ -363,13 +806,14 @@ void run(GenMCDriver *driver, llvm::Interpreter *EE)
 		}
 		EE->reset();
 		EE->setExecutionContext(createExecutionContext(driver->getExec().getGraph()));
-		EE->runAsMain(driver->getConf()->programEntryFun);
+		EE->runMain();
 		driver->handleExecutionEnd();
 	} while (!driver->done());
 }
 
-auto estimate(std::shared_ptr<const Config> conf, const std::unique_ptr<llvm::Module> &mod,
-	      const std::unique_ptr<ModuleInfo> &modInfo) -> VerificationResult
+auto estimate(const LLIConfig &lliConfig, std::shared_ptr<const Config> conf,
+	      const std::unique_ptr<llvm::Module> &mod, const std::unique_ptr<ModuleInfo> &modInfo)
+	-> VerificationResult
 {
 	auto estCtx = std::make_unique<llvm::LLVMContext>();
 	auto newmod = LLVMModule::cloneModule(mod, estCtx);
@@ -378,25 +822,22 @@ auto estimate(std::shared_ptr<const Config> conf, const std::unique_ptr<llvm::Mo
 					  GenMCDriver::EstimationMode{conf->estimationMax});
 	std::string buf;
 	auto EE = llvm::Interpreter::create(std::move(newmod), std::move(newMI), &*driver,
-					    driver->getConf(), driver->getExec().getAllocator(),
-					    &buf);
-	driver->setEE(&*EE);
-
+					    &lliConfig, driver->getExec().getAllocator(), &buf);
 	run(&*driver, &*EE);
 	return std::move(driver->getResult());
 }
 
-auto verify(std::shared_ptr<const Config> conf, std::unique_ptr<llvm::Module> mod,
-	    std::unique_ptr<ModuleInfo> modInfo) -> VerificationResult
+auto verify(const LLIConfig &lliConfig, std::shared_ptr<const Config> conf,
+	    std::unique_ptr<llvm::Module> mod, std::unique_ptr<ModuleInfo> modInfo)
+	-> VerificationResult
 {
 	/* Spawn a single or multiple drivers depending on the configuration */
-	if (conf->threads == 1) {
+	if (lliConfig.threads == 1) {
 		auto driver = GenMCDriver::create(conf, nullptr, GenMCDriver::VerificationMode{});
 		std::string buf;
 		auto EE = llvm::Interpreter::create(std::move(mod), std::move(modInfo), &*driver,
-						    driver->getConf(),
-						    driver->getExec().getAllocator(), &buf);
-		driver->setEE(&*EE);
+						    &lliConfig, driver->getExec().getAllocator(),
+						    &buf);
 		run(&*driver, &*EE);
 		return std::move(driver->getResult());
 	}
@@ -404,7 +845,7 @@ auto verify(std::shared_ptr<const Config> conf, std::unique_ptr<llvm::Module> mo
 	std::vector<std::future<VerificationResult>> futures;
 	{
 		/* Then, fire up the drivers */
-		ThreadPool pool(conf, mod, modInfo, run);
+		ThreadPool pool(lliConfig, conf, mod, modInfo, run);
 		futures = pool.waitForTasks();
 	}
 
@@ -419,50 +860,60 @@ auto main(int argc, char **argv) -> int
 {
 	auto begin = std::chrono::high_resolution_clock::now();
 	auto conf = std::make_shared<Config>();
+	LLIConfig lliConfig;
 
-	parseConfig(argc, argv, *conf);
+	parseConfig(argc, argv, *conf, lliConfig);
 
 	PRINT(VerbosityLevel::Error)
 		<< PACKAGE_NAME " v" PACKAGE_VERSION << " (LLVM " LLVM_VERSION ")\n"
 		<< "Copyright (C) 2024 MPI-SWS. All rights reserved.\n\n";
 
+	/* Make sure we can resolve symbols in the program. We use 0
+	 * as an argument in order to load the program, not a library. This
+	 * is useful as it allows the executions of external functions in the
+	 * user code. */
+	std::string errorStr;
+	if (llvm::sys::DynamicLibrary::LoadLibraryPermanently(nullptr, &errorStr)) {
+		WARN("Could not resolve symbols in the program: " + errorStr);
+	}
+
 	auto ctx = std::make_unique<llvm::LLVMContext>(); // *dtor after module's*
-	std::unique_ptr<llvm::Module> module = compileToModule(conf, ctx);
+	auto moduleUP = compileToModule(lliConfig, ctx);
 
-	/* Handle option "-link-with" */
-	if (!conf->linkWith.empty()) {
-		auto confNew = std::make_shared<Config>(*conf);
+	/* Handle option "-extra-input"*/
+	std::vector<std::unique_ptr<llvm::Module>> modules;
+	modules.push_back(std::move(moduleUP));
+	for (const auto extraInput : lliConfig.extraInput) {
+		LLIConfig confNew;
 
-		confNew->inputFile = conf->linkWith;
-		confNew->lang = determineLang(confNew->inputFile);
-		confNew->cflags = {};
+		confNew.inputFile = extraInput;
+		confNew.cflags = {};
 		std::unique_ptr<llvm::Module> linkModule = compileToModule(confNew, ctx);
 
-		std::vector<std::unique_ptr<llvm::Module>> modules;
-		modules.push_back(std::move(module));
 		modules.push_back(std::move(linkModule));
-		module = LLVMModule::linkAllModules(std::move(modules));
 	}
+	moduleUP = LLVMModule::linkAllModules(std::move(modules));
 
 	PRINT(VerbosityLevel::Error) << "*** Compilation complete.\n";
 
 	/* Perform the necessary transformations */
-	auto modInfo = std::make_unique<ModuleInfo>(*module);
-	transformInput(conf, *module, *modInfo);
+	auto modInfo = std::make_unique<ModuleInfo>(*moduleUP);
+	transformInput(lliConfig, *moduleUP, *modInfo);
+	adjustConfig(*modInfo, *conf);
 	PRINT(VerbosityLevel::Error) << "*** Transformation complete.\n";
 
 	/* Estimate the state space */
 	if (conf->estimate) {
 		LOG(VerbosityLevel::Tip) << "Estimating state-space size. For better performance, "
 					    "you can use --disable-estimation.\n";
-		auto res = estimate(conf, module, modInfo);
+		auto res = estimate(lliConfig, conf, moduleUP, modInfo);
 		printEstimationResults(conf, begin, res);
-		if (res.status != VerificationError::VE_OK)
+		if (res.status.has_value())
 			return EVERIFY;
 	}
 
 	/* Go ahead and try to verify */
-	auto res = verify(conf, std::move(module), std::move(modInfo));
+	auto res = verify(lliConfig, conf, std::move(moduleUP), std::move(modInfo));
 	printVerificationResults(conf, res);
 
 	/* Serialize spec if in analysis mode */
@@ -474,5 +925,5 @@ auto main(int argc, char **argv) -> int
 		<< "s\n";
 
 	/* TODO: Check globalContext.destroy() and llvm::shutdown() */
-	return res.status == VerificationError::VE_OK ? 0 : EVERIFY;
+	return !res.status.has_value() ? 0 : EVERIFY;
 }
