@@ -308,7 +308,10 @@ public:
 	{
 		DELEGATE_LABEL(MemAccessLabel);
 		out << " (" << fmtFun(lab.getAddr()) << ", ";
-		printVal(lab.getVal(), lab.getType());
+		if (lab.isNotAtomic() && !lab.isComplete())
+			out << "?";
+		else
+			printVal(lab.getVal(), lab.getType());
 		out << ")";
 	}
 

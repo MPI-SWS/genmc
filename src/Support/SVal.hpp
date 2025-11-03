@@ -33,13 +33,14 @@ public:
 	static constexpr unsigned width = sizeof(Value) * CHAR_BIT;
 
 	/** Constructors/destructors */
-	SVal() : value(0) {}
-	explicit SVal(uint64_t v) : value(v) {}
+	SVal() : value(0), provenance(0) {}
+	explicit SVal(uint64_t v) : value(v), provenance(0) {}
+	SVal(Value value, Value prov) : value(value), provenance(prov) {}
 
-	/** Returns a (limited) representation of this Value */
+	/** Returns a (limited) representation of this value */
 	[[nodiscard]] auto get() const -> uint64_t { return value; }
 
-	/** Returns a (limited) signed representation of this Value */
+	/** Returns a (limited) signed representation of this value */
 	[[nodiscard]] auto getSigned() const -> int64_t
 	{
 		int64_t tmp;
@@ -47,11 +48,14 @@ public:
 		return tmp;
 	}
 
-	/** Returns a pointer representation of this Value */
+	/** Returns a pointer representation of this value */
 	[[nodiscard]] auto getPointer() const -> void * { return (void *)(uintptr_t)value; }
 
 	/** Returns a (limited) representation of the Value as a boolean */
 	[[nodiscard]] auto getBool() const -> bool { return (!!*this); }
+
+	/** Get any provanence information for this value */
+	[[nodiscard]] auto getProvenance() const -> uint64_t { return provenance; }
 
 	/** Sign-extends the number in the bottom B bits of X to SVal::width
 	 * Pre: 0 < B <= SVal::width */
@@ -64,8 +68,8 @@ public:
 
 	/** Equality operators */
 
-	inline auto operator==(const SVal &v) const -> bool { return v.value == value; }
-	inline auto operator!=(const SVal &v) const -> bool { return !(*this == v); }
+	auto operator==(const SVal &v) const -> bool { return v.value == value; }
+	auto operator!=(const SVal &v) const -> bool { return !(*this == v); }
 
 	/** Comparison operators */
 
@@ -102,7 +106,7 @@ public:
 		n.value _op## = v.value;                                                           \
 		return n;                                                                          \
 	}                                                                                          \
-	SVal &operator _op##=(const SVal &v)                                                       \
+	SVal &operator _op##=(const SVal & v)                                                      \
 	{                                                                                          \
 		value _op## = v.value;                                                             \
 		return *this;                                                                      \
@@ -145,6 +149,9 @@ private:
 
 	/** The actual value */
 	Value value;
+
+	/** Pointer provenance; binary operations preserve LHS provenance */
+	Value provenance;
 };
 
 /** Comparator for SVal */

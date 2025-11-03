@@ -1093,6 +1093,7 @@ public:
 	/** Helpers for various write attributes */
 	bool isFinal() const { return hasAttr(WriteAttr::Final); }
 	bool isLocal() const { return hasAttr(WriteAttr::Local); }
+	bool isComplete() const { return hasAttr(WriteAttr::Complete); }
 
 	/** Whether this is part of an RMW operation */
 	bool isRMW() const;

@@ -24,6 +24,7 @@ enum class WriteAttr {
 	Local = 0x1,
 	Final = 0x2,
 	WWRacy = 0x4,
+	Complete = 0x8,
 };
 
 ENABLE_BITMASK_OPERATORS(WriteAttr);

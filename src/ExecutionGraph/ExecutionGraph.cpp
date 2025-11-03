@@ -289,8 +289,6 @@ void ExecutionGraph::cutToStamp(Stamp stamp)
 
 void ExecutionGraph::copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) const
 {
-	other.recoveryTID = recoveryTID;
-
 	/* We resize up to g.size() (instead of v.size()) because there might be a create
 	 * that is contained in v, but its respective begin is not.
 	 * Will clean up orphaned begins later. */
@@ -469,6 +467,10 @@ void ExecutionGraph::copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) 
 					other.getEventLabel((*rIt)->getPos()));
 			}
 		}
+	}
+	for (const auto &[loc, val] : initVals_) {
+		if (other.containsLoc(loc))
+			other.initVals_.insert({loc, val});
 	}
 }
 

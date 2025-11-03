@@ -49,14 +49,16 @@ public:
 
 	void visitReadLabel(const ReadLabel &lab)
 	{
-		driver->handleLoad(std::unique_ptr<ReadLabel>(
-			static_cast<ReadLabel *>(lab.clone().release())));
+		driver->handleLoad(
+			std::unique_ptr<ReadLabel>(static_cast<ReadLabel *>(lab.clone().release())),
+			std::nullopt);
 	}
 
 	void visitWriteLabel(const WriteLabel &lab)
 	{
 		driver->handleStore(std::unique_ptr<WriteLabel>(
-			static_cast<WriteLabel *>(lab.clone().release())));
+					    static_cast<WriteLabel *>(lab.clone().release())),
+				    std::nullopt);
 	}
 
 	void visitFenceLabel(const FenceLabel &lab)
@@ -124,12 +126,14 @@ public:
 			static_cast<LockZNESpinEndLabel *>(lab.clone().release())));
 	}
 
-	void visitMethodBeginLabel(const MethodBeginLabel &lab) {
+	void visitMethodBeginLabel(const MethodBeginLabel &lab)
+	{
 		driver->handleDummy(std::unique_ptr<MethodBeginLabel>(
 			static_cast<MethodBeginLabel *>(lab.clone().release())));
 	}
 
-	void visitMethodEndLabel(const MethodEndLabel &lab) {
+	void visitMethodEndLabel(const MethodEndLabel &lab)
+	{
 		driver->handleDummy(std::unique_ptr<MethodEndLabel>(
 			static_cast<MethodEndLabel *>(lab.clone().release())));
 	}

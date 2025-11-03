@@ -162,7 +162,7 @@ public:
 
 	/** Returns the value this load reads */
 	template <EventLabel::EventLabelKind k, typename... Ts>
-	HandleResult<SVal> handleLoad(Event pos, Ts &&...params)
+	HandleResult<SVal> handleLoad(Event pos, std::optional<SVal> oldVal, Ts &&...params)
 	{
 		auto &g = getExec().getGraph();
 		if (isExecutionDrivenByGraph(pos)) {
@@ -170,7 +170,7 @@ public:
 		}
 #define HANDLE_LABEL(NAME)                                                                         \
 	if constexpr (k == EventLabel::EventLabelKind::NAME) {                                     \
-		return handleLoad(NAME##Label::create(pos, std::forward<Ts>(params)...));          \
+		return handleLoad(NAME##Label::create(pos, std::forward<Ts>(params)...), oldVal);  \
 	} else
 #include "ExecutionGraph/EventLabel.def"
 		static_assert(false, "Unhandled load label kind");
@@ -178,13 +178,16 @@ public:
 
 	/** A store has been interpreted, nothing for the interpreter */
 	template <EventLabel::EventLabelKind k, typename... Ts>
-	HandleResult<std::monostate> handleStore(Event pos, Ts &&...params)
+	HandleResult<bool> handleStore(Event pos, std::optional<SVal> oldVal, Ts &&...params)
 	{
-		if (isExecutionDrivenByGraph(pos))
-			return {};
+		if (isExecutionDrivenByGraph(pos)) {
+			auto &g = getExec().getGraph();
+			auto *lab = llvm::dyn_cast<WriteLabel>(g.getEventLabel(pos));
+			return lab == g.co_max(lab->getAddr());
+		}
 #define HANDLE_LABEL(NAME)                                                                         \
 	if constexpr (k == EventLabel::EventLabelKind::NAME) {                                     \
-		return handleStore(NAME##Label::create(pos, std::forward<Ts>(params)...));         \
+		return handleStore(NAME##Label::create(pos, std::forward<Ts>(params)...), oldVal); \
 	} else
 #include "ExecutionGraph/EventLabel.def"
 		static_assert(false, "Unhandled store label kind");
@@ -353,8 +356,9 @@ private:
 	void handleThreadFinish(std::unique_ptr<ThreadFinishLabel> eLab);
 	void handleThreadKill(std::unique_ptr<ThreadKillLabel> lab);
 	void handleBlock(std::unique_ptr<BlockLabel> bLab);
-	HandleResult<SVal> handleLoad(std::unique_ptr<ReadLabel> rLab);
-	HandleResult<std::monostate> handleStore(std::unique_ptr<WriteLabel> wLab);
+	HandleResult<SVal> handleLoad(std::unique_ptr<ReadLabel> rLab, std::optional<SVal> oldVal);
+	HandleResult<bool> handleStore(std::unique_ptr<WriteLabel> wLab,
+				       std::optional<SVal> oldVal);
 	void handleFence(std::unique_ptr<FenceLabel> fLab);
 	SVal handleMalloc(std::unique_ptr<MallocLabel> aLab);
 	std::optional<VerificationError> handleFree(std::unique_ptr<FreeLabel> dLab);

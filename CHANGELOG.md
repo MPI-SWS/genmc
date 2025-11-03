@@ -11,6 +11,12 @@ released.
 - Documentation for LLVM-based Rust frontend
 
 
+## [0.14.0] - 2025.11.03
+### Changes
+
+- API changes for Miri frontend
+
+
 ## [0.13.1] - 2025.10.11
 ### Added
 

@@ -1334,7 +1334,27 @@ EventLabel *GenMCDriver::pickRandomRf(ReadLabel *rLab, std::vector<EventLabel *>
 	return stores[random];
 }
 
-GenMCDriver::HandleResult<SVal> GenMCDriver::handleLoad(std::unique_ptr<ReadLabel> rLab)
+static void updateNonAtomicValue(MemAccessLabel *lab, SVal val)
+{
+	auto &g = *lab->getParent();
+	auto addr = lab->getAddr();
+
+	if (g.isLocEmpty(addr)) {
+		g.setInitVal(addr, val);
+		return;
+	}
+
+	/* When co-maximal write is not non-atomic, we don't need to update it */
+	auto &wLab = *g.co_rbegin(addr);
+	if (!wLab.isNotAtomic() || wLab.isComplete())
+		return;
+
+	wLab.setVal(val);
+	wLab.setAttr(WriteAttr::Complete);
+}
+
+GenMCDriver::HandleResult<SVal> GenMCDriver::handleLoad(std::unique_ptr<ReadLabel> rLab,
+							std::optional<SVal> oldVal)
 {
 	auto &g = getExec().getGraph();
 
@@ -1385,6 +1405,8 @@ GenMCDriver::HandleResult<SVal> GenMCDriver::handleLoad(std::unique_ptr<ReadLabe
 		});
 	if (err)
 		return {*err};
+	if (oldVal)
+		updateNonAtomicValue(lab, *oldVal);
 
 	GENMC_DEBUG(LOG(VerbosityLevel::Debug2) << "--- Added load " << lab->getPos() << "\n"
 						<< getExec().getGraph(););
@@ -1480,7 +1502,8 @@ void GenMCDriver::calcCoOrderings(WriteLabel *lab, const std::vector<EventLabel 
 	}
 }
 
-GenMCDriver::HandleResult<std::monostate> GenMCDriver::handleStore(std::unique_ptr<WriteLabel> wLab)
+GenMCDriver::HandleResult<bool> GenMCDriver::handleStore(std::unique_ptr<WriteLabel> wLab,
+							 std::optional<SVal> oldVal)
 {
 	auto &g = getExec().getGraph();
 
@@ -1495,6 +1518,8 @@ GenMCDriver::HandleResult<std::monostate> GenMCDriver::handleStore(std::unique_p
 			   .or_else([&] { return checkForRaces(lab); });
 	if (err)
 		return {*err};
+	if (oldVal)
+		updateNonAtomicValue(lab, *oldVal);
 
 	checkReconsiderFaiSpinloop(lab);
 	unblockWaitingHelping(lab);
@@ -1521,14 +1546,14 @@ GenMCDriver::HandleResult<std::monostate> GenMCDriver::handleStore(std::unique_p
 						<< getExec().getGraph(););
 
 	if (inReplay())
-		return {};
+		return lab == g.co_max(lab->getAddr());
 
 	calcRevisits(lab);
 	if (!co || violatesAtomicity(lab)) {
 		moot();
 		return Invalid{};
 	}
-	return {};
+	return lab == g.co_max(lab->getAddr());
 }
 
 SVal GenMCDriver::handleMalloc(std::unique_ptr<MallocLabel> aLab)

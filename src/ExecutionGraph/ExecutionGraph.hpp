@@ -340,24 +340,6 @@ public:
 		poLists.emplace_back();
 	};
 
-	/* Pers: Add/remove a thread for the recovery procedure */
-	void addRecoveryThread()
-	{
-		recoveryTID = events.size();
-		events.emplace_back();
-		poLists.emplace_back();
-	};
-	void delRecoveryThread()
-	{
-		events.pop_back();
-		poLists.pop_back();
-		recoveryTID = -1;
-	};
-
-	/* Returns the tid of the recovery routine.
-	 * If not in recovery mode, returns -1 */
-	auto getRecoveryRoutineId() const -> int { return recoveryTID; };
-
 	/* Returns the number of threads currently in the graph */
 	auto getNumThreads() const -> unsigned int { return events.size(); };
 
@@ -466,7 +448,19 @@ public:
 					   [this](auto tid) { return isThreadBlocked(tid); });
 	}
 
-	auto getInitVal(const AAccess &access) const -> SVal { return initValGetter_(access); }
+	auto getInitVal(const AAccess &access) const -> SVal
+	{
+		return initVals_.contains(access.getAddr()) ? initVals_.at(access.getAddr())
+							    : initValGetter_(access);
+	}
+	void setInitVal(const SAddr &addr, SVal val)
+	{
+		auto result = initVals_.insert({addr, val});
+		BUG_ON(result.second &&
+		       (((*result.first).second.get() != val.get() &&
+			 (*result.first).second.getProvenance() !=
+				 val.getProvenance()))); /* Attempt to replace initial value */
+	}
 
 	void setInitValGetter(InitValGetter f) { initValGetter_ = std::move(f); }
 
@@ -599,10 +593,8 @@ protected:
 	/* XXX: Temporary map; eventually remove */
 	AccessMap accessMap_;
 
-	/* Pers: The ID of the recovery routine.
-	 * It should be -1 if not in recovery mode, or have the
-	 * value of the recovery routine otherwise. */
-	int recoveryTID = -1;
+	/* XXX: Temporary map; eventually remove */
+	std::unordered_map<SAddr, SVal> initVals_;
 
 	InitValGetter initValGetter_;
 };
