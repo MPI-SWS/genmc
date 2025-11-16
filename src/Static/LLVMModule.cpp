@@ -56,7 +56,6 @@
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/IPO/DeadArgumentElimination.h>
-#include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Scalar/JumpThreading.h>
 #include <llvm/Transforms/Scalar/SROA.h>
 #include <llvm/Transforms/Utils/Mem2Reg.h>
@@ -74,7 +73,7 @@ auto parseLLVMModule(const std::string &filename, const std::unique_ptr<llvm::LL
 	auto mod = llvm::parseIRFile(filename, err, *ctx);
 	if (!mod) {
 		err.print(filename.c_str(), llvm::dbgs());
-		ERROR("Could not parse LLVM IR!\n");
+		ERROR("Could not parse LLVM IR!");
 	}
 	return std::move(mod);
 }
@@ -87,7 +86,7 @@ auto linkAllModules(std::vector<std::unique_ptr<llvm::Module>> modules) -> std::
 	Linker linker(*modules[0]);
 	for (size_t i = 1; i < modules.size(); ++i) {
 		if (linker.linkInModule(std::move(modules[i]))) {
-			ERROR("Could not link the LLVM IR!\n");
+			ERROR("Could not link the LLVM IR!");
 		}
 	}
 
@@ -129,7 +128,7 @@ auto parseLinkAllLLVMModules(const fs::path &dirname, const std::unique_ptr<llvm
 		std::unique_ptr<Module> module = parseIRFile(bc_file.string(), err, *ctx);
 		if (!module) {
 			err.print(bc_file.c_str(), llvm::dbgs());
-			ERROR("Could not parse LLVM IR!\n");
+			ERROR("Could not parse LLVM IR!");
 		}
 		modules.push_back(std::move(module));
 	}
@@ -314,7 +313,7 @@ void printLLVMModule(llvm::Module &mod, const std::string &out)
 
 	/* TODO: Do we need an exception? If yes, properly handle it */
 	if (errs) {
-		WARN("Failed to write transformed module to file " + out + ": " + errs.message());
+		WARN("Failed to write transformed module to file {}: {}\n", out, errs.message());
 		return;
 	}
 	mod.print(*os, nullptr);

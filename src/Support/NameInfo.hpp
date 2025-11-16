@@ -16,7 +16,9 @@
 
 #include "Error.hpp"
 
+#include <format>
 #include <string>
+#include <vector>
 
 /**
  * Represents naming information for a specific type/allocation
@@ -38,7 +40,7 @@ public:
 	/** Whether we have any information stored */
 	[[nodiscard]] auto empty() const -> bool { return info.empty(); }
 
-	friend auto operator<<(llvm::raw_ostream &rhs, const NameInfo &info) -> llvm::raw_ostream &;
+	friend struct std::formatter<NameInfo>;
 
 private:
 	/*
@@ -51,6 +53,20 @@ private:
 
 	/** Naming information at different offsets */
 	OffsetInfo info;
+};
+
+/** Make `NameInfo` formattable with `std::format`. */
+template <> struct std::formatter<NameInfo> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const NameInfo &info, std::format_context &ctx) const
+	{
+		auto out = ctx.out();
+		for (const auto &kv : info.info) {
+			out = std::format_to(out, "{}: {}\n", kv.first, kv.second);
+		}
+		return out;
+	}
 };
 
 #endif /* GENMC_NAME_INFO_HPP */

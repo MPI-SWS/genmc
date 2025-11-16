@@ -16,7 +16,9 @@
 
 #include "ExecutionGraph/EventLabel.hpp"
 #include "Support/Error.hpp"
-#include <llvm/Support/Casting.h>
+
+#include <format>
+#include <sstream>
 
 /*******************************************************************************
  **                           LabelVisitor Class
@@ -223,6 +225,7 @@ public:
 	}
 	void visitMethodEndLabel(const MethodEndLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 	void visitOutputLabel(const OutputLabel &lab) { return DELEGATE_LABEL(EventLabel); }
+	void visitErrorLabel(const ErrorLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 
 	/* Matchers for abstract classes */
 
@@ -253,20 +256,17 @@ public:
 template <typename Subclass> class LabelPrinterBase : public LabelVisitor<Subclass> {
 
 public:
-	using FmterT = std::function<std::string(SAddr)>;
+	using FmterT = std::function<std::string(const MemAccessLabel &)>;
 	using GetterT = std::function<SVal(const ReadLabel &)>;
 
 	LabelPrinterBase()
-		: out(buf), fmtFun([&](const SAddr &saddr) {
-			  std::string buf;
-			  llvm::raw_string_ostream s(buf);
-			  s << saddr;
-			  return s.str();
+		: fmtFun([&](const MemAccessLabel &lab) {
+			  return std::format("{}", lab.getAddr());
 		  }),
 		  valFun()
 	{}
 	LabelPrinterBase(FmterT addrFmter, GetterT readValGetter)
-		: out(buf), fmtFun(addrFmter), valFun(readValGetter)
+		: fmtFun(addrFmter), valFun(readValGetter)
 	{}
 
 #define IMPLEMENT_INTEGER_PRINT(OS, TY)                                                            \
@@ -289,14 +289,14 @@ public:
 			IMPLEMENT_POINTER_PRINT(out, atyp);
 		default:
 			PRINT_BUGREPORT_INFO_ONCE("val-printing",
-						  "Unhandled type for value predicate!\n");
+						  "Unhandled type for value predicate!");
 		}
 	}
 
 	void visitReadLabel(const ReadLabel &lab)
 	{
 		DELEGATE_LABEL(MemAccessLabel);
-		out << " (" << fmtFun(lab.getAddr());
+		out << " (" << fmtFun(lab);
 		if (valFun) {
 			out << ", ";
 			printVal(valFun(lab), lab.getType());
@@ -307,7 +307,7 @@ public:
 	void visitWriteLabel(const WriteLabel &lab)
 	{
 		DELEGATE_LABEL(MemAccessLabel);
-		out << " (" << fmtFun(lab.getAddr()) << ", ";
+		out << " (" << fmtFun(lab) << ", ";
 		if (lab.isNotAtomic() && !lab.isComplete())
 			out << "?";
 		else
@@ -318,7 +318,7 @@ public:
 	void visitFenceLabel(const FenceLabel &lab)
 	{
 		DELEGATE_LABEL(EventLabel);
-		out << lab.getOrdering();
+		out << std::format("{}", lab.getOrdering());
 	}
 
 	void visitMallocLabel(const MallocLabel &lab)
@@ -362,17 +362,16 @@ public:
 	void visitMemAccessLabel(const MemAccessLabel &lab)
 	{
 		DELEGATE_LABEL(EventLabel);
-		out << lab.getOrdering();
+		out << std::format("{}", lab.getOrdering());
 	}
 
 	void visitEventLabel(const EventLabel &lab)
 	{
-		out << lab.getPos() << ": " << lab.getKind();
+		out << std::format("{}: {}", lab.getPos(), lab.getKind());
 	}
 
 protected:
-	std::string buf;
-	llvm::raw_string_ostream out;
+	std::ostringstream out;
 	FmterT fmtFun;
 	GetterT valFun;
 };
@@ -389,7 +388,8 @@ public:
 
 	std::string toString(const EventLabel &lab)
 	{
-		buf.clear();
+		out.str("");
+		out.clear();
 		this->visit(lab);
 		return out.str();
 	}
@@ -402,7 +402,7 @@ public:
 		else if (lab.getRf()->getPos().isInitializer())
 			out << "[INIT]";
 		else
-			out << "[" << lab.getRf()->getPos() << "]";
+			out << std::format("[{}]", lab.getRf()->getPos());
 	}
 
 	void visitReadLabel(const ReadLabel &lab)
@@ -425,7 +425,8 @@ public:
 
 	std::string toString(const EventLabel &lab)
 	{
-		buf.clear();
+		out.str("");
+		out.clear();
 		this->visit(lab);
 		return out.str();
 	}
@@ -433,7 +434,7 @@ public:
 	/* Helpers to print orderings as exponent */
 	void printOrdering(const EventLabel &lab)
 	{
-		out << "<SUP>" << lab.getOrdering() << "</SUP>";
+		out << std::format("<SUP>{}</SUP>", lab.getOrdering());
 	}
 
 	void visitFenceLabel(const FenceLabel &lab)

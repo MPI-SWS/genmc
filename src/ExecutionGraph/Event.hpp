@@ -16,8 +16,7 @@
 
 #include "Support/Hash.hpp"
 
-#include <llvm/ADT/Hashing.h>
-#include <llvm/Support/raw_ostream.h>
+#include <format>
 
 /**
  * Represents the position of a given label in an execution graph.
@@ -71,11 +70,6 @@ struct Event {
 		return tmp;
 	}
 
-	static auto hash_value(const Event &e) -> llvm::hash_code
-	{
-		return llvm::hash_combine(e.thread, e.index);
-	};
-
 	int thread;
 	int index;
 
@@ -85,8 +79,6 @@ private:
 	static constexpr int DEF_IDX = -17;
 	static constexpr int BOT_IDX = -42;
 };
-
-auto operator<<(llvm::raw_ostream &s, Event e) -> llvm::raw_ostream &;
 
 using Edge = std::pair<Event, Event>;
 
@@ -101,5 +93,15 @@ template <> struct hash<Event> {
 	}
 };
 } // namespace std
+
+/** Make `Event` formattable with `std::format`. */
+template <> struct std::formatter<Event> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const Event &e, std::format_context &ctx) const
+	{
+		return std::format_to(ctx.out(), "({}, {})", e.thread, e.index);
+	}
+};
 
 #endif /* GENMC_EVENT_HPP */

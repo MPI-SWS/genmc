@@ -43,10 +43,3 @@ auto Linearization::applyPermutation(const PermutationMap &pMap) -> Linearizatio
 	calculateOrder(result.lin_, result.order_);
 	return result;
 }
-
-auto operator<<(llvm::raw_ostream &os, const Linearization &lin) -> llvm::raw_ostream &
-{
-	os << lin.lin_.size() << ": ";
-	os << format(lin.lin_);
-	return os;
-}

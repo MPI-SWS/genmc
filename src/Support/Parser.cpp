@@ -12,22 +12,27 @@
  */
 
 #include "Parser.hpp"
-#include <cstdio>
 
-auto Parser::readFile(const string &fileName) -> string
+#include <fstream>
+#include <iostream>
+#include <vector>
+
+namespace genmc {
+
+auto readFile(const std::string &absPath) -> std::string
 {
-	ifstream ifs(fileName.c_str(), ios::in | ios::binary | ios::ate);
+	std::ifstream ifs(absPath.c_str(), std::ios::in | std::ios::binary | std::ios::ate);
 	/* TODO: Error check here? */
-	ifstream::pos_type fileSize = ifs.tellg();
-	ifs.seekg(0, ios::beg);
+	std::ifstream::pos_type fileSize = ifs.tellg();
+	ifs.seekg(0, std::ios::beg);
 	/* TODO: Does tellg work on all platforms? */
-	vector<char> bytes(fileSize);
-	ifs.read(&bytes[0], fileSize);
+	std::vector<char> bytes(fileSize);
+	ifs.read(bytes.data(), fileSize);
 
-	return string(&bytes[0], fileSize);
+	return std::string(bytes.data(), fileSize);
 }
 
-auto Parser::getFileLineByNumber(const std::string &absPath, int line) -> std::string
+auto getFileLineByNumber(const std::string &absPath, int line) -> std::string
 {
 	std::ifstream ifs(absPath);
 	std::string s;
@@ -40,7 +45,7 @@ auto Parser::getFileLineByNumber(const std::string &absPath, int line) -> std::s
 	return s;
 }
 
-void Parser::stripWhitespace(std::string &s)
+void stripWhitespace(std::string &s)
 {
 	s.erase(s.begin(),
 		std::find_if(s.begin(), s.end(), [](int c) { return !std::isspace(c); }));
@@ -48,29 +53,11 @@ void Parser::stripWhitespace(std::string &s)
 		s.end());
 }
 
-void Parser::stripSlashes(std::string &absPath)
+void extractFilename(std::string &absPath)
 {
 	auto i = absPath.find_last_of('/');
 	if (i != std::string::npos)
 		absPath = absPath.substr(i + 1);
 }
 
-void Parser::parseInstFromMData(std::pair<int, std::string> &locAndFile, std::string functionName,
-				llvm::raw_ostream &os /* llvm::outs() */)
-{
-	int line = locAndFile.first;
-	std::string absPath = locAndFile.second;
-
-	/* If line is default-valued or malformed, skip... */
-	if (line <= 0)
-		return;
-
-	auto s = getFileLineByNumber(absPath, line);
-	stripWhitespace(s);
-	stripSlashes(absPath);
-
-	if (functionName != "")
-		os << "[" << functionName << "] ";
-	os << absPath << ": " << line << ": ";
-	os << s << "\n";
-}
+}; /* namespace genmc */

@@ -21,6 +21,8 @@
 #include <llvm/IR/InstIterator.h>
 #include <llvm/IR/Instructions.h>
 
+#include <algorithm>
+
 using namespace llvm;
 
 /* Helper for getSourceLoads() -- see below */

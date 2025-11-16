@@ -15,7 +15,9 @@
 #define GENMC_VECTOR_CLOCK_HPP
 
 #include "ExecutionGraph/Event.hpp"
-#include <llvm/Support/Casting.h>
+#include "Support/Cast.hpp"
+
+#include <format>
 
 /*******************************************************************************
  **                        VectorClock Class (Abstract)
@@ -83,9 +85,9 @@ public:
 	/** Clones a VectorClock */
 	[[nodiscard]] auto clone() const -> std::unique_ptr<VectorClock>;
 
-	/** Printing facilities */
-	virtual void printData(llvm::raw_ostream &s) const = 0;
-	friend auto operator<<(llvm::raw_ostream &s, const VectorClock &v) -> llvm::raw_ostream &;
+	/** Formatting facilities */
+	virtual auto formatData(std::format_context &ctx) const
+		-> std::format_context::iterator = 0;
 
 private:
 	/** The kind of this VectorClock */
@@ -96,6 +98,16 @@ private:
 struct VectorClockCloner {
 	auto operator()(const VectorClock &x) const -> VectorClock * { return x.clone().release(); }
 	// VectorClock *operator()(VectorClock &&x) const { return new VectorClock(std::move(x)); }
+};
+
+/** Make `VectorClock` formattable with `std::format`. */
+template <> struct std::formatter<VectorClock> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const VectorClock &vc, std::format_context &ctx) const
+	{
+		return vc.formatData(ctx);
+	}
 };
 
 #endif /* GENMC_VECTOR_CLOCK_HPP */

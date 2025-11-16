@@ -17,10 +17,9 @@
 #include "ExecutionGraph/EventLabel.hpp"
 #include "ExecutionGraph/GraphIterators.hpp"
 #include "ExecutionGraph/GraphUtils.hpp"
+#include "Support/Cast.hpp"
 #include "Support/Error.hpp"
 #include "Verification/Config.hpp"
-
-#include <llvm/Support/Casting.h>
 
 #include <algorithm>
 #include <ranges>
@@ -55,13 +54,13 @@ static void calcPorfReplay(const EventLabel *lab, View &view, std::vector<Event>
 	const auto &g = *lab->getParent();
 	for (++i; i <= lab->getIndex(); ++i) {
 		const auto *pLab = g.getEventLabel(Event(lab->getThread(), i));
-		if (const auto *rLab = llvm::dyn_cast<ReadLabel>(pLab))
+		if (const auto *rLab = genmc::dyn_cast<ReadLabel>(pLab))
 			calcPorfReplay(rLab->getRf(), view, schedule);
-		else if (const auto *jLab = llvm::dyn_cast<ThreadJoinLabel>(pLab))
+		else if (const auto *jLab = genmc::dyn_cast<ThreadJoinLabel>(pLab))
 			calcPorfReplay(g.getLastThreadLabel(jLab->getChildId()), view, schedule);
-		else if (const auto *tsLab = llvm::dyn_cast<ThreadStartLabel>(pLab))
+		else if (const auto *tsLab = genmc::dyn_cast<ThreadStartLabel>(pLab))
 			calcPorfReplay(tsLab->getCreate(), view, schedule);
-		if (!llvm::isa<BlockLabel>(pLab))
+		if (!genmc::isa<BlockLabel>(pLab))
 			schedule.push_back(pLab->getPos());
 	}
 }
@@ -69,11 +68,11 @@ static void calcPorfReplay(const EventLabel *lab, View &view, std::vector<Event>
 static auto isSchedulable(const ExecutionGraph &g, int thread) -> bool
 {
 	const auto *lab = g.getLastThreadLabel(thread);
-	return !llvm::isa_and_nonnull<TerminatorLabel>(lab);
+	return !genmc::isa_and_present<TerminatorLabel>(lab);
 }
 
-static auto calculateReplaySchedule(const ExecutionGraph &g, const Config *conf)
-	-> std::vector<Event>
+static auto calculateReplaySchedule(const ExecutionGraph &g, const Config *conf,
+				    std::optional<Event> errorEvent) -> std::vector<Event>
 {
 	/* Calculate preliminary replay schedule (reversed order) */
 	View view;
@@ -81,12 +80,20 @@ static auto calculateReplaySchedule(const ExecutionGraph &g, const Config *conf)
 	for (auto i = 0U; i < g.getNumThreads(); i++)
 		calcPorfReplay(g.getLastThreadLabel(i), view, result);
 
-	/* Erase any non-schedulable threads. */
-	if (!conf->replayCompletedThreads) {
+	/* If we are error-replaying, move error event last */
+	if (errorEvent) {
+		auto it = std::ranges::find(result, *errorEvent);
+		BUG_ON(it == result.end());
+		result.erase(it);
+		result.push_back(*errorEvent);
+	}
+
+	/* Erase any non-schedulable threads (if possible) */
+	if (!conf->replayCompletedThreads && !errorEvent) {
 		std::erase_if(result, [&g](const auto &pos) {
 			auto *lab = g.getLastThreadLabel(pos.thread);
 			return !isSchedulable(g, lab->getThread()) &&
-			       !llvm::isa_and_nonnull<BlockLabel>(lab);
+			       !genmc::isa_and_present<BlockLabel>(lab);
 		});
 	}
 
@@ -99,7 +106,7 @@ static auto calculateReplaySchedule(const ExecutionGraph &g, const Config *conf)
 
 	/* The schedule is still reversed, need to fix that. */
 	std::ranges::reverse(result);
-	// GENMC_DEBUG(llvm::dbgs() << format(std::ranges::reverse_view(result)) << "\n";);
+	// GENMC_DEBUG(LOG(VerbosityLevel::Tip, "{}\n", std::ranges::reverse_view(result)););
 	return result;
 }
 
@@ -107,18 +114,19 @@ void Scheduler::resetExplorationOptions(const ExecutionGraph &g)
 {
 	setRescheduledRead(Event::getInit());
 	threadPrios_.clear();
-	replaySchedule_ = calculateReplaySchedule(g, getConf());
+	replaySchedule_ = calculateReplaySchedule(g, getConf(), eventToReexecute_);
 
 	/* Check whether the event that led to this execs needs thread prioritization */
 	for (auto tid : g.thr_ids()) {
-		const auto *rLab = llvm::dyn_cast<ReadLabel>(g.getLastThreadLabel(tid));
+		const auto *rLab = genmc::dyn_cast<ReadLabel>(g.getLastThreadLabel(tid));
 		if (!rLab)
 			continue;
 
 		auto rpreds = po_preds(g, rLab);
-		auto oLabIt = std::ranges::find_if(
-			rpreds, [&](auto &oLab) { return llvm::isa<SpeculativeReadLabel>(&oLab); });
-		if (llvm::isa<SpeculativeReadLabel>(rLab) || oLabIt != rpreds.end())
+		auto oLabIt = std::ranges::find_if(rpreds, [&](auto &oLab) {
+			return genmc::isa<SpeculativeReadLabel>(&oLab);
+		});
+		if (genmc::isa<SpeculativeReadLabel>(rLab) || oLabIt != rpreds.end())
 			prioritize(rLab->getPos());
 	}
 }
@@ -141,12 +149,14 @@ auto Scheduler::scheduleReplay(const ExecutionGraph &g, std::span<Action> runnab
 	/* If the next event to be replayed is an assume()-read, eagerly pop it. Otherwise,
 	 * the instruction counter might never increase (due to the read blocking), and
 	 * we will be stuck scheduling the same thread forever. */
-	auto next = replaySchedule_.back();
-	const auto *lastLab = g.getLastThreadLabel(next.thread);
-	if (llvm::isa<BlockLabel>(lastLab) && next.index == lastLab->getIndex() - 1 &&
-	    llvm::isa<ReadLabel>(g.po_imm_pred(lastLab))) /* overapproximation */
+	auto nextReplay = replaySchedule_.back();
+	auto nextRunnable = runnable[replaySchedule_.back().thread].event.next();
+	const auto *lastLab = g.getLastThreadLabel(nextReplay.thread);
+	if (!eventToReexecute_ && nextRunnable == nextReplay && genmc::isa<BlockLabel>(lastLab) &&
+	    nextReplay.index == lastLab->getIndex() - 1 &&
+	    genmc::isa<ReadLabel>(g.po_imm_pred(lastLab))) /* overapproximation */
 		replaySchedule_.pop_back();
-	return {next.thread};
+	return {nextReplay.thread};
 }
 
 auto Scheduler::schedulePrioritized(const ExecutionGraph &g) -> std::optional<int>
@@ -164,7 +174,8 @@ auto Scheduler::schedulePrioritized(const ExecutionGraph &g) -> std::optional<in
 auto Scheduler::rescheduleReads(ExecutionGraph &g) -> std::optional<int>
 {
 	auto result = std::ranges::find_if(g.thr_ids(), [this, &g](auto tid) {
-		auto *bLab = llvm::dyn_cast_or_null<ReadOptBlockLabel>(g.getLastThreadLabel(tid));
+		auto *bLab =
+			genmc::dyn_cast_if_present<ReadOptBlockLabel>(g.getLastThreadLabel(tid));
 		if (!bLab)
 			return false;
 
@@ -216,8 +227,8 @@ static auto extractValPrefix(const ExecutionGraph &g, Event pos)
 void Scheduler::cacheEventLabel(const ExecutionGraph &g, const EventLabel *lab)
 {
 	/* Find the respective function ID: if no label has been cached, lab is a begin */
-	const auto *firstLab = llvm::isa<ThreadStartLabel>(lab)
-				       ? llvm::dyn_cast<ThreadStartLabel>(lab)
+	const auto *firstLab = genmc::isa<ThreadStartLabel>(lab)
+				       ? genmc::dyn_cast<ThreadStartLabel>(lab)
 				       : g.getFirstThreadLabel(lab->getThread());
 	auto cacheKey = std::make_pair(firstLab->getThreadInfo().funId, (unsigned)lab->getThread());
 
@@ -278,8 +289,8 @@ static auto findNextLabelToAdd(const ExecutionGraph &g, int thread) -> Event
 {
 	const auto *firstLab = g.getFirstThreadLabel(thread);
 	auto succs = po_succs(g, firstLab);
-	auto it =
-		std::ranges::find_if(succs, [&](auto &lab) { return llvm::isa<EmptyLabel>(&lab); });
+	auto it = std::ranges::find_if(succs,
+				       [&](auto &lab) { return genmc::isa<EmptyLabel>(&lab); });
 	return it == succs.end() ? g.getLastThreadLabel(thread)->getPos().next() : (*it).getPos();
 }
 

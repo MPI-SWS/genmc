@@ -14,34 +14,29 @@
 #ifndef GENMC_GENMC_DRIVER_HPP
 #define GENMC_GENMC_DRIVER_HPP
 
-#include "ADT/Trie.hpp"
 #include "ExecutionGraph/EventLabel.hpp"
 #include "ExecutionGraph/ExecutionGraph.hpp"
-#include "Support/Hash.hpp"
 #include "Support/SAddrAllocator.hpp"
 #include "Verification/ChoiceMap.hpp"
 #include "Verification/Config.hpp"
 #include "Verification/InterpreterCallbacks.hpp"
 #include "Verification/Relinche/LinearizabilityChecker.hpp"
-#include "Verification/Relinche/Specification.hpp"
 #include "Verification/Scheduler.hpp"
 #include "Verification/VerificationError.hpp"
 #include "Verification/VerificationResult.hpp"
 #include "Verification/WorkList.hpp"
-#include <llvm/ADT/BitVector.h>
-#include <llvm/IR/Module.h>
 
-#include <chrono>
 #include <cstdint>
-#include <ctime>
 #include <memory>
+#include <ostream>
 #include <random>
 #include <utility>
 #include <variant>
 
 namespace llvm {
 class Interpreter;
-}
+class Module;
+} // namespace llvm
 class ModuleInfo;
 class ThreadPool;
 class LLIConfig;
@@ -102,27 +97,29 @@ public:
 		Event lastAdded = Event::getInit();
 	};
 
+	/** Scheduler result type */
+	struct Finished {};
+	struct Blocked {};
+	struct Error {};
+	using ScheduleResult = std::variant<Finished, Blocked, Error, int>;
+
 	/** Handler Result Types */
 	struct Reset {};
 	struct Invalid {};
 	template <typename T>
 	using HandleResult = std::variant<T, VerificationError, Reset, Invalid>;
 
-	/** Details for an error to be reported */
-	struct ErrorDetails {
-		ErrorDetails() = default;
-		ErrorDetails(Event pos, VerificationError r, std::string err = std::string(),
-			     const EventLabel *racyLab = nullptr, bool shouldHalt = true)
-			: pos(pos), type(r), msg(std::move(err)), racyLab(racyLab),
-			  shouldHalt(shouldHalt)
-		{}
-
-		Event pos{};
-		VerificationError type{};
-		std::string msg{};
-		const EventLabel *racyLab{};
-		bool shouldHalt = true;
+	/** Debug information for an instruction */
+	struct EventDbgInfo {
+		std::string file;
+		int line;
+		std::string functionName;
+		std::string source;
+		std::string accessedVarName;
 	};
+
+	/** Packs together debug information for a graph */
+	using GraphDbgInfo = std::unordered_map<Event, EventDbgInfo>;
 
 	template <typename... Ts> static auto create(Ts &&...params) -> std::unique_ptr<GenMCDriver>
 	{
@@ -132,14 +129,17 @@ public:
 	/**** Generic actions ***/
 
 	/** Returns to the interpreter the next thread to run (nullopt if none) */
-	auto scheduleNext(std::span<Action> runnable) -> std::optional<int>;
+	auto scheduleNext(std::span<Action> runnable) -> ScheduleResult;
 
 	/** Attemps to complete the execution by inspecting the cache.
 	 * Returns whether it succeeded. */
 	auto runFromCache() -> bool;
 
-	/** Things to do when an execution starts/ends */
-	void handleExecutionStart();
+	/** Should be called at the beginning of each execution. Returns whether the frontend
+	 * could collect debug information (non-mandatory) */
+	bool handleExecutionStart();
+
+	/** Should be called at the end of each execution */
 	void handleExecutionEnd();
 
 	/** Whether there are more executions to be explored */
@@ -152,22 +152,26 @@ public:
 	/*** Instruction handling ***/
 
 	/** A thread has just finished execution, nothing for the interpreter */
-	void handleThreadFinish(Event pos, SVal val);
+	void handleThreadFinish(const EventDbgInfo *dbg, Event pos, SVal val);
 
 	/** A thread has terminated abnormally */
-	void handleThreadKill(Event pos);
+	void handleThreadKill(const EventDbgInfo *dbg, Event pos);
 
 	/** This method blocks the current thread  */
-	void handleAssume(Event pos, AssumeType type);
+	void handleAssume(const EventDbgInfo *dbg, Event pos, AssumeType type);
 
 	/** Returns the value this load reads */
 	template <EventLabel::EventLabelKind k, typename... Ts>
-	HandleResult<SVal> handleLoad(Event pos, std::optional<SVal> oldVal, Ts &&...params)
+	HandleResult<SVal> handleLoad(const EventDbgInfo *dbg, Event pos,
+				      std::optional<SVal> oldVal, Ts &&...params)
 	{
 		auto &g = getExec().getGraph();
-		if (isExecutionDrivenByGraph(pos)) {
-			return getReadRetValue(llvm::dyn_cast<ReadLabel>(g.getEventLabel(pos)));
-		}
+
+		if (auto err = updateErrorInfoAndMaybeExit(pos, dbg); err)
+			return {*err};
+		if (isExecutionDrivenByGraph(pos))
+			return getReadRetValue(genmc::dyn_cast<ReadLabel>(g.getEventLabel(pos)));
+
 #define HANDLE_LABEL(NAME)                                                                         \
 	if constexpr (k == EventLabel::EventLabelKind::NAME) {                                     \
 		return handleLoad(NAME##Label::create(pos, std::forward<Ts>(params)...), oldVal);  \
@@ -178,11 +182,14 @@ public:
 
 	/** A store has been interpreted, nothing for the interpreter */
 	template <EventLabel::EventLabelKind k, typename... Ts>
-	HandleResult<bool> handleStore(Event pos, std::optional<SVal> oldVal, Ts &&...params)
+	HandleResult<bool> handleStore(const EventDbgInfo *dbg, Event pos,
+				       std::optional<SVal> oldVal, Ts &&...params)
 	{
+		if (auto err = updateErrorInfoAndMaybeExit(pos, dbg); err)
+			return {*err};
 		if (isExecutionDrivenByGraph(pos)) {
 			auto &g = getExec().getGraph();
-			auto *lab = llvm::dyn_cast<WriteLabel>(g.getEventLabel(pos));
+			auto *lab = genmc::dyn_cast<WriteLabel>(g.getEventLabel(pos));
 			return lab == g.co_max(lab->getAddr());
 		}
 #define HANDLE_LABEL(NAME)                                                                         \
@@ -194,14 +201,19 @@ public:
 	}
 
 	/** A fence has been interpreted, nothing for the interpreter */
-	void handleFence(Event pos, MemOrdering ord, const EventDeps &deps);
+	void handleFence(const EventDbgInfo *dbg, Event pos, MemOrdering ord,
+			 const EventDeps &deps);
 
 	/** Returns an appropriate result for malloc() */
-	template <typename... Ts> SVal handleMalloc(Event pos, Ts &&...params)
+	template <typename... Ts>
+	SVal handleMalloc(const EventDbgInfo *dbg, Event pos, Ts &&...params)
 	{
 		auto &g = getExec().getGraph();
+
+		if (auto err = updateErrorInfoAndMaybeExit(pos, dbg); err)
+			return {};
 		if (isExecutionDrivenByGraph(pos)) {
-			auto *lab = llvm::dyn_cast<MallocLabel>(g.getEventLabel(pos));
+			auto *lab = genmc::dyn_cast<MallocLabel>(g.getEventLabel(pos));
 			BUG_ON(!lab);
 			return SVal(lab->getAllocAddr().get());
 		}
@@ -209,48 +221,47 @@ public:
 	}
 
 	/** A call to free() has been interpreted, nothing for the intepreter */
-	std::optional<VerificationError> handleFree(Event pos, SAddr loc, const EventDeps &deps);
-	std::optional<VerificationError> handleRetire(Event pos, SAddr loc, const EventDeps &deps);
+	std::optional<VerificationError> handleFree(const EventDbgInfo *dbg, Event pos, SAddr loc,
+						    const EventDeps &deps);
+	std::optional<VerificationError> handleRetire(const EventDbgInfo *dbg, Event pos, SAddr loc,
+						      const EventDeps &deps);
 
 	/** Returns the TID of the newly created thread */
-	int handleThreadCreate(Event pos, ThreadInfo info, const EventDeps &deps);
+	int handleThreadCreate(const EventDbgInfo *dbg, Event pos, ThreadInfo info,
+			       const EventDeps &deps);
 
 	/** Returns an appropriate result for pthread_join() */
-	HandleResult<SVal> handleThreadJoin(Event pos, unsigned int childTid,
-					    const EventDeps &deps);
+	HandleResult<SVal> handleThreadJoin(const EventDbgInfo *dbg, Event pos,
+					    unsigned int childTid, const EventDeps &deps);
 
 	/** A helping CAS operation has been interpreter.
 	 * Returns whether the helped CAS is present. */
-	bool handleHelpingCas(Event pos, MemOrdering ord, SAddr loc, ASize size, AType type,
-			      SVal cmpVal, SVal newVal, const EventDeps &deps);
+	bool handleHelpingCas(const EventDbgInfo *dbg, Event pos, MemOrdering ord, SAddr loc,
+			      ASize size, AType type, SVal cmpVal, SVal newVal,
+			      const EventDeps &deps);
 
 	/** A call to __VERIFIER_opt_begin() has been interpreted.
 	 * Returns whether the block should expand */
-	bool handleOptional(Event pos);
+	bool handleOptional(const EventDbgInfo *dbg, Event pos);
 
 	/** A call to __VERIFIER_spin_start() has been interpreted */
-	void handleSpinStart(Event pos);
+	void handleSpinStart(const EventDbgInfo *dbg, Event pos);
 
 	/** A call to __VERIFIER_faiZNE_spin_end() has been interpreted */
-	void handleFaiZNESpinEnd(Event pos);
+	void handleFaiZNESpinEnd(const EventDbgInfo *dbg, Event pos);
 
 	/** A call to __VERIFIER_lockZNE_spin_end() has been interpreted */
-	void handleLockZNESpinEnd(Event pos);
+	void handleLockZNESpinEnd(const EventDbgInfo *dbg, Event pos);
 
 	/** Helpers for dummy events */
-	void handleLoopBegin(Event pos);
-	void handleHpProtect(Event pos, SAddr hpAddr, SAddr protAddr);
-	void handleMethodBegin(Event pos, std::string methodName, int32_t argVal);
-	void handleMethodEnd(Event pos, std::string methodName, int32_t retVal);
-	void handleOutput(Event pos, std::string msg);
-
-	/** This method either blocks the offending thread (e.g., if the
-	 * execution is invalid), or aborts the exploration */
-	void reportError(const ErrorDetails &details);
-
-	/** Helper that reports an unreported warning only if it hasn't reported before.
-	 * Returns true if the warning should be treated as an error according to the config. */
-	bool reportWarningOnce(Event pos, VerificationError r, const EventLabel *racyLab = nullptr);
+	void handleLoopBegin(const EventDbgInfo *dbg, Event pos);
+	void handleHpProtect(const EventDbgInfo *dbg, Event pos, SAddr hpAddr, SAddr protAddr);
+	void handleMethodBegin(const EventDbgInfo *dbg, Event pos, std::string methodName,
+			       int32_t argVal);
+	void handleMethodEnd(const EventDbgInfo *dbg, Event pos, std::string methodName,
+			     int32_t retVal);
+	void handleOutput(const EventDbgInfo *dbg, Event pos, std::string msg);
+	void handleError(const EventDbgInfo *dbg, Event pos, std::string msg);
 
 	virtual ~GenMCDriver();
 
@@ -276,12 +287,6 @@ protected:
 
 	/** Returns a pointer to the user configuration */
 	const Config *getConf() const { return userConf.get(); }
-
-	/** Returns a pointer to the interpreter */
-	llvm::Interpreter *getEE() const { return EE; }
-
-	/** Sets pointer to the interpreter */
-	void setEE(llvm::Interpreter *interp) { EE = interp; }
 
 	/** Set the callbacks for querying the interpreter. */
 	void setInterpCallbacks(InterpreterCallbacks interpCallbacks);
@@ -371,6 +376,14 @@ private:
 	void handleLockZNESpinEnd(std::unique_ptr<LockZNESpinEndLabel> lab);
 	void handleDummy(std::unique_ptr<EventLabel> lab);
 
+	/** This method either blocks the offending thread (e.g., if the
+	 * execution is invalid), or aborts the exploration */
+	void reportError(Event pos, const ErrorDetails &details);
+
+	/** Helper that reports an unreported warning only if it hasn't reported before.
+	 * Returns true if the warning should be treated as an error according to the config. */
+	bool reportWarningOnce(Event pos, VerificationError r, const EventLabel *racyLab = nullptr);
+
 	/*** Exploration-related ***/
 
 	/** Returns whether a revisit results to a valid execution
@@ -416,12 +429,11 @@ private:
 	/** Returns true if the exploration is guided by a graph */
 	bool isExecutionDrivenByGraph(Event pos);
 
-	/** Returns true if we are in error-replaying mode */
-	[[nodiscard]] auto inReplay() const -> bool { return inReplay_; }
+	/** Error reporting: initiates an exploration to collect metadata */
+	void initiateErrorReplay(const ErrorDetails &details);
 
-	/** Helpers for error replaying (TODO: remove) */
-	void startReplay();
-	void endReplay();
+	/** Error reporting: stops a metadata-collecting execution (and cleans up) */
+	void haltErrorReplay();
 
 	/** Opt: Caches LAB to optimize scheduling next time */
 	void cacheEventLabel(const EventLabel *lab);
@@ -613,29 +625,9 @@ private:
 
 	/*** Output-related ***/
 
-	/** Returns a view to be used when replaying */
-	std::unique_ptr<VectorClock> getReplayView() const;
-
-	/** Prints the source-code instructions leading to Event e.
-	 * Assumes that debugging information have already been collected */
-	void printTraceBefore(const EventLabel *lab, llvm::raw_ostream &ss = llvm::dbgs());
-
-	/** Helper for printTraceBefore() that prints events according to po U rf */
-	void recPrintTraceBefore(const Event &e, View &a, llvm::raw_ostream &ss = llvm::outs());
-
-	/** Returns the name of the variable residing in addr */
-	std::string getVarName(const SAddr &addr) const;
-
-	/** Outputs the full graph.
-	 * If printMetadata is set, it outputs debugging information
-	 * (these should have been collected beforehand) */
-	void printGraph(bool printMetadata = false, llvm::raw_ostream &s = llvm::dbgs());
-
-	/** Outputs the current graph into a file (DOT format),
-	 * and visually marks events e and c (conflicting).
-	 * Assumes debugging information have already been collected  */
-	void dotPrintToFile(const std::string &filename, const EventLabel *errLab = nullptr,
-			    const EventLabel *racyLab = nullptr, bool printObservation = false);
+	std::optional<VerificationError> updateErrorInfoAndMaybeExit(Event pos,
+								     const EventDbgInfo *dbg);
+	const EventDbgInfo *getDbgInfo(Event pos);
 
 	void updateLabelViews(EventLabel *lab);
 	std::optional<VerificationError> checkForRaces(const EventLabel *lab);
@@ -654,8 +646,6 @@ private:
 	 * either (po U rf) or (AR U rf) */
 	const VectorClock &getPrefixView(const EventLabel *lab) const;
 
-	friend llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const VerificationError &r);
-
 	/** Random generator facilities used */
 	using MyRNG = std::mt19937;
 	using MyDist = std::uniform_int_distribution<MyRNG::result_type>;
@@ -668,9 +658,6 @@ private:
 
 	/** User configuration */
 	std::shared_ptr<const Config> userConf;
-
-	/** The interpreter used by the driver */
-	llvm::Interpreter *EE{};
 
 	/** Execution stack */
 	std::vector<Execution> execStack;
@@ -702,8 +689,14 @@ private:
 	/** Whether we are in error replaying */
 	bool inReplay_ = false;
 
-	/** Dbg: Random-number generators for estimation randomization */
+	/** Random-number generators for estimation randomization */
 	MyRNG estRng;
+
+	/** Stores instruction debug info */
+	GraphDbgInfo dbgInfo_;
+
+	/** The details of an error to be reported (buffered) */
+	std::optional<ErrorDetails> bufferedError_;
 
 	/** Callbacks for querying information from the interpreter. */
 	InterpreterCallbacks interpreterCallbacks_;

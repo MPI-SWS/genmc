@@ -16,7 +16,8 @@
 
 #include "ADT/VSet.hpp"
 #include "Event.hpp"
-#include <llvm/Support/raw_ostream.h>
+
+#include <format>
 
 /*******************************************************************************
  **                             DepInfo Class
@@ -56,12 +57,21 @@ public:
 	[[nodiscard]] auto begin() const -> const_iterator { return set_.begin(); };
 	[[nodiscard]] auto end() const -> const_iterator { return set_.end(); };
 
-	/* Printing */
-	friend auto operator<<(llvm::raw_ostream &s, const DepInfo &dep) -> llvm::raw_ostream &;
+	friend struct std::formatter<DepInfo>;
 
 private:
 	/** The actual container for the dependencies */
 	Set set_;
+};
+
+/** Make `DebInfo` formattable with `std::format`. */
+template <> struct std::formatter<DepInfo> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const DepInfo &dep, std::format_context &ctx) const
+	{
+		return std::format_to(ctx.out(), "{}", dep.set_);
+	}
 };
 
 /*******************************************************************************

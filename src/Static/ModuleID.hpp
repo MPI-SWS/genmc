@@ -14,7 +14,11 @@
 #ifndef GENMC_MODULE_ID_HPP
 #define GENMC_MODULE_ID_HPP
 
-#include <llvm/IR/Value.h>
+#include <unordered_map>
+
+namespace llvm {
+class Value;
+}
 
 /**
  * Contains (unique) identification information for some of the module's

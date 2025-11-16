@@ -16,7 +16,6 @@
 
 #include "ExecutionGraph.hpp"
 #include <iterator>
-#include <llvm/ADT/iterator_range.h>
 #include <type_traits>
 #include <utility>
 
@@ -30,9 +29,6 @@ using const_label_iterator = ExecutionGraph::const_label_iterator;
 /*******************************************************************************
  **                         label-iteration utilities
  ******************************************************************************/
-
-using label_range = llvm::iterator_range<ExecutionGraph::label_iterator>;
-using const_label_range = llvm::iterator_range<ExecutionGraph::const_label_iterator>;
 
 inline auto other_labels(ExecutionGraph &G, const EventLabel *lab)
 {
@@ -51,8 +47,6 @@ inline auto other_labels(const ExecutionGraph &G, const EventLabel *lab)
 
 using const_co_iterator = ExecutionGraph::const_co_iterator;
 using const_reverse_co_iterator = ExecutionGraph::const_reverse_co_iterator;
-using const_co_range = llvm::iterator_range<const_co_iterator>;
-using const_reverse_co_range = llvm::iterator_range<const_reverse_co_iterator>;
 
 namespace detail {
 inline const_co_iterator coSentinel;
@@ -61,41 +55,41 @@ inline const_reverse_co_iterator coRevSentinel;
 
 inline auto co_succ_begin(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *wLab = llvm::dyn_cast<WriteLabel>(lab);
+	auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
 	return wLab ? G.co_succ_begin(wLab) : ::detail::coSentinel;
 }
 inline auto co_succ_end(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *wLab = llvm::dyn_cast<WriteLabel>(lab);
+	auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
 	return wLab ? G.co_succ_end(wLab) : ::detail::coSentinel;
 }
 inline auto co_succs(const ExecutionGraph &G, const EventLabel *lab)
 {
-	return const_co_range(co_succ_begin(G, lab), co_succ_end(G, lab));
+	return std::ranges::subrange(co_succ_begin(G, lab), co_succ_end(G, lab));
 }
 inline const WriteLabel *co_imm_succ(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *wLab = llvm::dyn_cast<WriteLabel>(lab);
+	auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
 	return !wLab ? nullptr : G.co_imm_succ(wLab);
 }
 
 inline const_reverse_co_iterator co_pred_begin(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *wLab = llvm::dyn_cast<WriteLabel>(lab);
+	auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
 	return wLab ? G.co_pred_begin(wLab) : ::detail::coRevSentinel;
 }
 inline const_reverse_co_iterator co_pred_end(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *wLab = llvm::dyn_cast<WriteLabel>(lab);
+	auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
 	return wLab ? G.co_pred_end(wLab) : ::detail::coRevSentinel;
 }
-inline const_reverse_co_range co_preds(const ExecutionGraph &G, const EventLabel *lab)
+inline auto co_preds(const ExecutionGraph &G, const EventLabel *lab)
 {
-	return const_reverse_co_range(co_pred_begin(G, lab), co_pred_end(G, lab));
+	return std::ranges::subrange(co_pred_begin(G, lab), co_pred_end(G, lab));
 }
 inline const WriteLabel *co_imm_pred(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *wLab = llvm::dyn_cast<WriteLabel>(lab);
+	auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
 	return !wLab ? nullptr : G.co_imm_pred(wLab);
 }
 
@@ -124,25 +118,12 @@ inline const EventLabel *po_imm_pred(const ExecutionGraph &G, const EventLabel *
  **                         ppo-iteration utilities
  ******************************************************************************/
 
-using const_ppo_iterator = DepInfo::const_iterator;
-using const_ppo_range = llvm::iterator_range<const_ppo_iterator>;
-
 #define PPO_ITERATOR(name)                                                                         \
-	inline const_ppo_iterator name##_pred_begin(const ExecutionGraph &G, Event e)              \
-	{                                                                                          \
-		return G.getEventLabel(e)->name##_begin();                                         \
-	}                                                                                          \
-                                                                                                   \
-	inline const_ppo_iterator name##_pred_end(const ExecutionGraph &G, Event e)                \
-	{                                                                                          \
-		return G.getEventLabel(e)->name##_end();                                           \
-	}                                                                                          \
-                                                                                                   \
-	inline const_ppo_range name##_preds(const ExecutionGraph &G, Event e)                      \
+	inline auto name##_preds(const ExecutionGraph &G, Event e)                                 \
 	{                                                                                          \
 		return G.getEventLabel(e)->name();                                                 \
 	}                                                                                          \
-	inline const_ppo_range name##_preds(const ExecutionGraph &G, const EventLabel *lab)        \
+	inline auto name##_preds(const ExecutionGraph &G, const EventLabel *lab)                   \
 	{                                                                                          \
 		return lab->name();                                                                \
 	}
@@ -162,7 +143,7 @@ struct LocationFilter {
 
 	bool operator()(const EventLabel &sLab) const
 	{
-		auto *lab = llvm::dyn_cast<MemAccessLabel>(&sLab);
+		auto *lab = genmc::dyn_cast<MemAccessLabel>(&sLab);
 		return lab && lab->getAddr() == addr;
 	}
 
@@ -171,31 +152,11 @@ private:
 	const SAddr addr;
 };
 
-template <typename IterT>
-struct poloc_filter_iterator : public llvm::filter_iterator<IterT, LocationFilter> {
-public:
-	using BaseT = llvm::filter_iterator<IterT, LocationFilter>;
-
-	poloc_filter_iterator(IterT it, IterT end, LocationFilter filter) : BaseT(it, end, filter)
-	{}
-
-	poloc_filter_iterator &operator++()
-	{
-		return static_cast<poloc_filter_iterator &>(BaseT::operator++());
-	}
-	poloc_filter_iterator operator++(int)
-	{
-		auto tmp = *this;
-		BaseT::operator++();
-		return tmp;
-	}
-};
-
 static inline bool hasLocation(const EventLabel *lab) { return lab->hasLocation(); }
 
 static inline SAddr getLocation(const EventLabel *lab)
 {
-	if (auto *mLab = llvm::dyn_cast<MemAccessLabel>(lab))
+	if (auto *mLab = genmc::dyn_cast<MemAccessLabel>(lab))
 		return mLab->getAddr();
 	return SAddr();
 }
@@ -248,7 +209,7 @@ struct RfIntFilter {
 
 	bool operator()(const EventLabel &rLab) const
 	{
-		auto *lab = llvm::dyn_cast<ReadLabel>(&rLab);
+		auto *lab = genmc::dyn_cast<ReadLabel>(&rLab);
 		return lab && lab->getRf()->getPos() != write;
 	}
 
@@ -263,7 +224,7 @@ struct RfInvIntFilter {
 
 	bool operator()(const EventLabel &sLab) const
 	{
-		auto *lab = llvm::dyn_cast<WriteLabel>(&sLab);
+		auto *lab = genmc::dyn_cast<WriteLabel>(&sLab);
 		return lab && lab->getPos() != write;
 	}
 
@@ -275,7 +236,7 @@ private:
 
 inline auto detour_succs(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *wLab = llvm::dyn_cast<WriteLabel>(lab);
+	auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
 	return wLab ? poloc_succs(G, lab) |
 			       std::views::filter(::detail::RfIntFilter(G, lab->getPos()))
 		    : poloc_succs(G, G.getLastThreadLabel(lab->getThread())) |
@@ -284,7 +245,7 @@ inline auto detour_succs(const ExecutionGraph &G, const EventLabel *lab)
 
 inline auto detour_preds(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *rLab = llvm::dyn_cast<ReadLabel>(lab);
+	auto *rLab = genmc::dyn_cast<ReadLabel>(lab);
 	return rLab && rLab->getRf()
 		       ? poloc_preds(G, lab) | std::views::filter(::detail::RfInvIntFilter(
 						       G, rLab->getRf()->getPos()))
@@ -297,32 +258,21 @@ inline auto detour_preds(const ExecutionGraph &G, const EventLabel *lab)
  ******************************************************************************/
 
 using const_rf_iterator = WriteLabel::const_rf_iterator;
-using const_rf_range = llvm::iterator_range<const_rf_iterator>;
 
 namespace detail {
 inline const_rf_iterator sentinel;
 };
 
-inline const_rf_iterator rf_succ_begin(const ExecutionGraph &G, const EventLabel *lab)
+inline auto rf_succs(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *wLab = llvm::dyn_cast<WriteLabel>(lab);
-	return wLab ? wLab->readers_begin() : ::detail::sentinel;
-}
-
-inline const_rf_iterator rf_succ_end(const ExecutionGraph &G, const EventLabel *lab)
-{
-	auto *wLab = llvm::dyn_cast<WriteLabel>(lab);
-	return wLab ? wLab->readers_end() : ::detail::sentinel;
-}
-
-inline const_rf_range rf_succs(const ExecutionGraph &G, const EventLabel *lab)
-{
-	return const_rf_range(rf_succ_begin(G, lab), rf_succ_end(G, lab));
+	auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
+	return wLab ? wLab->readers()
+		    : std::ranges::subrange(::detail::sentinel, ::detail::sentinel);
 }
 
 inline const EventLabel *rf_pred(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *rLab = llvm::dyn_cast<ReadLabel>(lab);
+	auto *rLab = genmc::dyn_cast<ReadLabel>(lab);
 	return (!rLab || !rLab->getRf()) ? nullptr : rLab->getRf();
 }
 
@@ -330,60 +280,16 @@ inline const EventLabel *rf_pred(const ExecutionGraph &G, const EventLabel *lab)
  **                         rfe-iteration utilities
  ******************************************************************************/
 
-namespace detail {
-struct DiffThreadFilter {
-	DiffThreadFilter() = delete;
-	DiffThreadFilter(const ExecutionGraph &g, int t) : graph(g), thread(t) {}
-
-	bool operator()(const ReadLabel &rLab) const { return rLab.getThread() != thread; }
-
-private:
-	const ExecutionGraph &graph;
-	const int thread;
-};
-
-template <typename IterT>
-struct rfe_filter_iterator : public llvm::filter_iterator<IterT, DiffThreadFilter> {
-public:
-	using BaseT = llvm::filter_iterator<IterT, DiffThreadFilter>;
-
-	rfe_filter_iterator(IterT it, IterT end, DiffThreadFilter filter) : BaseT(it, end, filter)
-	{}
-
-	rfe_filter_iterator &operator++()
-	{
-		return static_cast<rfe_filter_iterator &>(BaseT::operator++());
-	}
-	rfe_filter_iterator operator++(int)
-	{
-		auto tmp = *this;
-		BaseT::operator++();
-		return tmp;
-	}
-};
-} /* namespace detail */
-
-using const_rfe_iterator = ::detail::rfe_filter_iterator<const_rf_iterator>;
-using const_rfe_range = llvm::iterator_range<const_rfe_iterator>;
-
-inline const_rfe_iterator rfe_succ_begin(const ExecutionGraph &G, const EventLabel *lab)
+inline auto rfe_succs(const ExecutionGraph &G, const EventLabel *lab)
 {
-	return const_rfe_iterator(rf_succ_begin(G, lab), rf_succ_end(G, lab),
-				  ::detail::DiffThreadFilter(G, lab->getThread()));
-}
-inline const_rfe_iterator rfe_succ_end(const ExecutionGraph &G, const EventLabel *lab)
-{
-	return const_rfe_iterator(rf_succ_end(G, lab), rf_succ_end(G, lab),
-				  ::detail::DiffThreadFilter(G, lab->getThread()));
-}
-inline const_rfe_range rfe_succs(const ExecutionGraph &G, const EventLabel *lab)
-{
-	return const_rfe_range(rfe_succ_begin(G, lab), rfe_succ_end(G, lab));
+	return rf_succs(G, lab) | std::views::filter([lab](auto &oLab) {
+		       return oLab.getThread() != lab->getThread();
+	       });
 }
 
 inline const EventLabel *rfe_pred(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *rLab = llvm::dyn_cast<ReadLabel>(lab);
+	auto *rLab = genmc::dyn_cast<ReadLabel>(lab);
 	return (rLab && rLab->readsExt()) ? rLab->getRf() : nullptr;
 }
 
@@ -391,60 +297,16 @@ inline const EventLabel *rfe_pred(const ExecutionGraph &G, const EventLabel *lab
  **                         rfi-iteration utilities
  ******************************************************************************/
 
-namespace detail {
-struct SameThreadFilter {
-	SameThreadFilter() = delete;
-	SameThreadFilter(const ExecutionGraph &g, int t) : graph(g), thread(t) {}
-
-	bool operator()(const ReadLabel &rLab) const { return rLab.getThread() == thread; }
-
-private:
-	const ExecutionGraph &graph;
-	const int thread;
-};
-
-template <typename IterT>
-struct rfi_filter_iterator : public llvm::filter_iterator<IterT, SameThreadFilter> {
-public:
-	using BaseT = llvm::filter_iterator<IterT, SameThreadFilter>;
-
-	rfi_filter_iterator(IterT it, IterT end, SameThreadFilter filter) : BaseT(it, end, filter)
-	{}
-
-	rfi_filter_iterator &operator++()
-	{
-		return static_cast<rfi_filter_iterator &>(BaseT::operator++());
-	}
-	rfi_filter_iterator operator++(int)
-	{
-		auto tmp = *this;
-		BaseT::operator++();
-		return tmp;
-	}
-};
-} /* namespace detail */
-
-using const_rfi_iterator = ::detail::rfi_filter_iterator<const_rf_iterator>;
-using const_rfi_range = llvm::iterator_range<const_rfi_iterator>;
-
-inline const_rfi_iterator rfi_succ_begin(const ExecutionGraph &G, const EventLabel *lab)
+inline auto rfi_succs(const ExecutionGraph &G, const EventLabel *lab)
 {
-	return const_rfi_iterator(rf_succ_begin(G, lab), rf_succ_end(G, lab),
-				  ::detail::SameThreadFilter(G, lab->getThread()));
-}
-inline const_rfi_iterator rfi_succ_end(const ExecutionGraph &G, const EventLabel *lab)
-{
-	return const_rfi_iterator(rf_succ_end(G, lab), rf_succ_end(G, lab),
-				  ::detail::SameThreadFilter(G, lab->getThread()));
-}
-inline const_rfi_range rfi_succs(const ExecutionGraph &G, const EventLabel *lab)
-{
-	return const_rfi_range(rfi_succ_begin(G, lab), rfi_succ_end(G, lab));
+	return rf_succs(G, lab) | std::views::filter([lab](auto &oLab) {
+		       return oLab.getThread() == lab->getThread();
+	       });
 }
 
 inline const EventLabel *rfi_pred(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *rLab = llvm::dyn_cast<ReadLabel>(lab);
+	auto *rLab = genmc::dyn_cast<ReadLabel>(lab);
 	return (rLab && rLab->readsInt()) ? rLab->getRf() : nullptr;
 }
 
@@ -454,12 +316,12 @@ inline const EventLabel *rfi_pred(const ExecutionGraph &G, const EventLabel *lab
 
 inline const ThreadStartLabel *tc_succ(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *tcLab = llvm::dyn_cast<ThreadCreateLabel>(lab);
+	auto *tcLab = genmc::dyn_cast<ThreadCreateLabel>(lab);
 	return tcLab ? G.getFirstThreadLabel(tcLab->getChildId()) : nullptr;
 }
 inline const ThreadCreateLabel *tc_pred(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *tsLab = llvm::dyn_cast<ThreadStartLabel>(lab);
+	auto *tsLab = genmc::dyn_cast<ThreadStartLabel>(lab);
 	return tsLab ? tsLab->getCreate() : nullptr;
 }
 
@@ -469,14 +331,14 @@ inline const ThreadCreateLabel *tc_pred(const ExecutionGraph &G, const EventLabe
 
 inline const ThreadJoinLabel *tj_succ(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *eLab = llvm::dyn_cast<ThreadFinishLabel>(lab);
+	auto *eLab = genmc::dyn_cast<ThreadFinishLabel>(lab);
 	return !eLab ? nullptr : eLab->getParentJoin();
 }
 
 inline const ThreadFinishLabel *tj_pred(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *tjLab = llvm::dyn_cast<ThreadJoinLabel>(lab);
-	return tjLab ? llvm::dyn_cast_or_null<ThreadFinishLabel>(
+	auto *tjLab = genmc::dyn_cast<ThreadJoinLabel>(lab);
+	return tjLab ? genmc::dyn_cast_if_present<ThreadFinishLabel>(
 			       G.getLastThreadLabel(tjLab->getChildId()))
 		     : nullptr;
 }
@@ -485,48 +347,23 @@ inline const ThreadFinishLabel *tj_pred(const ExecutionGraph &G, const EventLabe
  **                         fr-iteration utilities
  ******************************************************************************/
 
-using const_fr_iterator = const_co_iterator;
-using const_reverse_fr_iterator = const_reverse_co_iterator;
-
-using const_fr_range = llvm::iterator_range<const_fr_iterator>;
-using const_reverse_fr_range = llvm::iterator_range<const_reverse_fr_iterator>;
-
-using const_fr_inv_iterator = WriteLabel::const_rf_iterator;
-using const_fr_inv_range = llvm::iterator_range<const_fr_inv_iterator>;
-
-inline const_fr_iterator fr_succ_begin(const ExecutionGraph &G, const EventLabel *lab)
+inline auto fr_succs(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *rLab = llvm::dyn_cast<ReadLabel>(lab);
-	return rLab ? G.fr_succ_begin(rLab) : ::detail::coSentinel;
-}
-inline const_fr_iterator fr_succ_end(const ExecutionGraph &G, const EventLabel *lab)
-{
-	auto *rLab = llvm::dyn_cast<ReadLabel>(lab);
-	return rLab ? G.fr_succ_end(rLab) : ::detail::coSentinel;
-}
-inline const_fr_range fr_succs(const ExecutionGraph &G, const EventLabel *lab)
-{
-	return const_fr_range(fr_succ_begin(G, lab), fr_succ_end(G, lab));
+	const auto *rLab = genmc::dyn_cast<ReadLabel>(lab);
+	return rLab ? G.fr_succs(rLab)
+		    : std::ranges::subrange(::detail::coSentinel, ::detail::coSentinel);
 }
 inline const WriteLabel *fr_imm_succ(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *rLab = llvm::dyn_cast<ReadLabel>(lab);
+	const auto *rLab = genmc::dyn_cast<ReadLabel>(lab);
 	return !rLab ? nullptr : G.fr_imm_succ(rLab);
 }
 
-inline const_fr_inv_iterator fr_imm_pred_begin(const ExecutionGraph &G, const EventLabel *lab)
+inline auto fr_imm_preds(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *wLab = llvm::dyn_cast<WriteLabel>(lab);
-	return wLab ? G.fr_imm_pred_begin(wLab) : ::detail::sentinel;
-}
-inline const_fr_inv_iterator fr_imm_pred_end(const ExecutionGraph &G, const EventLabel *lab)
-{
-	auto *wLab = llvm::dyn_cast<WriteLabel>(lab);
-	return wLab ? G.fr_imm_pred_end(wLab) : ::detail::sentinel;
-}
-inline const_fr_inv_range fr_imm_preds(const ExecutionGraph &G, const EventLabel *lab)
-{
-	return const_fr_inv_range(fr_imm_pred_begin(G, lab), fr_imm_pred_end(G, lab));
+	const auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
+	return wLab ? G.fr_imm_preds(wLab)
+		    : std::ranges::subrange(::detail::sentinel, ::detail::sentinel);
 }
 
 /*******************************************************************************
@@ -540,32 +377,21 @@ inline auto samelocs(const ExecutionGraph &G, const EventLabel *lab) { return G.
  ******************************************************************************/
 
 using const_alloc_iterator = MallocLabel::const_access_iterator;
-using const_alloc_range = llvm::iterator_range<const_alloc_iterator>;
 
 namespace detail {
 inline const_alloc_iterator allocSentinel;
 };
 
-inline const_alloc_iterator alloc_succ_begin(const ExecutionGraph &G, const EventLabel *lab)
+inline auto alloc_succs(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *aLab = llvm::dyn_cast<MallocLabel>(lab);
-	return aLab ? aLab->accesses_begin() : ::detail::allocSentinel;
-}
-
-inline const_alloc_iterator alloc_succ_end(const ExecutionGraph &G, const EventLabel *lab)
-{
-	auto *aLab = llvm::dyn_cast<MallocLabel>(lab);
-	return aLab ? aLab->accesses_end() : ::detail::allocSentinel;
-}
-
-inline const_alloc_range alloc_succs(const ExecutionGraph &G, const EventLabel *lab)
-{
-	return const_alloc_range(alloc_succ_begin(G, lab), alloc_succ_end(G, lab));
+	const auto *aLab = genmc::dyn_cast<MallocLabel>(lab);
+	return aLab ? aLab->accesses()
+		    : std::ranges::subrange(::detail::allocSentinel, ::detail::allocSentinel);
 }
 
 inline const MallocLabel *alloc_pred(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *aLab = llvm::dyn_cast<MemAccessLabel>(lab);
+	auto *aLab = genmc::dyn_cast<MemAccessLabel>(lab);
 	return (!aLab || !aLab->getAlloc()) ? nullptr : aLab->getAlloc();
 }
 
@@ -575,13 +401,13 @@ inline const MallocLabel *alloc_pred(const ExecutionGraph &G, const EventLabel *
 
 inline const FreeLabel *free_succ(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *aLab = llvm::dyn_cast<MallocLabel>(lab);
+	auto *aLab = genmc::dyn_cast<MallocLabel>(lab);
 	return (!aLab || !aLab->getFree()) ? nullptr : aLab->getFree();
 }
 
 inline const MallocLabel *free_pred(const ExecutionGraph &G, const EventLabel *lab)
 {
-	auto *dLab = llvm::dyn_cast<FreeLabel>(lab);
+	auto *dLab = genmc::dyn_cast<FreeLabel>(lab);
 	return (!dLab || !dLab->getAlloc()) ? nullptr : dLab->getAlloc();
 }
 
@@ -600,14 +426,14 @@ inline auto indirectEnd(MethodEndLabel *lab) -> MethodEndLabel & { return *lab; 
 
 inline auto lin_succs(const ExecutionGraph &G, const EventLabel *lab)
 {
-	const auto *endLab = llvm::dyn_cast<MethodEndLabel>(lab);
+	const auto *endLab = genmc::dyn_cast<MethodEndLabel>(lab);
 	return (endLab ? endLab->lin_succs() : std::views::all(::detail::sentinelSuccs)) |
 	       std::views::transform(::detail::indirectBegin);
 }
 
 inline auto lin_preds(const ExecutionGraph &G, const EventLabel *lab)
 {
-	const auto *begLab = llvm::dyn_cast<MethodBeginLabel>(lab);
+	const auto *begLab = genmc::dyn_cast<MethodBeginLabel>(lab);
 	return (begLab ? begLab->lin_preds() : std::views::all(::detail::sentinelPreds)) |
 	       std::views::transform(::detail::indirectEnd);
 }

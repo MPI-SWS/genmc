@@ -170,39 +170,39 @@ bool RAChecker::visitCalc68_2(const EventLabel *lab, View &calcRes) const
 		}
 	}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<FenceLabel>(pLab)) {
+		if (true && pLab->isAtLeastRelease() && genmc::isa<FenceLabel>(pLab)) {
 			if (!visitCalc68_1(pLab, calcRes)) {
 				return false;
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<ThreadCreateLabel>(pLab)) {
+		if (true && pLab->isAtLeastRelease() && genmc::isa<ThreadCreateLabel>(pLab)) {
 			if (!visitCalc68_1(pLab, calcRes)) {
 				return false;
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<ThreadFinishLabel>(pLab)) {
+		if (true && pLab->isAtLeastRelease() && genmc::isa<ThreadFinishLabel>(pLab)) {
 			if (!visitCalc68_1(pLab, calcRes)) {
 				return false;
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<FenceLabel>(pLab))
+		if (true && pLab->isAtLeastRelease() && genmc::isa<FenceLabel>(pLab))
 			if (calcRes.updateIdx(pLab->getPos()); true) {
 				if (!visitCalc68_0(pLab, calcRes)) {
 					return false;
 				}
 			}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<ThreadCreateLabel>(pLab))
+		if (true && pLab->isAtLeastRelease() && genmc::isa<ThreadCreateLabel>(pLab))
 			if (calcRes.updateIdx(pLab->getPos()); true) {
 				if (!visitCalc68_0(pLab, calcRes)) {
 					return false;
 				}
 			}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<ThreadFinishLabel>(pLab))
+		if (true && pLab->isAtLeastRelease() && genmc::isa<ThreadFinishLabel>(pLab))
 			if (calcRes.updateIdx(pLab->getPos()); true) {
 				if (!visitCalc68_0(pLab, calcRes)) {
 					return false;
@@ -236,9 +236,10 @@ bool RAChecker::visitCalc68_3(const EventLabel *lab, View &calcRes) const
 			}
 		}
 	if (auto pLab = rf_pred(g, lab); pLab)
-		if (true && llvm::isa<WriteLabel>(pLab) &&
-		    ((llvm::isa<ReadLabel>(pLab) && llvm::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-		     (llvm::isa<WriteLabel>(pLab) && llvm::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
+		if (true && genmc::isa<WriteLabel>(pLab) &&
+		    ((genmc::isa<ReadLabel>(pLab) && genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
+		     (genmc::isa<WriteLabel>(pLab) &&
+		      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 			auto status = visitedCalc68_4[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCalc68_4(pLab, calcRes)) {
@@ -270,9 +271,10 @@ bool RAChecker::visitCalc68_4(const EventLabel *lab, View &calcRes) const
 	visitedCalc68_4[lab->getStamp().get()] = NodeStatus::entered;
 
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && llvm::isa<ReadLabel>(pLab) &&
-		    ((llvm::isa<ReadLabel>(pLab) && llvm::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-		     (llvm::isa<WriteLabel>(pLab) && llvm::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
+		if (true && genmc::isa<ReadLabel>(pLab) &&
+		    ((genmc::isa<ReadLabel>(pLab) && genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
+		     (genmc::isa<WriteLabel>(pLab) &&
+		      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 			if (!visitCalc68_3(pLab, calcRes)) {
 				return false;
 			}
@@ -321,9 +323,10 @@ bool RAChecker::visitCalc68_5(const EventLabel *lab, View &calcRes) const
 			}
 		}
 	if (auto pLab = rf_pred(g, lab); pLab)
-		if (true && llvm::isa<WriteLabel>(pLab) &&
-		    ((llvm::isa<ReadLabel>(pLab) && llvm::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-		     (llvm::isa<WriteLabel>(pLab) && llvm::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
+		if (true && genmc::isa<WriteLabel>(pLab) &&
+		    ((genmc::isa<ReadLabel>(pLab) && genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
+		     (genmc::isa<WriteLabel>(pLab) &&
+		      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 			auto status = visitedCalc68_4[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCalc68_4(pLab, calcRes)) {
@@ -351,7 +354,7 @@ bool RAChecker::visitCalc68_6(const EventLabel *lab, View &calcRes) const
 {
 	auto &g = *lab->getParent();
 
-	if (true && lab->isAtLeastAcquire() && llvm::isa<FenceLabel>(lab))
+	if (true && lab->isAtLeastAcquire() && genmc::isa<FenceLabel>(lab))
 		if (auto pLab = po_imm_pred(g, lab); pLab) {
 			auto status = visitedCalc68_5[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
@@ -364,7 +367,7 @@ bool RAChecker::visitCalc68_6(const EventLabel *lab, View &calcRes) const
 			} else if (status == NodeStatus::left) {
 			}
 		}
-	if (true && lab->isAtLeastAcquire() && llvm::isa<ThreadJoinLabel>(lab))
+	if (true && lab->isAtLeastAcquire() && genmc::isa<ThreadJoinLabel>(lab))
 		if (auto pLab = po_imm_pred(g, lab); pLab) {
 			auto status = visitedCalc68_5[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
@@ -377,7 +380,7 @@ bool RAChecker::visitCalc68_6(const EventLabel *lab, View &calcRes) const
 			} else if (status == NodeStatus::left) {
 			}
 		}
-	if (true && lab->isAtLeastAcquire() && llvm::isa<ThreadStartLabel>(lab))
+	if (true && lab->isAtLeastAcquire() && genmc::isa<ThreadStartLabel>(lab))
 		if (auto pLab = po_imm_pred(g, lab); pLab) {
 			auto status = visitedCalc68_5[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
@@ -433,11 +436,11 @@ bool RAChecker::visitCalc68_6(const EventLabel *lab, View &calcRes) const
 	}
 	if (true && lab->isAtLeastAcquire())
 		if (auto pLab = rf_pred(g, lab); pLab)
-			if (true && llvm::isa<WriteLabel>(pLab) &&
-			    ((llvm::isa<ReadLabel>(pLab) &&
-			      llvm::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-			     (llvm::isa<WriteLabel>(pLab) &&
-			      llvm::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
+			if (true && genmc::isa<WriteLabel>(pLab) &&
+			    ((genmc::isa<ReadLabel>(pLab) &&
+			      genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
+			     (genmc::isa<WriteLabel>(pLab) &&
+			      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 				auto status = visitedCalc68_4[pLab->getStamp().get()];
 				if (status == NodeStatus::unseen) {
 					if (!visitCalc68_4(pLab, calcRes)) {
@@ -553,7 +556,7 @@ bool RAChecker::visitCalc69_2(const EventLabel *lab, View &calcRes) const
 					return false;
 				}
 			}
-	if (true && lab->isAtLeastAcquire() && !(llvm::isa<AbstractLockCasReadLabel>(lab)))
+	if (true && lab->isAtLeastAcquire() && !(genmc::isa<AbstractLockCasReadLabel>(lab)))
 		if (auto pLab = rf_pred(g, lab); pLab)
 			if (true && pLab->isAtLeastRelease())
 				if (calcRes.updateIdx(pLab->getPos()); true) {
@@ -583,7 +586,7 @@ bool RAChecker::visitCalc69_2(const EventLabel *lab, View &calcRes) const
 				return false;
 			}
 		}
-	if (true && lab->isAtLeastAcquire() && !(llvm::isa<AbstractLockCasReadLabel>(lab)))
+	if (true && lab->isAtLeastAcquire() && !(genmc::isa<AbstractLockCasReadLabel>(lab)))
 		if (auto pLab = rf_pred(g, lab); pLab)
 			if (true && pLab->isAtLeastRelease()) {
 				if (!visitCalc69_1(pLab, calcRes)) {
@@ -595,8 +598,8 @@ bool RAChecker::visitCalc69_2(const EventLabel *lab, View &calcRes) const
 			return false;
 		}
 	}
-	if (true && lab->isAtLeastAcquire() && llvm::isa<FenceLabel>(lab) &&
-	    !(llvm::isa<AbstractLockCasReadLabel>(lab)))
+	if (true && lab->isAtLeastAcquire() && genmc::isa<FenceLabel>(lab) &&
+	    !(genmc::isa<AbstractLockCasReadLabel>(lab)))
 		if (auto pLab = po_imm_pred(g, lab); pLab) {
 			auto status = visitedCalc69_6[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
@@ -609,8 +612,8 @@ bool RAChecker::visitCalc69_2(const EventLabel *lab, View &calcRes) const
 			} else if (status == NodeStatus::left) {
 			}
 		}
-	if (true && lab->isAtLeastAcquire() && llvm::isa<ThreadJoinLabel>(lab) &&
-	    !(llvm::isa<AbstractLockCasReadLabel>(lab)))
+	if (true && lab->isAtLeastAcquire() && genmc::isa<ThreadJoinLabel>(lab) &&
+	    !(genmc::isa<AbstractLockCasReadLabel>(lab)))
 		if (auto pLab = po_imm_pred(g, lab); pLab) {
 			auto status = visitedCalc69_6[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
@@ -623,8 +626,8 @@ bool RAChecker::visitCalc69_2(const EventLabel *lab, View &calcRes) const
 			} else if (status == NodeStatus::left) {
 			}
 		}
-	if (true && lab->isAtLeastAcquire() && llvm::isa<ThreadStartLabel>(lab) &&
-	    !(llvm::isa<AbstractLockCasReadLabel>(lab)))
+	if (true && lab->isAtLeastAcquire() && genmc::isa<ThreadStartLabel>(lab) &&
+	    !(genmc::isa<AbstractLockCasReadLabel>(lab)))
 		if (auto pLab = po_imm_pred(g, lab); pLab) {
 			auto status = visitedCalc69_6[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
@@ -637,7 +640,7 @@ bool RAChecker::visitCalc69_2(const EventLabel *lab, View &calcRes) const
 			} else if (status == NodeStatus::left) {
 			}
 		}
-	if (true && lab->isAtLeastAcquire() && !(llvm::isa<AbstractLockCasReadLabel>(lab)))
+	if (true && lab->isAtLeastAcquire() && !(genmc::isa<AbstractLockCasReadLabel>(lab)))
 		if (auto pLab = rf_pred(g, lab); pLab) {
 			auto status = visitedCalc69_3[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
@@ -650,13 +653,13 @@ bool RAChecker::visitCalc69_2(const EventLabel *lab, View &calcRes) const
 			} else if (status == NodeStatus::left) {
 			}
 		}
-	if (true && lab->isAtLeastAcquire() && !(llvm::isa<AbstractLockCasReadLabel>(lab)))
+	if (true && lab->isAtLeastAcquire() && !(genmc::isa<AbstractLockCasReadLabel>(lab)))
 		if (auto pLab = rf_pred(g, lab); pLab)
-			if (true && llvm::isa<WriteLabel>(pLab) &&
-			    ((llvm::isa<ReadLabel>(pLab) &&
-			      llvm::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-			     (llvm::isa<WriteLabel>(pLab) &&
-			      llvm::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
+			if (true && genmc::isa<WriteLabel>(pLab) &&
+			    ((genmc::isa<ReadLabel>(pLab) &&
+			      genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
+			     (genmc::isa<WriteLabel>(pLab) &&
+			      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 				auto status = visitedCalc69_5[pLab->getStamp().get()];
 				if (status == NodeStatus::unseen) {
 					if (!visitCalc69_5(pLab, calcRes)) {
@@ -681,40 +684,40 @@ bool RAChecker::visitCalc69_3(const EventLabel *lab, View &calcRes) const
 	visitedCalc69_3[lab->getStamp().get()] = NodeStatus::entered;
 
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<FenceLabel>(pLab))
+		if (true && pLab->isAtLeastRelease() && genmc::isa<FenceLabel>(pLab))
 			if (calcRes.updateIdx(pLab->getPos()); true) {
 				if (!visitCalc69_0(pLab, calcRes)) {
 					return false;
 				}
 			}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<ThreadCreateLabel>(pLab))
+		if (true && pLab->isAtLeastRelease() && genmc::isa<ThreadCreateLabel>(pLab))
 			if (calcRes.updateIdx(pLab->getPos()); true) {
 				if (!visitCalc69_0(pLab, calcRes)) {
 					return false;
 				}
 			}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<ThreadFinishLabel>(pLab))
+		if (true && pLab->isAtLeastRelease() && genmc::isa<ThreadFinishLabel>(pLab))
 			if (calcRes.updateIdx(pLab->getPos()); true) {
 				if (!visitCalc69_0(pLab, calcRes)) {
 					return false;
 				}
 			}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<FenceLabel>(pLab)) {
+		if (true && pLab->isAtLeastRelease() && genmc::isa<FenceLabel>(pLab)) {
 			if (!visitCalc69_1(pLab, calcRes)) {
 				return false;
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<ThreadCreateLabel>(pLab)) {
+		if (true && pLab->isAtLeastRelease() && genmc::isa<ThreadCreateLabel>(pLab)) {
 			if (!visitCalc69_1(pLab, calcRes)) {
 				return false;
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<ThreadFinishLabel>(pLab)) {
+		if (true && pLab->isAtLeastRelease() && genmc::isa<ThreadFinishLabel>(pLab)) {
 			if (!visitCalc69_1(pLab, calcRes)) {
 				return false;
 			}
@@ -766,9 +769,10 @@ bool RAChecker::visitCalc69_4(const EventLabel *lab, View &calcRes) const
 		}
 	}
 	if (auto pLab = rf_pred(g, lab); pLab)
-		if (true && llvm::isa<WriteLabel>(pLab) &&
-		    ((llvm::isa<ReadLabel>(pLab) && llvm::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-		     (llvm::isa<WriteLabel>(pLab) && llvm::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
+		if (true && genmc::isa<WriteLabel>(pLab) &&
+		    ((genmc::isa<ReadLabel>(pLab) && genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
+		     (genmc::isa<WriteLabel>(pLab) &&
+		      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 			auto status = visitedCalc69_5[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCalc69_5(pLab, calcRes)) {
@@ -793,9 +797,10 @@ bool RAChecker::visitCalc69_5(const EventLabel *lab, View &calcRes) const
 	visitedCalc69_5[lab->getStamp().get()] = NodeStatus::entered;
 
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && llvm::isa<ReadLabel>(pLab) &&
-		    ((llvm::isa<ReadLabel>(pLab) && llvm::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-		     (llvm::isa<WriteLabel>(pLab) && llvm::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
+		if (true && genmc::isa<ReadLabel>(pLab) &&
+		    ((genmc::isa<ReadLabel>(pLab) && genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
+		     (genmc::isa<WriteLabel>(pLab) &&
+		      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 			if (!visitCalc69_4(pLab, calcRes)) {
 				return false;
 			}
@@ -851,9 +856,10 @@ bool RAChecker::visitCalc69_6(const EventLabel *lab, View &calcRes) const
 		}
 	}
 	if (auto pLab = rf_pred(g, lab); pLab)
-		if (true && llvm::isa<WriteLabel>(pLab) &&
-		    ((llvm::isa<ReadLabel>(pLab) && llvm::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-		     (llvm::isa<WriteLabel>(pLab) && llvm::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
+		if (true && genmc::isa<WriteLabel>(pLab) &&
+		    ((genmc::isa<ReadLabel>(pLab) && genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
+		     (genmc::isa<WriteLabel>(pLab) &&
+		      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 			auto status = visitedCalc69_5[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCalc69_5(pLab, calcRes)) {
@@ -1003,8 +1009,8 @@ static auto getMOOptRfAfter(WriteLabel *sLab) -> std::vector<EventLabel *>
 
 	std::for_each(g.co_succ_begin(sLab), g.co_succ_end(sLab), [&](auto &wLab) {
 		after.push_back(&wLab);
-		std::transform(wLab.readers_begin(), wLab.readers_end(),
-			       std::back_inserter(rfAfter), [&](auto &rLab) { return &rLab; });
+		std::ranges::transform(wLab.readers(), std::back_inserter(rfAfter),
+				       [&](auto &rLab) { return &rLab; });
 	});
 	std::transform(rfAfter.begin(), rfAfter.end(), std::back_inserter(after),
 		       [](auto *rLab) { return rLab; });
@@ -1020,8 +1026,8 @@ static auto getMOInvOptRfAfter(WriteLabel *sLab) -> std::vector<EventLabel *>
 	/* First, add (mo;rf?)-before */
 	std::for_each(g.co_pred_begin(sLab), g.co_pred_end(sLab), [&](auto &wLab) {
 		after.push_back(&wLab);
-		std::transform(wLab.readers_begin(), wLab.readers_end(),
-			       std::back_inserter(rfAfter), [&](auto &rLab) { return &rLab; });
+		std::ranges::transform(wLab.readers(), std::back_inserter(rfAfter),
+				       [&](auto &rLab) { return &rLab; });
 	});
 	std::transform(rfAfter.begin(), rfAfter.end(), std::back_inserter(after),
 		       [](auto *rLab) { return rLab; });
@@ -1109,7 +1115,7 @@ auto RAChecker::getCoherentPlacings(WriteLabel *wLab) -> std::vector<EventLabel 
 
 	/* If it is an RMW store, there is only one possible position in MO */
 	if (wLab->isRMW()) {
-		auto *rLab = llvm::dyn_cast<ReadLabel>(g.po_imm_pred(wLab));
+		auto *rLab = genmc::dyn_cast<ReadLabel>(g.po_imm_pred(wLab));
 		BUG_ON(!rLab);
 		auto *rfLab = rLab->getRf();
 		BUG_ON(!rfLab);
@@ -1285,7 +1291,7 @@ bool RAChecker::visitCoherence_2(const EventLabel *lab, const EventLabel *initLa
 		}
 	}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastAcquire() && llvm::isa<FenceLabel>(pLab)) {
+		if (true && pLab->isAtLeastAcquire() && genmc::isa<FenceLabel>(pLab)) {
 			auto status = visitedCoherence_6[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_6(pLab, initLab)) {
@@ -1298,7 +1304,7 @@ bool RAChecker::visitCoherence_2(const EventLabel *lab, const EventLabel *initLa
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastAcquire() && llvm::isa<ThreadJoinLabel>(pLab)) {
+		if (true && pLab->isAtLeastAcquire() && genmc::isa<ThreadJoinLabel>(pLab)) {
 			auto status = visitedCoherence_6[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_6(pLab, initLab)) {
@@ -1311,7 +1317,7 @@ bool RAChecker::visitCoherence_2(const EventLabel *lab, const EventLabel *initLa
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastAcquire() && llvm::isa<ThreadStartLabel>(pLab)) {
+		if (true && pLab->isAtLeastAcquire() && genmc::isa<ThreadStartLabel>(pLab)) {
 			auto status = visitedCoherence_6[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_6(pLab, initLab)) {
@@ -1337,7 +1343,7 @@ bool RAChecker::visitCoherence_3(const EventLabel *lab, const EventLabel *initLa
 	visitedCoherence_3[lab->getStamp().get()] = NodeStatus::entered;
 
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<FenceLabel>(pLab)) {
+		if (true && pLab->isAtLeastRelease() && genmc::isa<FenceLabel>(pLab)) {
 			auto status = visitedCoherence_2[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_2(pLab, initLab)) {
@@ -1350,7 +1356,7 @@ bool RAChecker::visitCoherence_3(const EventLabel *lab, const EventLabel *initLa
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<ThreadCreateLabel>(pLab)) {
+		if (true && pLab->isAtLeastRelease() && genmc::isa<ThreadCreateLabel>(pLab)) {
 			auto status = visitedCoherence_2[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_2(pLab, initLab)) {
@@ -1363,7 +1369,7 @@ bool RAChecker::visitCoherence_3(const EventLabel *lab, const EventLabel *initLa
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<ThreadFinishLabel>(pLab)) {
+		if (true && pLab->isAtLeastRelease() && genmc::isa<ThreadFinishLabel>(pLab)) {
 			auto status = visitedCoherence_2[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_2(pLab, initLab)) {
@@ -1389,7 +1395,7 @@ bool RAChecker::visitCoherence_3(const EventLabel *lab, const EventLabel *initLa
 	}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
 		if (true && pLab->isAtLeastAcquire() && pLab->isAtLeastRelease() &&
-		    llvm::isa<FenceLabel>(pLab)) {
+		    genmc::isa<FenceLabel>(pLab)) {
 			auto status = visitedCoherence_4[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_4(pLab, initLab)) {
@@ -1402,26 +1408,26 @@ bool RAChecker::visitCoherence_3(const EventLabel *lab, const EventLabel *initLa
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<FenceLabel>(pLab)) {
+		if (true && pLab->isAtLeastRelease() && genmc::isa<FenceLabel>(pLab)) {
 			if (!visitCoherence_0(pLab, initLab)) {
 				return false;
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<ThreadCreateLabel>(pLab)) {
+		if (true && pLab->isAtLeastRelease() && genmc::isa<ThreadCreateLabel>(pLab)) {
 			if (!visitCoherence_0(pLab, initLab)) {
 				return false;
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<ThreadFinishLabel>(pLab)) {
+		if (true && pLab->isAtLeastRelease() && genmc::isa<ThreadFinishLabel>(pLab)) {
 			if (!visitCoherence_0(pLab, initLab)) {
 				return false;
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
 		if (true && pLab->isAtLeastAcquire() && pLab->isAtLeastRelease() &&
-		    llvm::isa<FenceLabel>(pLab)) {
+		    genmc::isa<FenceLabel>(pLab)) {
 			auto status = visitedCoherence_6[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_6(pLab, initLab)) {
@@ -1460,9 +1466,10 @@ bool RAChecker::visitCoherence_4(const EventLabel *lab, const EventLabel *initLa
 			}
 		}
 	if (auto pLab = rf_pred(g, lab); pLab)
-		if (true && llvm::isa<WriteLabel>(pLab) &&
-		    ((llvm::isa<ReadLabel>(pLab) && llvm::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-		     (llvm::isa<WriteLabel>(pLab) && llvm::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
+		if (true && genmc::isa<WriteLabel>(pLab) &&
+		    ((genmc::isa<ReadLabel>(pLab) && genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
+		     (genmc::isa<WriteLabel>(pLab) &&
+		      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 			if (!visitCoherence_5(pLab, initLab)) {
 				return false;
 			}
@@ -1508,9 +1515,10 @@ bool RAChecker::visitCoherence_5(const EventLabel *lab, const EventLabel *initLa
 	auto &g = *lab->getParent();
 
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && llvm::isa<ReadLabel>(pLab) &&
-		    ((llvm::isa<ReadLabel>(pLab) && llvm::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-		     (llvm::isa<WriteLabel>(pLab) && llvm::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
+		if (true && genmc::isa<ReadLabel>(pLab) &&
+		    ((genmc::isa<ReadLabel>(pLab) && genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
+		     (genmc::isa<WriteLabel>(pLab) &&
+		      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 			auto status = visitedCoherence_4[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_4(pLab, initLab)) {
@@ -1726,7 +1734,7 @@ bool RAChecker::visitCoherence_8(const EventLabel *lab, const EventLabel *initLa
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastAcquire() && llvm::isa<FenceLabel>(pLab)) {
+		if (true && pLab->isAtLeastAcquire() && genmc::isa<FenceLabel>(pLab)) {
 			auto status = visitedCoherence_12[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_12(pLab, initLab)) {
@@ -1739,7 +1747,7 @@ bool RAChecker::visitCoherence_8(const EventLabel *lab, const EventLabel *initLa
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastAcquire() && llvm::isa<ThreadJoinLabel>(pLab)) {
+		if (true && pLab->isAtLeastAcquire() && genmc::isa<ThreadJoinLabel>(pLab)) {
 			auto status = visitedCoherence_12[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_12(pLab, initLab)) {
@@ -1752,7 +1760,7 @@ bool RAChecker::visitCoherence_8(const EventLabel *lab, const EventLabel *initLa
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastAcquire() && llvm::isa<ThreadStartLabel>(pLab)) {
+		if (true && pLab->isAtLeastAcquire() && genmc::isa<ThreadStartLabel>(pLab)) {
 			auto status = visitedCoherence_12[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_12(pLab, initLab)) {
@@ -1877,7 +1885,7 @@ bool RAChecker::visitCoherence_9(const EventLabel *lab, const EventLabel *initLa
 
 	if (auto pLab = po_imm_pred(g, lab); pLab)
 		if (true && pLab->isAtLeastAcquire() && pLab->isAtLeastRelease() &&
-		    llvm::isa<FenceLabel>(pLab)) {
+		    genmc::isa<FenceLabel>(pLab)) {
 			auto status = visitedCoherence_10[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_10(pLab, initLab)) {
@@ -1903,7 +1911,7 @@ bool RAChecker::visitCoherence_9(const EventLabel *lab, const EventLabel *initLa
 	}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
 		if (true && pLab->isAtLeastAcquire() && pLab->isAtLeastRelease() &&
-		    llvm::isa<FenceLabel>(pLab)) {
+		    genmc::isa<FenceLabel>(pLab)) {
 			auto status = visitedCoherence_12[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_12(pLab, initLab)) {
@@ -1916,7 +1924,7 @@ bool RAChecker::visitCoherence_9(const EventLabel *lab, const EventLabel *initLa
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<FenceLabel>(pLab)) {
+		if (true && pLab->isAtLeastRelease() && genmc::isa<FenceLabel>(pLab)) {
 			auto status = visitedCoherence_7[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_7(pLab, initLab)) {
@@ -1929,7 +1937,7 @@ bool RAChecker::visitCoherence_9(const EventLabel *lab, const EventLabel *initLa
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<ThreadCreateLabel>(pLab)) {
+		if (true && pLab->isAtLeastRelease() && genmc::isa<ThreadCreateLabel>(pLab)) {
 			auto status = visitedCoherence_7[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_7(pLab, initLab)) {
@@ -1942,7 +1950,7 @@ bool RAChecker::visitCoherence_9(const EventLabel *lab, const EventLabel *initLa
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<ThreadFinishLabel>(pLab)) {
+		if (true && pLab->isAtLeastRelease() && genmc::isa<ThreadFinishLabel>(pLab)) {
 			auto status = visitedCoherence_7[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_7(pLab, initLab)) {
@@ -1955,7 +1963,7 @@ bool RAChecker::visitCoherence_9(const EventLabel *lab, const EventLabel *initLa
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<FenceLabel>(pLab)) {
+		if (true && pLab->isAtLeastRelease() && genmc::isa<FenceLabel>(pLab)) {
 			auto status = visitedCoherence_8[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_8(pLab, initLab)) {
@@ -1968,7 +1976,7 @@ bool RAChecker::visitCoherence_9(const EventLabel *lab, const EventLabel *initLa
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<ThreadCreateLabel>(pLab)) {
+		if (true && pLab->isAtLeastRelease() && genmc::isa<ThreadCreateLabel>(pLab)) {
 			auto status = visitedCoherence_8[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_8(pLab, initLab)) {
@@ -1981,7 +1989,7 @@ bool RAChecker::visitCoherence_9(const EventLabel *lab, const EventLabel *initLa
 			}
 		}
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && pLab->isAtLeastRelease() && llvm::isa<ThreadFinishLabel>(pLab)) {
+		if (true && pLab->isAtLeastRelease() && genmc::isa<ThreadFinishLabel>(pLab)) {
 			auto status = visitedCoherence_8[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_8(pLab, initLab)) {
@@ -2045,9 +2053,10 @@ bool RAChecker::visitCoherence_10(const EventLabel *lab, const EventLabel *initL
 			}
 		}
 	if (auto pLab = rf_pred(g, lab); pLab)
-		if (true && llvm::isa<WriteLabel>(pLab) &&
-		    ((llvm::isa<ReadLabel>(pLab) && llvm::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-		     (llvm::isa<WriteLabel>(pLab) && llvm::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
+		if (true && genmc::isa<WriteLabel>(pLab) &&
+		    ((genmc::isa<ReadLabel>(pLab) && genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
+		     (genmc::isa<WriteLabel>(pLab) &&
+		      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 			if (!visitCoherence_11(pLab, initLab)) {
 				return false;
 			}
@@ -2075,9 +2084,10 @@ bool RAChecker::visitCoherence_11(const EventLabel *lab, const EventLabel *initL
 	auto &g = *lab->getParent();
 
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && llvm::isa<ReadLabel>(pLab) &&
-		    ((llvm::isa<ReadLabel>(pLab) && llvm::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-		     (llvm::isa<WriteLabel>(pLab) && llvm::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
+		if (true && genmc::isa<ReadLabel>(pLab) &&
+		    ((genmc::isa<ReadLabel>(pLab) && genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
+		     (genmc::isa<WriteLabel>(pLab) &&
+		      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 			auto status = visitedCoherence_10[pLab->getStamp().get()];
 			if (status == NodeStatus::unseen) {
 				if (!visitCoherence_10(pLab, initLab)) {
@@ -2133,7 +2143,7 @@ bool RAChecker::visitCoherence_12(const EventLabel *lab, const EventLabel *initL
 bool RAChecker::visitCoherenceRelinche(const ExecutionGraph &g) const
 {
 	for (auto &lab : g.labels()) {
-		if (!llvm::isa<MethodBeginLabel>(&lab))
+		if (!genmc::isa<MethodBeginLabel>(&lab))
 			continue;
 		visitedCoherence_2.clear();
 		visitedCoherence_2.resize(g.getMaxStamp().get() + 1);
@@ -2221,36 +2231,36 @@ bool RAChecker::visitLHSUnlessError2_1(const EventLabel *lab) const
 {
 	auto &g = *lab->getParent();
 
-	if (true && llvm::isa<FreeLabel>(lab) && !llvm::isa<HpRetireLabel>(lab))
+	if (true && genmc::isa<FreeLabel>(lab) && !genmc::isa<HpRetireLabel>(lab))
 		for (auto &tmp : samelocs(g, lab))
 			if (auto *pLab = &tmp; true)
-				if (true && llvm::isa<FreeLabel>(pLab) &&
-				    !llvm::isa<HpRetireLabel>(pLab)) {
+				if (true && genmc::isa<FreeLabel>(pLab) &&
+				    !genmc::isa<HpRetireLabel>(pLab)) {
 					if (!visitLHSUnlessError2_0(pLab)) {
 						return false;
 					}
 				}
-	if (true && llvm::isa<FreeLabel>(lab) && !llvm::isa<HpRetireLabel>(lab))
+	if (true && genmc::isa<FreeLabel>(lab) && !genmc::isa<HpRetireLabel>(lab))
 		for (auto &tmp : samelocs(g, lab))
 			if (auto *pLab = &tmp; true)
-				if (true && llvm::isa<HpRetireLabel>(pLab)) {
+				if (true && genmc::isa<HpRetireLabel>(pLab)) {
 					if (!visitLHSUnlessError2_0(pLab)) {
 						return false;
 					}
 				}
-	if (true && llvm::isa<HpRetireLabel>(lab))
+	if (true && genmc::isa<HpRetireLabel>(lab))
 		for (auto &tmp : samelocs(g, lab))
 			if (auto *pLab = &tmp; true)
-				if (true && llvm::isa<FreeLabel>(pLab) &&
-				    !llvm::isa<HpRetireLabel>(pLab)) {
+				if (true && genmc::isa<FreeLabel>(pLab) &&
+				    !genmc::isa<HpRetireLabel>(pLab)) {
 					if (!visitLHSUnlessError2_0(pLab)) {
 						return false;
 					}
 				}
-	if (true && llvm::isa<HpRetireLabel>(lab))
+	if (true && genmc::isa<HpRetireLabel>(lab))
 		for (auto &tmp : samelocs(g, lab))
 			if (auto *pLab = &tmp; true)
-				if (true && llvm::isa<HpRetireLabel>(pLab)) {
+				if (true && genmc::isa<HpRetireLabel>(pLab)) {
 					if (!visitLHSUnlessError2_0(pLab)) {
 						return false;
 					}
@@ -2321,13 +2331,13 @@ bool RAChecker::visitLHSUnlessError3_2(const EventLabel *lab, const View &v) con
 {
 	auto &g = *lab->getParent();
 
-	if (true && llvm::isa<FreeLabel>(lab) && !llvm::isa<HpRetireLabel>(lab))
+	if (true && genmc::isa<FreeLabel>(lab) && !genmc::isa<HpRetireLabel>(lab))
 		if (auto pLab = free_pred(g, lab); pLab) {
 			if (!visitLHSUnlessError3_1(pLab, v)) {
 				return false;
 			}
 		}
-	if (true && llvm::isa<FreeLabel>(lab) && !llvm::isa<HpRetireLabel>(lab))
+	if (true && genmc::isa<FreeLabel>(lab) && !genmc::isa<HpRetireLabel>(lab))
 		if (auto pLab = free_pred(g, lab); pLab) {
 			if (!visitLHSUnlessError3_0(pLab, v)) {
 				return false;
@@ -2373,7 +2383,7 @@ bool RAChecker::visitLHSUnlessError4_1(const EventLabel *lab) const
 	auto &g = *lab->getParent();
 
 	if (auto pLab = free_succ(g, lab); pLab)
-		if (true && llvm::isa<FreeLabel>(pLab) && !llvm::isa<HpRetireLabel>(pLab)) {
+		if (true && genmc::isa<FreeLabel>(pLab) && !genmc::isa<HpRetireLabel>(pLab)) {
 			if (!visitLHSUnlessError4_0(pLab)) {
 				return false;
 			}
@@ -2445,9 +2455,9 @@ bool RAChecker::visitLHSUnlessError5_1(const EventLabel *lab, const View &v) con
 
 	for (auto &tmp : alloc_succs(g, lab))
 		if (auto *pLab = &tmp; true)
-			if (true && llvm::isa<MemAccessLabel>(pLab) &&
-			    llvm::dyn_cast<MemAccessLabel>(pLab)->getAddr().isDynamic() &&
-			    !isHazptrProtected(llvm::dyn_cast<MemAccessLabel>(pLab))) {
+			if (true && genmc::isa<MemAccessLabel>(pLab) &&
+			    genmc::dyn_cast<MemAccessLabel>(pLab)->getAddr().isDynamic() &&
+			    !isHazptrProtected(genmc::dyn_cast<MemAccessLabel>(pLab))) {
 				if (!visitLHSUnlessError5_0(pLab, v)) {
 					return false;
 				}
@@ -2460,17 +2470,17 @@ bool RAChecker::visitLHSUnlessError5_2(const EventLabel *lab, const View &v) con
 {
 	auto &g = *lab->getParent();
 
-	if (true && llvm::isa<HpRetireLabel>(lab))
+	if (true && genmc::isa<HpRetireLabel>(lab))
 		if (auto pLab = free_pred(g, lab); pLab) {
 			if (!visitLHSUnlessError5_1(pLab, v)) {
 				return false;
 			}
 		}
-	if (true && llvm::isa<HpRetireLabel>(lab))
+	if (true && genmc::isa<HpRetireLabel>(lab))
 		if (auto pLab = free_pred(g, lab); pLab)
-			if (true && llvm::isa<MemAccessLabel>(pLab) &&
-			    llvm::dyn_cast<MemAccessLabel>(pLab)->getAddr().isDynamic() &&
-			    !isHazptrProtected(llvm::dyn_cast<MemAccessLabel>(pLab))) {
+			if (true && genmc::isa<MemAccessLabel>(pLab) &&
+			    genmc::dyn_cast<MemAccessLabel>(pLab)->getAddr().isDynamic() &&
+			    !isHazptrProtected(genmc::dyn_cast<MemAccessLabel>(pLab))) {
 				if (!visitLHSUnlessError5_0(pLab, v)) {
 					return false;
 				}
@@ -2515,7 +2525,7 @@ bool RAChecker::visitLHSUnlessError6_1(const EventLabel *lab) const
 	auto &g = *lab->getParent();
 
 	if (auto pLab = free_succ(g, lab); pLab)
-		if (true && llvm::isa<HpRetireLabel>(pLab)) {
+		if (true && genmc::isa<HpRetireLabel>(pLab)) {
 			if (!visitLHSUnlessError6_0(pLab)) {
 				return false;
 			}
@@ -2528,9 +2538,9 @@ bool RAChecker::visitLHSUnlessError6_2(const EventLabel *lab) const
 {
 	auto &g = *lab->getParent();
 
-	if (true && llvm::isa<MemAccessLabel>(lab) &&
-	    llvm::dyn_cast<MemAccessLabel>(lab)->getAddr().isDynamic() &&
-	    !isHazptrProtected(llvm::dyn_cast<MemAccessLabel>(lab)))
+	if (true && genmc::isa<MemAccessLabel>(lab) &&
+	    genmc::dyn_cast<MemAccessLabel>(lab)->getAddr().isDynamic() &&
+	    !isHazptrProtected(genmc::dyn_cast<MemAccessLabel>(lab)))
 		if (auto pLab = alloc_pred(g, lab); pLab) {
 			if (!visitLHSUnlessError6_1(pLab)) {
 				return false;
@@ -2586,7 +2596,7 @@ bool RAChecker::visitLHSUnlessError7_1(const EventLabel *lab) const
 	auto &g = *lab->getParent();
 
 	if (auto pLab = free_succ(g, lab); pLab)
-		if (true && llvm::isa<HpRetireLabel>(pLab)) {
+		if (true && genmc::isa<HpRetireLabel>(pLab)) {
 			if (!visitLHSUnlessError7_0(pLab)) {
 				return false;
 			}
@@ -2599,9 +2609,9 @@ bool RAChecker::visitLHSUnlessError7_2(const EventLabel *lab) const
 {
 	auto &g = *lab->getParent();
 
-	if (true && llvm::isa<MemAccessLabel>(lab) &&
-	    llvm::dyn_cast<MemAccessLabel>(lab)->getAddr().isDynamic() &&
-	    isHazptrProtected(llvm::dyn_cast<MemAccessLabel>(lab)))
+	if (true && genmc::isa<MemAccessLabel>(lab) &&
+	    genmc::dyn_cast<MemAccessLabel>(lab)->getAddr().isDynamic() &&
+	    isHazptrProtected(genmc::dyn_cast<MemAccessLabel>(lab)))
 		if (auto pLab = alloc_pred(g, lab); pLab) {
 			if (!visitLHSUnlessError7_1(pLab)) {
 				return false;
@@ -2710,7 +2720,7 @@ bool RAChecker::visitRHSUnlessError7_4(const EventLabel *lab) const
 	auto &g = *lab->getParent();
 
 	if (auto pLab = po_imm_pred(g, lab); pLab)
-		if (true && llvm::isa<HpProtectLabel>(pLab)) {
+		if (true && genmc::isa<HpProtectLabel>(pLab)) {
 			if (!visitRHSUnlessError7_3(pLab)) {
 				return false;
 			}
@@ -2776,50 +2786,50 @@ bool RAChecker::visitLHSUnlessError8_1(const EventLabel *lab, const View &v) con
 {
 	auto &g = *lab->getParent();
 
-	if (true && lab->isNotAtomic() && llvm::isa<WriteLabel>(lab))
+	if (true && lab->isNotAtomic() && genmc::isa<WriteLabel>(lab))
 		for (auto &tmp : samelocs(g, lab))
 			if (auto *pLab = &tmp; true)
-				if (true && llvm::isa<WriteLabel>(pLab)) {
+				if (true && genmc::isa<WriteLabel>(pLab)) {
 					if (!visitLHSUnlessError8_0(pLab, v)) {
 						return false;
 					}
 				}
-	if (true && lab->isNotAtomic() && llvm::isa<WriteLabel>(lab))
+	if (true && lab->isNotAtomic() && genmc::isa<WriteLabel>(lab))
 		for (auto &tmp : samelocs(g, lab))
 			if (auto *pLab = &tmp; true)
-				if (true && llvm::isa<ReadLabel>(pLab)) {
+				if (true && genmc::isa<ReadLabel>(pLab)) {
 					if (!visitLHSUnlessError8_0(pLab, v)) {
 						return false;
 					}
 				}
-	if (true && lab->isNotAtomic() && llvm::isa<ReadLabel>(lab))
+	if (true && lab->isNotAtomic() && genmc::isa<ReadLabel>(lab))
 		for (auto &tmp : samelocs(g, lab))
 			if (auto *pLab = &tmp; true)
-				if (true && llvm::isa<WriteLabel>(pLab)) {
+				if (true && genmc::isa<WriteLabel>(pLab)) {
 					if (!visitLHSUnlessError8_0(pLab, v)) {
 						return false;
 					}
 				}
-	if (true && llvm::isa<WriteLabel>(lab))
+	if (true && genmc::isa<WriteLabel>(lab))
 		for (auto &tmp : samelocs(g, lab))
 			if (auto *pLab = &tmp; true)
-				if (true && pLab->isNotAtomic() && llvm::isa<WriteLabel>(pLab)) {
+				if (true && pLab->isNotAtomic() && genmc::isa<WriteLabel>(pLab)) {
 					if (!visitLHSUnlessError8_0(pLab, v)) {
 						return false;
 					}
 				}
-	if (true && llvm::isa<WriteLabel>(lab))
+	if (true && genmc::isa<WriteLabel>(lab))
 		for (auto &tmp : samelocs(g, lab))
 			if (auto *pLab = &tmp; true)
-				if (true && pLab->isNotAtomic() && llvm::isa<ReadLabel>(pLab)) {
+				if (true && pLab->isNotAtomic() && genmc::isa<ReadLabel>(pLab)) {
 					if (!visitLHSUnlessError8_0(pLab, v)) {
 						return false;
 					}
 				}
-	if (true && llvm::isa<ReadLabel>(lab))
+	if (true && genmc::isa<ReadLabel>(lab))
 		for (auto &tmp : samelocs(g, lab))
 			if (auto *pLab = &tmp; true)
-				if (true && pLab->isNotAtomic() && llvm::isa<WriteLabel>(pLab)) {
+				if (true && pLab->isNotAtomic() && genmc::isa<WriteLabel>(pLab)) {
 					if (!visitLHSUnlessError8_0(pLab, v)) {
 						return false;
 					}
@@ -2866,10 +2876,10 @@ bool RAChecker::visitLHSUnlessWarning9_1(const EventLabel *lab, const View &v) c
 {
 	auto &g = *lab->getParent();
 
-	if (true && llvm::isa<WriteLabel>(lab))
+	if (true && genmc::isa<WriteLabel>(lab))
 		for (auto &tmp : samelocs(g, lab))
 			if (auto *pLab = &tmp; true)
-				if (true && llvm::isa<WriteLabel>(pLab)) {
+				if (true && genmc::isa<WriteLabel>(pLab)) {
 					if (!visitLHSUnlessWarning9_0(pLab, v)) {
 						return false;
 					}
@@ -2978,12 +2988,12 @@ View RAChecker::calcPPoRfBefore(const EventLabel *lab) const
 	if (!pLab)
 		return pporf;
 	pporf.update(pLab->getPrefixView());
-	if (auto *rLab = llvm::dyn_cast<ReadLabel>(pLab))
+	if (auto *rLab = genmc::dyn_cast<ReadLabel>(pLab))
 		pporf.update(rLab->getRf()->getPrefixView());
-	auto *tsLab = llvm::dyn_cast<ThreadStartLabel>(pLab);
+	auto *tsLab = genmc::dyn_cast<ThreadStartLabel>(pLab);
 	if (tsLab && tsLab->getCreate())
 		pporf.update(tsLab->getCreate()->getPrefixView());
-	if (auto *tjLab = llvm::dyn_cast<ThreadJoinLabel>(pLab))
+	if (auto *tjLab = genmc::dyn_cast<ThreadJoinLabel>(pLab))
 		pporf.update(g.getLastThreadLabel(tjLab->getChildId())->getPrefixView());
 	return pporf;
 }

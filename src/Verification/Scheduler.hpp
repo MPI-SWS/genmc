@@ -62,6 +62,18 @@ public:
 	/** Opt: Sets R as a read to be repaired */
 	void setRescheduledRead(Event r) { readToReschedule_ = r; }
 
+	/** Opt: Whether we are re-executing up to E (e.g., for error reporting) */
+	[[nodiscard]] auto isErrorReplayEvent(Event e) const -> bool
+	{
+		return eventToReexecute_ == e;
+	}
+
+	/** Opt: Whether there is an event to re-execute */
+	[[nodiscard]] auto inErrorReplay() const -> bool { return eventToReexecute_.has_value(); }
+
+	/** Opt: Sets E as an event to be re-executed */
+	void setErrorReplayEvent(std::optional<Event> e) { eventToReexecute_ = e; }
+
 protected:
 	Scheduler(const Config *config) : conf_(config) {}
 
@@ -107,6 +119,9 @@ private:
 
 	/** The schedule for replays (porf-linearization) */
 	std::vector<Event> replaySchedule_;
+
+	/** Opt: Whether we need to re-execute up to a given event (error reporting) */
+	std::optional<Event> eventToReexecute_;
 
 	/** Opt: Whether a particular read needs to be repaired during rescheduling */
 	Event readToReschedule_ = Event::getInit();

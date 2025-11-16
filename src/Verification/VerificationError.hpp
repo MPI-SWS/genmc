@@ -14,6 +14,7 @@
 #ifndef GENMC_VERIFICATION_ERROR_HPP
 #define GENMC_VERIFICATION_ERROR_HPP
 
+#include "ExecutionGraph/Event.hpp"
 #include "Support/Error.hpp"
 
 #include <string>
@@ -86,22 +87,94 @@ inline auto isHardError(VerificationError err) -> bool
 		 err <= VerificationError::VE_NonErrorLast);
 }
 
-/* For compilers that do not have a recent enough lib{std}c++ */
-#ifndef STDLIBCPP_SUPPORTS_ENUM_MAP_KEYS
-struct EnumClassHash {
-	template <typename T> std::size_t operator()(T t) const
+inline static SystemError systemErrorNumber; // just to inform the driver
+
+/** Details for an error to be reported */
+struct ErrorDetails {
+	ErrorDetails() = default;
+	ErrorDetails(Event pos, VerificationError r, std::string err = std::string(),
+		     const EventLabel *racyLab = nullptr, bool shouldHalt = true)
+		: pos(pos), type(r), msg(std::move(err)), racyLab(racyLab), shouldHalt(shouldHalt)
+	{}
+
+	Event pos{};
+	VerificationError type{};
+	std::string msg{};
+	const EventLabel *racyLab{};
+	bool shouldHalt = true;
+};
+
+/* Helper macro to reduce switch verbosity. */
+#define FORMAT_CASE(error_case, s)                                                                 \
+	case error_case:                                                                           \
+		return std::format_to(ctx.out(), "{}", s);                                         \
+		break
+
+/** Make `SystemError` formattable with `std::format`. */
+template <> struct std::formatter<SystemError> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const SystemError &err, std::format_context &ctx) const
 	{
-		return static_cast<std::size_t>(t);
+		switch (err) {
+			FORMAT_CASE(SystemError::SE_EPERM, "Operation not permitted");
+			FORMAT_CASE(SystemError::SE_ENOENT, "No such file or directory");
+			FORMAT_CASE(SystemError::SE_EIO, "Input/output error");
+			FORMAT_CASE(SystemError::SE_EBADF, "Bad file descriptor");
+			FORMAT_CASE(SystemError::SE_ENOMEM, "Cannot allocate memory");
+			FORMAT_CASE(SystemError::SE_EEXIST, "File exists");
+			FORMAT_CASE(SystemError::SE_EINVAL, "Invalid argument");
+			FORMAT_CASE(SystemError::SE_EMFILE, "Too many open files");
+			FORMAT_CASE(SystemError::SE_ENFILE, "Too many open files in system");
+			FORMAT_CASE(SystemError::SE_EFBIG, "File too large");
+		default:
+			return std::format_to(ctx.out(), "{}", "Unknown system error");
+		}
 	}
 };
-#define ENUM_HASH(t) EnumClassHash
-#else
-#define ENUM_HASH(t) std::hash<t>
-#endif
 
-extern SystemError systemErrorNumber; // just to inform the driver
-extern const std::unordered_map<SystemError, std::string, ENUM_HASH(SystemError)> errorList;
+/** Make `VerificationError` formattable with `std::format`. */
+template <> struct std::formatter<VerificationError> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
 
-llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const VerificationError &st);
+	auto format(const VerificationError &err, std::format_context &ctx) const
+	{
+		switch (err) {
+			FORMAT_CASE(VerificationError::VE_Safety, "Safety violation");
+			FORMAT_CASE(VerificationError::VE_Recovery, "Recovery error");
+			FORMAT_CASE(VerificationError::VE_Liveness, "Liveness violation");
+			FORMAT_CASE(VerificationError::VE_RaceNotAtomic, "Non-atomic race");
+			FORMAT_CASE(VerificationError::VE_WWRace, "Unordered writes");
+			FORMAT_CASE(VerificationError::VE_UnfreedMemory, "Unfreed memory");
+			FORMAT_CASE(VerificationError::VE_RaceFreeMalloc, "Malloc-free race");
+			FORMAT_CASE(VerificationError::VE_FreeNonMalloc,
+				    "Attempt to free non-allocated memory");
+			FORMAT_CASE(VerificationError::VE_DoubleFree, "Double-free error");
+			FORMAT_CASE(VerificationError::VE_Allocation, "Allocation error");
+			FORMAT_CASE(VerificationError::VE_UninitializedMem,
+				    "Attempt to read from uninitialized memory");
+			FORMAT_CASE(VerificationError::VE_AccessNonMalloc,
+				    "Attempt to access non-allocated memory");
+			FORMAT_CASE(VerificationError::VE_AccessFreed,
+				    "Attempt to access freed memory");
+			FORMAT_CASE(VerificationError::VE_InvalidCreate,
+				    "Invalid create() operation");
+			FORMAT_CASE(VerificationError::VE_InvalidJoin, "Invalid join() operation");
+			FORMAT_CASE(VerificationError::VE_InvalidUnlock,
+				    "Invalid unlock() operation");
+			FORMAT_CASE(VerificationError::VE_InvalidBInit,
+				    "Invalid barrier_init() operation");
+			FORMAT_CASE(VerificationError::VE_BarrierWellFormedness,
+				    "Execution not barrier-well-formed");
+			FORMAT_CASE(VerificationError::VE_Annotation, "Annotation error");
+			FORMAT_CASE(VerificationError::VE_MixedSize, "Mixed-size accesses");
+			FORMAT_CASE(VerificationError::VE_LinearizabilityError,
+				    "Linearizability error");
+			FORMAT_CASE(VerificationError::VE_SystemError, systemErrorNumber);
+		default:
+			return std::format_to(ctx.out(), "Unknown status");
+		}
+	}
+};
 
 #endif /* GENMC_VERIFICATION_ERROR_HPP */

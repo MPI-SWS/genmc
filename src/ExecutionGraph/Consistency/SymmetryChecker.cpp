@@ -29,8 +29,8 @@ static auto calcLargestSymmPrefixBeforeSR(int symm, const EventLabel *lab) -> in
 
 		if (labA->getKind() != labB->getKind())
 			return j - 1;
-		if (const auto *rLabA = llvm::dyn_cast<ReadLabel>(labA)) {
-			const auto *rLabB = llvm::dyn_cast<ReadLabel>(labB);
+		if (const auto *rLabA = genmc::dyn_cast<ReadLabel>(labA)) {
+			const auto *rLabB = genmc::dyn_cast<ReadLabel>(labB);
 			if (rLabA->getRf()->getThread() == symm &&
 			    rLabB->getRf()->getThread() == lab->getThread() &&
 			    rLabA->getRf()->getIndex() == rLabB->getRf()->getIndex())
@@ -38,7 +38,7 @@ static auto calcLargestSymmPrefixBeforeSR(int symm, const EventLabel *lab) -> in
 			if (rLabA->getRf() != rLabB->getRf())
 				return j - 1;
 		}
-		if (const auto *wLabA = llvm::dyn_cast<WriteLabel>(labA))
+		if (const auto *wLabA = genmc::dyn_cast<WriteLabel>(labA))
 			if (!wLabA->isLocal())
 				return j - 1;
 	}
@@ -53,7 +53,7 @@ auto SymmetryChecker::sharePrefixSR(int symm, const EventLabel *lab) const -> bo
 auto SymmetryChecker::isEcoBefore(const EventLabel *lab, int tid) const -> bool
 {
 	const auto &g = *lab->getParent();
-	if (!llvm::isa<MemAccessLabel>(lab))
+	if (!genmc::isa<MemAccessLabel>(lab))
 		return false;
 
 	auto symmPos = Event(tid, lab->getIndex());
@@ -61,16 +61,18 @@ auto SymmetryChecker::isEcoBefore(const EventLabel *lab, int tid) const -> bool
 	// 	return wLab.getPos() == symmPos;
 	// }))
 	// 	return true;
-	if (std::any_of(co_succ_begin(g, lab), co_succ_end(g, lab), [&](auto &sLab) {
+	if (std::ranges::any_of(co_succs(g, lab), [&](auto &sLab) {
 		    return sLab.getPos() == symmPos ||
-			   std::any_of(sLab.readers_begin(), sLab.readers_end(),
-				       [&](auto &rLab) { return rLab.getPos() == symmPos; });
+			   std::ranges::any_of(sLab.readers(), [&](auto &rLab) {
+				   return rLab.getPos() == symmPos;
+			   });
 	    }))
 		return true;
-	if (std::any_of(fr_succ_begin(g, lab), fr_succ_end(g, lab), [&](auto &sLab) {
+	if (std::ranges::any_of(fr_succs(g, lab), [&](auto &sLab) {
 		    return sLab.getPos() == symmPos ||
-			   std::any_of(sLab.readers_begin(), sLab.readers_end(),
-				       [&](auto &rLab) { return rLab.getPos() == symmPos; });
+			   std::ranges::any_of(sLab.readers(), [&](auto &rLab) {
+				   return rLab.getPos() == symmPos;
+			   });
 	    }))
 		return true;
 	return false;
@@ -81,13 +83,13 @@ static auto isEcoSymmetric(const EventLabel *lab, int tid) -> bool
 	const auto &g = *lab->getParent();
 
 	const auto *symmLab = g.getEventLabel(Event(tid, lab->getIndex()));
-	if (const auto *rLab = llvm::dyn_cast<ReadLabel>(lab)) {
-		return rLab->getRf() == llvm::dyn_cast<ReadLabel>(symmLab)->getRf();
+	if (const auto *rLab = genmc::dyn_cast<ReadLabel>(lab)) {
+		return rLab->getRf() == genmc::dyn_cast<ReadLabel>(symmLab)->getRf();
 	}
 
-	const auto *wLab = llvm::dyn_cast<WriteLabel>(lab);
+	const auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
 	BUG_ON(!wLab);
-	return g.co_imm_succ(wLab) == llvm::dyn_cast<WriteLabel>(symmLab);
+	return g.co_imm_succ(wLab) == genmc::dyn_cast<WriteLabel>(symmLab);
 }
 
 auto SymmetryChecker::isPredSymmetryOK(const EventLabel *lab, int symm) const -> bool
@@ -163,9 +165,9 @@ void SymmetryChecker::updatePrefixWithSymmetries(EventLabel *lab)
 	auto *symmLab = g.getEventLabel({symm, si});
 
 	/* It might be that symmlab doesn't have a prefix (ReadOptBlock optimization) */
-	if (!llvm::isa<BlockLabel>(symmLab))
+	if (!genmc::isa<BlockLabel>(symmLab))
 		v.update(symmLab->getPrefixView());
-	if (auto *rLab = llvm::dyn_cast<ReadLabel>(symmLab)) {
+	if (auto *rLab = genmc::dyn_cast<ReadLabel>(symmLab)) {
 		v.update(rLab->getRf()->getPrefixView());
 	}
 }

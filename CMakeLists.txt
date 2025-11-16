@@ -19,27 +19,29 @@ set(RUST_DIR "${CMAKE_SOURCE_DIR}/rust")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 install(DIRECTORY include/ DESTINATION "${PKG_INCLUDE_DIR}" FILES_MATCHING PATTERN "*.h")
 
-### Toolchains required
-find_library(HAVE_LIBDL dl REQUIRED)
-find_library(HAVE_LIBFFI ffi REQUIRED)
+### Whether to build lli-based binary
+option(BUILD_LLI "Build lli-based executable (requires LLVM)" ON)
+if(BUILD_LLI)
+  find_library(HAVE_LIBDL dl REQUIRED)
+  find_library(HAVE_LIBFFI ffi REQUIRED)
 
-# For linking to LLVM, see: https://llvm.org/docs/CMake.html#embedding-llvm-in-your-project
-# We unset the cached variables here, to look for different LLVM installations if `CMAKE_PREFIX_PATH` changes
-unset(LLVM_DIR CACHE)
-unset(LLVM_FOUND CACHE)
-find_package(LLVM REQUIRED CONFIG)
+  # For linking to LLVM, see: https://llvm.org/docs/CMake.html#embedding-llvm-in-your-project
+  # We unset the cached variables here, to look for different LLVM installations if `CMAKE_PREFIX_PATH` changes
+  unset(LLVM_DIR CACHE)
+  unset(LLVM_FOUND CACHE)
+  find_package(LLVM REQUIRED CONFIG)
 
-find_program(CLANGPATH clang PATHS ${LLVM_TOOLS_BINARY_DIR} NO_CACHE NO_DEFAULT_PATH REQUIRED)
-find_program(LLVM_CONFIG_PATH llvm-config PATHS ${LLVM_TOOLS_BINARY_DIR} NO_CACHE NO_DEFAULT_PATH REQUIRED)
-message(STATUS "Using LLVM ${LLVM_PACKAGE_VERSION} (${LLVM_CONFIG_PATH})")
-message(STATUS "Using clang ${CLANGPATH}")
+  find_program(CLANGPATH clang PATHS ${LLVM_TOOLS_BINARY_DIR} NO_CACHE NO_DEFAULT_PATH REQUIRED)
+  find_program(LLVM_CONFIG_PATH llvm-config PATHS ${LLVM_TOOLS_BINARY_DIR} NO_CACHE NO_DEFAULT_PATH REQUIRED)
+  message(STATUS "Using LLVM ${LLVM_PACKAGE_VERSION} (${LLVM_CONFIG_PATH})")
+  message(STATUS "Using clang ${CLANGPATH}")
 
-separate_arguments(LLVM_DEFINITIONS)
-execute_process(COMMAND "${LLVM_CONFIG_PATH}" --build-mode OUTPUT_VARIABLE LLVM_BUILDMODE
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
+  separate_arguments(LLVM_DEFINITIONS)
+  execute_process(COMMAND "${LLVM_CONFIG_PATH}" --build-mode OUTPUT_VARIABLE LLVM_BUILDMODE
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+endif()
 
-
-# Find Rust-installations in path given by the user
+### Whether to build lli binary with Rust support
 option(ENABLE_RUST "Enable compiling using Rust inputs" OFF)
 if(ENABLE_RUST)
   message(STATUS "Rust enabled!")
@@ -63,6 +65,10 @@ if(ENABLE_RUST)
       message(FATAL_ERROR "Rust using different major LLVM-version then GenMC!")
     endif()
   endif()
+endif()
+
+if(ENABLE_RUST AND NOT BUILD_LLI)
+  message(FATAL_ERROR "ENABLE_RUST=ON requires BUILD_LLI=ON.")
 endif()
 
 execute_process(

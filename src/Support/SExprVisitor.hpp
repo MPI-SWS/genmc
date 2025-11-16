@@ -16,11 +16,10 @@
 
 #include "ADT/VSet.hpp"
 #include "Static/ModuleID.hpp"
+#include "Support/Cast.hpp"
 #include "Support/Error.hpp"
 #include "Support/MemAccess.hpp"
 #include "Support/SExpr.hpp"
-#include "Support/SExprVisitor.hpp"
-#include <llvm/Support/Casting.h>
 
 #include <map>
 #include <unordered_map>
@@ -214,6 +213,17 @@ private:
 	std::string output;
 };
 
+/** Make `SExpr` formattable with `std::format`. */
+template <typename U> struct std::formatter<SExpr<U>> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const SExpr<U> &annot, std::format_context &ctx) const
+	{
+		return std::format_to(ctx.out(), "{}",
+				      SExprPrinter<U>().toString(const_cast<SExpr<U> &>(annot)));
+	}
+};
+
 /*******************************************************************************
  **                           SExprEvaluator Class
  ******************************************************************************/
@@ -339,7 +349,7 @@ public:
 	std::unique_ptr<SExpr<T>> substitute(const SExpr<T> *orig, T &&reg, const SExpr<T> *r)
 	{
 		auto e = orig->clone();
-		if (auto *re = llvm::dyn_cast<RegisterExpr<T>>(e.get()))
+		if (auto *re = genmc::dyn_cast<RegisterExpr<T>>(e.get()))
 			if (re->getRegister() == reg)
 				return r->clone();
 
@@ -353,7 +363,7 @@ public:
 	{
 		for (auto i = 0u; i < e.getNumKids(); i++) {
 			this->visit(e.getKid(i));
-			if (auto *re = llvm::dyn_cast<RegisterExpr<T>>(e.getKid(i)))
+			if (auto *re = genmc::dyn_cast<RegisterExpr<T>>(e.getKid(i)))
 				if (re->getRegister() == getRegToReplace())
 					e.setKid(i, getReplaceExpr()->clone());
 		}
@@ -385,7 +395,7 @@ public:
 	{
 		replaceMap = &rMap;
 		auto e = orig->clone();
-		if (auto *re = llvm::dyn_cast<RegisterExpr<T>>(e.get())) {
+		if (auto *re = genmc::dyn_cast<RegisterExpr<T>>(e.get())) {
 			if (shouldReplace(re->getRegister()))
 				return ConcreteExpr<T>::create(getReplaceValSize(re->getRegister()),
 							       getReplaceVal(re->getRegister()));
@@ -398,7 +408,7 @@ public:
 	{
 		for (auto i = 0u; i < e.getNumKids(); i++) {
 			this->visit(e.getKid(i));
-			if (auto *re = llvm::dyn_cast<RegisterExpr<T>>(e.getKid(i)))
+			if (auto *re = genmc::dyn_cast<RegisterExpr<T>>(e.getKid(i)))
 				if (shouldReplace(re->getRegister()))
 					e.setKid(i, ConcreteExpr<T>::create(
 							    getReplaceValSize(re->getRegister()),
@@ -673,12 +683,6 @@ template <typename T> void SExprPrinter<T>::visitCmpExpr(CmpExpr<T> &e)
 	output += ", ";
 	this->visit(e.getKid(1));
 	output += ")";
-}
-
-template <typename U> llvm::raw_ostream &operator<<(llvm::raw_ostream &rhs, const SExpr<U> &annot)
-{
-	rhs << SExprPrinter<U>().toString(const_cast<SExpr<U> &>(annot));
-	return rhs;
 }
 
 /*******************************************************************************

@@ -16,18 +16,9 @@
 #include "ExecutionGraph/ExecutionGraph.hpp"
 #include "Verification/Relinche/Observation.hpp"
 
-#include <llvm/ADT/SmallString.h>
-#include <llvm/ADT/StringRef.h>
-#include <llvm/Support/Casting.h>
-#include <llvm/Support/Debug.h>
-#include <llvm/Support/FileSystem.h>
-#include <llvm/Support/Format.h>
-#include <llvm/Support/Path.h>
-#include <llvm/Support/raw_os_ostream.h>
-#include <llvm/Support/raw_ostream.h>
-
 #include <algorithm>
 #include <memory>
+#include <sstream>
 #include <utility>
 #include <vector>
 
@@ -53,13 +44,12 @@ public:
 
 	auto toString() const -> std::string override
 	{
-		std::string str;
-		auto s = llvm::raw_string_ostream(str);
+		std::ostringstream s;
 		s << "The library implementation does not induce all the synchronization\n"
 		  << "required by the specification. Missing synchronizations:\n";
 		for (const auto &edges : missingSyncs_) {
 			for (const auto &edge : edges)
-				s << edge.first << "->" << edge.second << " ";
+				s << std::format("{}->{} ", edge.first, edge.second);
 			s << "\n";
 		}
 		return s.str();
@@ -86,12 +76,11 @@ public:
 
 	auto toString() const -> std::string override
 	{
-		std::string str;
-		auto s = llvm::raw_string_ostream(str);
+		std::ostringstream s;
 		s << "The library implementation returns incorrect return values\n"
 		  << "under the following extended client:\n";
 		for (const auto &edge : extensionEdges_) {
-			s << edge.first << "->" << edge.second << " ";
+			s << std::format("{}->{} ", edge.first, edge.second);
 		}
 		s << "\nTo run the extended client add --max-hint-size=0 and following "
 		     "C-flags after '--' :\n"

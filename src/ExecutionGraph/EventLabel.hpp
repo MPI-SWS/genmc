@@ -16,6 +16,7 @@
 
 #include "ADT/VSet.hpp"
 #include "ADT/View.hpp"
+#include "ADT/ilist.hpp"
 #include "ADT/value_ptr.hpp"
 #include "ExecutionGraph/DepInfo.hpp"
 #include "ExecutionGraph/Event.hpp"
@@ -23,6 +24,7 @@
 #include "ExecutionGraph/LoadAnnotation.hpp"
 #include "ExecutionGraph/Stamp.hpp"
 #include "Runtime/InterpreterEnumAPI.hpp"
+#include "Support/Cast.hpp"
 #include "Support/MemAccess.hpp"
 #include "Support/MemOrdering.hpp"
 #include "Support/NameInfo.hpp"
@@ -31,11 +33,7 @@
 #include "Support/SVal.hpp"
 #include "Support/ThreadInfo.hpp"
 
-#include <llvm/ADT/ilist_node.h>
-#include <llvm/ADT/simple_ilist.h>
-#include <llvm/Support/Casting.h>
-#include <llvm/Support/raw_ostream.h>
-
+#include <format>
 #include <optional>
 #include <ranges>
 
@@ -46,10 +44,9 @@ class ThreadCreateLabel;
 class ThreadJoinLabel;
 class ExecutionGraph;
 
-template <typename T, class... Options>
-class CopyableIList : public llvm::simple_ilist<T, Options...> {
+template <typename T, typename Tag = void> class CopyableIList : public genmc::ilist<T, Tag> {
 
-	using BaseT = llvm::simple_ilist<T, Options...>;
+	using BaseT = genmc::ilist<T, Tag>;
 
 public:
 	CopyableIList() = default;
@@ -74,8 +71,8 @@ struct io_tag {};
  * getter methods are private. One can obtain information about such relations
  * by querying the execution graph.
  */
-class EventLabel : public llvm::ilist_node<EventLabel, llvm::ilist_tag<io_tag>>,
-		   public llvm::ilist_node<EventLabel, llvm::ilist_tag<po_tag>> {
+class EventLabel : public genmc::ilist_node<EventLabel, io_tag>,
+		   public genmc::ilist_node<EventLabel, po_tag> {
 
 public:
 	/* Discriminator for LLVM-style RTTI (dyn_cast<> et al).
@@ -93,27 +90,13 @@ protected:
 		: kind(k), position(p), ordering(o), deps(deps)
 	{}
 
-	using const_dep_iterator = DepInfo::const_iterator;
-	using const_dep_range = llvm::iterator_range<const_dep_iterator>;
-
-	using calc_const_iterator = VSet<Event>::const_iterator;
-	using calc_const_range = llvm::iterator_range<calc_const_iterator>;
-
 public:
 	virtual ~EventLabel() = default;
 
 	/** Iterators for dependencies */
-	const_dep_iterator data_begin() const { return deps.data.begin(); }
-	const_dep_iterator data_end() const { return deps.data.end(); }
-	const_dep_range data() const { return const_dep_range(deps.data.begin(), deps.data.end()); }
-
-	const_dep_iterator addr_begin() const { return deps.addr.begin(); }
-	const_dep_iterator addr_end() const { return deps.addr.end(); }
-	const_dep_range addr() const { return const_dep_range(deps.addr.begin(), deps.addr.end()); }
-
-	const_dep_iterator ctrl_begin() const { return deps.ctrl.begin(); }
-	const_dep_iterator ctrl_end() const { return deps.ctrl.end(); }
-	const_dep_range ctrl() const { return const_dep_range(deps.ctrl.begin(), deps.ctrl.end()); }
+	auto data() const { return std::views::all(deps.data); }
+	auto addr() const { return std::views::all(deps.addr); }
+	auto ctrl() const { return std::views::all(deps.ctrl); }
 
 	/** Returns the discriminator of this object */
 	EventLabelKind getKind() const { return kind; }
@@ -173,10 +156,11 @@ public:
 	void addView(View &&view) { calculatedViews.emplace_back(view); }
 
 	/** Iterators for calculated relations */
-	calc_const_range calculated(size_t i) const
+	auto calculated(size_t i) const
 	{
-		return (getPos().isInitializer() || getKind() == Empty) ? calculatedRels[0]
-									: calculatedRels[i];
+		return (getPos().isInitializer() || getKind() == Empty)
+			       ? std::views::all(calculatedRels[0])
+			       : std::views::all(calculatedRels[i]);
 	}
 
 	/** Getters for calculated views */
@@ -249,8 +233,6 @@ public:
 		prefixView = nullptr;
 		revisitable = true;
 	}
-
-	friend llvm::raw_ostream &operator<<(llvm::raw_ostream &rhs, const EventLabel &lab);
 
 private:
 	friend class ExecutionGraph;
@@ -588,7 +570,7 @@ private:
 
 /** This label abstracts the common functionality that loads and stores have
  * (e.g., asking for the address of such a label) */
-class MemAccessLabel : public EventLabel, public llvm::ilist_node<MemAccessLabel> {
+class MemAccessLabel : public EventLabel, public genmc::ilist_node<MemAccessLabel> {
 
 protected:
 	MemAccessLabel(EventLabelKind k, Event pos, MemOrdering ord, SAddr loc, ASize size,
@@ -649,7 +631,7 @@ private:
 
 /** The label for reads. All special read types (e.g., FAI, CAS) should inherit
  * from this class */
-class ReadLabel : public MemAccessLabel, public llvm::ilist_node<ReadLabel> {
+class ReadLabel : public MemAccessLabel, public genmc::ilist_node<ReadLabel> {
 
 protected:
 	ReadLabel(EventLabelKind k, Event pos, MemOrdering ord, SAddr loc, ASize size, AType type,
@@ -1055,7 +1037,7 @@ public:
 
 /** Represents a write operation. All special types of writes (e.g., FAI, CAS)
  * should inherit from this class */
-class WriteLabel : public MemAccessLabel, public llvm::ilist_node<WriteLabel> {
+class WriteLabel : public MemAccessLabel, public genmc::ilist_node<WriteLabel> {
 
 protected:
 	WriteLabel(EventLabelKind k, Event pos, MemOrdering ord, SAddr addr, ASize size, AType type,
@@ -1114,15 +1096,9 @@ public:
 	using ReaderList = CopyableIList<ReadLabel>;
 	using rf_iterator = ReaderList::iterator;
 	using const_rf_iterator = ReaderList::const_iterator;
-	using rf_range = llvm::iterator_range<rf_iterator>;
-	using const_rf_range = llvm::iterator_range<const_rf_iterator>;
 
-	rf_iterator readers_begin() { return readerList.begin(); }
-	rf_iterator readers_end() { return readerList.end(); }
-	rf_range readers() { return rf_range(readers_begin(), readers_end()); }
-	const_rf_iterator readers_begin() const { return readerList.begin(); }
-	const_rf_iterator readers_end() const { return readerList.end(); }
-	const_rf_range readers() const { return const_rf_range(readers_begin(), readers_end()); }
+	auto readers() { return std::views::all(readerList); }
+	auto readers() const { return std::views::all(readerList); }
 
 	virtual void reset() override
 	{
@@ -1140,16 +1116,16 @@ private:
 	/** Adds a read to the list of reads reading from the write */
 	void addReader(ReadLabel *rLab)
 	{
-		BUG_ON(std::find_if(readers_begin(), readers_end(), [rLab](ReadLabel &oLab) {
+		BUG_ON(std::find_if(readerList.begin(), readerList.end(), [rLab](ReadLabel &oLab) {
 			       return oLab.getPos() == rLab->getPos();
-		       }) != readers_end());
+		       }) != readerList.end());
 		readerList.push_back(*rLab);
 	}
 
 	/** Removes all readers that satisfy predicate F */
 	template <typename F> void removeReader(F cond)
 	{
-		for (auto it = readers_begin(); it != readers_end();) {
+		for (auto it = readerList.begin(); it != readerList.end();) {
 			if (cond(*it))
 				it = readerList.erase(it);
 			else
@@ -1479,18 +1455,9 @@ public:
 	using AccessList = CopyableIList<MemAccessLabel>;
 	using access_iterator = AccessList::iterator;
 	using const_access_iterator = AccessList::const_iterator;
-	using access_range = llvm::iterator_range<access_iterator>;
-	using const_access_range = llvm::iterator_range<const_access_iterator>;
 
-	access_iterator accesses_begin() { return accessList.begin(); }
-	access_iterator accesses_end() { return accessList.end(); }
-	access_range accesses() { return access_range(accesses_begin(), accesses_end()); }
-	const_access_iterator accesses_begin() const { return accessList.begin(); }
-	const_access_iterator accesses_end() const { return accessList.end(); }
-	const_access_range accesses() const
-	{
-		return const_access_range(accesses_begin(), accesses_end());
-	}
+	auto accesses() { return std::views::all(accessList); }
+	auto accesses() const { return std::views::all(accessList); }
 
 	/** Returns the size of this allocation */
 	unsigned int getAllocSize() const { return allocSize; }
@@ -1535,15 +1502,15 @@ private:
 
 	void addAccess(MemAccessLabel *mLab)
 	{
-		BUG_ON(std::find_if(accesses_begin(), accesses_end(), [mLab](auto &oLab) {
+		BUG_ON(std::find_if(accessList.begin(), accessList.end(), [mLab](auto &oLab) {
 			       return oLab.getPos() == mLab->getPos();
-		       }) != accesses_end());
+		       }) != accessList.end());
 		accessList.push_back(*mLab);
 	}
 
 	template <typename F> void removeAccess(F cond)
 	{
-		for (auto it = accesses_begin(); it != accesses_end();) {
+		for (auto it = accessList.begin(); it != accessList.end();) {
 			if (cond(*it))
 				it = accessList.erase(it);
 			else
@@ -1861,7 +1828,7 @@ public:
 	{
 		for (auto it = linSuccs_.begin(); it != linSuccs_.end();) {
 			if (cond(*it)) {
-				auto *mbLab = llvm::dyn_cast<MethodBeginLabel>(*it);
+				auto *mbLab = genmc::dyn_cast<MethodBeginLabel>(*it);
 				mbLab->removePredNoCascade(
 					[this](auto &lab) { return lab == this; });
 				it = linSuccs_.erase(it);
@@ -1923,6 +1890,25 @@ public:
 	[[nodiscard]] auto getMsg() const -> const std::string & { return msg_; }
 
 	DEFINE_STANDARD_MEMBERS(Output)
+private:
+	std::string msg_;
+};
+
+/*******************************************************************************
+ **                           ErrorLabel Class
+ ******************************************************************************/
+
+/** Represents an error in the user program (e.g., assertion violation) **/
+class ErrorLabel : public EventLabel {
+
+public:
+	ErrorLabel(Event pos, std::string msg)
+		: EventLabel(Error, pos, MemOrdering::NotAtomic), msg_(std::move(msg))
+	{}
+
+	[[nodiscard]] auto getMsg() const -> const std::string & { return msg_; }
+
+	DEFINE_STANDARD_MEMBERS(Error)
 private:
 	std::string msg_;
 };
@@ -2027,7 +2013,7 @@ template <typename F> void MethodBeginLabel::removePred(F cond)
 {
 	for (auto it = linPreds_.begin(); it != linPreds_.end();) {
 		if (cond(*it)) {
-			auto *meLab = llvm::dyn_cast<MethodEndLabel>(*it);
+			auto *meLab = genmc::dyn_cast<MethodEndLabel>(*it);
 			meLab->removeSuccNoCascade([this](auto &lab) { return lab == this; });
 			it = linPreds_.erase(it);
 		} else {
@@ -2042,7 +2028,7 @@ template <typename F> void MethodBeginLabel::removePred(F cond)
 
 inline bool EventLabel::isStable() const
 {
-	auto *mLab = llvm::dyn_cast<MemAccessLabel>(this);
+	auto *mLab = genmc::dyn_cast<MemAccessLabel>(this);
 	return !isRevisitable() || (mLab && !mLab->wasAddedMax());
 }
 
@@ -2069,6 +2055,172 @@ inline bool ReadLabel::isConfirming(EventLabelKind k)
 	return ConfirmingReadLabel::classofKind(k) || ConfirmingCasReadLabel::classofKind(k);
 }
 
-llvm::raw_ostream &operator<<(llvm::raw_ostream &rhs, const EventLabel::EventLabelKind k);
+/**** Formatting ****/
+
+/** Make `EventLabel::EventLabelKind` formattable with `std::format`. */
+template <> struct std::formatter<EventLabel::EventLabelKind> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const EventLabel::EventLabelKind &k, std::format_context &ctx) const
+	{
+		std::string_view str;
+		switch (k) {
+		case EventLabel::ThreadStart:
+			str = "THREAD_START";
+			break;
+		case EventLabel::Init:
+			str = "INIT";
+			break;
+		case EventLabel::JoinBlock:
+			str = "BLOCK[join]";
+			break;
+		case EventLabel::SpinloopBlock:
+			str = "BLOCK[spinloop]";
+			break;
+		case EventLabel::FaiZNEBlock:
+			str = "BLOCK[Fai-zne]";
+			break;
+		case EventLabel::LockZNEBlock:
+			str = "BLOCK[Lock-zne]";
+			break;
+		case EventLabel::HelpedCASBlock:
+			str = "BLOCK[helped-cas]";
+			break;
+		case EventLabel::ConfirmationBlock:
+			str = "BLOCK[conf]";
+			break;
+		case EventLabel::BarrierBlock:
+			str = "BLOCK[barrier]";
+			break;
+		case EventLabel::ErrorBlock:
+			str = "BLOCK[error]";
+			break;
+		case EventLabel::UserBlock:
+			str = "BLOCK[user]";
+			break;
+		case EventLabel::ReadOptBlock:
+			str = "BLOCK[read-opt]";
+			break;
+		case EventLabel::ThreadKill:
+			str = "KILL";
+			break;
+		case EventLabel::ThreadFinish:
+			str = "THREAD_END";
+			break;
+		case EventLabel::Read:
+		case EventLabel::BWaitRead:
+		case EventLabel::CondVarWaitRead:
+		case EventLabel::SpeculativeRead:
+		case EventLabel::ConfirmingRead:
+			str = "R";
+			break;
+		case EventLabel::CasRead:
+		case EventLabel::LockCasRead:
+		case EventLabel::TrylockCasRead:
+		case EventLabel::AbstractLockCasRead:
+		case EventLabel::HelpedCasRead:
+		case EventLabel::ConfirmingCasRead:
+			str = "CR";
+			break;
+		case EventLabel::FaiRead:
+		case EventLabel::BIncFaiRead:
+		case EventLabel::NoRetFaiRead:
+			str = "UR";
+			break;
+		case EventLabel::Write:
+		case EventLabel::CondVarInitWrite:
+		case EventLabel::CondVarSignalWrite:
+		case EventLabel::CondVarBcastWrite:
+		case EventLabel::CondVarDestroyWrite:
+		case EventLabel::UnlockWrite:
+			str = "W";
+			break;
+		case EventLabel::CasWrite:
+		case EventLabel::LockCasWrite:
+		case EventLabel::TrylockCasWrite:
+		case EventLabel::AbstractLockCasWrite:
+		case EventLabel::HelpedCasWrite:
+		case EventLabel::ConfirmingCasWrite:
+			str = "CW";
+			break;
+		case EventLabel::FaiWrite:
+		case EventLabel::BIncFaiWrite:
+		case EventLabel::NoRetFaiWrite:
+			str = "UW";
+			break;
+		case EventLabel::Fence:
+			str = "F";
+			break;
+		case EventLabel::Malloc:
+			str = "MALLOC";
+			break;
+		case EventLabel::Free:
+			str = "FREE";
+			break;
+		case EventLabel::HpRetire:
+			str = "HP_RETIRE";
+			break;
+		case EventLabel::ThreadCreate:
+			str = "THREAD_CREATE";
+			break;
+		case EventLabel::ThreadJoin:
+			str = "THREAD_JOIN";
+			break;
+		case EventLabel::HelpingCas:
+			str = "HELPING_CAS";
+			break;
+		case EventLabel::HpProtect:
+			str = "HP_PROTECT";
+			break;
+		case EventLabel::MethodBegin:
+			str = "METHOD_BEGIN";
+			break;
+		case EventLabel::MethodEnd:
+			str = "METHOD_END";
+			break;
+		case EventLabel::Output:
+			str = "OUTPUT";
+			break;
+		case EventLabel::Error:
+			str = "ERROR";
+			break;
+		case EventLabel::Optional:
+			str = "OPTIONAL";
+			break;
+		case EventLabel::LoopBegin:
+			str = "LOOP_BEGIN";
+			break;
+		case EventLabel::SpinStart:
+			str = "SPIN_START";
+			break;
+		case EventLabel::FaiZNESpinEnd:
+		case EventLabel::LockZNESpinEnd:
+			str = "ZNE_SPIN_END";
+			break;
+		case EventLabel::Empty:
+			str = "EMPTY";
+			break;
+		default:
+			PRINT_BUGREPORT_INFO_ONCE("print-label-type", "Cannot print label type");
+			str = "UNKNOWN";
+			break;
+		}
+		return std::format_to(ctx.out(), "{}", str);
+	}
+};
+
+/** Make any `EventLabel` (including subclasses) formattable with `std::format`. */
+#include "ExecutionGraph/LabelVisitor.hpp"
+
+template <typename T>
+requires std::derived_from<T, EventLabel>
+struct std::formatter<T> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const T &lab, std::format_context &ctx) const
+	{
+		return std::format_to(ctx.out(), "{}", LabelPrinter().toString(lab));
+	}
+};
 
 #endif /* GENMC_EVENTLABEL_HPP */

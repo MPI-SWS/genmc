@@ -14,8 +14,9 @@
 #ifndef GENMC_MATRIX_2D_HPP
 #define GENMC_MATRIX_2D_HPP
 
-#include <llvm/Support/raw_ostream.h>
-
+#include <algorithm>
+#include <ostream>
+#include <ranges>
 #include <utility>
 #include <vector>
 
@@ -54,8 +55,8 @@ private:
 		void clear() { elems_.clear(); }
 
 		template <typename F>
-		friend auto operator<<(llvm::raw_ostream &s, const IndexMapper<F> &getter)
-			-> llvm::raw_ostream &;
+		friend auto operator<<(std::ostream &s, const IndexMapper<F> &getter)
+			-> std::ostream &;
 
 	private:
 		std::vector<U> elems_;
@@ -169,7 +170,7 @@ public:
 	auto operator!=(const Matrix2D<T> &m) const -> bool { return !(*this == m); }
 
 	template <typename U>
-	friend auto operator<<(llvm::raw_ostream &s, const Matrix2D<U> &m) -> llvm::raw_ostream &;
+	friend auto operator<<(std::ostream &s, const Matrix2D<U> &m) -> std::ostream &;
 
 private:
 	/** Workhorse of allTopoSort() */
@@ -466,7 +467,7 @@ template <typename T> void Matrix2D<T>::addEdgeAndTransitive(const T &a, const T
 }
 
 template <typename T>
-auto operator<<(llvm::raw_ostream &s, const typename Matrix2D<T>::Mapper &gi) -> llvm::raw_ostream &
+auto operator<<(std::ostream &s, const typename Matrix2D<T>::Mapper &gi) -> std::ostream &
 {
 	for (auto &e : gi.elems_)
 		s << e << " ";
@@ -474,16 +475,14 @@ auto operator<<(llvm::raw_ostream &s, const typename Matrix2D<T>::Mapper &gi) ->
 }
 
 template <unsigned>
-auto operator<<(llvm::raw_ostream &s, const typename Matrix2D<unsigned>::Mapper &gi)
-	-> llvm::raw_ostream &
+auto operator<<(std::ostream &s, const typename Matrix2D<unsigned>::Mapper &gi) -> std::ostream &
 {
 	for (auto i = 0U; i < gi.size(); ++i)
 		s << i << " ";
 	return s;
 }
 
-template <typename T>
-auto operator<<(llvm::raw_ostream &s, const Matrix2D<T> &matrix) -> llvm::raw_ostream &
+template <typename T> auto operator<<(std::ostream &s, const Matrix2D<T> &matrix) -> std::ostream &
 {
 	s << "Elements: " << matrix.getMapper() << "\n";
 

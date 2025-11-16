@@ -13,21 +13,15 @@
 
 #include "config.h"
 
-#include "Verification/Relinche/Specification.hpp"
+#include "ADT/BitVector.hpp"
 #include "ADT/Matrix2D.hpp"
 #include "ExecutionGraph/ExecutionGraph.hpp"
+#include "Support/Cast.hpp"
 #include "Support/DotPrint.hpp"
 #include "Verification/Relinche/Observation.hpp"
-
-#include <llvm/ADT/BitVector.h>
-#include <llvm/ADT/SmallString.h>
-#include <llvm/ADT/iterator_range.h>
-#include <llvm/Support/FileSystem.h>
-#include <llvm/Support/Path.h>
-#include <llvm/Support/raw_ostream.h>
+#include "Verification/Relinche/Specification.hpp"
 
 #include <algorithm>
-#include <istream>
 #include <queue>
 #include <ranges>
 #include <string>
@@ -36,7 +30,8 @@
 
 auto Specification::lookupSyncOrInsert(const Observation &obs) -> Specification::Record &
 {
-	for (auto &it : llvm::make_range(data_.equal_range(obs)))
+	const auto [begin, end] = data_.equal_range(obs);
+	for (auto &it : std::ranges::subrange(begin, end))
 		if (it.first.hasSameHb(obs))
 			return it.second;
 
@@ -45,7 +40,8 @@ auto Specification::lookupSyncOrInsert(const Observation &obs) -> Specification:
 
 auto Specification::lookupSync(const Observation &obs) const -> const Specification::Record &
 {
-	for (const auto &it : llvm::make_range(data_.equal_range(obs)))
+	const auto [begin, end] = data_.equal_range(obs);
+	for (const auto &it : std::ranges::subrange(begin, end))
 		if (it.first.hasSameHb(obs))
 			return it.second;
 	ERROR("Observation not found!");
@@ -60,7 +56,8 @@ void Specification::addHints(const Observation &obs, std::vector<Hint> &&newHint
 
 auto Specification::isRefinedBy(const Observation &obs) const -> bool
 {
-	return std::ranges::any_of(llvm::make_range(data_.equal_range(obs)),
+	const auto [begin, end] = data_.equal_range(obs);
+	return std::ranges::any_of(std::ranges::subrange(begin, end),
 				   [&](auto &specObs) { return specObs.first.isRefinedBy(obs); });
 }
 
@@ -68,7 +65,8 @@ auto Specification::refinementMissingEdges(const Observation &obs) const
 	-> std::vector<std::vector<Edge>>
 {
 	std::vector<std::vector<Edge>> res;
-	for (const auto &specObs : llvm::make_range(data_.equal_range(obs))) {
+	const auto [begin, end] = data_.equal_range(obs);
+	for (const auto &specObs : std::ranges::subrange(begin, end)) {
 		std::vector<Edge> missedEdges;
 		for (const auto &[op1, op2] : specObs.first.calculateHbDiff((obs)))
 			missedEdges.emplace_back(obs.getCall(op1).beginLab->getPos(),
@@ -112,14 +110,14 @@ static auto calculateLinearization(const ExecutionGraph &graph, const Observatio
 	/* Find the location of the global lock */
 	auto labs = graph.labels();
 	auto labIt = std::ranges::find_if(
-		labs, [&](auto &lab) { return llvm::isa<AbstractLockCasWriteLabel>(&lab); });
+		labs, [&](auto &lab) { return genmc::isa<AbstractLockCasWriteLabel>(&lab); });
 	ERROR_ON(labIt == std::ranges::end(labs), "RELINCHE: Could not find abstract global lock.");
-	auto lockLoc = llvm::dyn_cast<AbstractLockCasWriteLabel>(&*labIt)->getAddr();
+	auto lockLoc = genmc::dyn_cast<AbstractLockCasWriteLabel>(&*labIt)->getAddr();
 
 	/* Project the co of global lock to begin/end events */
 	std::vector<MethodCall::Id> result;
 	for (const auto &lab : graph.co(lockLoc)) {
-		if (!llvm::isa<AbstractLockCasWriteLabel>(&lab))
+		if (!genmc::isa<AbstractLockCasWriteLabel>(&lab))
 			continue;
 		if (auto opIx = obs.getContainingCallId(lab))
 			result.push_back(opIx.value());
@@ -252,7 +250,7 @@ void Specification::add(ExecutionGraph &g, const ConsistencyChecker *consChecker
  **                     Hint Calculation Algorithm
  ******************************************************************************/
 
-auto operator<<(llvm::raw_ostream &os, const Hint &hint) -> llvm::raw_ostream &
+auto operator<<(std::ostream &os, const Hint &hint) -> std::ostream &
 {
 	for (auto const &e : hint.edges)
 		printDotEdge(os, e);
@@ -271,7 +269,7 @@ public:
 	struct ExtEdge {
 		ExtEvent src;
 		ExtEvent dst;
-		llvm::BitVector contradictingLins; // whether the edge kill i-th lin
+		genmc::BitVector contradictingLins; // whether the edge kill i-th lin
 
 		ExtEdge(MethodCall::Id from, MethodCall::Id to)
 			: src(toEndExtEvent(from)), dst(toBeginExtEvent(to))
@@ -282,8 +280,7 @@ public:
 			return std::tie(this->src, this->dst) == std::tie(other.src, other.dst);
 		}
 
-		friend auto operator<<(llvm::raw_ostream &os, const ExtEdge &e)
-			-> llvm::raw_ostream &
+		friend auto operator<<(std::ostream &os, const ExtEdge &e) -> std::ostream &
 		{
 			printDotEdge(os, e.src, e.dst);
 			return os;
@@ -348,7 +345,7 @@ public:
 	/* Whether the extension can kill all left lins assuming killableLins can be killed via
 	 * edges later */
 	[[nodiscard]] auto
-	killsLeftoverLins(const llvm::BitVector &linsKillableViaFutureEdges) const
+	killsLeftoverLins(const genmc::BitVector &linsKillableViaFutureEdges) const
 	{
 		auto tmp = killedLins_; // copy
 		tmp |= linsKillableViaFutureEdges;
@@ -390,13 +387,13 @@ private:
 	}
 
 	/* Extension edges */
-	llvm::SmallVector<const ExtEdge *, 8> ext_;
+	genmc::SmallVector<const ExtEdge *, 8> ext_;
 
 	/* transitive closure of extended happens-before: (hb u ext)+ */
 	Matrix2D<unsigned int> hbext_;
 
 	/* cached U_{e in edges} e.contradictingLins */
-	llvm::BitVector killedLins_;
+	genmc::BitVector killedLins_;
 };
 
 /* Add extension to set of already calculated hints */
@@ -454,7 +451,7 @@ auto Specification::calculateObservationHints(const Observation &obs) const -> s
 
 		// Accumulator of all lins could be killed in the future of `newExt` (only
 		// edges that made progress took into account).
-		llvm::BitVector linsKillableViaFutureEdges;
+		genmc::BitVector linsKillableViaFutureEdges;
 
 		/* For each edge `newEdge` consider extension (ext + newEdge) */
 		// NB: Loop goes backward so at each iteration we have prediction for
@@ -500,11 +497,11 @@ auto Specification::calculateObservationHints(const Observation &obs) const -> s
 	for (const auto &ext : extensions)
 		result.emplace_back(ext.toHint());
 
-	GENMC_DEBUG(if (debug) llvm::dbgs()
-			    << "Stats: #calls: " << obs.getNumOps()
-			    << ", #hb:  " << std::ranges::distance(obs.hb()) << ", #lins: " << lins
-			    << " => #extension: " << extensionsExplored
-			    << ", #hints:  " << result.size() << "\n";);
+	GENMC_DEBUG(if (debug) LOG(
+			    VerbosityLevel::Tip,
+			    "Stats: #calls: {}, #hb: {}, #lins: {} => #extension: {}, #hints: {}",
+			    obs.getNumOps(), std::ranges::distance(obs.hb()), lins.size(),
+			    extensionsExplored, result.size()););
 	GENMC_DEBUG(extensionsExploredInTotal += extensionsExplored;);
 
 	return result;
@@ -522,7 +519,7 @@ void Specification::calculateHints()
 
 /* Print vector in format that easy to parse */
 template <typename VectorT, typename FT>
-inline static void printlnVector(llvm::raw_ostream &os, const VectorT &v, FT printElem,
+inline static void printlnVector(std::ostream &os, const VectorT &v, FT printElem,
 				 const std::string &sep = "   ", const std::string &sizeSep = "   ")
 {
 	os << v.size();
@@ -539,9 +536,11 @@ inline static void printlnVector(llvm::raw_ostream &os, const VectorT &v, FT pri
 	os << "\n";
 }
 
-void serialize(llvm::raw_ostream &os, const Specification &spec)
+void serialize(std::ostream &os, const Specification &spec)
 {
-	auto printEdge = [&](auto const &edge) { os << edge.first << " " << edge.second; };
+	auto printEdge = [&](auto const &edge) {
+		os << std::format("{} {}", edge.first, edge.second);
+	};
 	auto printOpCall = [&os](auto &call) {
 		os << call.name << " " << call.argVal << " " << call.retVal;
 	};

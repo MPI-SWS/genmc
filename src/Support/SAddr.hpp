@@ -18,6 +18,7 @@
 #include "Error.hpp"
 
 #include <cstdint>
+#include <format>
 
 /*******************************************************************************
  **                             SAddr Class
@@ -50,8 +51,7 @@ public:
 
 	static constexpr Width threadStartBit = 32;
 	static constexpr Width indexMask = ((Width)1 << threadStartBit) - 1;
-	static constexpr Width threadMask =
-		(durableMask - ((Width)1 << threadStartBit));
+	static constexpr Width threadMask = (durableMask - ((Width)1 << threadStartBit));
 
 	static constexpr Width threadLimit = threadMask >> threadStartBit;
 	static constexpr Width allocLimit = indexMask;
@@ -143,11 +143,33 @@ public:
 		return s;
 	}
 
-	friend auto operator<<(llvm::raw_ostream &rhs, const SAddr &addr) -> llvm::raw_ostream &;
-
 private:
 	/** The actual address */
 	Width addr;
+};
+
+/** Make `SAddr` formattable with `std::format`. */
+template <> struct std::formatter<SAddr> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const SAddr &addr, std::format_context &ctx) const
+	{
+		auto internal = addr.isInternal() ? "I" : "";
+
+		std::string_view prefix;
+		if (addr.isStatic())
+			prefix = "G";
+		else if (addr.isAutomatic())
+			prefix = "S";
+		else if (addr.isHeap())
+			prefix = "H";
+		else
+			BUG();
+
+		return std::format_to(ctx.out(), "{}{}#({}, {})", prefix, internal,
+				      ((addr.get() & SAddr::threadMask) >> SAddr::threadStartBit),
+				      (addr.get() & SAddr::indexMask));
+	}
 };
 
 namespace std {

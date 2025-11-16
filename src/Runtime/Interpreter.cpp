@@ -33,10 +33,12 @@
 #include "Runtime/LLIConfig.hpp"
 #include "Static/LLVMUtils.hpp"
 #include "Support/Error.hpp"
-#include <cstring>
+#include "Support/Parser.hpp"
 #include <llvm/CodeGen/IntrinsicLowering.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Module.h>
+
+#include <cstring>
 #include <optional>
 
 using namespace llvm;
@@ -63,27 +65,6 @@ std::unique_ptr<Interpreter> Interpreter::create(std::unique_ptr<Module> M,
 					     alloctor);
 }
 
-llvm::raw_ostream &llvm::operator<<(llvm::raw_ostream &s, const Thread &thr)
-{
-	return s << "<" << thr.parentId << ", " << thr.id << ">"
-		 << " " << thr.threadFun->getName().str();
-}
-
-std::unique_ptr<InterpreterState> Interpreter::saveState()
-{
-	/* This function may be called during `GenMCDriver::scheduleNext` during the optimized
-	 * scheduling part, when we hold a reference to the memory of `globalInstructions`. If a
-	 * warning is triggered during this, we will save the state with this function, then later
-	 * restore it. We need to ensure that the reference to `globalInstructions` stays valid, so
-	 * we swap the copy and the original here.
-	 */
-	auto tmp = std::make_unique<InterpreterState>(dynState);
-	std::swap(tmp->globalInstructions, dynState.globalInstructions);
-	return std::move(tmp);
-}
-
-void Interpreter::restoreState(std::unique_ptr<InterpreterState> s) { dynState = std::move(*s); }
-
 void Interpreter::resetThread(unsigned int id)
 {
 	auto &thr = getThrById(id);
@@ -91,6 +72,7 @@ void Interpreter::resetThread(unsigned int id)
 	thr.tls = threadLocalVars;
 	thr.blocked = BlockageType::NotBlocked;
 	thr.rng.seed(Thread::seed);
+	thr.currDbgInfo = {};
 
 	clearDeps(id);
 
@@ -111,6 +93,8 @@ void Interpreter::reset()
 	 * that thread (joins do not empty ECStacks)
 	 */
 	dynState.currentThread = 0;
+	dynState.collectDbgInfo = false;
+	dynState.nameInfo.clear();
 	dynState.AtExitHandlers.clear();
 	std::for_each(threads_begin(), threads_end(), [this](Thread &thr) { resetThread(thr.id); });
 }
@@ -191,8 +175,9 @@ void Interpreter::collectStaticAddresses(SAddrAllocator &alloctor)
 		    (!MI->idInfo.VID.count(&v) ||
 		     !MI->varInfo.globalInfo.count(MI->idInfo.VID.at(&v)))) {
 			WARN_ONCE("name-info",
-				  ("Inadequate naming info for variable " + v.getName() +
-				   ".\nPlease submit a bug report to " PACKAGE_BUGREPORT "\n"));
+				  "Inadequate naming info for variable {}\nPlease submit a bug "
+				  "report to " PACKAGE_BUGREPORT "\n",
+				  v.getName().str());
 		}
 	}
 
@@ -284,6 +269,63 @@ void Interpreter::updateInternalFunRetDeps(unsigned int tid, Function *F, Instru
 		updateDataDeps(tid, CS, threadPos(tid));
 }
 
+static std::string getFilenameFromMData(MDNode *node)
+{
+	const auto &loc = static_cast<const llvm::DILocation &>(*node);
+	llvm::StringRef file = loc.getFilename();
+	llvm::StringRef dir = loc.getDirectory();
+
+	BUG_ON(!file.size());
+
+	std::string absPath;
+	if (file.front() == '/') {
+		absPath = file.str();
+	} else {
+		BUG_ON(!dir.size());
+		absPath = dir.str();
+		if (absPath.back() != '/')
+			absPath += "/";
+		absPath += file;
+	}
+	return absPath;
+}
+
+std::string Interpreter::getAccessedVarName(const std::optional<SAddr> &loc)
+{
+	if (!loc)
+		return "";
+	if (loc->isStatic())
+		return getStaticName(*loc);
+
+	auto it = dynState.nameInfo.find(*loc);
+	if (it == dynState.nameInfo.end())
+		return "";
+	return it.value().first + it.value().second->getNameAtOffset(*loc - it.start());
+}
+
+const GenMCDriver::EventDbgInfo *Interpreter::currDbgInfo(std::optional<SAddr> loc)
+{
+	auto &thr = getCurThr();
+	if (!dynState.collectDbgInfo || thr.ECStack.empty())
+		return nullptr;
+
+	auto &I = *thr.ECStack.back().CurInst->getPrevNode();
+	if (!I.getMetadata("dbg"))
+		return nullptr;
+
+	thr.currDbgInfo.line = I.getDebugLoc().getLine();
+	thr.currDbgInfo.file = getFilenameFromMData(I.getMetadata("dbg"));
+	thr.currDbgInfo.functionName = thr.threadFun->getName().str();
+	thr.currDbgInfo.source =
+		genmc::getFileLineByNumber(thr.currDbgInfo.file, thr.currDbgInfo.line);
+	thr.currDbgInfo.accessedVarName = getAccessedVarName(loc);
+
+	/* Prettify strings (after all data has been parsed) */
+	genmc::stripWhitespace(thr.currDbgInfo.source);
+	genmc::extractFilename(thr.currDbgInfo.file);
+	return &thr.currDbgInfo;
+}
+
 //===----------------------------------------------------------------------===//
 // Interpreter ctor - Initialize stuff
 //
@@ -314,7 +356,7 @@ Interpreter::Interpreter(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> 
 
 	/* Setup the interpreter for the exploration */
 	mainFun = FindFunctionNamed(userConf->programEntryFun);
-	ERROR_ON(!mainFun, "Could not find program's entry point function!\n");
+	ERROR_ON(!mainFun, "Could not find program's entry point function!");
 
 	createAddMainThread();
 }

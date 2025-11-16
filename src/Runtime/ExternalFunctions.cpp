@@ -37,10 +37,6 @@
 
 #include "Runtime/Interpreter.h"
 #include "Support/Error.hpp"
-#include <cmath>
-#include <csignal>
-#include <cstdio>
-#include <cstring>
 #include <llvm/IR/DataLayout.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Module.h>
@@ -48,6 +44,13 @@
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/ManagedStatic.h>
 #include <llvm/Support/Mutex.h>
+#include <llvm/Support/raw_ostream.h>
+
+#include <cmath>
+#include <csignal>
+#include <cstdio>
+#include <cstring>
+#include <iostream>
 #include <map>
 
 #ifdef HAVE_LIBFFI
@@ -342,9 +345,9 @@ GenericValue Interpreter::callExternalFunction(Function *F,
 		errs() << "Tried to execute an unknown external function: " << *F->getType()
 		       << " __main\n";
 	else
-		ERROR("Tried to execute an unknown external function: " + F->getName());
+		ERROR("Tried to execute an unknown external function: {}", F->getName().str());
 #ifndef USE_LIBFFI
-	errs() << "Recompiling LLVM with --enable-libffi might help.\n";
+	errs() << "Recompiling LLVM with --enable-libffi might help.";
 #endif
 	return GenericValue();
 }
@@ -551,7 +554,7 @@ static GenericValue lle_X_memset(FunctionType *FT, const std::vector<GenericValu
 	 *      which will most likely lead to mixed-size memory accesses
 	 *   2) They would need to be intercepted by the interpreter anyway
 	 */
-	ERROR("Invalid call to memset()!\n");
+	ERROR("Invalid call to memset()!");
 
 	// int val = (int)Args[1].IntVal.getSExtValue();
 	// size_t len = (size_t)Args[2].IntVal.getZExtValue();
@@ -566,7 +569,7 @@ static GenericValue lle_X_memset(FunctionType *FT, const std::vector<GenericValu
 
 static GenericValue lle_X_memcpy(FunctionType *FT, const std::vector<GenericValue> &Args)
 {
-	ERROR("Invalid call to memcpy()!\n");
+	ERROR("Invalid call to memcpy()!");
 
 	// memcpy(GVTOP(Args[0]), GVTOP(Args[1]),
 	//        (size_t)(Args[2].IntVal.getLimitedValue()));

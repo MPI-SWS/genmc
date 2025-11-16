@@ -14,15 +14,14 @@
 #ifndef GENMC_DOTPRINT_HPP
 #define GENMC_DOTPRINT_HPP
 
-#include <llvm/Support/raw_ostream.h>
-
 #include <map>
+#include <ostream>
 
 template <typename T>
-inline void printDotEdge(llvm::raw_ostream &os, const T &from, const T &to,
+inline void printDotEdge(std::ostream &os, const T &from, const T &to,
 			 std::map<std::string, std::string> &&attrs = {})
 {
-	os << "\"" << from << "\"" << "->" << "\"" << to << "\"";
+	os << std::format("\"{}\"->\"{}\"", from, to);
 	if (!attrs.empty()) {
 		os << "[";
 		for (auto const &it : attrs) {
@@ -34,7 +33,7 @@ inline void printDotEdge(llvm::raw_ostream &os, const T &from, const T &to,
 };
 
 template <typename T>
-inline void printlnDotEdge(llvm::raw_ostream &os, const T &from, const T &to,
+inline void printlnDotEdge(std::ostream &os, const T &from, const T &to,
 			   std::map<std::string, std::string> &&attrs = {})
 {
 	printDotEdge(os, from, to, std::move(attrs));
@@ -42,14 +41,14 @@ inline void printlnDotEdge(llvm::raw_ostream &os, const T &from, const T &to,
 };
 
 template <typename T>
-inline void printDotEdge(llvm::raw_ostream &os, const std::pair<T, T> &e,
+inline void printDotEdge(std::ostream &os, const std::pair<T, T> &e,
 			 std::map<std::string, std::string> &&attrs = {})
 {
 	printDotEdge(os, e.first, e.second, std::move(attrs));
 }
 
 template <typename T>
-inline void printlnDotEdge(llvm::raw_ostream &os, const std::pair<T, T> &e,
+inline void printlnDotEdge(std::ostream &os, const std::pair<T, T> &e,
 			   std::map<std::string, std::string> &&attrs = {})
 {
 	printlnDotEdge(os, e.first, e.second, std::move(attrs));

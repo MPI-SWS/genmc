@@ -12,7 +12,6 @@
  */
 
 #include "InterpreterEnumAPI.hpp"
-#include "Support/Error.hpp"
 
 const std::unordered_map<std::string, InternalFunctions> internalFunNames = {
 #define HANDLE_FUNCTION(NUM, FUN, NAME) {FUN, InternalFunctions::NAME},

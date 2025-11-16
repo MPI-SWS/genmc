@@ -14,20 +14,20 @@
 #ifndef GENMC_THREAD_POOL_HPP
 #define GENMC_THREAD_POOL_HPP
 
-#include "ExecutionGraph/DepExecutionGraph.hpp"
-#include "Runtime/Interpreter.h"
-#include "Runtime/LLIConfig.hpp"
-#include "Static/LLVMModule.hpp"
 #include "Support/ThreadPinner.hpp"
 #include "Verification/GenMCDriver.hpp"
 #include "Verification/VerificationResult.hpp"
-#include <llvm/IR/Module.h>
-#include <llvm/Transforms/Utils/Cloning.h>
 
 #include <atomic>
 #include <future>
 #include <memory>
 #include <thread>
+
+/* TODO: Make lli-independent */
+namespace llvm {
+class Interpreter;
+class LLVMContext;
+} // namespace llvm
 
 /*******************************************************************************
  **                           GlobalWorkQueue Class
@@ -141,38 +141,7 @@ public:
 	ThreadPool(ThreadPool &&) = delete;
 	ThreadPool(const LLIConfig &lliConfig, const std::shared_ptr<const Config> &conf,
 		   const std::unique_ptr<llvm::Module> &mod, const std::unique_ptr<ModuleInfo> &MI,
-		   TFunT threadFun)
-		: numWorkers_(lliConfig.threads), pinner_(numWorkers_), joiner_(workers_)
-	{
-
-		/* Set global variables before spawning the threads */
-		shouldHalt_.store(false);
-		remainingTasks_.store(0);
-
-		/* Have a non-empty queue before spawning workers */
-		auto dummyGetter = [](auto &addr) { return SVal(0); };
-		auto execGraph = conf->isDepTrackingModel
-					 ? std::make_unique<DepExecutionGraph>(dummyGetter)
-					 : std::make_unique<ExecutionGraph>(dummyGetter);
-		auto exec = std::make_unique<GenMCDriver::Execution>(
-			std::move(execGraph), std::move(WorkList()), std::move(ChoiceMap()),
-			std::move(SAddrAllocator()), Event::getInit());
-		submit(std::move(exec));
-
-		/* Spawn workers */
-		for (auto i = 0U; i < numWorkers_; i++) {
-			contexts_.push_back(std::make_unique<llvm::LLVMContext>());
-			auto newmod = LLVMModule::cloneModule(mod, contexts_.back());
-			auto newMI = MI->clone(*newmod);
-
-			auto dw = GenMCDriver::create(conf, this);
-			std::string buf;
-			auto EE = llvm::Interpreter::create(std::move(newmod), std::move(newMI),
-							    &*dw, &lliConfig,
-							    dw->getExec().getAllocator(), &buf);
-			addWorker(i, std::move(dw), std::move(EE), threadFun);
-		}
-	}
+		   TFunT threadFun);
 
 	auto operator=(const ThreadPool &) -> ThreadPool & = delete;
 	auto operator=(ThreadPool &&) -> ThreadPool & = delete;
@@ -195,7 +164,11 @@ public:
 	/*** Tasks-related ***/
 
 	/** Submits a task to be executed by a worker */
+#ifdef BUILD_LLI
 	void submit(TaskT task);
+#else
+	void submit(TaskT task) { BUG(); }
+#endif
 
 	/** Notify the pool about the addition/completion of a task */
 	auto incRemainingTasks() -> unsigned { return ++remainingTasks_; }
@@ -217,7 +190,7 @@ public:
 
 	/*** Destructor ***/
 
-	~ThreadPool() { halt(); }
+	~ThreadPool();
 
 private:
 	/** Adds a worker thread to the pool */

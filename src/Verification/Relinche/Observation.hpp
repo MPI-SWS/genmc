@@ -14,12 +14,12 @@
 #ifndef GENMC_OBSERVATION_HPP
 #define GENMC_OBSERVATION_HPP
 
+#include "ADT/IndexedMap.hpp"
 #include "ADT/VSet.hpp"
+#include "Support/Error.hpp"
+#include "Support/Hash.hpp"
 
-#include <llvm/ADT/Hashing.h>
-#include <llvm/ADT/IndexedMap.h>
-#include <llvm/Support/raw_ostream.h>
-
+#include <format>
 #include <ranges>
 #include <string>
 #include <utility>
@@ -45,11 +45,6 @@ struct MethodCall {
 
 		auto operator<=>(const Id &other) const = default;
 
-		friend auto operator<<(llvm::raw_ostream &os, const Id &id) -> llvm::raw_ostream &
-		{
-			return os << id.id_;
-		}
-
 	private:
 		/* Internal convention: the id of a call object is its index in
 		 * the parent Observation::ops_ */
@@ -59,7 +54,8 @@ struct MethodCall {
 	/* for diagnostics */
 	using ThreadKindAndCopyIx = std::pair<int16_t, int16_t>; // (kind of thread, number of copy)
 
-	Id id; /**< Invariant: the id of a call will always be its index in the parent observation */
+	Id id; /**< Invariant: the id of a call will always be its index in the parent observation
+		*/
 	std::string name;
 	int32_t argVal;
 	int32_t retVal;
@@ -76,14 +72,6 @@ struct MethodCall {
 	}
 
 	auto operator==(const MethodCall &other) const -> bool { return operator<=>(other) == 0; }
-
-	friend auto operator<<(llvm::raw_ostream &os, const MethodCall &call) -> llvm::raw_ostream &
-	{
-		os << call.id << ": " << call.name << "("
-		   << (call.argVal == 0 ? "" : std::to_string(call.argVal)) << ") -> "
-		   << (call.retVal == 0 ? "⊥" : std::to_string(call.retVal));
-		return os;
-	}
 };
 
 /** This class represents the projection of execution graph into client.
@@ -95,7 +83,7 @@ class Observation {
 
 public:
 	using CallEdge = std::pair<MethodCall::Id, MethodCall::Id>;
-	using PermutationMap = llvm::IndexedMap<MethodCall::Id>;
+	using PermutationMap = genmc::IndexedMap<MethodCall::Id>;
 
 	Observation(ExecutionGraph &graph, const ConsistencyChecker *consChecker);
 
@@ -161,13 +149,12 @@ public:
 		return std::tie(ops_, rfs_, hb_) < std::tie(other.ops_, other.rfs_, other.hb_);
 	}
 
-	friend auto operator<<(llvm::raw_ostream &os, const Observation &obs)
-		-> llvm::raw_ostream &;
+	friend struct std::formatter<Observation>;
 
 private:
 	Observation() = default;
 
-	friend void serialize(llvm::raw_ostream &os, const Specification &spec);
+	friend void serialize(std::ostream &os, const Specification &spec);
 	friend auto deserialize(std::istream &is) -> Specification;
 
 	std::vector<MethodCall> ops_;	// Ordered operation calls
@@ -176,17 +163,57 @@ private:
 };
 
 template <> struct std::hash<Observation> {
-	auto operator()(const Observation &obs) const -> size_t
+	auto operator()(const Observation &obs) const -> std::size_t
 	{
-		uint64_t hash = 0;
+		std::size_t hash = 0;
 
 		for (const auto &call : obs.ops()) {
-			hash = llvm::hash_combine(hash, call.retVal);
+			hash_combine(hash, call.retVal);
 		}
 		for (const auto &[from, to] : obs.rfs()) {
-			hash += llvm::hash_combine(from, to);
+			hash_combine(hash, from);
+			hash_combine(hash, to);
 		}
 		return hash;
+	}
+};
+
+/**** Formatting methods. ****/
+
+/** Make `MethodCall::Id` formattable with `std::format`. */
+template <> struct std::formatter<MethodCall::Id> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const MethodCall::Id &id, std::format_context &ctx) const
+	{
+		return std::format_to(ctx.out(), "{}", id.value());
+	}
+};
+
+/** Make `MethodCall` formattable with `std::format`. */
+template <> struct std::formatter<MethodCall> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const MethodCall &call, std::format_context &ctx) const
+	{
+		auto argStr = call.argVal == 0 ? std::string{} : std::to_string(call.argVal);
+		auto retStr = call.retVal == 0 ? std::string{"⊥"} : std::to_string(call.retVal);
+		return std::format_to(ctx.out(), "{}: {}({}) -> {}", call.id, call.name, argStr,
+				      retStr);
+	}
+};
+
+/** Make `Observation` formattable with `std::format`. */
+template <> struct std::formatter<Observation> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const Observation &obs, std::format_context &ctx) const
+	{
+		auto out = ctx.out();
+		out = std::format_to(out, "Ops:\n{}\n", obs.ops_);
+		out = std::format_to(out, "RF:\n{}\n", obs.rfs_);
+		out = std::format_to(out, "HB:\n{}\n", obs.hb_);
+		return out;
 	}
 };
 

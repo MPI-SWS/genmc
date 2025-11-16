@@ -14,10 +14,11 @@
 #ifndef GENMC_VIEW_HPP
 #define GENMC_VIEW_HPP
 
+#include "ADT/IndexedMap.hpp"
 #include "ADT/VectorClock.hpp"
 #include "ExecutionGraph/Event.hpp"
-#include <llvm/ADT/IndexedMap.h>
-#include <llvm/Support/raw_ostream.h>
+
+#include <format>
 
 /**
  * An instantiation of a vector clock where it is assumed that if an index
@@ -26,7 +27,7 @@
  */
 class View : public VectorClock {
 private:
-	using EventView = llvm::IndexedMap<int>;
+	using EventView = genmc::IndexedMap<int>;
 	EventView view_;
 
 public:
@@ -85,7 +86,7 @@ public:
 		view_[e.thread] = e.index;
 	}
 
-	void printData(llvm::raw_ostream &s) const override;
+	auto formatData(std::format_context &ctx) const -> std::format_context::iterator override;
 
 	static auto classof(const VectorClock *vc) -> bool { return vc->getKind() == VC_View; }
 };

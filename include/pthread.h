@@ -142,6 +142,7 @@ int pthread_create(pthread_t *__restrict __newthread,
 		   void *(*__start_routine) (void *),
 		   void *__restrict __arg)
 {
+	assert(__start_routine != NULL && "Invalid argument in pthread_create(): NULL pointer");
 	(*__newthread) = __VERIFIER_thread_create(__attr, __start_routine, __arg);
 	return 0;
 }

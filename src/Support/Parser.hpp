@@ -14,24 +14,24 @@
 #ifndef GENMC_PARSER_HPP
 #define GENMC_PARSER_HPP
 
-#include <fstream>
-#include <iostream>
-#include <llvm/Support/Debug.h>
-#include <llvm/Support/raw_ostream.h>
 #include <string>
-#include <vector>
 
-using namespace std;
+namespace genmc {
 
-class Parser {
-public:
-	auto readFile(const string &fileName) -> string;
-	static auto getFileLineByNumber(const std::string &absPath, int line) -> std::string;
-	static void stripWhitespace(std::string &s);
-	static void stripSlashes(std::string &absPath);
-	static void parseInstFromMData(std::pair<int, std::string> &locAndFile,
-				       std::string functionName,
-				       llvm::raw_ostream &os = llvm::dbgs());
-};
+/** Reads the file `absPath` and returns its contents into a string */
+auto readFile(const std::string &absPath) -> std::string;
+
+/** Reads the `line`-th number of `absPath` */
+auto getFileLineByNumber(const std::string &absPath, int line) -> std::string;
+
+/** Strips leading and trailing whitespace from `s` */
+void stripWhitespace(std::string &s);
+
+/** Extracts the filename given an absolute path `absPath` */
+void extractFilename(std::string &absPath);
+
+auto parseInstFromMData(int line, std::string absPath, const std::string &functionName)
+	-> std::string;
+} /* namespace genmc */
 
 #endif /* GENMC_PARSER_HPP */

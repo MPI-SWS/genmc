@@ -42,9 +42,11 @@
 #include "Support/SAddrAllocator.hpp"
 #include "Support/SVal.hpp"
 #include "Support/ThreadInfo.hpp"
+#include "Verification/GenMCDriver.hpp"
 #include "Verification/InterpreterCallbacks.hpp"
 #include "Verification/VerificationError.hpp"
 
+#include <llvm/ADT/IntervalMap.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/GenericValue.h>
 #include <llvm/IR/DataLayout.h>
@@ -54,8 +56,8 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/Support/DataTypes.h>
 #include <llvm/Support/ErrorHandling.h>
-#include <llvm/Support/raw_ostream.h>
 
+#include <format>
 #include <optional>
 #include <random>
 #include <unordered_map>
@@ -176,7 +178,7 @@ public:
 	std::unordered_map<const void *, llvm::GenericValue> tls;
 	BlockageType blocked{};
 	MyRNG rng;
-	std::vector<std::pair<int, std::string>> prefixLOC;
+	GenMCDriver::EventDbgInfo currDbgInfo;
 
 	bool isMain() const { return id == 0; }
 
@@ -199,8 +201,6 @@ protected:
 	{}
 };
 
-llvm::raw_ostream &operator<<(llvm::raw_ostream &s, const Thread &thr);
-
 /* The state of the program -- i.e., part of the program being interpreted */
 enum class ProgramState { Ctors, Main, Dtors };
 
@@ -208,6 +208,8 @@ enum class ProgramState { Ctors, Main, Dtors };
 enum class ExecutionState { Normal, Replay };
 
 struct DynamicComponents {
+
+	DynamicComponents() : nameInfo(imapAllocator) {}
 
 	/* Information about threads as well as the currently executing thread */
 	std::vector<Thread> threads;
@@ -219,6 +221,13 @@ struct DynamicComponents {
 
 	/* Information about the interpreter's state */
 	ProgramState programState = ProgramState::Main; /* Pers */
+
+	/* Whether we should collect dbg info + naming info during error runs */
+	using AddrIntervalMap = IntervalMap<SAddr, std::pair<std::string, const NameInfo *>, 16,
+					    IntervalMapHalfOpenInfo<SAddr>>;
+	bool collectDbgInfo = false;
+	AddrIntervalMap::Allocator imapAllocator;
+	AddrIntervalMap nameInfo;
 
 	GenericValue ExitValue; // The return value of the called function
 
@@ -282,9 +291,6 @@ public:
 			     GenMCDriver *driver, const LLIConfig *userConf,
 			     SAddrAllocator &alloctor);
 	virtual ~Interpreter();
-
-	std::unique_ptr<InterpreterState> saveState();
-	void restoreState(std::unique_ptr<InterpreterState>);
 
 	Thread &constructAddThreadFromInfo(const ThreadInfo &ti)
 	{
@@ -391,6 +397,11 @@ public:
 	Event incPos() { return ++dynState.globalInstructions[getCurThr().id].event; }
 	Event decPos() { return --dynState.globalInstructions[getCurThr().id].event; }
 
+	/* Returns debug metadata for the current instruction. Returns nullptr if
+	 * we're not in debug collection mode (see runAsMain()), or if no metadata exist.*/
+	const GenMCDriver::EventDbgInfo *currDbgInfo(std::optional<SAddr> loc = {});
+	std::string getAccessedVarName(const std::optional<SAddr> &loc);
+
 	Event threadPos(unsigned int i) const { return dynState.globalInstructions[i].event; }
 
 	/* Query interpreter's state */
@@ -452,7 +463,6 @@ public:
 	void freeMachineCodeForFunction(Function *F) {}
 
 	/* Helper functions */
-	void replayExecutionBefore(const VectorClock &before);
 
 	SVal getLocInitVal(const AAccess &access)
 	{
@@ -492,7 +502,7 @@ public:
 	void run(); // Execute instructions until nothing left to do
 
 	/* run() wrappers */
-	int runMain();
+	int runMain(bool collectDbg = false);
 
 	// Opcode Implementations
 	void visitReturnInst(ReturnInst &I);
@@ -599,8 +609,6 @@ private: // Helper functions
 	void popStackAndReturnValueToCaller(Type *RetTy, GenericValue Result,
 					    ReturnInst *retI = nullptr);
 
-	void handleSystemError(SystemError code, const std::string &msg);
-
 	void setProgramState(ProgramState s) { dynState.programState = s; }
 
 	void handleLock(SAddr addr, ASize size, const EventDeps *deps);
@@ -704,5 +712,16 @@ private: // Helper functions
 }; // namespace llvm
 
 } // namespace llvm
+
+/** Make `llvm::Thread` formattable with `std::format`. */
+template <> struct std::formatter<llvm::Thread> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const llvm::Thread &thr, std::format_context &ctx) const
+	{
+		return std::format_to(ctx.out(), "<{}, {}> {}", thr.parentId, thr.id,
+				      thr.threadFun->getName().str());
+	}
+};
 
 #endif

@@ -18,6 +18,7 @@
 
 #include <climits>
 #include <cstdint>
+#include <format>
 
 /*******************************************************************************
  **                             ASize Class
@@ -46,11 +47,19 @@ public:
 	auto operator<=>(const ASize &other) const = default;
 	auto operator()() const -> Size { return size; }
 
-	friend auto operator<<(llvm::raw_ostream &rhs, const ASize &s) -> llvm::raw_ostream &;
-
 private:
 	/** The actual size */
 	Size size;
+};
+
+/** Make `ASize` formattable with `std::format`. */
+template <> struct std::formatter<ASize> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const ASize &size, std::format_context &ctx) const
+	{
+		return std::format_to(ctx.out(), "{}", size.get());
+	}
 };
 
 #endif /* GENMC_ASIZE_HPP */

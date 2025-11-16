@@ -15,24 +15,27 @@
 #include "Runtime/LLIConfig.hpp"
 #include "Static/LLVMModule.hpp"
 #include "Support/Error.hpp"
+#include "Support/Logger.hpp"
 #include "Support/ThreadPool.hpp"
 #include "Verification/Config.hpp"
 #include "Verification/GenMCDriver.hpp"
 
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/DynamicLibrary.h>
-#include <llvm/Support/FileSystem.h>
-#include <llvm/Support/raw_ostream.h>
 
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <format>
+#include <iomanip>
+#include <ios>
+#include <iostream>
 #include <memory>
 #include <unistd.h>
 
-namespace fs = llvm::sys::fs;
+namespace fs = std::filesystem;
 
 enum class InputLanguage : std::uint8_t { clang, cargo, rust, llvmir };
 
@@ -233,10 +236,9 @@ static llvm::cl::opt<bool> clSkipGenmcStdBuild(
 	llvm::cl::desc("Don't build the genmc-std crate while verifying .rs files "
 		       "if a build is already present"));
 
-static llvm::cl::list<std::string>
-	clExtraInput("extra-input", llvm::cl::value_desc("file"),
-		   llvm::cl::cat(clDebugging),
-		   llvm::cl::desc("Build this file seperately and link the result into the build"));
+static llvm::cl::list<std::string> clExtraInput(
+	"extra-input", llvm::cl::value_desc("file"), llvm::cl::cat(clDebugging),
+	llvm::cl::desc("Build this file seperately and link the result into the build"));
 
 static llvm::cl::opt<unsigned int>
 	clWarnOnGraphSize("warn-on-graph-size", llvm::cl::init(1024), llvm::cl::value_desc("N"),
@@ -282,9 +284,6 @@ static llvm::cl::opt<VerbosityLevel> clVLevel(
 				 ));
 
 #ifdef ENABLE_GENMC_DEBUG
-static llvm::cl::opt<bool> clPrintStamps("print-stamps", llvm::cl::cat(clDebugging),
-					 llvm::cl::desc("Print stamps in execution graphs"));
-
 static llvm::cl::opt<bool>
 	clColorAccesses("color-accesses", llvm::cl::cat(clDebugging),
 			llvm::cl::desc("Color accesses depending on revisitability"));
@@ -338,7 +337,7 @@ static void checkLLIConfig(const LLIConfig &lliConfig)
 {
 	/* Make sure -skip-genmc-std-build is used only on Rust builds */
 	if (lliConfig.skipGenmcStdBuild && !lliConfig.rust) {
-		ERROR("-skip-genmc-std-build used on non-Rust input.\n");
+		ERROR("-skip-genmc-std-build used on non-Rust input.");
 	}
 }
 
@@ -377,10 +376,11 @@ static void saveConfigOptions(Config &conf, LLIConfig &lliConfig)
 	lliConfig.outputLlvmBefore = std::move(clOutputLlvmBefore);
 	lliConfig.outputLlvmAfter = std::move(clOutputLlvmAfter);
 	lliConfig.skipGenmcStdBuild = clSkipGenmcStdBuild;
-	for (const auto extraInput : clExtraInput){
+	for (const auto extraInput : clExtraInput) {
 		auto extraLang = determineLang(extraInput);
 		lliConfig.extraInput.insert(extraInput);
-		lliConfig.rust |= extraLang == InputLanguage::rust || extraLang == InputLanguage::cargo;
+		lliConfig.rust |= extraLang == InputLanguage::rust ||
+				  extraLang == InputLanguage::cargo;
 	}
 	lliConfig.programEntryFun = std::move(clProgramEntryFunction);
 	lliConfig.isDepTrackingModel = (clModelType == ModelType::IMM);
@@ -422,8 +422,6 @@ static void saveConfigOptions(Config &conf, LLIConfig &lliConfig)
 	conf.printExecGraphs = clPrintExecGraphs;
 	conf.printBlockedExecs = clPrintBlockedExecs;
 #ifdef ENABLE_GENMC_DEBUG
-	conf.printStamps = clPrintStamps;
-	conf.colorAccesses = clColorAccesses;
 	conf.validateExecGraphs = clValidateExecGraphs;
 	conf.countDuplicateExecs = clCountDuplicateExecs;
 	conf.countMootExecs = clCountMootExecs;
@@ -438,19 +436,19 @@ static void adjustConfig(const ModuleInfo &modInfo, Config &conf)
 	/* Warn if BAM is enabled and barrier results might be used */
 	if (!conf.disableBAM && modInfo.barrierResultsUsed.has_value() &&
 	    *modInfo.barrierResultsUsed == BarrierRetResult::Used) {
-		LOG(VerbosityLevel::Warning)
-			<< "Could not determine whether barrier_wait() result is used."
-			<< " Use -disable-bam if the order in which threads reach the barrier "
-			   "matters.\n";
+		LOG(VerbosityLevel::Warning,
+		    "Could not determine whether barrier_wait() result is used. Use -disable-bam "
+		    "if the order in which threads reach the barrier matters.");
 	}
 
 	/* Perhaps override the MM under which verification will take place */
 	if (modInfo.determinedMM.has_value() && isStrongerThan(*modInfo.determinedMM, conf.model)) {
 		conf.model = *modInfo.determinedMM;
 		conf.isDepTrackingModel = (conf.model == ModelType::IMM);
-		LOG(VerbosityLevel::Tip)
-			<< "Automatically adjusting memory model to " << conf.model
-			<< ". You can disable this behavior with -disable-mm-detector.\n";
+		LOG(VerbosityLevel::Tip,
+		    "Automatically adjusting memory model to {}. You can disable this behavior "
+		    "with -disable-mm-detector.",
+		    conf.model);
 	}
 }
 
@@ -469,8 +467,17 @@ static void parseConfig(int argc, char **argv, Config &conf, LLIConfig &lliConfi
 
 	/* Save the config options and do some sanity-checks. */
 	saveConfigOptions(conf, lliConfig);
-	checkConfig(conf);
 	checkLLIConfig(lliConfig);
+
+	std::vector<std::string> warnings;
+	auto status = conf.validate(warnings);
+	for (const auto &w : warnings)
+		WARN("{}", w);
+	if (!status) {
+		for (const auto &e : status.error())
+			LOG(VerbosityLevel::Error, "{}", e);
+		exit(EUSER);
+	}
 
 	/* Set (global) log state */
 	logLevel = clVLevel;
@@ -548,7 +555,7 @@ static auto buildCargoProject(std::string &cargoPath, const std::filesystem::pat
 	std::string buildCommand =
 		std::string("RUSTFLAGS=\"--emit=llvm-bc\" ") + cargoPath + std::string(" build");
 	if (std::system(buildCommand.c_str()) != 0) {
-		WARN("'cargo build' failed \n");
+		WARN("'cargo build' failed");
 		return false;
 	}
 
@@ -559,9 +566,9 @@ static auto buildCargoProject(std::string &cargoPath, const std::filesystem::pat
 
 /**
  * Compilation for *.rs input types.
- * Strategy: Build genmc-std as library cargo project separately, then include the produced .rlib
- * file as a prelude (--extern) when building our .rs file with rustc. Link the llvm-ir output files
- * produced by genmc-std into it seperately.
+ * Strategy: Build genmc-std as library cargo project separately, then include the produced
+ * .rlib file as a prelude (--extern) when building our .rs file with rustc. Link the
+ * llvm-ir output files produced by genmc-std into it seperately.
  */
 static auto compileRustInput(const LLIConfig &lliConfig,
 			     const std::unique_ptr<llvm::LLVMContext> &ctx,
@@ -600,7 +607,7 @@ static auto compileRustInput(const LLIConfig &lliConfig,
 	/* Build the rustc file */
 	std::string rustcCommand = rustcPath + args;
 	if (std::system(rustcCommand.c_str()) != 0) {
-		WARN("'rustc' failed \n");
+		WARN("'rustc' failed");
 		return false;
 	}
 
@@ -608,7 +615,7 @@ static auto compileRustInput(const LLIConfig &lliConfig,
 	 * genmc__rust_alloc are not present in the module for use in later LLVM-Passes) */
 	std::string mvCommand = std::string("mv -f rustc_out.bc ") + (pathDebug / "deps").string();
 	if (std::system(mvCommand.c_str()) != 0) {
-		WARN("Copying the LLVM-IR output failed \n");
+		WARN("Copying the LLVM-IR output failed");
 		return false;
 	}
 	module = LLVMModule::parseLinkAllLLVMModules(pathGenmcStd, ctx);
@@ -624,8 +631,7 @@ static auto compileCargoInput(const LLIConfig &lliConfig,
 			      std::unique_ptr<llvm::Module> &module) -> bool
 {
 #ifndef RUSTC_PATH
-	ERROR("Rust not linked, use cmake with '-DENABLE_RUST=ON' and rebuild GenMC to use "
-	      "Rust.");
+	ERROR("Rust not linked, use cmake with '-DENABLE_RUST=ON' and rebuild GenMC to use Rust.");
 #define CARGO_PATH ""
 #endif
 	std::string cargoPath = std::string(CARGO_PATH);
@@ -652,8 +658,8 @@ static auto compileToModule(const LLIConfig &lliConfig,
 	-> std::unique_ptr<llvm::Module>
 {
 	/* Make sure filename is a regular file */
-	if (!llvm::sys::fs::is_regular_file(lliConfig.inputFile))
-		ERROR("Input file is neither a regular file, nor a directory!\n");
+	if (!fs::is_regular_file(lliConfig.inputFile))
+		ERROR("Input file is neither a regular file, nor a directory!");
 
 	std::unique_ptr<llvm::Module> module;
 	auto lang = determineLang(lliConfig.inputFile);
@@ -700,67 +706,61 @@ static void printEstimationResults(const std::shared_ptr<const Config> &conf,
 				   const std::chrono::high_resolution_clock::time_point &begin,
 				   const VerificationResult &res)
 {
-	PRINT(VerbosityLevel::Error) << res.message;
-	PRINT(VerbosityLevel::Error)
-		<< (!res.status.has_value() ? "*** Estimation complete.\n"
-					    : "*** Estimation unsuccessful.\n");
+	PRINT(VerbosityLevel::Error, "{}", res.message);
+	PRINT(VerbosityLevel::Error, "{}.\n",
+	      (!res.status.has_value() ? "*** Estimation complete"
+				       : "\n*** Estimation unsuccessful"));
 
-	auto mean = std::llround(res.estimationMean);
-	auto sd = std::llround(std::sqrt(res.estimationVariance));
+	long long mean = std::llround(res.estimationMean);
+	long long sd = std::llround(std::sqrt(res.estimationVariance));
 	auto meanTimeSecs = getElapsedSecs(begin) / (res.explored + res.exploredBlocked);
-	PRINT(VerbosityLevel::Error)
-		<< "Total executions estimate: " << mean << " (+- " << sd << ")\n"
-		<< "Time to completion estimate: " << llvm::format("%.2Lf", meanTimeSecs * mean)
-		<< "s\n";
-	GENMC_DEBUG(if (conf->printEstimationStats) PRINT(VerbosityLevel::Error)
-			    << "Estimation moot: " << res.exploredMoot << "\n"
-			    << "Estimation blocked: " << res.exploredBlocked << "\n"
-			    << "Estimation complete: " << res.explored << "\n";);
+	PRINT(VerbosityLevel::Error, "Total executions estimate: {} (+- {})\n", mean, sd);
+	PRINT(VerbosityLevel::Error, "Time to completion estimate: {:.2f}s\n", meanTimeSecs * mean);
+	GENMC_DEBUG(if (conf->printEstimationStats) {
+		PRINT(VerbosityLevel::Error, "Estimation moot: {}\n", res.exploredMoot);
+		PRINT(VerbosityLevel::Error, "Estimation blocked: {}\n", res.exploredBlocked);
+		PRINT(VerbosityLevel::Error, "Estimation complete: {}\n", res.explored);
+	});
 }
 
 static void printVerificationResults(const std::shared_ptr<const Config> &conf,
 				     const VerificationResult &res)
 {
-	PRINT(VerbosityLevel::Error) << res.message;
-	PRINT(VerbosityLevel::Error)
-		<< (!res.status.has_value()
-			    ? "*** Verification complete.\nNo errors were detected.\n"
-			    : "*** Verification unsuccessful.\n");
+	PRINT(VerbosityLevel::Error, "{}", res.message);
+	PRINT(VerbosityLevel::Error, "{}.\n",
+	      (!res.status.has_value() ? "*** Verification complete.\nNo errors were detected"
+				       : "\n*** Verification unsuccesful"));
 
-	PRINT(VerbosityLevel::Error) << "Number of complete executions explored: " << res.explored;
-	GENMC_DEBUG(PRINT(VerbosityLevel::Error)
-			    << ((conf->countDuplicateExecs)
-					? " (" + std::to_string(res.duplicates) + " duplicates)"
-					: ""););
+	PRINT(VerbosityLevel::Error, "Number of complete executions explored: {}", res.explored);
+	GENMC_DEBUG(if (conf->countDuplicateExecs)
+			    PRINT(VerbosityLevel::Error, " ({} duplicates)", res.duplicates););
 	if (res.boundExceeding) {
 		BUG_ON(conf->boundType == BoundType::round);
-		PRINT(VerbosityLevel::Error)
-			<< " (" + std::to_string(res.boundExceeding) + " exceeded bound)";
+		PRINT(VerbosityLevel::Error, " ({} exceeded bound)", res.boundExceeding);
 	}
 	if (res.exploredBlocked != 0U) {
-		PRINT(VerbosityLevel::Error)
-			<< "\nNumber of blocked executions seen: " << res.exploredBlocked;
+		PRINT(VerbosityLevel::Error, "\nNumber of blocked executions seen: {}",
+		      res.exploredBlocked);
 	}
 	GENMC_DEBUG(
 		if (conf->countMootExecs) {
-			PRINT(VerbosityLevel::Error) << " (+ " << res.exploredMoot << " mooted)";
+			PRINT(VerbosityLevel::Error, " (+ {} mooted)", res.exploredMoot);
 		};
 		if (conf->boundsHistogram) {
-			PRINT(VerbosityLevel::Error) << "\nBounds histogram:";
+			PRINT(VerbosityLevel::Error, "\nBounds histogram:");
 			auto executions = 0u;
 			for (auto i = 0u; i < res.exploredBounds.size(); i++) {
 				executions += res.exploredBounds[i];
-				PRINT(VerbosityLevel::Error) << " " << executions;
+				PRINT(VerbosityLevel::Error, " {}", executions);
 			}
 			if (!executions)
-				PRINT(VerbosityLevel::Error) << " 0";
+				PRINT(VerbosityLevel::Error, " 0");
 		});
 	if (conf->checkLinSpec) {
-		PRINT(VerbosityLevel::Error)
-			<< "\nNumber of checked hints: " << res.relincheResult.hintsChecked;
-		GENMC_DEBUG(PRINT(VerbosityLevel::Error) << llvm::format(
-				    "\nRelinche time: %.2Lfs",
-				    durationToMill(res.relincheResult.analysisTime)););
+		PRINT(VerbosityLevel::Error, "\nNumber of checked hints: {}",
+		      res.relincheResult.hintsChecked);
+		GENMC_DEBUG(PRINT(VerbosityLevel::Error, "\nRelinche time: {:.2f}s",
+				  durationToMill(res.relincheResult.analysisTime)););
 	}
 }
 
@@ -770,16 +770,17 @@ static void calculateHintsAndSaveSpec(const std::shared_ptr<const Config> &conf,
 	auto spec = std::move(*res.specification);
 	spec.calculateHints();
 
-	PRINT(VerbosityLevel::Error) << "\n*** Specification analysis complete.\n";
-	PRINT(VerbosityLevel::Error)
-		<< "Number of collected outcomes: " << spec.getNumOutcomes()
-		<< " (synchronizations: " << spec.getNumObservations() << ")\n";
-	PRINT(VerbosityLevel::Error) << "Number of hints found: " << spec.getNumHints();
+	PRINT(VerbosityLevel::Error, "\n*** Specification analysis complete.\n");
+	PRINT(VerbosityLevel::Error, "Number of collected outcomes: {} (synchronizations: {})\n",
+	      spec.getNumOutcomes(), spec.getNumObservations());
+	PRINT(VerbosityLevel::Error, "Number of hints found: {}", spec.getNumHints());
 
-	std::error_code err;
-	llvm::raw_fd_ostream specFile(*conf->collectLinSpec, err, fs::CD_CreateAlways, fs::FA_Write,
-				      fs::OF_None);
-	handleFSError(err, "during save specification file");
+	const auto &filePath = *conf->collectLinSpec;
+	std::ofstream specFile(filePath, std::ios::trunc);
+	if (!specFile) {
+		std::error_code ec = std::make_error_code(std::io_errc::stream);
+		handleFSError(ec, "Failed to open specification file: " + filePath);
+	}
 	serialize(specFile, spec);
 }
 
@@ -796,17 +797,16 @@ static auto createExecutionContext(const ExecutionGraph &g) -> std::vector<Threa
 
 void run(GenMCDriver *driver, llvm::Interpreter *EE)
 {
-	driver->setEE(&*EE);
 	driver->setInterpCallbacks(EE->getCallbacks());
 	do {
-		driver->handleExecutionStart();
-		if (driver->runFromCache()) {
+		auto errorReplay = driver->handleExecutionStart();
+		if (!errorReplay && driver->runFromCache()) {
 			driver->handleExecutionEnd();
 			continue;
 		}
 		EE->reset();
 		EE->setExecutionContext(createExecutionContext(driver->getExec().getGraph()));
-		EE->runMain();
+		EE->runMain(errorReplay);
 		driver->handleExecutionEnd();
 	} while (!driver->done());
 }
@@ -858,15 +858,17 @@ auto verify(const LLIConfig &lliConfig, std::shared_ptr<const Config> conf,
 
 auto main(int argc, char **argv) -> int
 {
+	std::ios::sync_with_stdio(false);
+
 	auto begin = std::chrono::high_resolution_clock::now();
 	auto conf = std::make_shared<Config>();
 	LLIConfig lliConfig;
 
 	parseConfig(argc, argv, *conf, lliConfig);
 
-	PRINT(VerbosityLevel::Error)
-		<< PACKAGE_NAME " v" PACKAGE_VERSION << " (LLVM " LLVM_VERSION ")\n"
-		<< "Copyright (C) 2024 MPI-SWS. All rights reserved.\n\n";
+	PRINT(VerbosityLevel::Error,
+	      PACKAGE_NAME " v" PACKAGE_VERSION " (LLVM " LLVM_VERSION ")\n"
+			   "Copyright (C) 2024 MPI-SWS. All rights reserved.\n\n");
 
 	/* Make sure we can resolve symbols in the program. We use 0
 	 * as an argument in order to load the program, not a library. This
@@ -874,7 +876,7 @@ auto main(int argc, char **argv) -> int
 	 * user code. */
 	std::string errorStr;
 	if (llvm::sys::DynamicLibrary::LoadLibraryPermanently(nullptr, &errorStr)) {
-		WARN("Could not resolve symbols in the program: " + errorStr);
+		WARN("Could not resolve symbols in the program: {}", errorStr);
 	}
 
 	auto ctx = std::make_unique<llvm::LLVMContext>(); // *dtor after module's*
@@ -894,18 +896,18 @@ auto main(int argc, char **argv) -> int
 	}
 	moduleUP = LLVMModule::linkAllModules(std::move(modules));
 
-	PRINT(VerbosityLevel::Error) << "*** Compilation complete.\n";
+	PRINT(VerbosityLevel::Error, "*** Compilation complete.\n");
 
 	/* Perform the necessary transformations */
 	auto modInfo = std::make_unique<ModuleInfo>(*moduleUP);
 	transformInput(lliConfig, *moduleUP, *modInfo);
 	adjustConfig(*modInfo, *conf);
-	PRINT(VerbosityLevel::Error) << "*** Transformation complete.\n";
+	PRINT(VerbosityLevel::Error, "*** Transformation complete.\n");
 
 	/* Estimate the state space */
 	if (conf->estimate) {
-		LOG(VerbosityLevel::Tip) << "Estimating state-space size. For better performance, "
-					    "you can use --disable-estimation.\n";
+		LOG(VerbosityLevel::Tip, "Estimating state-space size. For better performance, you "
+					 "can use --disable-estimation.");
 		auto res = estimate(lliConfig, conf, moduleUP, modInfo);
 		printEstimationResults(conf, begin, res);
 		if (res.status.has_value())
@@ -920,9 +922,7 @@ auto main(int argc, char **argv) -> int
 	if (conf->collectLinSpec)
 		calculateHintsAndSaveSpec(conf, res);
 
-	PRINT(VerbosityLevel::Error)
-		<< "\nTotal wall-clock time: " << llvm::format("%.2Lf", getElapsedSecs(begin))
-		<< "s\n";
+	PRINT(VerbosityLevel::Error, "\nTotal wall-clock time: {:.2f}s\n", getElapsedSecs(begin));
 
 	/* TODO: Check globalContext.destroy() and llvm::shutdown() */
 	return !res.status.has_value() ? 0 : EVERIFY;

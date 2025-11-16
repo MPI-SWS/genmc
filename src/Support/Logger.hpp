@@ -15,107 +15,118 @@
 #define GENMC_LOGGER_HPP
 
 #include "Support/Verbosity.hpp"
-#include <llvm/Support/raw_ostream.h>
+
+#include <format>
+#include <iostream>
 #include <set>
+#include <string>
+
+/* Feature detection for std::print{ln}, fall back to <iostream> otherwise. */
+#ifdef __cpp_lib_print
+#include <print>
+#endif /* __cpp_lib_print */
 
 struct out_tag {};
 struct err_tag {};
 
-template <typename U> class Logger {
+template <typename T>
+concept StreamTag = std::same_as<T, out_tag> || std::same_as<T, err_tag>;
+
+namespace detail {
+template <StreamTag U> constexpr auto to_stream() -> std::ostream *
+{
+	if constexpr (std::is_same_v<U, err_tag>) {
+		return &std::cerr;
+	} else if constexpr (std::is_same_v<U, out_tag>) {
+		return &std::cout;
+	}
+}
+}; // namespace detail
+
+template <StreamTag U> class Logger {
 
 protected:
 	/* So that derived classes can bypass the initial write to buffer */
-	Logger(VerbosityLevel l, bool) : buffer_(str_) {}
+	Logger(VerbosityLevel l, bool) : out_(::detail::to_stream<U>()) {}
+
+	/* Allow derived classes to print the level the same way this class does. */
+	void printLevel(VerbosityLevel l) const
+	{
+#ifdef __cpp_lib_print
+		std::print(*out_, "{}", l);
+#else
+		*out_ << std::format("{}", l);
+#endif /* __cpp_lib_print */
+	}
 
 public:
-	Logger(VerbosityLevel l = VerbosityLevel::Warning) : buffer_(str_)
+	Logger(VerbosityLevel l = VerbosityLevel::Warning) : out_(::detail::to_stream<U>())
 	{
 		if (std::is_same_v<U, err_tag>)
-			buffer_ << l;
+			printLevel(l);
 	}
 
-	template <typename T> auto operator<<(const T &msg) -> Logger &
+	template <typename... Args> void log(std::format_string<Args...> fmt, Args &&...args) const
 	{
-		buffer_ << msg;
-		return *this;
-	}
-
-	~Logger()
-	{
-		/*
-		 * 1. We don't have to flush (automatic for stderr; don't care for stdout)
-		 * 2. Stream ops are atomic according to POSIX:
-		 *    http://www.gnu.org/s/libc/manual/html_node/Streams-and-Threads.html
-		 */
-		if (std::is_same_v<U, out_tag>)
-			llvm::outs() << buffer_.str();
-		else
-			llvm::errs() << buffer_.str();
+#ifdef __cpp_lib_print
+		std::print(*out_, fmt, std::forward<Args>(args)...);
+#else
+		*out_ << std::format(fmt, std::forward<Args>(args)...);
+#endif /* __cpp_lib_print */
 	}
 
 protected:
-	std::string str_;
-	llvm::raw_string_ostream buffer_;
+	std::ostream *out_;
 };
 
 /** A logger that logs each message only once */
-template <typename U> class LoggerOnce : public Logger<U> {
+template <StreamTag U> class LoggerOnce : public Logger<U> {
 
 public:
-	/* In principle, we could just append to the buffer and check whether the
-	 * ID has been encountered before at destruction. This class is extra verbose
-	 * so that we avoid writing to the buffer altogether if we have seen this ID */
+	/* In case multiple `LoggerOnce` are created with the same id, the one that was created
+	 * first will be used. */
 	LoggerOnce(const std::string &id, VerbosityLevel l = VerbosityLevel::Warning)
-		: Logger<U>(l, true), id(id)
+		: Logger<U>(l, true), shouldPrint_(ids_.count(id) == 0)
 	{
-		if (!ids.count(id))
-			this->buffer_ << l;
+		if (shouldPrint_) {
+			ids_.insert(id);
+			Logger<U>::printLevel(l);
+		}
 	}
 
-	template <typename T> auto operator<<(const T &msg) -> LoggerOnce &
+	template <typename... Args> void log(std::format_string<Args...> fmt, Args &&...args) const
 	{
-		if (ids.count(id)) {
-			return *this;
-		}
-		return static_cast<LoggerOnce &>(Logger<U>::operator<<(msg));
-	}
-
-	~LoggerOnce()
-	{
-		if (!ids.count(id)) {
-			ids.insert(id);
-		}
+		if (shouldPrint_)
+			Logger<U>::log(fmt, std::forward<Args>(args)...);
 	}
 
 private:
-	const std::string &id;
-	static thread_local inline std::set<std::string> ids;
+	const bool shouldPrint_{};
+
+	static thread_local inline std::set<std::string> ids_;
 };
 
 inline VerbosityLevel logLevel = VerbosityLevel::Tip;
 
-#define LOG(level)                                                                                 \
+/** Logs a formatted message (adds newline), in `std::format` style */
+#define LOG(level, fmt, ...)                                                                       \
 	if (level > logLevel)                                                                      \
 		;                                                                                  \
 	else                                                                                       \
-		Logger<err_tag>(level)
+		Logger<err_tag>(level).log(fmt "\n", ##__VA_ARGS__)
 
-#define LOG_ONCE(id, level)                                                                        \
+/** Logs a formatted message (adds newline), but only once per `id`. */
+#define LOG_ONCE(id, level, fmt, ...)                                                              \
 	if (level > logLevel)                                                                      \
 		;                                                                                  \
 	else                                                                                       \
-		LoggerOnce<err_tag>(id, level)
+		LoggerOnce<err_tag>(id, level).log(fmt "\n", ##__VA_ARGS__)
 
-#define PRINT(level)                                                                               \
+/** Prints a formatted message to stdout (no newline) */
+#define PRINT(level, fmt, ...)                                                                     \
 	if (level > logLevel)                                                                      \
 		;                                                                                  \
 	else                                                                                       \
-		Logger<out_tag>(level)
-
-#define PRINT_ONCE(level)                                                                          \
-	if (level > logLevel)                                                                      \
-		;                                                                                  \
-	else                                                                                       \
-		Logger<out_tag>(level)
+		Logger<out_tag>(level).log(fmt, ##__VA_ARGS__)
 
 #endif /* GENMC_LOGGER_HPP */

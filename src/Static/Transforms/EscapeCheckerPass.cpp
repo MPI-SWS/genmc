@@ -22,6 +22,8 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
 
+#include <algorithm>
+
 using namespace llvm;
 
 /* EscapeInfo impl */

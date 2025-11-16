@@ -18,8 +18,6 @@
 #include "Support/Error.hpp"
 #include "Support/SVal.hpp"
 
-#include <llvm/IR/Instructions.h>
-
 #include <cstdint>
 
 enum class RMWBinOp : std::uint8_t {
@@ -80,28 +78,6 @@ inline auto executeRMWBinOp(SVal oldVal, SVal val, ASize size, RMWBinOp op) -> S
 		WARN_ONCE("invalid-rmw-op", "Unsupported operation in RMW instruction!\n");
 		return val;
 	}
-}
-
-/* Translates an LLVM opreation to our internal one; assumes the
- * operation is one we support (i.e., no fops,udecwrap,etc)*/
-inline auto fromLLVMBinOp(llvm::AtomicRMWInst::BinOp op) -> RMWBinOp
-{
-	static const RMWBinOp lookup[11] = {
-		/* xchg */ RMWBinOp::Xchg,
-		/* add  */ RMWBinOp::Add,
-		/* sub  */ RMWBinOp::Sub,
-		/* and  */ RMWBinOp::And,
-		/* nand */ RMWBinOp::Nand,
-		/* or   */ RMWBinOp::Or,
-		/* xor  */ RMWBinOp::Xor,
-		/* max  */ RMWBinOp::Max,
-		/* min  */ RMWBinOp::Min,
-		/* umax */ RMWBinOp::UMax,
-		/* umin */ RMWBinOp::UMin,
-	};
-	BUG_ON(!isValidRMWBinOp(
-		static_cast<std::underlying_type_t<llvm::AtomicRMWInst::BinOp>>(op)));
-	return lookup[static_cast<size_t>(op)];
 }
 
 #endif /* GENMC_RMWOPS_HPP */

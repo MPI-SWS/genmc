@@ -15,8 +15,8 @@
 #include "ExecutionGraph/Consistency/ConsistencyChecker.hpp"
 #include "ExecutionGraph/EventLabel.hpp"
 #include "ExecutionGraph/ExecutionGraph.hpp"
-
-#include <llvm/Support/raw_ostream.h>
+#include "Support/Cast.hpp"
+#include "Support/Error.hpp"
 
 #include <algorithm>
 #include <utility>
@@ -52,14 +52,13 @@ static void populateOpsRf(ExecutionGraph &g, std::vector<MethodCall> &ops,
 	for (auto tid : g.thr_ids()) {
 		MethodBeginLabel *openBegin = nullptr;
 		for (auto &lab : g.po(tid)) {
-			if (auto *beginLab = llvm::dyn_cast<MethodBeginLabel>(&lab)) {
+			if (auto *beginLab = genmc::dyn_cast<MethodBeginLabel>(&lab)) {
 				ERROR_ON(openBegin, "Nested method calls are unsupported");
 				openBegin = beginLab;
 				continue;
 			}
-			if (auto *endLab = llvm::dyn_cast<MethodEndLabel>(&lab)) {
-				ERROR_ON(!openBegin, "Unmatched method return in thread " +
-							     std::to_string(tid));
+			if (auto *endLab = genmc::dyn_cast<MethodEndLabel>(&lab)) {
+				ERROR_ON(!openBegin, "Unmatched method return in thread {}", tid);
 				if (tid > 0) {
 					if (ops.back().name == endLab->getName()) {
 						++thdCopyIx;
@@ -81,19 +80,19 @@ static void populateOpsRf(ExecutionGraph &g, std::vector<MethodCall> &ops,
 				continue;
 
 			/* Warn if this is not the MPC */
-			auto isNonMPC = (tid > 0 && !llvm::isa<ThreadStartLabel>(&lab) &&
-					 !llvm::isa<ThreadFinishLabel>(&lab));
+			auto isNonMPC = (tid > 0 && !genmc::isa<ThreadStartLabel>(&lab) &&
+					 !genmc::isa<ThreadFinishLabel>(&lab));
 			WARN_ON_ONCE(isNonMPC, "non-mpc-found",
 				     "The client is not the \"Most Parallel Client\".");
 
-			if (const auto *rLab = llvm::dyn_cast<ReadLabel>(&lab)) {
+			if (const auto *rLab = genmc::dyn_cast<ReadLabel>(&lab)) {
 				outsideRFs.emplace_back(rLab->getRf()->getPos(), numOutsideEvents);
-			} else if (llvm::isa<WriteLabel>(lab)) {
+			} else if (genmc::isa<WriteLabel>(&lab)) {
 				outsideWrites[lab.getPos()] = numOutsideEvents;
 			}
 			++numOutsideEvents;
 		}
-		ERROR_ON(openBegin, "No return label in thread " + std::to_string(tid));
+		ERROR_ON(openBegin, "No return label in thread {}", tid);
 	}
 
 	/* Add non-method RF edges to the Observation */
@@ -185,12 +184,4 @@ auto Observation::getContainingCallId(const EventLabel &lab) const -> std::optio
 		       call.endLab->getPos().index >= index;
 	});
 	return opIt != std::ranges::end(opRange) ? std::optional(opIt->id) : std::nullopt;
-}
-
-auto operator<<(llvm::raw_ostream &os, const Observation &obs) -> llvm::raw_ostream &
-{
-	os << "Ops:\n" << format(obs.ops_) << "\n";
-	os << "RF:\n" << format(obs.rfs_) << "\n";
-	os << "HB:\n" << format(obs.hb_) << "\n";
-	return os;
 }

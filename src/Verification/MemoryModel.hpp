@@ -17,28 +17,35 @@
 #include "Support/Error.hpp"
 
 #include <cstdint>
+#include <format>
 #include <string>
 
 enum class ModelType : std::uint8_t { SC = 0, TSO = 1, RA = 2, RC11 = 3, IMM = 4 };
 
-inline auto operator<<(llvm::raw_ostream &s, const ModelType &model) -> llvm::raw_ostream &
-{
-	switch (model) {
-	case ModelType::SC:
-		return s << "SC";
-	case ModelType::TSO:
-		return s << "TSO";
-	case ModelType::RA:
-		return s << "RA";
-	case ModelType::RC11:
-		return s << "RC11";
-	case ModelType::IMM:
-		return s << "IMM";
-	default:
-		PRINT_BUGREPORT_INFO_ONCE("missing-model-name", "Unknown memory model name");
-		return s;
+/** Make `ModelType` formattable with `std::format`. */
+template <> struct std::formatter<ModelType> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const ModelType &model, std::format_context &ctx) const
+	{
+		switch (model) {
+		case ModelType::SC:
+			return std::format_to(ctx.out(), "SC");
+		case ModelType::TSO:
+			return std::format_to(ctx.out(), "TSO");
+		case ModelType::RA:
+			return std::format_to(ctx.out(), "RA");
+		case ModelType::RC11:
+			return std::format_to(ctx.out(), "RC11");
+		case ModelType::IMM:
+			return std::format_to(ctx.out(), "IMM");
+		default:
+			PRINT_BUGREPORT_INFO_ONCE("missing-model-name",
+						  "Unknown memory model name");
+			return std::format_to(ctx.out(), "UNKNOWN");
+		}
 	}
-}
+};
 
 inline auto isStrongerThan(ModelType model, ModelType other) -> bool
 {

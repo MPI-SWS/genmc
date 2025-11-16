@@ -31,57 +31,64 @@ static auto doesPolicySupportSeed(const SchedulePolicy policy) -> bool
 	BUG(); /* Unknown SchedulePolicy */
 }
 
-void checkConfig(Config &conf)
+auto Config::validate(std::vector<std::string> &warnings) -> ValidationStatus
 {
+	ConfigErrorList errors;
+
 	/* Check exploration options */
-	if (conf.LAPOR) {
-		ERROR("LAPOR is temporarily disabled.\n");
+	if (LAPOR) {
+		errors.emplace_back("LAPOR is temporarily disabled.");
 	}
-	if (conf.confirmation) {
-		ERROR("Confirmation is temporarily disabled.\n");
+	if (confirmation) {
+		errors.emplace_back("Confirmation is temporarily disabled.");
 	}
-	if (conf.model == ModelType::IMM && (conf.ipr || conf.symmetryReduction)) {
-		WARN("In-place revisiting and symmetry reduction have no effect under IMM\n");
-		conf.symmetryReduction = false;
-		conf.ipr = false;
+	if (model == ModelType::IMM && (ipr || symmetryReduction)) {
+		warnings.emplace_back(
+			"In-place revisiting and symmetry reduction have no effect under IMM");
+		symmetryReduction = false;
+		ipr = false;
 	}
 
 	/* Check debugging options */
-	if (!doesPolicySupportSeed(conf.schedulePolicy) && conf.printRandomScheduleSeed)
-		WARN("--print-schedule-seed used without --schedule-policy={arbitrary,wfr}.\n");
-	if (!doesPolicySupportSeed(conf.schedulePolicy) && !conf.randomScheduleSeed.empty())
-		WARN("--schedule-seed used without --schedule-policy={arbitrary,wfr}.\n");
+	if (!doesPolicySupportSeed(schedulePolicy) && printRandomScheduleSeed)
+		warnings.emplace_back(
+			"--print-schedule-seed used without --schedule-policy={{arbitrary,wfr}}.");
+	if (!doesPolicySupportSeed(schedulePolicy) && !randomScheduleSeed.empty())
+		warnings.emplace_back(
+			"--schedule-seed used without --schedule-policy={{arbitrary,wfr}}.");
 
 	/* Check bounding options */
-	if (conf.bound.has_value() && conf.model != ModelType::SC) {
-		ERROR("Bounding can only be used with --sc.\n");
+	if (bound.has_value() && model != ModelType::SC) {
+		errors.emplace_back("Bounding can only be used with --sc.");
 	}
-	GENMC_DEBUG(ERROR_ON(conf.bound.has_value() && conf.boundsHistogram,
-			     "Bounds histogram cannot be used when bounding.\n"););
-	if (conf.bound.has_value() && conf.boundType != BoundType::none) {
-		WARN("--bound-type used without --bound.\n");
+	GENMC_DEBUG(if (bound.has_value() && boundsHistogram)
+			    errors.emplace_back("Bounds histogram cannot be used when bounding."););
+	if (!bound.has_value() && boundType != BoundType::none) {
+		warnings.emplace_back("--bound-type used without --bound.");
 	}
 
 	/* Sanitize bounding options */
-	bool bounding = conf.bound.has_value();
-	GENMC_DEBUG(bounding |= conf.boundsHistogram;);
-	if (bounding && (conf.LAPOR || !conf.disableBAM || conf.symmetryReduction || conf.ipr ||
-			 conf.schedulePolicy != SchedulePolicy::LTR)) {
-		WARN("LAPOR/BAM/SR/IPR have no effect when --bound is used. Scheduling "
-		     "defaults to LTR.\n");
-		conf.LAPOR = conf.symmetryReduction = conf.ipr = false;
-		conf.disableBAM = true;
-		conf.schedulePolicy = SchedulePolicy::LTR;
+	auto bounding = bound.has_value();
+	GENMC_DEBUG(bounding |= boundsHistogram;);
+	if (bounding && (LAPOR || !disableBAM || symmetryReduction || ipr ||
+			 schedulePolicy != SchedulePolicy::LTR)) {
+		warnings.emplace_back(
+			"LAPOR/BAM/SR/IPR have no effect when --bound is used. Scheduling "
+			"defaults to LTR.");
+		LAPOR = symmetryReduction = ipr = false;
+		disableBAM = true;
+		schedulePolicy = SchedulePolicy::LTR;
 	}
 
 	/* Check Relinche options */
-	if (conf.collectLinSpec.has_value() && !conf.checkLinSpec->empty()) {
-		ERROR("Cannot collect and analyze linearizability specification in a single "
-		      "run.\n");
+	if (collectLinSpec.has_value() && checkLinSpec.has_value()) {
+		errors.emplace_back(
+			"Cannot collect and analyze linearizability specification in a single "
+			"run.");
 	}
-	if (conf.checkLinSpec.has_value() &&
-	    (!std::filesystem::exists(*conf.checkLinSpec) ||
-	     !std::filesystem::is_regular_file(*conf.checkLinSpec))) {
-		ERROR("Specification file is not a regular file!\n");
+	if (checkLinSpec.has_value() && (!std::filesystem::exists(*checkLinSpec) ||
+					 !std::filesystem::is_regular_file(*checkLinSpec))) {
+		errors.emplace_back("Specification file is not a regular file!");
 	}
+	return errors.empty() ? ValidationStatus() : std::unexpected{std::move(errors)};
 }

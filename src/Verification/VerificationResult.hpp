@@ -1,6 +1,7 @@
 #ifndef GENMC_VERIFICATION_RESULT_HPP
 #define GENMC_VERIFICATION_RESULT_HPP
 
+#include "ADT/IndexedMap.hpp"
 #include "ADT/VSet.hpp"
 #include "Verification/Relinche/LinearizabilityChecker.hpp"
 #include "Verification/Relinche/Specification.hpp"
@@ -21,7 +22,7 @@ struct VerificationResult {
 #ifdef ENABLE_GENMC_DEBUG
 	unsigned exploredMoot{};		/**< Number of moot executions _encountered_ */
 	unsigned duplicates{};			/**< Number of duplicate executions explored */
-	llvm::IndexedMap<int> exploredBounds{}; /**< Number of complete executions not
+	genmc::IndexedMap<int> exploredBounds{}; /**< Number of complete executions not
 			       exceeding each bound */
 #endif
 	std::string message;				 /**< A message to be printed */

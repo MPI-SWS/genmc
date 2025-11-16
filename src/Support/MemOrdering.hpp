@@ -21,12 +21,11 @@
 
 #include "Support/Error.hpp"
 
-#include <llvm/Support/AtomicOrdering.h>
-#include <llvm/Support/raw_ostream.h>
-
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <format>
+#include <ostream>
 
 /** C11 memory ordering */
 enum class MemOrdering : std::uint8_t {
@@ -85,23 +84,39 @@ inline auto isAtLeastOrStrongerThan(MemOrdering ord, MemOrdering other) -> bool
 	return lookup[static_cast<size_t>(ord)][static_cast<size_t>(other)];
 }
 
-/** Translates an LLVM ordering to our internal one; assumes the
- * ordering is one we support (i.e., currently not Unordered)*/
-inline auto fromLLVMOrdering(llvm::AtomicOrdering ord) -> MemOrdering
-{
-	static const MemOrdering lookup[8] = {
-		/* NotAtomic */ MemOrdering::NotAtomic,
-		/* Unordered */ MemOrdering::Relaxed,
-		/* monotonic */ MemOrdering::Relaxed,
-		/* consume   */ MemOrdering::Acquire,
-		/* acquire   */ MemOrdering::Acquire,
-		/* release   */ MemOrdering::Release,
-		/* acq_rel   */ MemOrdering::AcquireRelease,
-		/* seq_cst   */ MemOrdering::SequentiallyConsistent,
-	};
-	return lookup[static_cast<size_t>(ord)];
-}
+/** Make `MemOrdering` formattable with `std::format`. */
+template <> struct std::formatter<MemOrdering> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
 
-auto operator<<(llvm::raw_ostream &rhs, MemOrdering ord) -> llvm::raw_ostream &;
+	auto format(const MemOrdering &ord, std::format_context &ctx) const
+	{
+		std::string_view str;
+		switch (ord) {
+		case MemOrdering::NotAtomic:
+			str = "na";
+			break;
+		case MemOrdering::Relaxed:
+			str = "rlx";
+			break;
+		case MemOrdering::Acquire:
+			str = "acq";
+			break;
+		case MemOrdering::Release:
+			str = "rel";
+			break;
+		case MemOrdering::AcquireRelease:
+			str = "ar";
+			break;
+		case MemOrdering::SequentiallyConsistent:
+			str = "sc";
+			break;
+		default:
+			PRINT_BUGREPORT_INFO_ONCE("print-ordering-type", "Cannot print ordering");
+			str = "UNKNOWN";
+			break;
+		}
+		return std::format_to(ctx.out(), "{}", str);
+	}
+};
 
 #endif /* GENMC_MEMORDERING_HPP */

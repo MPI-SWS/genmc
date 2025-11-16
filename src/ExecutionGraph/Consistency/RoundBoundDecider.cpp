@@ -19,33 +19,33 @@
 auto areSCPredsInView(const ExecutionGraph &g, const View &v, Event e) -> bool
 {
 	auto *lab = g.getEventLabel(e);
-	if (llvm::isa<ThreadStartLabel>(lab))
+	if (genmc::isa<ThreadStartLabel>(lab))
 		return v.contains(tc_pred(g, lab)->getPos());
 
-	if (llvm::isa<ThreadJoinLabel>(lab))
+	if (genmc::isa<ThreadJoinLabel>(lab))
 		return v.contains(tj_pred(g, lab)->getPos());
 
-	if (!llvm::isa<MemAccessLabel>(lab))
+	if (!genmc::isa<MemAccessLabel>(lab))
 		return true;
 
-	if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab))
+	if (auto *rLab = genmc::dyn_cast<ReadLabel>(lab))
 		return v.contains(rLab->getRf()->getPos());
 
-	auto *sLab = llvm::dyn_cast<WriteLabel>(lab);
+	auto *sLab = genmc::dyn_cast<WriteLabel>(lab);
 	BUG_ON(!sLab);
 	auto *pLab = g.co_imm_pred(sLab);
 	if (pLab && !v.contains(pLab->getPos()))
 		return false;
 
-	return std::none_of(g.fr_imm_pred_begin(sLab), g.fr_imm_pred_end(sLab),
-			    [&](const auto &rLab) { return !v.contains(rLab.getPos()); });
+	return std::ranges::none_of(g.fr_imm_preds(sLab),
+				    [&](const auto &rLab) { return !v.contains(rLab.getPos()); });
 }
 
 auto RoundBoundDecider::doesExecutionExceedBound(unsigned int bound) const -> bool
 {
 
 	auto &g = getGraph();
-	const auto full = *llvm::dyn_cast<View>(g.getViewFromStamp(g.getMaxStamp()).get());
+	const auto full = *genmc::dyn_cast<View>(g.getViewFromStamp(g.getMaxStamp()).get());
 	View curr;
 
 	do {
@@ -73,7 +73,7 @@ auto RoundBoundDecider::doesExecutionExceedBound(unsigned int bound) const -> bo
 auto RoundBoundDecider::calculate() const -> unsigned
 {
 	auto &g = getGraph();
-	const auto full = *llvm::dyn_cast<View>(g.getViewFromStamp(g.getMaxStamp()).get());
+	const auto full = *genmc::dyn_cast<View>(g.getViewFromStamp(g.getMaxStamp()).get());
 	View curr;
 	unsigned bound = 0;
 

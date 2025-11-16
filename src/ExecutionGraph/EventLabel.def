@@ -171,7 +171,8 @@ HANDLE_LABEL(Empty)
 HANDLE_LABEL(MethodBegin)
 HANDLE_LABEL(MethodEnd)
 HANDLE_LABEL(Output)
-LAST_LABEL(Other, Output)
+HANDLE_LABEL(Error)
+LAST_LABEL(Other, Error)
 
 #undef FIRST_LABEL
 #undef LAST_LABEL

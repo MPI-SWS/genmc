@@ -18,6 +18,8 @@
 
 #include <climits>
 #include <cstdint>
+#include <cstring>
+#include <format>
 
 /**
  * Represents a value to be written to memory. All values are represented as
@@ -132,8 +134,6 @@ public:
 		return sign ? std::to_string(getSigned()) : std::to_string(get());
 	}
 
-	friend auto operator<<(llvm::raw_ostream &rhs, const SVal &v) -> llvm::raw_ostream &;
-
 private:
 	[[nodiscard]] auto compare(const SVal &v) const -> int
 	{
@@ -157,6 +157,16 @@ private:
 /** Comparator for SVal */
 struct SValUCmp {
 	auto operator()(const SVal &lhs, const SVal &rhs) -> bool { return lhs.ult(rhs); }
+};
+
+/** Make `SVal` formattable with `std::format`. */
+template <> struct std::formatter<SVal> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const SVal &v, std::format_context &ctx) const
+	{
+		return std::format_to(ctx.out(), "{}", v.get());
+	}
 };
 
 #endif /* GENMC_SVAL_HPP */

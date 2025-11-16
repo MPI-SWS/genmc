@@ -15,12 +15,13 @@
 #define GENMC_EXECUTION_GRAPH_HPP
 
 #include "ADT/VectorClock.hpp"
+#include "ADT/ilist.hpp"
 #include "ExecutionGraph/Event.hpp"
 #include "ExecutionGraph/EventLabel.hpp"
 #include "ExecutionGraph/Stamp.hpp"
 #include "Support/Hash.hpp"
-#include <llvm/ADT/StringMap.h>
 
+#include <format>
 #include <functional>
 #include <memory>
 #include <ranges>
@@ -44,14 +45,14 @@ class ExecutionGraph {
 public:
 	using Thread = std::vector<std::unique_ptr<EventLabel>>;
 	using ThreadList = std::vector<Thread>;
-	using StoreList = llvm::simple_ilist<WriteLabel>;
+	using StoreList = genmc::ilist<WriteLabel>;
 	using LocMap = std::unordered_map<SAddr, StoreList>;
 	using AccessVector = std::vector<EventLabel *>;
 	using AccessMap = std::unordered_map<SAddr, AccessVector>;
 	using InitValGetter = std::function<SVal(const AAccess &)>;
-	using PoList = llvm::simple_ilist<EventLabel, llvm::ilist_tag<po_tag>>;
+	using PoList = genmc::ilist<EventLabel, po_tag>;
 	using PoLists = std::vector<PoList>;
-	using IoList = llvm::simple_ilist<EventLabel, llvm::ilist_tag<io_tag>>;
+	using IoList = genmc::ilist<EventLabel, io_tag>;
 
 	ExecutionGraph(InitValGetter f) : initValGetter_(std::move(f))
 	{
@@ -271,12 +272,12 @@ public:
 
 	auto fr_succ_begin(ReadLabel *rLab) -> co_iterator
 	{
-		auto *wLab = llvm::dyn_cast<WriteLabel>(rLab->getRf());
+		auto *wLab = genmc::dyn_cast<WriteLabel>(rLab->getRf());
 		return wLab ? co_succ_begin(wLab) : co_begin(rLab->getAddr());
 	}
 	auto fr_succ_begin(const ReadLabel *rLab) const -> const_co_iterator
 	{
-		auto *wLab = llvm::dyn_cast<WriteLabel>(rLab->getRf());
+		auto *wLab = genmc::dyn_cast<WriteLabel>(rLab->getRf());
 		return wLab ? co_succ_begin(wLab) : co_begin(rLab->getAddr());
 	}
 	auto fr_succ_end(ReadLabel *rLab) -> co_iterator { return co_end(rLab->getAddr()); }
@@ -284,35 +285,31 @@ public:
 	{
 		return co_end(rLab->getAddr());
 	}
+	auto fr_succs(ReadLabel *rLab)
+	{
+		return std::ranges::subrange(fr_succ_begin(rLab), fr_succ_end(rLab));
+	}
+	auto fr_succs(const ReadLabel *rLab) const
+	{
+		return std::ranges::subrange(fr_succ_begin(rLab), fr_succ_end(rLab));
+	}
 	auto fr_imm_succ(const ReadLabel *rLab) const -> const WriteLabel *
 	{
 		auto it = fr_succ_begin(rLab);
 		return it == fr_succ_end(rLab) ? nullptr : &*it;
 	}
 
-	auto fr_imm_pred_begin(WriteLabel *wLab) -> WriteLabel::rf_iterator
+	auto fr_imm_preds(WriteLabel *wLab)
 	{
 		return co_pred_begin(wLab) == co_pred_end(wLab)
-			       ? init_rf_begin(wLab->getAddr())
-			       : (*co_pred_begin(wLab)).readers_begin();
+			       ? getInitLabel()->rfs(wLab->getAddr())
+			       : co_pred_begin(wLab)->readers();
 	}
-	auto fr_imm_pred_begin(const WriteLabel *wLab) const -> WriteLabel::const_rf_iterator
+	auto fr_imm_preds(const WriteLabel *wLab) const
 	{
 		return co_pred_begin(wLab) == co_pred_end(wLab)
-			       ? init_rf_begin(wLab->getAddr())
-			       : (*co_pred_begin(wLab)).readers_begin();
-	}
-	auto fr_imm_pred_end(WriteLabel *wLab) -> WriteLabel::rf_iterator
-	{
-		return co_pred_begin(wLab) == co_pred_end(wLab)
-			       ? init_rf_end(wLab->getAddr())
-			       : (*co_pred_begin(wLab)).readers_end();
-	}
-	auto fr_imm_pred_end(const WriteLabel *wLab) const -> WriteLabel::const_rf_iterator
-	{
-		return co_pred_begin(wLab) == co_pred_end(wLab)
-			       ? init_rf_end(wLab->getAddr())
-			       : (*co_pred_begin(wLab)).readers_end();
+			       ? getInitLabel()->rfs(wLab->getAddr())
+			       : co_pred_begin(wLab)->readers();
 	}
 
 	auto samelocs(const EventLabel *lab) const
@@ -321,11 +318,11 @@ public:
 		auto cIndirect = [](auto *lab) -> EventLabel & { return *lab; };
 		static const std::vector<EventLabel *> accessSentinelVector;
 
-		if (llvm::isa<MemAccessLabel>(lab))
-			return accessMap_.at(llvm::cast<MemAccessLabel>(lab)->getAddr()) |
+		if (genmc::isa<MemAccessLabel>(lab))
+			return accessMap_.at(genmc::cast<MemAccessLabel>(lab)->getAddr()) |
 			       std::views::filter(isSameLabel) | std::views::transform(cIndirect);
-		if (llvm::isa<FreeLabel>(lab))
-			return accessMap_.at(llvm::cast<FreeLabel>(lab)->getFreedAddr()) |
+		if (genmc::isa<FreeLabel>(lab))
+			return accessMap_.at(genmc::cast<FreeLabel>(lab)->getFreedAddr()) |
 			       std::views::filter(isSameLabel) | std::views::transform(cIndirect);
 		return accessSentinelVector | std::views::filter(isSameLabel) |
 		       std::views::transform(cIndirect);
@@ -352,7 +349,7 @@ public:
 	/** Returns true if TID is blocked */
 	auto isThreadBlocked(int tid) const -> bool
 	{
-		return !isThreadEmpty(tid) && llvm::isa<BlockLabel>(getLastThreadLabel(tid));
+		return !isThreadEmpty(tid) && genmc::isa<BlockLabel>(getLastThreadLabel(tid));
 	}
 
 	/* Event addition/removal methods */
@@ -397,7 +394,7 @@ public:
 	 * If the passed event is not a read, returns nullptr  */
 	auto getReadLabel(Event e) const -> const ReadLabel *
 	{
-		return llvm::dyn_cast<ReadLabel>(getEventLabel(e));
+		return genmc::dyn_cast<ReadLabel>(getEventLabel(e));
 	}
 	auto getReadLabel(Event e) -> ReadLabel *
 	{
@@ -409,7 +406,7 @@ public:
 	 * If the passed event is not a write, returns nullptr  */
 	auto getWriteLabel(Event e) const -> const WriteLabel *
 	{
-		return llvm::dyn_cast<WriteLabel>(getEventLabel(e));
+		return genmc::dyn_cast<WriteLabel>(getEventLabel(e));
 	}
 	auto getWriteLabel(Event e) -> WriteLabel *
 	{
@@ -420,7 +417,7 @@ public:
 	/* Returns the first label in the thread tid */
 	auto getFirstThreadLabel(int tid) const -> const ThreadStartLabel *
 	{
-		return llvm::dyn_cast<ThreadStartLabel>(getEventLabel(Event(tid, 0)));
+		return genmc::dyn_cast<ThreadStartLabel>(getEventLabel(Event(tid, 0)));
 	}
 	auto getFirstThreadLabel(int tid) -> ThreadStartLabel *
 	{
@@ -488,7 +485,7 @@ public:
 	/* Returns true if the graph contains e, and the label is not EMPTY */
 	auto containsPosNonEmpty(const Event &e) const -> bool
 	{
-		return containsPos(e) && !llvm::isa<EmptyLabel>(getEventLabel(e));
+		return containsPos(e) && !genmc::isa<EmptyLabel>(getEventLabel(e));
 	}
 
 	/* Debugging methods */
@@ -528,9 +525,8 @@ public:
 		return getCopyUpTo(*getViewFromStamp(getMaxStamp()));
 	}
 
-	/* Overloaded operators */
-	friend auto operator<<(llvm::raw_ostream &s, const ExecutionGraph &g)
-		-> llvm::raw_ostream &;
+	/* For formatting: */
+	friend struct std::formatter<ExecutionGraph>;
 
 protected:
 	friend class WriteLabel;
@@ -599,6 +595,43 @@ protected:
 	InitValGetter initValGetter_;
 };
 
+/** Make `ExecutionGraph` formattable with `std::format`. */
+template <> struct std::formatter<ExecutionGraph> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const ExecutionGraph &g, std::format_context &ctx) const
+	{
+		auto out = ctx.out();
+
+		// Format threads
+		for (auto i = 0U; i < g.getNumThreads(); i++) {
+			out = std::format_to(out, "Thread {}:\n", i);
+			for (const auto &lab : g.po(i)) {
+				out = std::format_to(out, "\t{} @ {}\n", lab.getStamp(), lab);
+			}
+		}
+
+		// Format thread sizes
+		out = std::format_to(out, "Thread sizes:\n\t");
+		for (auto i = 0U; i < g.getNumThreads(); i++) {
+			out = std::format_to(out, "{} ", g.getThreadSize(i));
+		}
+		out = std::format_to(out, "\n");
+
+		// Format coherence order for each location
+		for (auto lIt = g.loc_begin(), lE = g.loc_end(); lIt != lE; ++lIt) {
+			out = std::format_to(out, "{}: ", lIt->first);
+			for (auto sIt = g.co_begin(lIt->first); sIt != g.co_end(lIt->first);
+			     ++sIt) {
+				out = std::format_to(out, "{} ", sIt->getPos());
+			}
+			out = std::format_to(out, "\n");
+		}
+
+		return out;
+	}
+};
+
 namespace std {
 template <> struct hash<ExecutionGraph> {
 	auto operator()(const ExecutionGraph &g) const -> size_t
@@ -610,11 +643,11 @@ template <> struct hash<ExecutionGraph> {
 		for (auto i = 0U; i < g.getNumThreads(); i++) {
 			hash_combine(hash, g.getThreadSize(i));
 			for (const auto &lab : g.po(i)) {
-				if (const auto *rLab = llvm::dyn_cast<ReadLabel>(&lab)) {
+				if (const auto *rLab = genmc::dyn_cast<ReadLabel>(&lab)) {
 					hash_combine(hash, rLab->getRf() ? rLab->getRf()->getPos()
 									 : Event::getBottom());
 				}
-				if (const auto *wLab = llvm::dyn_cast<WriteLabel>(&lab)) {
+				if (const auto *wLab = genmc::dyn_cast<WriteLabel>(&lab)) {
 					const auto *pLab = g.co_imm_pred(wLab);
 					hash_combine(hash,
 						     pLab ? pLab->getPos() : Event::getInit());

@@ -14,9 +14,8 @@
 #ifndef GENMC_VSET_HPP
 #define GENMC_VSET_HPP
 
-#include <llvm/Support/raw_ostream.h>
-
 #include <algorithm>
+#include <format>
 #include <initializer_list>
 #include <vector>
 
@@ -97,11 +96,24 @@ public:
 
 	auto operator<=>(const VSet<T> &other) const = default;
 
-	template <typename U>
-	friend auto operator<<(llvm::raw_ostream &s, const VSet<U> &set) -> llvm::raw_ostream &;
+	friend struct std::formatter<VSet<T>>;
 
 private:
 	Set vset_;
+};
+
+/** Make `VSet` formattable with `std::format`. */
+template <typename T> struct std::formatter<VSet<T>> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const VSet<T> &set, std::format_context &ctx) const
+	{
+		auto out = std::format_to(ctx.out(), "[ ");
+		for (const auto &elem : set.vset_) {
+			out = std::format_to(out, "{} ", elem);
+		}
+		return std::format_to(out, "]");
+	}
 };
 
 /**** VSet templates ****/
@@ -373,16 +385,6 @@ template <class T> auto VSet<T>::diff(const VSet<T> &s) const -> VSet<T>
 			result.insert(e);
 	}
 	return result;
-}
-
-template <typename T>
-auto operator<<(llvm::raw_ostream &s, const VSet<T> &set) -> llvm::raw_ostream &
-{
-	s << "[ ";
-	for (auto i = 0u; i < set.size(); i++)
-		s << set[i] << " ";
-	s << "]";
-	return s;
 }
 
 #endif /* GENMC_VSET_HPP */

@@ -7,6 +7,7 @@ extern "C"
 #endif
 
 #include <stddef.h>
+#include <assert.h>
 #include <genmc_internal.h>
 
 void exit(int);
@@ -31,12 +32,15 @@ void free(void *ptr)
 static inline __attribute__((always_inline))
 void *malloc(size_t size)
 {
+	assert(size > 0 && "Zero size in malloc()");
 	return __VERIFIER_malloc(size);
 }
 
 static inline __attribute__((always_inline))
 void *aligned_alloc(size_t align, size_t size)
 {
+	assert(align > 0 && (align & (align - 1)) == 0 && "Invalid alignment in aligned_alloc()");
+	assert(size > 0 && (size % align) == 0 && "Invalid size in aligned_alloc()");
 	return __VERIFIER_malloc_aligned(align, size);
 }
 

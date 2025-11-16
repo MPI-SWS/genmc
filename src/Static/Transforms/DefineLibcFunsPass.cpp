@@ -35,7 +35,7 @@ void replaceFunWithNop(Module &M, std::string name)
 	else if (retTy->isPointerTy())
 		res = ConstantPointerNull::get(dyn_cast<PointerType>(retTy));
 	else
-		WARN("Could not add definition for " + name + "!\n");
+		WARN("Could not add definition for {}!\n", name);
 
 	auto *BB = BasicBlock::Create(F->getContext(), "", F);
 	ReturnInst::Create(F->getContext(), res, BB);

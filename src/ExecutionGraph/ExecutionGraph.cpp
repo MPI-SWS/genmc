@@ -12,8 +12,8 @@
  */
 
 #include "ExecutionGraph.hpp"
-#include <llvm/IR/DebugInfo.h>
 
+#include <iostream>
 #include <memory>
 
 /************************************************************
@@ -55,12 +55,12 @@ auto ExecutionGraph::addLabelToGraph(std::unique_ptr<EventLabel> lab) -> EventLa
 		lab->setStamp(nextStamp());
 
 	/* Track coherence if necessary */
-	if (auto *mLab = llvm::dyn_cast<MemAccessLabel>(&*lab)) {
+	if (auto *mLab = genmc::dyn_cast<MemAccessLabel>(&*lab)) {
 		trackCoherenceAtLoc(mLab->getAddr());
 		accessMap_[mLab->getAddr()].push_back(&*lab);
 	}
 	/* XXX: Track accesses to each location (no allocs; temp fix) */
-	if (auto *dLab = llvm::dyn_cast<FreeLabel>(&*lab)) {
+	if (auto *dLab = genmc::dyn_cast<FreeLabel>(&*lab)) {
 		trackCoherenceAtLoc(dLab->getFreedAddr());
 		accessMap_[dLab->getFreedAddr()].push_back(&*lab);
 	}
@@ -69,7 +69,7 @@ auto ExecutionGraph::addLabelToGraph(std::unique_ptr<EventLabel> lab) -> EventLa
 	auto *lastLab = getLastThreadLabel(pos.thread);
 	if (lastLab && pos.index < lastLab->getIndex()) {
 		auto eLab = getEventLabel(pos);
-		BUG_ON(eLab && !llvm::isa<EmptyLabel>(eLab));
+		BUG_ON(eLab && !genmc::isa<EmptyLabel>(eLab));
 		auto &oldLab = *events[pos.thread][pos.index];
 		auto it = poLists[pos.thread].erase(po_iterator(oldLab));
 		insertionOrder.remove(oldLab);
@@ -109,38 +109,38 @@ void ExecutionGraph::addAlloc(MallocLabel *aLab, MemAccessLabel *mLab)
 void ExecutionGraph::removeLast(unsigned int thread)
 {
 	auto *lab = getLastThreadLabel(thread);
-	if (auto *rLab = llvm::dyn_cast_or_null<ReadLabel>(lab)) {
-		if (auto *wLab = llvm::dyn_cast_or_null<WriteLabel>(rLab->getRf())) {
+	if (auto *rLab = genmc::dyn_cast_if_present<ReadLabel>(lab)) {
+		if (auto *wLab = genmc::dyn_cast_if_present<WriteLabel>(rLab->getRf())) {
 			wLab->removeReader([&](ReadLabel &oLab) { return &oLab == rLab; });
 		}
 	}
-	if (auto *wLab = llvm::dyn_cast<WriteLabel>(lab)) {
+	if (auto *wLab = genmc::dyn_cast<WriteLabel>(lab)) {
 		for (auto &rLab : wLab->readers()) {
 			rLab.setRfNoCascade(nullptr);
 		}
 	}
-	if (auto *mLab = llvm::dyn_cast<MemAccessLabel>(lab)) {
-		if (auto *aLab = llvm::dyn_cast_or_null<MallocLabel>(mLab->getAlloc()))
+	if (auto *mLab = genmc::dyn_cast<MemAccessLabel>(lab)) {
+		if (auto *aLab = genmc::dyn_cast_if_present<MallocLabel>(mLab->getAlloc()))
 			aLab->removeAccess([&](auto &oLab) { return &oLab == mLab; });
 		auto &accesses = accessMap_[mLab->getAddr()];
 		accesses.erase(std::remove(accesses.begin(), accesses.end(), mLab), accesses.end());
 	}
-	if (auto *dLab = llvm::dyn_cast<FreeLabel>(lab)) {
+	if (auto *dLab = genmc::dyn_cast<FreeLabel>(lab)) {
 		dLab->getAlloc()->setFree(nullptr);
 		auto &accesses = accessMap_[dLab->getFreedAddr()];
 		accesses.erase(std::remove(accesses.begin(), accesses.end(), dLab), accesses.end());
 	}
-	if (auto *aLab = llvm::dyn_cast<MallocLabel>(lab)) {
-		if (auto *dLab = llvm::dyn_cast_or_null<FreeLabel>(aLab->getFree()))
+	if (auto *aLab = genmc::dyn_cast<MallocLabel>(lab)) {
+		if (auto *dLab = genmc::dyn_cast_if_present<FreeLabel>(aLab->getFree()))
 			dLab->setAlloc(nullptr);
 	}
-	if (auto *cLab = llvm::dyn_cast<ThreadCreateLabel>(lab)) {
-		if (auto *tsLab = llvm::dyn_cast_or_null<ThreadStartLabel>(
+	if (auto *cLab = genmc::dyn_cast<ThreadCreateLabel>(lab)) {
+		if (auto *tsLab = genmc::dyn_cast_if_present<ThreadStartLabel>(
 			    getFirstThreadLabel(lab->getThread())))
 			tsLab->setCreate(nullptr);
 	}
-	if (auto *tjLab = llvm::dyn_cast<ThreadJoinLabel>(lab)) {
-		if (auto *eLab = llvm::dyn_cast_or_null<ThreadFinishLabel>(
+	if (auto *tjLab = genmc::dyn_cast<ThreadJoinLabel>(lab)) {
+		if (auto *eLab = genmc::dyn_cast_if_present<ThreadFinishLabel>(
 			    getLastThreadLabel(tjLab->getChildId())))
 			eLab->setParentJoin(nullptr);
 	}
@@ -158,7 +158,7 @@ void ExecutionGraph::removeAfter(const VectorClock &preds)
 	for (auto i = 0U; i < preds.size(); i++) {
 		for (auto j = 0U; j <= preds.getMax(i); j++) {
 			auto *lab = getEventLabel(Event(i, j));
-			if (auto *mLab = llvm::dyn_cast<MemAccessLabel>(lab))
+			if (auto *mLab = genmc::dyn_cast<MemAccessLabel>(lab))
 				keep.insert(mLab->getAddr());
 		}
 	}
@@ -209,46 +209,46 @@ void ExecutionGraph::cutToStamp(Stamp stamp)
 	for (auto i = 0U; i < getNumThreads(); i++) {
 		for (auto j = 0U; j <= preds->getMax(i); j++) {
 			auto *lab = getEventLabel(Event(i, j));
-			if (auto *wLab = llvm::dyn_cast<WriteLabel>(lab)) {
+			if (auto *wLab = genmc::dyn_cast<WriteLabel>(lab)) {
 				wLab->removeReader([&](ReadLabel &rLab) {
 					return !preds->contains(rLab.getPos());
 				});
 			}
-			if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab)) {
+			if (auto *rLab = genmc::dyn_cast<ReadLabel>(lab)) {
 				if (rLab->getRf() && !preds->contains(rLab->getRf()->getPos()))
 					rLab->setRfNoCascade(nullptr);
 			}
-			if (auto *mLab = llvm::dyn_cast<MemAccessLabel>(lab)) {
+			if (auto *mLab = genmc::dyn_cast<MemAccessLabel>(lab)) {
 				if (mLab->getAlloc() && !preds->contains(mLab->getAlloc()))
 					mLab->setAlloc(nullptr);
 			}
-			if (auto *tsLab = llvm::dyn_cast<ThreadStartLabel>(lab)) {
+			if (auto *tsLab = genmc::dyn_cast<ThreadStartLabel>(lab)) {
 				if (tsLab->getCreate() &&
 				    !preds->contains(tsLab->getCreate()->getPos()))
 					tsLab->setCreate(nullptr);
 			}
-			if (auto *eLab = llvm::dyn_cast<ThreadFinishLabel>(lab)) {
+			if (auto *eLab = genmc::dyn_cast<ThreadFinishLabel>(lab)) {
 				if (eLab->getParentJoin() &&
 				    !preds->contains(eLab->getParentJoin()->getPos()))
 					eLab->setParentJoin(nullptr);
 			}
-			if (auto *dLab = llvm::dyn_cast<FreeLabel>(lab)) {
+			if (auto *dLab = genmc::dyn_cast<FreeLabel>(lab)) {
 				if (dLab->getAlloc() && !preds->contains(dLab->getAlloc()))
 					dLab->setAlloc(nullptr);
 			}
-			if (auto *aLab = llvm::dyn_cast<MallocLabel>(lab)) {
+			if (auto *aLab = genmc::dyn_cast<MallocLabel>(lab)) {
 				if (aLab->getFree() && !preds->contains(aLab->getFree()->getPos()))
 					aLab->setFree(nullptr);
 				aLab->removeAccess([&](MemAccessLabel &mLab) {
 					return !preds->contains(mLab.getPos());
 				});
 			}
-			if (auto *begLab = llvm::dyn_cast<MethodBeginLabel>(lab)) {
+			if (auto *begLab = genmc::dyn_cast<MethodBeginLabel>(lab)) {
 				begLab->removePredNoCascade([&](auto *endLab) {
 					return !preds->contains(endLab->getPos());
 				});
 			}
-			if (auto *endLab = llvm::dyn_cast<MethodEndLabel>(lab)) {
+			if (auto *endLab = genmc::dyn_cast<MethodEndLabel>(lab)) {
 				endLab->removeSuccNoCascade([&](auto *begLab) {
 					return !preds->contains(begLab->getPos());
 				});
@@ -265,7 +265,7 @@ void ExecutionGraph::cutToStamp(Stamp stamp)
 	/* Remove begins as well */
 	for (auto i : std::views::reverse(thr_ids()) | std::views::take_while([this](auto i) {
 			      return getThreadSize(i) == 1 &&
-				     !llvm::isa<InitLabel>(getFirstThreadLabel(i));
+				     !genmc::isa<InitLabel>(getFirstThreadLabel(i));
 		      })) {
 		auto *bLab = getFirstThreadLabel(i);
 		BUG_ON(!bLab);
@@ -304,14 +304,14 @@ void ExecutionGraph::copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) 
 				continue;
 			}
 			auto *nLab = other.addLabelToGraph(getEventLabel(Event(i, j))->clone());
-			if (auto *wLab = llvm::dyn_cast<WriteLabel>(nLab)) {
+			if (auto *wLab = genmc::dyn_cast<WriteLabel>(nLab)) {
 				const_cast<WriteLabel *>(wLab)->removeReader([&v](ReadLabel &rLab) {
 					return !v.contains(rLab.getPos());
 				});
 			}
-			if (auto *mLab = llvm::dyn_cast<MemAccessLabel>(nLab))
+			if (auto *mLab = genmc::dyn_cast<MemAccessLabel>(nLab))
 				other.trackCoherenceAtLoc(mLab->getAddr());
-			if (auto *tcLab = llvm::dyn_cast<ThreadCreateLabel>(nLab))
+			if (auto *tcLab = genmc::dyn_cast<ThreadCreateLabel>(nLab))
 				;
 		}
 	}
@@ -320,7 +320,7 @@ void ExecutionGraph::copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) 
 	for (auto i :
 	     std::views::reverse(other.thr_ids()) | std::views::take_while([&other](auto i) {
 		     return other.getThreadSize(i) == 1 &&
-			    !llvm::isa<InitLabel>(other.getFirstThreadLabel(i));
+			    !genmc::isa<InitLabel>(other.getFirstThreadLabel(i));
 	     })) {
 		auto *bLab = other.getFirstThreadLabel(i);
 		BUG_ON(!bLab);
@@ -351,55 +351,55 @@ void ExecutionGraph::copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) 
 
 	/* Fix pointers */
 	for (auto &lab : other.labels()) {
-		auto *rLab = llvm::dyn_cast<ReadLabel>(&lab);
+		auto *rLab = genmc::dyn_cast<ReadLabel>(&lab);
 		if (rLab && rLab->getRf()) {
 			if (!v.contains(rLab->getRf()->getPos()))
 				rLab->setRfNoCascade(nullptr);
 			else
 				rLab->setRfNoCascade(other.getEventLabel(rLab->getRf()->getPos()));
 		}
-		if (auto *wLab = llvm::dyn_cast<WriteLabel>(&lab)) {
+		if (auto *wLab = genmc::dyn_cast<WriteLabel>(&lab)) {
 			wLab->removeReader([](auto &rLab) { return true; });
 			for (auto &oLab : getWriteLabel(lab.getPos())->readers())
 				if (v.contains(oLab.getPos()))
 					wLab->addReader(other.getReadLabel(oLab.getPos()));
 		}
-		auto *mLab = llvm::dyn_cast<MemAccessLabel>(&lab);
+		auto *mLab = genmc::dyn_cast<MemAccessLabel>(&lab);
 		if (mLab && mLab->getAlloc()) {
 			if (!v.contains(mLab->getAlloc()->getPos())) {
 				mLab->setAlloc(nullptr);
 			} else {
-				auto *aLab = llvm::dyn_cast<MallocLabel>(
+				auto *aLab = genmc::dyn_cast<MallocLabel>(
 					other.getEventLabel(mLab->getAlloc()->getPos()));
 				mLab->setAlloc(aLab);
 			}
 		}
-		auto *tsLab = llvm::dyn_cast<ThreadStartLabel>(&lab);
+		auto *tsLab = genmc::dyn_cast<ThreadStartLabel>(&lab);
 		if (tsLab && tsLab->getCreate()) {
 			if (!v.contains(tsLab->getCreate()->getPos())) {
 				tsLab->setCreate(nullptr);
 			} else {
-				auto *tcLab = llvm::dyn_cast<ThreadCreateLabel>(
+				auto *tcLab = genmc::dyn_cast<ThreadCreateLabel>(
 					other.getEventLabel(tsLab->getCreate()->getPos()));
 				tsLab->setCreate(tcLab);
 			}
 		}
-		auto *eLab = llvm::dyn_cast<ThreadFinishLabel>(&lab);
+		auto *eLab = genmc::dyn_cast<ThreadFinishLabel>(&lab);
 		if (eLab && eLab->getParentJoin()) {
 			if (!v.contains(eLab->getParentJoin()->getPos())) {
 				eLab->setParentJoin(nullptr);
 			} else {
-				auto *jLab = llvm::dyn_cast<ThreadJoinLabel>(
+				auto *jLab = genmc::dyn_cast<ThreadJoinLabel>(
 					other.getEventLabel(eLab->getParentJoin()->getPos()));
 				eLab->setParentJoin(jLab);
 			}
 		}
-		auto *aLab = llvm::dyn_cast<MallocLabel>(&lab);
+		auto *aLab = genmc::dyn_cast<MallocLabel>(&lab);
 		if (aLab && aLab->getFree()) {
 			if (!v.contains(aLab->getFree()->getPos())) {
 				aLab->setFree(nullptr);
 			} else {
-				auto *dLab = llvm::dyn_cast<FreeLabel>(
+				auto *dLab = genmc::dyn_cast<FreeLabel>(
 					other.getEventLabel(aLab->getFree()->getPos()));
 				aLab->setFree(dLab);
 			}
@@ -407,37 +407,37 @@ void ExecutionGraph::copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) 
 		if (aLab) {
 			aLab->removeAccess([](auto &mLab) { return true; });
 			for (auto &oLab :
-			     llvm::dyn_cast<MallocLabel>(getEventLabel(lab.getPos()))->accesses())
+			     genmc::dyn_cast<MallocLabel>(getEventLabel(lab.getPos()))->accesses())
 				if (v.contains(oLab.getPos()))
-					aLab->addAccess(llvm::dyn_cast<MemAccessLabel>(
+					aLab->addAccess(genmc::dyn_cast<MemAccessLabel>(
 						other.getEventLabel(oLab.getPos())));
 		}
-		auto *dLab = llvm::dyn_cast<FreeLabel>(&lab);
+		auto *dLab = genmc::dyn_cast<FreeLabel>(&lab);
 		if (dLab && dLab->getAlloc()) {
 			if (!v.contains(dLab->getAlloc()->getPos())) {
 				dLab->setAlloc(nullptr);
 			} else {
-				auto *aLab = llvm::dyn_cast<MallocLabel>(
+				auto *aLab = genmc::dyn_cast<MallocLabel>(
 					other.getEventLabel(dLab->getAlloc()->getPos()));
 				dLab->setAlloc(aLab);
 			}
 		}
-		if (auto *begLab = llvm::dyn_cast<MethodBeginLabel>(&lab)) {
+		if (auto *begLab = genmc::dyn_cast<MethodBeginLabel>(&lab)) {
 			begLab->removePredNoCascade([](auto *endLab) { return true; });
 			for (auto *endLab :
-			     llvm::dyn_cast<MethodBeginLabel>(getEventLabel(lab.getPos()))
+			     genmc::dyn_cast<MethodBeginLabel>(getEventLabel(lab.getPos()))
 				     ->lin_preds())
 				if (v.contains(endLab->getPos()))
-					begLab->addPredNoCascade(llvm::dyn_cast<MethodEndLabel>(
+					begLab->addPredNoCascade(genmc::dyn_cast<MethodEndLabel>(
 						other.getEventLabel(endLab->getPos())));
 		}
-		if (auto *endLab = llvm::dyn_cast<MethodEndLabel>(&lab)) {
+		if (auto *endLab = genmc::dyn_cast<MethodEndLabel>(&lab)) {
 			endLab->removeSuccNoCascade([](auto *endLab) { return true; });
 			for (auto *begLab :
-			     llvm::dyn_cast<MethodEndLabel>(getEventLabel(lab.getPos()))
+			     genmc::dyn_cast<MethodEndLabel>(getEventLabel(lab.getPos()))
 				     ->lin_succs())
 				if (v.contains(begLab->getPos()))
-					endLab->addSuccNoCascade(llvm::dyn_cast<MethodBeginLabel>(
+					endLab->addSuccNoCascade(genmc::dyn_cast<MethodBeginLabel>(
 						other.getEventLabel(begLab->getPos())));
 		}
 	}
@@ -488,90 +488,60 @@ auto ExecutionGraph::getCopyUpTo(const VectorClock &v) const -> std::unique_ptr<
 void ExecutionGraph::validate()
 {
 	for (auto &lab : labels()) {
-		if (auto *rLab = llvm::dyn_cast<ReadLabel>(&lab)) {
+		if (auto *rLab = genmc::dyn_cast<ReadLabel>(&lab)) {
 			if (!rLab->getRf())
 				continue;
 
 			if (!containsLab(rLab->getRf())) {
-				llvm::errs() << "Non-existent RF: " << rLab->getPos() << "\n";
-				llvm::errs() << *this << "\n";
+				std::print(std::cerr, "Non-existent RF: {}\n{}\n", rLab->getPos(),
+					   *this);
 				BUG();
 			}
 
-			if (auto *rfLab = llvm::dyn_cast<WriteLabel>(rLab->getRf())) {
-				if (std::all_of(rfLab->readers_begin(), rfLab->readers_end(),
-						[rLab](auto &oLab) { return &oLab != rLab; })) {
-					llvm::errs()
-						<< "Not in RF's readers list: " << rLab->getPos()
-						<< "\n";
-					llvm::errs() << *this << "\n";
+			if (auto *rfLab = genmc::dyn_cast<WriteLabel>(rLab->getRf())) {
+				if (std::ranges::all_of(rfLab->readers(), [rLab](auto &oLab) {
+					    return &oLab != rLab;
+				    })) {
+					std::print(std::cerr, "Not in RF's readers list: {}\n{}\n",
+						   rLab->getPos(), *this);
 					BUG();
 				}
 			}
 		}
-		if (auto *wLab = llvm::dyn_cast<WriteLabel>(&lab)) {
+		if (auto *wLab = genmc::dyn_cast<WriteLabel>(&lab)) {
 			if (wLab->isRMW() &&
-			    std::count_if(wLab->readers_begin(), wLab->readers_end(),
-					  [&](auto &rLab) { return rLab.isRMW(); }) > 1) {
-				llvm::errs() << "Atomicity violation: " << wLab->getPos() << "\n";
-				llvm::errs() << *this << "\n";
+			    std::ranges::count_if(wLab->readers(),
+						  [&](auto &rLab) { return rLab.isRMW(); }) > 1) {
+				std::print(std::cerr, "Atomicity violation: {}\n{}\n",
+					   wLab->getPos(), *this);
 				BUG();
 			}
 
-			if (std::any_of(wLab->readers_begin(), wLab->readers_end(),
-					[&](auto &rLab) {
-						return !containsPosNonEmpty(rLab.getPos());
-					})) {
-				llvm::errs() << "Non-existent/non-read reader: " << wLab->getPos()
-					     << "\n";
-				llvm::errs() << "Readers: ";
+			if (std::ranges::any_of(wLab->readers(), [&](auto &rLab) {
+				    return !containsPosNonEmpty(rLab.getPos());
+			    })) {
+				std::string readers = "";
 				for (auto &rLab : wLab->readers())
-					llvm::errs() << rLab.getPos() << " ";
-				llvm::errs() << "\n";
-				llvm::errs() << *this << "\n";
+					readers += std::format("{} ", rLab.getPos());
+				std::print(std::cerr,
+					   "Non-existent/non-read reader: {}\nReaders: {}\n{}\n",
+					   wLab->getPos(), readers, *this);
 				BUG();
 			}
 
-			if (std::any_of(wLab->readers_begin(), wLab->readers_end(),
-					[&](auto &rLab) { return rLab.getRf() != wLab; })) {
-				llvm::errs() << "RF not properly set: " << wLab->getPos() << "\n";
-				llvm::errs() << *this << "\n";
+			if (std::ranges::any_of(wLab->readers(),
+						[&](auto &rLab) { return rLab.getRf() != wLab; })) {
+				std::print(std::cerr, "RF not properly set: {}\n{}\n",
+					   wLab->getPos(), *this);
 				BUG();
 			}
-			for (auto it = wLab->readers_begin(), ie = wLab->readers_end(); it != ie;
-			     ++it) {
-				if (!containsPosNonEmpty(it->getPos())) {
-					llvm::errs() << "Readers list has garbage: " << *it << "\n";
-					llvm::errs() << *this << "\n";
+			for (auto &rLab : wLab->readers()) {
+				if (!containsPosNonEmpty(rLab.getPos())) {
+					std::print(std::cerr, "Readers list has garbage: {}\n{}\n",
+						   rLab, *this);
 					BUG();
 				}
 			}
 		}
 	}
-}
-
-/*******************************************************************************
- **                           Overloaded operators
- ******************************************************************************/
-
-auto operator<<(llvm::raw_ostream &s, const ExecutionGraph &g) -> llvm::raw_ostream &
-{
-	for (auto i = 0U; i < g.getNumThreads(); i++) {
-		s << "Thread " << i << ":\n";
-		for (const auto &lab : g.po(i)) {
-			s << "\t" << lab.getStamp() << " @ " << lab << "\n";
-		}
-	}
-	s << "Thread sizes:\n\t";
-	for (auto i = 0U; i < g.getNumThreads(); i++)
-		s << g.getThreadSize(i) << " ";
-	s << "\n";
-
-	for (auto lIt = g.loc_begin(), lE = g.loc_end(); lIt != lE; ++lIt) {
-		s << lIt->first << ": ";
-		for (auto sIt = g.co_begin(lIt->first); sIt != g.co_end(lIt->first); ++sIt)
-			s << sIt->getPos() << " ";
-		s << "\n";
-	}
-	return s;
 }

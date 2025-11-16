@@ -15,8 +15,8 @@
 #include "ExecutionGraph/EventLabel.hpp"
 #include "ExecutionGraph/ExecutionGraph.hpp"
 #include "ExecutionGraph/GraphIterators.hpp"
+#include "Support/Cast.hpp"
 #include <algorithm>
-#include <llvm/Support/Casting.h>
 #include <ranges>
 
 auto isHazptrProtected(const MemAccessLabel *mLab) -> bool
@@ -29,15 +29,15 @@ auto isHazptrProtected(const MemAccessLabel *mLab) -> bool
 
 	auto mpreds = po_preds(g, mLab);
 	auto pLabIt = std::ranges::find_if(mpreds, [&](auto &lab) {
-		auto *pLab = llvm::dyn_cast<HpProtectLabel>(&lab);
+		auto *pLab = genmc::dyn_cast<HpProtectLabel>(&lab);
 		return pLab && aLab->contains(pLab->getProtectedAddr());
 	});
-	if (pLabIt == mpreds.end() || !llvm::isa<HpProtectLabel>(&*pLabIt))
+	if (pLabIt == mpreds.end() || !genmc::isa<HpProtectLabel>(&*pLabIt))
 		return false;
 
-	auto *pLab = llvm::dyn_cast<HpProtectLabel>(&*pLabIt);
+	auto *pLab = genmc::dyn_cast<HpProtectLabel>(&*pLabIt);
 	for (auto &lab : std::ranges::subrange(std::ranges::begin(mpreds), pLabIt)) {
-		if (auto *oLab = llvm::dyn_cast<HpProtectLabel>(&lab))
+		if (auto *oLab = genmc::dyn_cast<HpProtectLabel>(&lab))
 			if (oLab->getHpAddr() == pLab->getHpAddr())
 				return false;
 	}
@@ -52,13 +52,13 @@ auto findMatchingLock(const UnlockWriteLabel *uLab) -> const CasWriteLabel *
 	for (auto &lab : g.po_preds(uLab)) {
 
 		/* In case support for reentrant locks is added... */
-		if (auto *suLab = llvm::dyn_cast<UnlockWriteLabel>(&lab)) {
+		if (auto *suLab = genmc::dyn_cast<UnlockWriteLabel>(&lab)) {
 			if (suLab->getAddr() == uLab->getAddr())
 				locUnlocks.push_back(suLab);
 		}
-		if (auto *lLab = llvm::dyn_cast<CasWriteLabel>(&lab)) {
-			if ((llvm::isa<LockCasWriteLabel>(lLab) ||
-			     llvm::isa<TrylockCasWriteLabel>(lLab)) &&
+		if (auto *lLab = genmc::dyn_cast<CasWriteLabel>(&lab)) {
+			if ((genmc::isa<LockCasWriteLabel>(lLab) ||
+			     genmc::isa<TrylockCasWriteLabel>(lLab)) &&
 			    lLab->getAddr() == uLab->getAddr()) {
 				if (locUnlocks.empty())
 					return lLab;
@@ -74,18 +74,18 @@ auto findMatchingUnlock(const CasWriteLabel *lLab) -> const UnlockWriteLabel *
 	const auto &g = *lLab->getParent();
 	std::vector<const CasWriteLabel *> locLocks;
 
-	BUG_ON(!llvm::isa<LockCasReadLabel>(lLab) && !llvm::isa<TrylockCasReadLabel>(lLab));
+	BUG_ON(!genmc::isa<LockCasWriteLabel>(lLab) && !genmc::isa<TrylockCasWriteLabel>(lLab));
 	for (auto &lab : g.po_succs(lLab)) {
 		/* skip next event */
 
 		/* In case support for reentrant locks is added... */
-		if (auto *slLab = llvm::dyn_cast<CasWriteLabel>(&lab)) {
-			if ((llvm::isa<LockCasWriteLabel>(slLab) ||
-			     llvm::isa<TrylockCasWriteLabel>(slLab)) &&
+		if (auto *slLab = genmc::dyn_cast<CasWriteLabel>(&lab)) {
+			if ((genmc::isa<LockCasWriteLabel>(slLab) ||
+			     genmc::isa<TrylockCasWriteLabel>(slLab)) &&
 			    slLab->getAddr() == lLab->getAddr())
 				locLocks.push_back(slLab);
 		}
-		if (auto *uLab = llvm::dyn_cast<UnlockWriteLabel>(&lab)) {
+		if (auto *uLab = genmc::dyn_cast<UnlockWriteLabel>(&lab)) {
 			if (uLab->getAddr() == lLab->getAddr()) {
 				if (locLocks.empty())
 					return uLab;
@@ -107,7 +107,7 @@ auto findMatchingSpeculativeRead(const ReadLabel *cLab, const EventLabel *&scLab
 
 		/* We don't care whether all previous confirmations are matched;
 		 * the same speculation maybe confirmed multiple times (e.g., baskets) */
-		if (auto *rLab = llvm::dyn_cast<SpeculativeReadLabel>(&lab)) {
+		if (auto *rLab = genmc::dyn_cast<SpeculativeReadLabel>(&lab)) {
 			if (rLab->getAddr() == cLab->getAddr())
 				return rLab;
 		}
@@ -123,15 +123,16 @@ auto findAllocatingLabel(const ExecutionGraph &g, const SAddr &addr) -> const Ma
 
 	/* Fastpath: location contains a store */
 	if (g.containsLoc(addr) && g.co_max(addr) != g.getInitLabel())
-		return llvm::cast<WriteLabel>(g.co_max(addr))->getAlloc();
+		return genmc::cast<WriteLabel>(g.co_max(addr))->getAlloc();
 
 	/* Iterate over labels */
 	auto labels = g.rlabels();
 	auto labIt = std::ranges::find_if(labels, [addr](auto &lab) {
-		auto *mLab = llvm::dyn_cast<MallocLabel>(&lab);
+		auto *mLab = genmc::dyn_cast<MallocLabel>(&lab);
 		return mLab && mLab->contains(addr);
 	});
-	return (labIt != std::ranges::end(labels)) ? llvm::dyn_cast<MallocLabel>(&*labIt) : nullptr;
+	return (labIt != std::ranges::end(labels)) ? genmc::dyn_cast<MallocLabel>(&*labIt)
+						   : nullptr;
 }
 
 auto findAllocatingLabel(ExecutionGraph &g, const SAddr &addr) -> MallocLabel *
@@ -153,25 +154,27 @@ auto findPendingRMW(const WriteLabel *sLab) -> const WriteLabel *
 		return nullptr;
 
 	const auto &g = *sLab->getParent();
-	const auto *pLab = llvm::dyn_cast<ReadLabel>(g.po_imm_pred(sLab));
+	const auto *pLab = genmc::dyn_cast<ReadLabel>(g.po_imm_pred(sLab));
 	BUG_ON(!pLab->getRf());
 	std::vector<const WriteLabel *> pending;
 
 	/* Fastpath: non-init rf */
-	if (auto *wLab = llvm::dyn_cast<WriteLabel>(pLab->getRf())) {
+	if (auto *wLab = genmc::dyn_cast<WriteLabel>(pLab->getRf())) {
 		for (auto &rLab : wLab->readers()) {
 			if (rLab.isRMW() && &rLab != pLab)
-				pending.push_back(llvm::dyn_cast<WriteLabel>(g.po_imm_succ(&rLab)));
+				pending.push_back(
+					genmc::dyn_cast<WriteLabel>(g.po_imm_succ(&rLab)));
 		}
 		return getMinimumStampLabel(pending);
 	}
 
 	/* Slowpath: scan init rfs */
-	std::for_each(
-		g.init_rf_begin(pLab->getAddr()), g.init_rf_end(pLab->getAddr()), [&](auto &rLab) {
-			if (rLab.getRf() == pLab->getRf() && &rLab != pLab && rLab.isRMW())
-				pending.push_back(llvm::dyn_cast<WriteLabel>(g.po_imm_succ(&rLab)));
-		});
+	std::for_each(g.init_rf_begin(pLab->getAddr()), g.init_rf_end(pLab->getAddr()),
+		      [&](auto &rLab) {
+			      if (rLab.getRf() == pLab->getRf() && &rLab != pLab && rLab.isRMW())
+				      pending.push_back(
+					      genmc::dyn_cast<WriteLabel>(g.po_imm_succ(&rLab)));
+		      });
 	return getMinimumStampLabel(pending);
 }
 
@@ -183,7 +186,7 @@ auto findPendingRMW(WriteLabel *sLab) -> WriteLabel *
 auto findBarrierInitValue(const BIncFaiWriteLabel *wLab) -> SVal
 {
 	const auto &g = *wLab->getParent();
-	const auto *irLab = llvm::dyn_cast<ReadLabel>(g.po_imm_pred(g.po_imm_pred(wLab)));
+	const auto *irLab = genmc::dyn_cast<ReadLabel>(g.po_imm_pred(g.po_imm_pred(wLab)));
 	BUG_ON(!irLab || !irLab->isNotAtomic());
 
 	return irLab->getReturnValue();
@@ -197,7 +200,7 @@ auto isLastInBarrierRound(const BIncFaiWriteLabel *wLab) -> bool
 auto readsBarrierUnblockingValue(const BWaitReadLabel *rLab) -> bool
 {
 	const auto &g = *rLab->getParent();
-	const auto *wLab = llvm::cast<BIncFaiWriteLabel>(g.po_imm_pred(rLab));
+	const auto *wLab = genmc::cast<BIncFaiWriteLabel>(g.po_imm_pred(rLab));
 	auto iVal = g.po_imm_pred(g.po_imm_pred(wLab))->getReturnValue();
 	auto val = rLab->getReturnValue();
 
@@ -225,7 +228,7 @@ void blockThread(ExecutionGraph &g, std::unique_ptr<BlockLabel> bLab)
 void unblockThread(ExecutionGraph &g, Event pos)
 {
 	auto *bLab = g.getLastThreadLabel(pos.thread);
-	BUG_ON(!llvm::isa<BlockLabel>(bLab));
+	BUG_ON(!genmc::isa<BlockLabel>(bLab));
 	g.removeLast(pos.thread);
 }
 
@@ -238,7 +241,7 @@ auto createRMWWriteLabel(const ExecutionGraph &g, const ReadLabel *rLab)
 
 	SVal result;
 	WriteAttr wattr = WriteAttr::None;
-	if (auto *faiLab = llvm::dyn_cast<FaiReadLabel>(rLab)) {
+	if (auto *faiLab = genmc::dyn_cast<FaiReadLabel>(rLab)) {
 		/* Need to get the rf value within the if, as rLab might be a disk op,
 		 * and we cannot get the value in that case (but it will also not be an RMW)
 		 */
@@ -246,7 +249,7 @@ auto createRMWWriteLabel(const ExecutionGraph &g, const ReadLabel *rLab)
 		result = executeRMWBinOp(rfVal, faiLab->getOpVal(), faiLab->getSize(),
 					 faiLab->getOp());
 		wattr = faiLab->getAttr();
-	} else if (auto *casLab = llvm::dyn_cast<CasReadLabel>(rLab)) {
+	} else if (auto *casLab = genmc::dyn_cast<CasReadLabel>(rLab)) {
 		result = casLab->getSwapVal();
 		wattr = casLab->getAttr();
 	} else

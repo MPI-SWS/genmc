@@ -19,12 +19,10 @@
 #include "Verification/Relinche/Linearization.hpp"
 #include "Verification/Relinche/Observation.hpp"
 
-#include <llvm/ADT/SmallString.h>
-#include <llvm/Support/raw_ostream.h>
-
 #include <climits>
 #include <istream>
 #include <numeric>
+#include <ostream>
 #include <ranges>
 #include <unordered_map>
 #include <vector>
@@ -33,7 +31,7 @@
 struct Hint {
 	std::vector<std::pair<MethodCall::Id, MethodCall::Id>> edges;
 
-	friend auto operator<<(llvm::raw_ostream &os, const Hint &hint) -> llvm::raw_ostream &;
+	friend auto operator<<(std::ostream &os, const Hint &hint) -> std::ostream &;
 };
 
 /** Serializable collection of projected graphs (observations) of the specification program */
@@ -67,7 +65,8 @@ public:
 	/** Iterate over <obs', <lins, hints>> pairs where obs' refines obs */
 	[[nodiscard]] auto refined_observations(const Observation &obs) const
 	{
-		return llvm::make_range(data_.equal_range(obs)) |
+		const auto [begin, end] = data_.equal_range(obs);
+		return std::ranges::subrange(begin, end) |
 		       std::views::filter([&](auto &kv) { return kv.first.isRefinedBy(obs); });
 	}
 
@@ -131,7 +130,7 @@ private:
 	[[nodiscard]]
 	auto calculateObservationHints(const Observation &obs) const -> std::vector<Hint>;
 
-	friend void serialize(llvm::raw_ostream &os, const Specification &spec);
+	friend void serialize(std::ostream &os, const Specification &spec);
 	friend auto deserialize(std::istream &is) -> Specification;
 
 	// split into two maps <obs, lins> + <obs, hints> ?
@@ -144,7 +143,7 @@ private:
 #endif
 };
 
-void serialize(llvm::raw_ostream &os, const Specification &spec);
+void serialize(std::ostream &os, const Specification &spec);
 auto deserialize(std::istream &is) -> Specification;
 
 #endif /* GENMC_SPECIFICATION_HPP */

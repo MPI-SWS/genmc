@@ -36,15 +36,15 @@ auto View::update(const DepView &v) -> DepView & { BUG(); }
 
 auto View::update(const VectorClock &vc) -> VectorClock &
 {
-	if (const auto *v = llvm::dyn_cast<View>(&vc))
+	if (const auto *v = genmc::dyn_cast<View>(&vc))
 		return this->update(*v);
 	BUG();
 }
 
-void View::printData(llvm::raw_ostream &s) const
+auto View::formatData(std::format_context &ctx) const -> std::format_context::iterator
 {
-	s << "[ ";
+	auto out = std::format_to(ctx.out(), "[ ");
 	for (auto i = 0U; i < size(); i++)
-		s << i << ":" << getMax(i) << " ";
-	s << "]";
+		out = std::format_to(out, "{}: {}", i, getMax(i));
+	return std::format_to(out, "]");
 }

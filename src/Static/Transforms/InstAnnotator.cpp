@@ -11,7 +11,6 @@
  *     https://opensource.org/licenses/MIT
  */
 
-
 #include "InstAnnotator.hpp"
 #include "Runtime/InterpreterEnumAPI.hpp"
 #include "Static/LLVMUtils.hpp"
@@ -72,7 +71,7 @@ InstAnnotator::IRExprUP InstAnnotator::generateOperandExpr(Value *op)
 				DL.getTypeAllocSizeInBits(op->getType()), SVal(0));
 		}
 		ERROR("Only integer and null constants currently allowed in assume() "
-		      "expressions.\n");
+		      "expressions.");
 	}
 	BUG_ON(!isa<Instruction>(op) && !isa<Argument>(op));
 	Module *mod = nullptr;

@@ -17,11 +17,16 @@
 #include "Verification/MemoryModel.hpp"
 
 #include <cstdint>
+#include <expected>
 #include <optional>
 #include <string>
+#include <vector>
 
 enum class SchedulePolicy : std::uint8_t { LTR, WF, WFR, Arbitrary };
-enum class BoundType : std::uint8_t { context, round, none };
+enum class BoundType : std::uint8_t { none, context, round };
+
+using ConfigErrorList = std::vector<std::string>;
+using ValidationStatus = std::expected<void, ConfigErrorList>;
 
 struct Config {
 	/*** Exploration options ***/
@@ -60,8 +65,6 @@ struct Config {
 	bool printRandomScheduleSeed{};
 	unsigned int warnOnGraphSize{};
 #ifdef ENABLE_GENMC_DEBUG
-	bool printStamps{};
-	bool colorAccesses{};
 	bool validateExecGraphs{};
 	bool countDuplicateExecs{};
 	bool countMootExecs{};
@@ -69,9 +72,8 @@ struct Config {
 	bool boundsHistogram{};
 	bool relincheDebug{};
 #endif
-};
 
-/* Check validity of config options. */
-void checkConfig(Config &conf);
+	auto validate(std::vector<std::string> &warnings) -> ValidationStatus;
+};
 
 #endif /* GENMC_CONFIG_HPP */

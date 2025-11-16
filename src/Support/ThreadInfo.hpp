@@ -21,12 +21,14 @@ struct ThreadInfo {
 	int id{};	      /**< Thread identifier */
 	int parentId = -1;    /**< ID of parent thread */
 	unsigned int funId{}; /**< ID for thread body (function argument to pthread_create) */
-	SVal arg;	      /**< parameter argument to pthread_create */
+	SVal arg;	      /**< Argument to pthread_create */
+	std::string name;     /**< Thread name */
 	int symmId = -1;      /**< ID of previous symmetric thread if any, -1 otherwise */
 
 	ThreadInfo() = default;
-	ThreadInfo(int id, int parentId, unsigned funId, SVal arg, int symm = -1)
-		: id(id), parentId(parentId), funId(funId), arg(arg), symmId(symm)
+	ThreadInfo(int id, int parentId, unsigned funId, SVal arg, std::string name, int symm = -1)
+		: id(id), parentId(parentId), funId(funId), arg(arg), name(std::move(name)),
+		  symmId(symm)
 	{}
 };
 

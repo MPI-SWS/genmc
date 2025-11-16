@@ -68,20 +68,20 @@ auto DepView::update(const DepView &v) -> DepView &
 
 auto DepView::update(const VectorClock &vc) -> VectorClock &
 {
-	if (const auto *v = llvm::dyn_cast<DepView>(&vc))
+	if (const auto *v = genmc::dyn_cast<DepView>(&vc))
 		return this->update(*v);
 	BUG();
 }
 
-void DepView::printData(llvm::raw_ostream &s) const
+auto DepView::formatData(std::format_context &ctx) const -> std::format_context::iterator
 {
-	s << "[\n";
+	auto out = std::format_to(ctx.out(), "[\n");
 	for (auto i = 0U; i < size(); i++) {
-		s << "\t" << i << ": " << getMax(i) << " ( ";
-		for (const auto &h : this->holes_[i])
-			s << h << " ";
-		s << ")\n";
+		out = std::format_to(out, "\t{}: {} ( ", i, getMax(i));
+		for (const auto &h : this->holes_[i]) {
+			out = std::format_to(out, "{} ", h);
+		}
+		out = std::format_to(out, ")\n");
 	}
-
-	s << "]";
+	return std::format_to(out, "]");
 }

@@ -14,12 +14,11 @@
 #ifndef GENMC_INTERPRETER_ENUM_API_HPP
 #define GENMC_INTERPRETER_ENUM_API_HPP
 
-#include <llvm/Support/raw_ostream.h>
-#include <string>
-#include <unordered_map>
-
 #include "ExecutionGraph/Event.hpp"
 #include "ExecutionGraph/LoadAnnotation.hpp"
+
+#include <string>
+#include <unordered_map>
 
 enum class ActionKind : std::uint8_t { Load, NonLoad };
 

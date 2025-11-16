@@ -18,6 +18,7 @@
 #include "Support/SExpr.hpp"
 #include "Support/SVal.hpp"
 
+#include <algorithm>
 #include <memory>
 
 /*
@@ -153,10 +154,6 @@ public:
 	virtual std::unique_ptr<SExpr> clone() const = 0;
 
 	static bool classof(const SExpr<T> *) { return true; }
-
-	template <typename U>
-	friend llvm::raw_ostream &operator<<(llvm::raw_ostream &rhs,
-					     const SExpr<U> &annot); /* as a visitor */
 
 protected:
 	template <typename U> friend class SExprEvaluator;

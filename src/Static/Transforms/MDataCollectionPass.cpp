@@ -14,13 +14,11 @@
 #include "MDataCollectionPass.hpp"
 #include "Static/LLVMUtils.hpp"
 #include "Support/Error.hpp"
-#include <llvm/ADT/Twine.h>
 #include <llvm/BinaryFormat/Dwarf.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/DebugInfo.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Function.h>
-#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/InstIterator.h>
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instruction.h>

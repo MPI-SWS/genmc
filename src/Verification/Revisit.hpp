@@ -15,6 +15,10 @@
 #define GENMC_REVISIT_HPP
 
 #include "ExecutionGraph/EventLabel.hpp"
+#include "Verification/VerificationError.hpp"
+
+#include <format>
+#include <utility>
 
 class ReadRevisit;
 
@@ -29,6 +33,7 @@ public:
 		RV_FRevMO,
 		RV_FRevOpt,
 		RV_FRevRerun,
+		RV_FRevReplay,
 		RV_FRevLast,
 		RV_BRev,
 		RV_BRevLast,
@@ -53,14 +58,11 @@ public:
 
 	/** Destructor and printing facilities */
 	virtual ~Revisit() {}
-	friend llvm::raw_ostream &operator<<(llvm::raw_ostream &rhs, const Revisit &item);
 
 private:
 	Kind kind;
 	Event pos;
 };
-
-llvm::raw_ostream &operator<<(llvm::raw_ostream &rhs, const Revisit::Kind k);
 
 /** Multiple hierarchy for read revisits */
 class ReadRevisit {
@@ -162,6 +164,22 @@ public:
 	static bool classof(const Revisit *item) { return item->getKind() == RV_FRevRerun; }
 };
 
+/** Represents an execution replay.  Helpful in error reporting */
+class ReplayForwardRevisit : public ForwardRevisit {
+
+public:
+	ReplayForwardRevisit(Event pos, ErrorDetails details)
+		: ForwardRevisit(RV_FRevReplay, pos), details_(std::move(details))
+	{}
+
+	const ErrorDetails &getDetails() const { return details_; }
+
+	static bool classof(const Revisit *item) { return item->getKind() == RV_FRevReplay; }
+
+private:
+	ErrorDetails details_;
+};
+
 /** Represents a backward revisit */
 class BackwardRevisit : public Revisit, public ReadRevisit {
 
@@ -215,7 +233,7 @@ inline Revisit *Revisit::castFromReadRevisit(const ReadRevisit *r)
 	case Revisit::Kind::RV_BRev:
 		return static_cast<BackwardRevisit *>(const_cast<ReadRevisit *>(r));
 	default:
-		BUG();
+		return nullptr;
 	}
 }
 
@@ -228,7 +246,7 @@ inline ReadRevisit *Revisit::castToReadRevisit(const Revisit *r)
 	case Revisit::Kind::RV_BRev:
 		return static_cast<BackwardRevisit *>(const_cast<Revisit *>(r));
 	default:
-		BUG();
+		return nullptr;
 	}
 }
 
@@ -236,80 +254,92 @@ inline ReadRevisit *Revisit::castToReadRevisit(const Revisit *r)
  **                             RTTI helpers
  *******************************************************************************/
 
-/** Specialization selected when ToTy is not a known subclass of ReadRevisit */
-template <class ToTy, bool IsKnownSubtype = ::std::is_base_of<ReadRevisit, ToTy>::value>
-struct cast_convert_read_rev {
-	static const ToTy *doit(const ReadRevisit *Val)
+namespace genmc {
+
+template <> inline auto isa<ReadRevisit>(const ::Revisit *Base) -> bool
+{
+	return ::Revisit::castToReadRevisit(Base);
+}
+
+template <> inline auto dyn_cast<ReadRevisit>(const Revisit *Base) -> const ::ReadRevisit *
+{
+	return ::Revisit::castToReadRevisit(Base);
+}
+
+template <> inline auto dyn_cast(::Revisit *Base) -> ::ReadRevisit *
+{
+	return ::Revisit::castToReadRevisit(Base);
+}
+
+} /* namespace genmc */
+
+/**** Formatting ****/
+/** Make `Revisit::Kind` formattable with `std::format`. */
+template <> struct std::formatter<Revisit::Kind> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const Revisit::Kind &k, std::format_context &ctx) const
 	{
-		return static_cast<const ToTy *>(Revisit::castFromReadRevisit(Val));
-	}
-
-	static ToTy *doit(ReadRevisit *Val)
-	{
-		return static_cast<ToTy *>(Revisit::castFromReadRevisit(Val));
-	}
-};
-
-/** Specialization selected when ToTy is a known subclass of ReadRevisit */
-template <class ToTy> struct cast_convert_read_rev<ToTy, true> {
-	static const ToTy *doit(const ReadRevisit *Val) { return static_cast<const ToTy *>(Val); }
-
-	static ToTy *doit(ReadRevisit *Val) { return static_cast<ToTy *>(Val); }
-};
-
-namespace llvm {
-
-/** isa<T>(ReadRevisit *) */
-template <typename To> struct isa_impl<To, ::ReadRevisit> {
-	static bool doit(const ::ReadRevisit &Val) { return To::classofKind(Val.getRevisitKind()); }
-};
-
-/** cast<T>(ReadRevisit *) */
-template <class ToTy> struct cast_convert_val<ToTy, const ::ReadRevisit, const ::ReadRevisit> {
-	static const ToTy &doit(const ::ReadRevisit &Val)
-	{
-		return *::cast_convert_read_rev<ToTy>::doit(&Val);
-	}
-};
-
-template <class ToTy> struct cast_convert_val<ToTy, ::ReadRevisit, ::ReadRevisit> {
-	static ToTy &doit(::ReadRevisit &Val) { return *::cast_convert_read_rev<ToTy>::doit(&Val); }
-};
-
-template <class ToTy> struct cast_convert_val<ToTy, const ::ReadRevisit *, const ::ReadRevisit *> {
-	static const ToTy *doit(const ::ReadRevisit *Val)
-	{
-		return ::cast_convert_read_rev<ToTy>::doit(Val);
-	}
-};
-
-template <class ToTy> struct cast_convert_val<ToTy, ::ReadRevisit *, ::ReadRevisit *> {
-	static ToTy *doit(::ReadRevisit *Val) { return ::cast_convert_read_rev<ToTy>::doit(Val); }
-};
-
-/// Implement cast_convert_val for EventLabel -> ReadRevisit conversions.
-template <class FromTy> struct cast_convert_val<::ReadRevisit, FromTy, FromTy> {
-	static ::ReadRevisit &doit(const FromTy &Val) { return *FromTy::castToReadRevisit(&Val); }
-};
-
-template <class FromTy> struct cast_convert_val<::ReadRevisit, FromTy *, FromTy *> {
-	static ::ReadRevisit *doit(const FromTy *Val) { return FromTy::castToReadRevisit(Val); }
-};
-
-template <class FromTy> struct cast_convert_val<const ::ReadRevisit, FromTy, FromTy> {
-	static const ::ReadRevisit &doit(const FromTy &Val)
-	{
-		return *FromTy::castToReadRevisit(&Val);
+		std::string_view str;
+		switch (k) {
+		case Revisit::RV_FRevRead:
+			str = "FR";
+			break;
+		case Revisit::RV_FRevOpt:
+			str = "OPT";
+			break;
+		case Revisit::RV_FRevRerun:
+			str = "RERUN";
+			break;
+		case Revisit::RV_FRevReplay:
+			str = "REPLAY";
+			break;
+		case Revisit::RV_FRevMO:
+			str = "MO";
+			break;
+		case Revisit::RV_BRev:
+			str = "BR";
+			break;
+		default:
+			PRINT_BUGREPORT_INFO_ONCE("print-revisit-type",
+						  "Cannot print revisit type");
+			str = "UNKNOWN";
+			break;
+		}
+		return std::format_to(ctx.out(), "{}", str);
 	}
 };
 
-template <class FromTy> struct cast_convert_val<const ::ReadRevisit, FromTy *, FromTy *> {
-	static const ::ReadRevisit *doit(const FromTy *Val)
+/** Make `Revisit` formattable with `std::format`. */
+template <> struct std::formatter<Revisit> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const Revisit &item, std::format_context &ctx) const
 	{
-		return FromTy::castToReadRevisit(Val);
+		switch (item.getKind()) {
+		case Revisit::RV_FRevRead: {
+			auto &fi = static_cast<const ReadForwardRevisit &>(item);
+			return std::format_to(ctx.out(), "{}({}: {})", fi.getKind(), fi.getPos(),
+					      fi.getRev());
+		}
+		case Revisit::RV_FRevMO: {
+			auto &mi = static_cast<const WriteForwardRevisit &>(item);
+			return std::format_to(ctx.out(), "{}({}: {})", mi.getKind(), mi.getPos(),
+					      mi.getPred());
+		}
+		case Revisit::RV_FRevOpt: {
+			auto &mi = static_cast<const OptionalForwardRevisit &>(item);
+			return std::format_to(ctx.out(), "{}({})", mi.getKind(), mi.getPos());
+		}
+		case Revisit::RV_BRev: {
+			auto &bi = static_cast<const BackwardRevisit &>(item);
+			return std::format_to(ctx.out(), "{}({}: [{}, {}])", bi.getKind(),
+					      bi.getPos(), bi.getRev(), *bi.getViewNoRel());
+		}
+		default:
+			return std::format_to(ctx.out(), "{}", item.getKind());
+		}
 	}
 };
-
-} /* namespace llvm */
 
 #endif /* GENMC_REVISIT_HPP */

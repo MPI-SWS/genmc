@@ -49,46 +49,46 @@ void DepExecutionGraph::cutToStamp(Stamp stamp)
 
 			/* Otherwise, remove 'pointers' to it, in an
 			 * analogous manner cutToView(). */
-			if (auto *wLab = llvm::dyn_cast<WriteLabel>(lab)) {
+			if (auto *wLab = genmc::dyn_cast<WriteLabel>(lab)) {
 				wLab->removeReader([&](ReadLabel &rLab) {
 					return !preds->contains(rLab.getPos());
 				});
 			}
-			if (auto *rLab = llvm::dyn_cast<ReadLabel>(lab)) {
+			if (auto *rLab = genmc::dyn_cast<ReadLabel>(lab)) {
 				if (rLab->getRf() && !preds->contains(rLab->getRf()->getPos()))
 					rLab->setRfNoCascade(nullptr);
 			}
-			if (auto *mLab = llvm::dyn_cast<MemAccessLabel>(lab)) {
+			if (auto *mLab = genmc::dyn_cast<MemAccessLabel>(lab)) {
 				if (mLab->getAlloc() && !preds->contains(mLab->getAlloc()))
 					mLab->setAlloc(nullptr);
 			}
-			if (auto *tsLab = llvm::dyn_cast<ThreadStartLabel>(lab)) {
+			if (auto *tsLab = genmc::dyn_cast<ThreadStartLabel>(lab)) {
 				if (tsLab->getCreate() &&
 				    !preds->contains(tsLab->getCreate()->getPos()))
 					tsLab->setCreate(nullptr);
 			}
-			if (auto *eLab = llvm::dyn_cast<ThreadFinishLabel>(lab)) {
+			if (auto *eLab = genmc::dyn_cast<ThreadFinishLabel>(lab)) {
 				if (eLab->getParentJoin() &&
 				    !preds->contains(eLab->getParentJoin()->getPos()))
 					eLab->setParentJoin(nullptr);
 			}
-			if (auto *dLab = llvm::dyn_cast<FreeLabel>(lab)) {
+			if (auto *dLab = genmc::dyn_cast<FreeLabel>(lab)) {
 				if (dLab->getAlloc() && !preds->contains(dLab->getAlloc()))
 					dLab->setAlloc(nullptr);
 			}
-			if (auto *aLab = llvm::dyn_cast<MallocLabel>(lab)) {
+			if (auto *aLab = genmc::dyn_cast<MallocLabel>(lab)) {
 				if (aLab->getFree() && !preds->contains(aLab->getFree()->getPos()))
 					aLab->setFree(nullptr);
 				aLab->removeAccess([&](MemAccessLabel &mLab) {
 					return !preds->contains(mLab.getPos());
 				});
 			}
-			if (auto *begLab = llvm::dyn_cast<MethodBeginLabel>(lab)) {
+			if (auto *begLab = genmc::dyn_cast<MethodBeginLabel>(lab)) {
 				begLab->removePredNoCascade([&](auto *endLab) {
 					return !preds->contains(endLab->getPos());
 				});
 			}
-			if (auto *endLab = llvm::dyn_cast<MethodEndLabel>(lab)) {
+			if (auto *endLab = genmc::dyn_cast<MethodEndLabel>(lab)) {
 				endLab->removeSuccNoCascade([&](auto *begLab) {
 					return !preds->contains(begLab->getPos());
 				});
@@ -105,7 +105,7 @@ void DepExecutionGraph::cutToStamp(Stamp stamp)
 	/* Remove begins as well */
 	for (auto i : std::views::reverse(thr_ids()) | std::views::take_while([this](auto i) {
 			      return getThreadSize(i) == 1 &&
-				     !llvm::isa<InitLabel>(getFirstThreadLabel(i));
+				     !genmc::isa<InitLabel>(getFirstThreadLabel(i));
 		      })) {
 		auto *bLab = getFirstThreadLabel(i);
 		BUG_ON(!bLab);

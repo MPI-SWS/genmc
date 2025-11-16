@@ -13,12 +13,10 @@
 
 
 #include "CodeCondenserPass.hpp"
-#include "Static/LLVMUtils.hpp"
 #include "Static/Transforms/BisimilarityCheckerPass.hpp"
 #include "Support/Error.hpp"
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/CFG.h>
-#include <llvm/IR/InstIterator.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 

@@ -14,11 +14,5 @@
 #include "SVal.hpp"
 #include "SAddr.hpp"
 
-auto operator<<(llvm::raw_ostream &s, const SVal &v) -> llvm::raw_ostream &
-{
-	s << v.get();
-	return s;
-}
-
 static_assert(sizeof(SVal::Value) >= sizeof(SAddr::Width), "SVal needs to be able to hold SAddr");
 static_assert(sizeof(SVal::Value) >= sizeof(uintptr_t), "SVal needs to be able to hold pointers");

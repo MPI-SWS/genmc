@@ -14,7 +14,7 @@
 #ifndef GENMC_VERBOSITY_HPP
 #define GENMC_VERBOSITY_HPP
 
-#include <llvm/Support/raw_ostream.h>
+#include <format>
 
 enum class VerbosityLevel {
 	Quiet,
@@ -29,6 +29,25 @@ enum class VerbosityLevel {
 #endif
 };
 
-auto operator<<(llvm::raw_ostream &rhs, VerbosityLevel l) -> llvm::raw_ostream &;
+template <> struct std::formatter<VerbosityLevel> : std::formatter<std::string_view> {
+	constexpr auto parse(std::format_parse_context &ctx)
+	{
+		return std::formatter<std::string_view>::parse(ctx);
+	}
+
+	auto format(const VerbosityLevel l, std::format_context &ctx) const
+	{
+		switch (l) {
+		case VerbosityLevel::Error:
+			return std::format_to(ctx.out(), "ERROR: ");
+		case VerbosityLevel::Warning:
+			return std::format_to(ctx.out(), "WARNING: ");
+		case VerbosityLevel::Tip:
+			return std::format_to(ctx.out(), "Tip: ");
+		default:
+			return std::format_to(ctx.out(), "");
+		}
+	}
+};
 
 #endif /* GENMC_VERBOSITY_HPP */

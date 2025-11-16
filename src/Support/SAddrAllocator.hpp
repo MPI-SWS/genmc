@@ -14,9 +14,9 @@
 #ifndef GENMC_SADDR_ALLOCATOR_HPP
 #define GENMC_SADDR_ALLOCATOR_HPP
 
-
 #include "Support/SAddr.hpp"
 
+#include <format>
 #include <unordered_map>
 
 class VectorClock;
@@ -69,8 +69,7 @@ public:
 
 	void restrict(const VectorClock &view);
 
-	friend auto operator<<(llvm::raw_ostream &rhs, const SAddrAllocator &alloctor)
-		-> llvm::raw_ostream &;
+	friend struct std::formatter<SAddrAllocator>;
 
 private:
 	/** Helper class to avoid allocating null for heap addresses */
@@ -86,6 +85,24 @@ private:
 
 	std::unordered_map<unsigned, SAddr::Width> staticPool_;
 	std::unordered_map<unsigned, WidthProxy> dynamicPool_; // Note different type here
+};
+
+/** Make `SAddrAllocator` formattable with `std::format`. */
+template <> struct std::formatter<SAddrAllocator> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const SAddrAllocator &allocator, std::format_context &ctx) const
+	{
+		auto out = std::format_to(ctx.out(), "static: ");
+		for (const auto &[tid, idx] : allocator.staticPool_) {
+			out = std::format_to(out, "({}, {}) ", tid, idx);
+		}
+		out = std::format_to(out, "\ndynamic: ");
+		for (const auto &[tid, idx] : allocator.dynamicPool_) {
+			out = std::format_to(out, "({}, {}) ", tid, static_cast<SAddr::Width>(idx));
+		}
+		return std::format_to(out, "\n");
+	}
 };
 
 #endif /* GENMC_SADDR_ALLOCATOR_HPP */

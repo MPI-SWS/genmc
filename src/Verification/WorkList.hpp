@@ -15,8 +15,8 @@
 #define GENMC_WORK_LIST_HPP
 
 #include "Verification/Revisit.hpp"
-#include <llvm/Support/Casting.h>
-#include <llvm/Support/raw_ostream.h>
+
+#include <format>
 #include <memory>
 #include <vector>
 
@@ -45,12 +45,26 @@ public:
 		return std::move(item);
 	}
 
-	friend auto operator<<(llvm::raw_ostream &s, const WorkList &wlist) -> llvm::raw_ostream &;
+	friend struct std::formatter<WorkList>;
 
 private:
 	/* Each stamp was associated with a bucket of TODOs before.
 	 * This is now unnecessary, as even a simple stack suffices */
 	std::vector<ItemT> wlist_;
+};
+
+/** Make `WorkList` formattable with `std::format`. */
+template <> struct std::formatter<WorkList> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const WorkList &wset, std::format_context &ctx) const
+	{
+		auto out = std::format_to(ctx.out(), "[ ");
+		for (const auto &item : wset.wlist_) {
+			out = std::format_to(out, "{} ", *item);
+		}
+		return std::format_to(out, "]");
+	}
 };
 
 #endif /* GENMC_WORK_LIST_HPP */

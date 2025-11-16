@@ -17,6 +17,7 @@
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Instructions.h>
 
+#include <algorithm>
 #include <utility>
 
 using namespace llvm;

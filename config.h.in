@@ -23,12 +23,9 @@
 #cmakedefine CLANGPATH "@CLANGPATH@"
 #cmakedefine LLVM_BUILDMODE "@LLVM_BUILDMODE@"
 #cmakedefine LLVM_VERSION "@LLVM_PACKAGE_VERSION@"
-//@LLVM_DEFINITIONS: @LLVM_DEFINITIONS@
-//@LLVM_INCLUDE_DIRS: @LLVM_INCLUDE_DIRS@
-//@LLVM_LIBRARY_DIR: @LLVM_LIBRARY_DIR@
-//@LLVM_CONFIG_PATH: @LLVM_CONFIG_PATH@
 
 /* Enable/disable additional debug checks, prints and options. */
+#cmakedefine BUILD_LLI
 #cmakedefine ENABLE_GENMC_DEBUG
 
 #endif /* GENMC_CONFIG_H */

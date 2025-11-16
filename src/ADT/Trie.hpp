@@ -15,6 +15,7 @@
 #define GENMC_TRIE_HPP
 
 #include "Support/Error.hpp"
+
 #include <memory>
 #include <vector>
 
@@ -76,12 +77,11 @@ public:
 #ifdef ENABLE_GENMC_DEBUG
 		void dump()
 		{
-			llvm::dbgs() << "Node: " << this << "\n"
-				     << "Label: " << format(label()) << "\n"
-				     << "Children:\n";
+			std::print(std::cerr, "Node: {}\nLabel: {}\nChildren: \n", (void *)this,
+				   label());
 
-			for (auto i = begin(), e = end(); i != e; ++i)
-				llvm::dbgs() << *i << " -> " << format((*i)->label()) << "\n";
+			for (auto it = begin(), e = end(); it != e; ++it)
+				std::print(std::cerr, "{} -> {}\n", (void *)*it, (*it)->label());
 		}
 #endif /* ifdef ENABLE_GENMC_DEBUG */
 

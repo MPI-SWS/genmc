@@ -33,6 +33,7 @@
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Utils/LoopUtils.h>
 
+#include <algorithm>
 #include <optional>
 #include <utility>
 

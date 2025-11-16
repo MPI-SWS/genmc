@@ -31,7 +31,7 @@ please issue the following command:
 
 You will need a C++20-compliant compiler (recommended: g++ >= 14) and an LLVM installation.
 The LLVM versions currently supported are:
-13.0.0, 14.0.0, 15.0.0, 16.0.0, 17.0.0, 18.0.0, 19.0.0, 20.0.0.
+15.0.0, 16.0.0, 17.0.0, 18.0.0, 19.0.0, 20.0.0.
 
 ##### GNU/Linux
 
@@ -41,7 +41,8 @@ following packages:
 		cmake clang  llvm  llvm-dev  libffi-dev
 		zlib1g-dev libedit-dev
 
-To run the default tests, `bc` is also necessary.
+`clang` and `llvm` are only necessary when building the `genmc` executable.
+To run the default tests, `bc` is also required.
 
 ##### Max OS X
 

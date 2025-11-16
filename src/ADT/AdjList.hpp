@@ -14,12 +14,11 @@
 #ifndef GENMC_ADJ_LIST_HPP
 #define GENMC_ADJ_LIST_HPP
 
+#include "ADT/BitVector.hpp"
 #include "Support/Error.hpp"
 
-#include <llvm/ADT/BitVector.h>
-#include <llvm/Support/raw_ostream.h>
-
 #include <functional>
+#include <ostream>
 #include <unordered_map>
 #include <vector>
 
@@ -158,7 +157,7 @@ public:
 	auto operator()(NodeId a, NodeId b) const -> bool { return transC[a][b]; }
 
 	template <typename U, typename Z>
-	friend auto operator<<(llvm::raw_ostream &s, const AdjList<U, Z> &l) -> llvm::raw_ostream &;
+	friend auto operator<<(std::ostream &s, const AdjList<U, Z> &l) -> std::ostream &;
 
 private:
 	/** Helper for dfs() */
@@ -191,7 +190,7 @@ private:
 
 	/** Maintain transitive closure info */
 	bool calculatedTransC = false;
-	std::vector<llvm::BitVector> transC;
+	std::vector<genmc::BitVector> transC;
 };
 
 /**** AdjList templates ****/
@@ -206,7 +205,7 @@ template <typename T, typename H> void AdjList<T, H>::addNode(T a)
 	inDegree.push_back(0);
 
 	calculatedTransC = false;
-	transC.push_back(llvm::BitVector(id));
+	transC.push_back(genmc::BitVector(id));
 }
 
 template <typename T, typename H> void AdjList<T, H>::addEdge(NodeId a, NodeId b)
@@ -470,7 +469,7 @@ template <typename T, typename H> auto AdjList<T, H>::isIrreflexive() -> bool
 }
 
 template <typename T, typename H>
-auto operator<<(llvm::raw_ostream &s, const AdjList<T, H> &l) -> llvm::raw_ostream &
+auto operator<<(std::ostream &s, const AdjList<T, H> &l) -> std::ostream &
 {
 	auto &elems = l.getElems();
 

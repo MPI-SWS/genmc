@@ -14,12 +14,13 @@
 #ifndef GENMC_DEP_VIEW_HPP
 #define GENMC_DEP_VIEW_HPP
 
+#include "ADT/IndexedMap.hpp"
 #include "ADT/VSet.hpp"
 #include "ADT/VectorClock.hpp"
 #include "ADT/View.hpp"
 #include "Support/Error.hpp"
-#include <llvm/ADT/IndexedMap.h>
-#include <llvm/Support/raw_ostream.h>
+
+#include <format>
 
 /**
  * An instantiation of a vector clock where if an event is contained in the clock,
@@ -31,7 +32,7 @@ private:
 	using Holes = VSet<int>;
 
 	class HoleView {
-		llvm::IndexedMap<Holes> hs_;
+		genmc::IndexedMap<Holes> hs_;
 
 	public:
 		HoleView() : hs_(Holes()) {}
@@ -127,7 +128,7 @@ public:
 	auto update(const DepView &v) -> DepView & override;
 	auto update(const VectorClock &vc) -> VectorClock & override;
 
-	void printData(llvm::raw_ostream &s) const override;
+	auto formatData(std::format_context &ctx) const -> std::format_context::iterator override;
 
 	static auto classof(const VectorClock *vc) -> bool { return vc->getKind() == VC_DepView; }
 

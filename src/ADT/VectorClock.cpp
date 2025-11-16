@@ -29,12 +29,6 @@ auto VectorClock::clone() const -> std::unique_ptr<VectorClock>
 	BUG();
 }
 
-auto operator<<(llvm::raw_ostream &s, const VectorClock &vc) -> llvm::raw_ostream &
-{
-	vc.printData(s);
-	return s;
-}
-
 auto VectorClock::empty() const -> bool { return size() == 0; }
 
 auto VectorClock::getMax(Event e) const -> int { return getMax(e.thread); }

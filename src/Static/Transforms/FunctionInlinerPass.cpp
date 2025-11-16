@@ -14,7 +14,6 @@
 #include "FunctionInlinerPass.hpp"
 #include "Runtime/InterpreterEnumAPI.hpp"
 #include <llvm/ADT/SCCIterator.h>
-#include <llvm/ADT/SmallVector.h>
 #include <llvm/Analysis/CallGraph.h>
 #include <llvm/Analysis/PostDominators.h>
 #include <llvm/IR/InstIterator.h>

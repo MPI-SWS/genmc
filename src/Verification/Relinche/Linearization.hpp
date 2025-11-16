@@ -14,10 +14,10 @@
 #ifndef GENMC_LINEARIZATION_HPP
 #define GENMC_LINEARIZATION_HPP
 
+#include "ADT/IndexedMap.hpp"
 #include "Verification/Relinche/Observation.hpp"
 
-#include <llvm/ADT/IndexedMap.h>
-
+#include <format>
 #include <vector>
 
 /** Represents a total ordering of MethodCall */
@@ -26,7 +26,7 @@ private:
 	using Index = unsigned int; /**< Index in a linear order */
 
 public:
-	using PermutationMap = llvm::IndexedMap<MethodCall::Id>;
+	using PermutationMap = genmc::IndexedMap<MethodCall::Id>;
 
 	Linearization() = default;
 	explicit Linearization(const std::vector<MethodCall::Id> &orderedIds);
@@ -48,8 +48,7 @@ public:
 
 	[[nodiscard]] auto operator<=>(const Linearization &other) const = default;
 
-	friend auto operator<<(llvm::raw_ostream &os, const Linearization &lin)
-		-> llvm::raw_ostream &;
+	friend struct std::formatter<Linearization>;
 
 private:
 	/** Index of an event in the order */
@@ -62,6 +61,16 @@ private:
 	 * a linearization. This is actually an indexed map (CallIx -> Index), but we
 	 * don't use an IndexedMap because we need comparison operators for Linearizations */
 	std::vector<Index> order_;
+};
+
+/** Make `Linearization` formattable with `std::format`. */
+template <> struct std::formatter<Linearization> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const Linearization &lin, std::format_context &ctx) const
+	{
+		return std::format_to(ctx.out(), "{}: {}", lin.lin_.size(), lin.lin_);
+	}
 };
 
 #endif /* GENMC_LINEARIZATION_HPP */

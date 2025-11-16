@@ -17,6 +17,7 @@
 #include "Support/Error.hpp"
 
 #include <cstdint>
+#include <format>
 
 /**
  * Represents a label stamp (positive number).
@@ -77,10 +78,18 @@ public:
 	[[nodiscard]] auto get() const -> uint32_t { return value; }
 	auto operator()() const -> uint32_t { return get(); }
 
-	friend auto operator<<(llvm::raw_ostream &rhs, const Stamp &s) -> llvm::raw_ostream &;
-
 private:
 	Value value;
+};
+
+/** Make `Stamp` formattable with `std::format`. */
+template <> struct std::formatter<Stamp> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+	auto format(const Stamp &s, std::format_context &ctx) const
+	{
+		return std::format_to(ctx.out(), "{}", s.get());
+	}
 };
 
 #endif /* GENMC_STAMP_HPP */

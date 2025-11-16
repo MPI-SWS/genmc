@@ -10,6 +10,22 @@ released.
 - Merge of MIXER [POPL'25] into mainline GenMC
 - Documentation for LLVM-based Rust frontend
 
+## [0.15.0] - 2025.11.16
+### Added
+
+- Support for building GenMC library only (`-DBUILD_LLI=OFF`; no LLVM required)
+
+### Fixes
+
+- Bug fixes in config validation
+
+### Changes
+
+- New error-reporting and scheduling API
+
+### Removed
+
+- Support for LLVM-{13,14}
 
 ## [0.14.0] - 2025.11.03
 ### Changes
