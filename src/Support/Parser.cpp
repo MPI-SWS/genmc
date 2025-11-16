@@ -13,6 +13,7 @@
 
 #include "Parser.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <vector>

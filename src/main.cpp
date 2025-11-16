@@ -473,8 +473,8 @@ static void parseConfig(int argc, char **argv, Config &conf, LLIConfig &lliConfi
 	auto status = conf.validate(warnings);
 	for (const auto &w : warnings)
 		WARN("{}", w);
-	if (!status) {
-		for (const auto &e : status.error())
+	if (auto *errors = std::get_if<ConfigErrorList>(&status); errors) {
+		for (const auto &e : *errors)
 			LOG(VerbosityLevel::Error, "{}", e);
 		exit(EUSER);
 	}

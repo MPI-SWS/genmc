@@ -17,16 +17,16 @@
 #include "Verification/MemoryModel.hpp"
 
 #include <cstdint>
-#include <expected>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 enum class SchedulePolicy : std::uint8_t { LTR, WF, WFR, Arbitrary };
 enum class BoundType : std::uint8_t { none, context, round };
 
 using ConfigErrorList = std::vector<std::string>;
-using ValidationStatus = std::expected<void, ConfigErrorList>;
+using ValidationStatus = std::variant<std::monostate, ConfigErrorList>;
 
 struct Config {
 	/*** Exploration options ***/

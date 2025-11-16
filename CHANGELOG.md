@@ -10,6 +10,14 @@ released.
 - Merge of MIXER [POPL'25] into mainline GenMC
 - Documentation for LLVM-based Rust frontend
 
+
+## [0.15.1] - 2025.11.16
+
+### Fixes
+
+- Compatibility fixes for older compilers
+
+
 ## [0.15.0] - 2025.11.16
 ### Added
 

@@ -16,6 +16,7 @@
 
 #include "Support/Error.hpp"
 
+#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -77,11 +78,11 @@ public:
 #ifdef ENABLE_GENMC_DEBUG
 		void dump()
 		{
-			std::print(std::cerr, "Node: {}\nLabel: {}\nChildren: \n", (void *)this,
-				   label());
+			std::cerr << std::format("Node: {}\nLabel: {}\nChildren: \n", (void *)this,
+						 label());
 
 			for (auto it = begin(), e = end(); it != e; ++it)
-				std::print(std::cerr, "{} -> {}\n", (void *)*it, (*it)->label());
+				std::cerr << std::format("{} -> {}\n", (void *)*it, (*it)->label());
 		}
 #endif /* ifdef ENABLE_GENMC_DEBUG */
 

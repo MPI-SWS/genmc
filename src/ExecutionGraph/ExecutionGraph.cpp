@@ -493,8 +493,8 @@ void ExecutionGraph::validate()
 				continue;
 
 			if (!containsLab(rLab->getRf())) {
-				std::print(std::cerr, "Non-existent RF: {}\n{}\n", rLab->getPos(),
-					   *this);
+				std::cerr << std::format("Non-existent RF: {}\n{}\n",
+							 rLab->getPos(), *this);
 				BUG();
 			}
 
@@ -502,8 +502,9 @@ void ExecutionGraph::validate()
 				if (std::ranges::all_of(rfLab->readers(), [rLab](auto &oLab) {
 					    return &oLab != rLab;
 				    })) {
-					std::print(std::cerr, "Not in RF's readers list: {}\n{}\n",
-						   rLab->getPos(), *this);
+					std::cerr
+						<< std::format("Not in RF's readers list: {}\n{}\n",
+							       rLab->getPos(), *this);
 					BUG();
 				}
 			}
@@ -512,8 +513,8 @@ void ExecutionGraph::validate()
 			if (wLab->isRMW() &&
 			    std::ranges::count_if(wLab->readers(),
 						  [&](auto &rLab) { return rLab.isRMW(); }) > 1) {
-				std::print(std::cerr, "Atomicity violation: {}\n{}\n",
-					   wLab->getPos(), *this);
+				std::cerr << std::format("Atomicity violation: {}\n{}\n",
+							 wLab->getPos(), *this);
 				BUG();
 			}
 
@@ -523,22 +524,22 @@ void ExecutionGraph::validate()
 				std::string readers = "";
 				for (auto &rLab : wLab->readers())
 					readers += std::format("{} ", rLab.getPos());
-				std::print(std::cerr,
-					   "Non-existent/non-read reader: {}\nReaders: {}\n{}\n",
-					   wLab->getPos(), readers, *this);
+				std::cerr << std::format(
+					"Non-existent/non-read reader: {}\nReaders: {}\n{}\n",
+					wLab->getPos(), readers, *this);
 				BUG();
 			}
 
 			if (std::ranges::any_of(wLab->readers(),
 						[&](auto &rLab) { return rLab.getRf() != wLab; })) {
-				std::print(std::cerr, "RF not properly set: {}\n{}\n",
-					   wLab->getPos(), *this);
+				std::cerr << std::format("RF not properly set: {}\n{}\n",
+							 wLab->getPos(), *this);
 				BUG();
 			}
 			for (auto &rLab : wLab->readers()) {
 				if (!containsPosNonEmpty(rLab.getPos())) {
-					std::print(std::cerr, "Readers list has garbage: {}\n{}\n",
-						   rLab, *this);
+					std::cerr << std::format(
+						"Readers list has garbage: {}\n{}\n", rLab, *this);
 					BUG();
 				}
 			}

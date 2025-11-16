@@ -90,5 +90,5 @@ auto Config::validate(std::vector<std::string> &warnings) -> ValidationStatus
 					 !std::filesystem::is_regular_file(*checkLinSpec))) {
 		errors.emplace_back("Specification file is not a regular file!");
 	}
-	return errors.empty() ? ValidationStatus() : std::unexpected{std::move(errors)};
+	return errors.empty() ? ValidationStatus() : ValidationStatus(std::move(errors));
 }
