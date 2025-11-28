@@ -1891,7 +1891,7 @@ static void printGraph(const ExecutionGraph &g, const GenMCDriver::GraphDbgInfo 
  * Assumes debugging information have already been collected  */
 void dotPrintToFile(const std::string &filename, EventLabel *errLab,
 		    std::unique_ptr<VectorClock> errView, const EventLabel *confLab,
-		    const VectorClock &confView, const ConsistencyChecker *checker,
+		    std::unique_ptr<VectorClock> confView, const ConsistencyChecker *checker,
 		    const GenMCDriver::GraphDbgInfo &dbgInfo, bool printObservation)
 {
 	auto &g = *errLab->getParent();
@@ -1913,7 +1913,7 @@ void dotPrintToFile(const std::string &filename, EventLabel *errLab,
 	else
 		before = g.getViewFromStamp(g.getMaxStamp());
 	if (confLab)
-		before->update(confView);
+		before->update(*confView);
 
 	/* Create a directed graph */
 	ss << "strict digraph {\n";
@@ -2087,9 +2087,10 @@ void GenMCDriver::reportError(Event pos, const ErrorDetails &details)
 
 	/* Dump the graph into a file (DOT format) */
 	if (!getConf()->dotFile.empty())
-		dotPrintToFile(getConf()->dotFile, errLab, getPrefixView(errLab).clone(),
-			       details.racyLab, getPrefixView(details.racyLab), &getConsChecker(),
-			       dbgInfo_, getConf()->dotPrintOnlyClientEvents);
+		dotPrintToFile(getConf()->dotFile, errLab,
+			       errLab ? getPrefixView(errLab).clone() : nullptr, details.racyLab,
+			       details.racyLab ? getPrefixView(details.racyLab).clone() : nullptr,
+			       &getConsChecker(), dbgInfo_, getConf()->dotPrintOnlyClientEvents);
 
 	/* Stop the error-collecting execution */
 	haltErrorReplay();

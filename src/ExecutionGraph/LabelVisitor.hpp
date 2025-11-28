@@ -455,7 +455,7 @@ public:
 		printOrdering(lab);
 	}
 
-	void visitEventLabel(const EventLabel &lab) { out << lab.getKind(); }
+	void visitEventLabel(const EventLabel &lab) { out << std::format("{}", lab.getKind()); }
 };
 
 #endif /* GENMC_LABEL_VISITOR_HPP */

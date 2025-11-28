@@ -513,11 +513,11 @@ static auto buildCompilationArgs(const LLIConfig &lliConfig) -> std::string
 	args += lliConfig.rust ? " -gdwarf-4" : " -g";
 	for (const auto &f : lliConfig.cflags)
 		args += " " + f;
-	args += " -I" SRC_INCLUDE_DIR;
-	args += " -I" INCLUDE_DIR;
+	args += " -I'" SRC_INCLUDE_DIR "'";
+	args += " -I'" INCLUDE_DIR "'";
 	args += " -S -emit-llvm";
 	args += " -o " + getOutFilename(lliConfig);
-	args += " " + lliConfig.inputFile;
+	args += " '" + lliConfig.inputFile + "'";
 
 	return args;
 }

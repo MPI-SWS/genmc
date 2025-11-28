@@ -11,6 +11,13 @@ released.
 - Documentation for LLVM-based Rust frontend
 
 
+## [0.16.1] - 2025.11.28
+
+### Fixes
+
+- Bug fixes for Github issues
+
+
 ## [0.16.0] - 2025.11.28
 
 ### Fixes

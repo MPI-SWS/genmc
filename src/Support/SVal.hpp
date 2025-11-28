@@ -35,9 +35,9 @@ public:
 	static constexpr unsigned width = sizeof(Value) * CHAR_BIT;
 
 	/** Constructors/destructors */
-	SVal() : value(0), provenance(0) {}
-	explicit SVal(uint64_t v) : value(v), provenance(0) {}
-	SVal(Value value, Value prov) : value(value), provenance(prov) {}
+	constexpr SVal() : value(0), provenance(0) {}
+	constexpr explicit SVal(uint64_t v) : value(v), provenance(0) {}
+	constexpr SVal(Value value, Value prov) : value(value), provenance(prov) {}
 
 	/** Returns a (limited) representation of this value */
 	[[nodiscard]] auto get() const -> uint64_t { return value; }
@@ -73,7 +73,7 @@ public:
 	auto truncate(unsigned w) -> SVal &
 	{
 		BUG_ON(w == 0 || w > width);
-		value = get() & ((uint64_t(1) << w) - 1);
+		value = w == 64 ? get() : (get() & ((uint64_t(1) << w) - 1));
 		return *this;
 	}
 
