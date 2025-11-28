@@ -1,0 +1,10 @@
+Error: Allocation error!
+Event (0, 2) in graph:
+<-1, 0> main:
+        (0, 1): MALLOC  stdlib.h:34
+        (0, 2): MALLOC  stdlib.h:34
+
+Trace to (0, 2):
+[main] stdlib.h: 34: return __VERIFIER_malloc(size);
+[main] stdlib.h: 34: return __VERIFIER_malloc(size);
+Allocator is out of memory

@@ -14,16 +14,15 @@
 #include "RoundBoundDecider.hpp"
 #include "ADT/View.hpp"
 #include "ExecutionGraph/ExecutionGraph.hpp"
-#include "ExecutionGraph/GraphIterators.hpp"
 
 auto areSCPredsInView(const ExecutionGraph &g, const View &v, Event e) -> bool
 {
 	auto *lab = g.getEventLabel(e);
 	if (genmc::isa<ThreadStartLabel>(lab))
-		return v.contains(tc_pred(g, lab)->getPos());
+		return v.contains(g.tc_pred(lab)->getPos());
 
 	if (genmc::isa<ThreadJoinLabel>(lab))
-		return v.contains(tj_pred(g, lab)->getPos());
+		return v.contains(g.tj_pred(lab)->getPos());
 
 	if (!genmc::isa<MemAccessLabel>(lab))
 		return true;

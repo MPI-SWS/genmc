@@ -53,7 +53,7 @@ int64_t deque_try_pop(struct deque *deq, int64_t *data)
 	// len = 1.
 	bool is_successful = atomic_compare_exchange_strong_explicit(&deq->top, &t, t + 1,
 							    memory_order_acq_rel,
-							    memory_order_acq_rel);
+							    memory_order_acquire);
 	atomic_store_explicit(&deq->bottom, b, memory_order_relaxed);
 	return (is_successful ? 0 : -2); // success or lost
 }
@@ -75,6 +75,6 @@ int64_t deque_try_steal(struct deque *deq, int64_t* data)
 
 	bool is_successful = atomic_compare_exchange_strong_explicit(&deq->top, &t, t + 1,
 							    memory_order_release,
-							    memory_order_release);
+							    memory_order_relaxed);
 	return (is_successful ? 0 : -2); // success or lost
 }

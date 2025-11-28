@@ -1,0 +1,11 @@
+Error: Non-atomic race!
+Event (1, 1) conflicts with event (0, 2) in graph:
+<-1, 0> main:
+        (0, 1): THREAD_CREATE [thread 1] pthread.h:143
+        (0, 2): Wna (x, 1234) L.36
+        (0, 3): THREAD_END
+<0, 1> _Z8thread_1Pv:
+        (1, 1): Wna (x, 42) L.11
+
+*** Verification unsuccessful.
+Number of complete executions explored: 1

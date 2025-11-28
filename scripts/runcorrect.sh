@@ -279,6 +279,10 @@ runtest() {
 printheader
 for dir in "${testdir}"/*
 do
+	case "${dir##*/}" in
+	    ${TESTFILTER}) ;;
+	    *)     continue;;
+	esac
     if test -n "${fastrun}"
     then
 	case "${dir##*/}" in
@@ -287,13 +291,7 @@ do
 		"pord-wr+wr-N-join-thr"|\
 		"pord-rd-wr+wr-N-cont")           continue;;
 		"big0"|"barrier2")         test -n "${bound_type}" && continue;;
-	    ${TESTFILTER})                                ;;
-	    *)                                    continue;;
-	esac
-    else
-	case "${dir##*/}" in
-	    ${TESTFILTER}) ;;
-	    *)     continue;;
+	    *)                                    		;;
 	esac
     fi
     runtest "${dir}"

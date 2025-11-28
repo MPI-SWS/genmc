@@ -140,7 +140,7 @@ public:
 	bool handleExecutionStart();
 
 	/** Should be called at the end of each execution */
-	void handleExecutionEnd();
+	auto handleExecutionEnd() -> std::optional<VerificationError>;
 
 	/** Whether there are more executions to be explored */
 	bool done();
@@ -421,10 +421,10 @@ private:
 	std::optional<VerificationError> checkFinalAnnotations(const WriteLabel *wLab);
 
 	/** Liveness: Reports an error on liveness violations */
-	void checkLiveness();
+	auto checkLiveness() -> std::optional<VerificationError>;
 
 	/** Reports an error if there is unfreed memory */
-	void checkUnfreedMemory();
+	auto checkUnfreedMemory() -> std::optional<VerificationError>;
 
 	/** Returns true if the exploration is guided by a graph */
 	bool isExecutionDrivenByGraph(Event pos);
@@ -490,10 +490,6 @@ private:
 	/** Returns true if all events to be removed by the revisit
 	 * RLAB <- SLAB form a maximal extension */
 	bool isMaximalExtension(const BackwardRevisit &r);
-
-	/** Returns true if the graph that will be created when sLab revisits rLab
-	 * will be the same as the current one */
-	bool revisitModifiesGraph(const BackwardRevisit &r) const;
 
 	bool prefixContainsSameLoc(const BackwardRevisit &r, const EventLabel *lab) const;
 

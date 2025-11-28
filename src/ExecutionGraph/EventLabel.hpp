@@ -33,6 +33,7 @@
 #include "Support/SVal.hpp"
 #include "Support/ThreadInfo.hpp"
 
+#include <cstdint>
 #include <format>
 #include <optional>
 #include <ranges>
@@ -1415,25 +1416,24 @@ public:
 class MallocLabel : public EventLabel {
 
 public:
-	MallocLabel(Event pos, MemOrdering ord, SAddr addr, unsigned int size, unsigned alignment,
+	MallocLabel(Event pos, MemOrdering ord, SAddr addr, uint64_t size, uint64_t alignment,
 		    StorageDuration sd, StorageType stype, AddressSpace spc, const NameInfo *info,
 		    const std::string &name, const EventDeps &deps = EventDeps())
 		: EventLabel(Malloc, pos, ord, deps), allocAddr(addr), allocSize(size),
 		  alignment(alignment), sdur(sd), stype(stype), spc(spc), name(name), nameInfo(info)
 	{}
-	MallocLabel(Event pos, SAddr addr, unsigned int size, unsigned alignment,
-		    StorageDuration sd, StorageType stype, AddressSpace spc,
-		    const NameInfo *info = nullptr, const std::string &name = {},
-		    const EventDeps &deps = EventDeps())
+	MallocLabel(Event pos, SAddr addr, uint64_t size, uint64_t alignment, StorageDuration sd,
+		    StorageType stype, AddressSpace spc, const NameInfo *info = nullptr,
+		    const std::string &name = {}, const EventDeps &deps = EventDeps())
 		: MallocLabel(pos, MemOrdering::NotAtomic, addr, size, alignment, sd, stype, spc,
 			      info, name, deps)
 	{}
-	MallocLabel(Event pos, unsigned int size, unsigned alignment, StorageDuration sd,
+	MallocLabel(Event pos, uint64_t size, uint64_t alignment, StorageDuration sd,
 		    StorageType stype, AddressSpace spc, const NameInfo *info = nullptr,
 		    const std::string &name = {}, const EventDeps &deps = EventDeps())
 		: MallocLabel(pos, SAddr(), size, alignment, sd, stype, spc, info, name, deps)
 	{}
-	MallocLabel(Event pos, unsigned int size, unsigned alignment, StorageDuration sd,
+	MallocLabel(Event pos, uint64_t size, uint64_t alignment, StorageDuration sd,
 		    StorageType stype, AddressSpace spc, const EventDeps &deps = EventDeps())
 		: MallocLabel(pos, size, alignment, sd, stype, spc, nullptr, {}, deps)
 	{}
@@ -1460,7 +1460,7 @@ public:
 	auto accesses() const { return std::views::all(accessList); }
 
 	/** Returns the size of this allocation */
-	unsigned int getAllocSize() const { return allocSize; }
+	uint64_t getAllocSize() const { return allocSize; }
 
 	/** Returns true if ADDR is contained within the allocated block */
 	bool contains(SAddr addr) const
@@ -1469,7 +1469,7 @@ public:
 	}
 
 	/** Returns the alignment of this allocation */
-	unsigned int getAlignment() const { return alignment; }
+	uint64_t getAlignment() const { return alignment; }
 
 	/** Returns the storage duration of this allocation */
 	StorageDuration getStorageDuration() const { return sdur; }
@@ -1528,10 +1528,10 @@ private:
 	AccessList accessList;
 
 	/** The size of the requested allocation */
-	unsigned int allocSize{};
+	uint64_t allocSize{};
 
 	/** Allocation alignment */
-	unsigned int alignment{};
+	uint64_t alignment{};
 
 	/** Storage duration */
 	StorageDuration sdur;
@@ -1557,21 +1557,21 @@ private:
 class FreeLabel : public EventLabel {
 
 protected:
-	FreeLabel(EventLabelKind k, Event pos, MemOrdering ord, SAddr addr, unsigned int size,
+	FreeLabel(EventLabelKind k, Event pos, MemOrdering ord, SAddr addr, uint64_t size,
 		  const EventDeps &deps = EventDeps())
 		: EventLabel(k, pos, ord, deps), freeAddr(addr), freedSize(size)
 	{}
-	FreeLabel(EventLabelKind k, Event pos, SAddr addr, unsigned int size,
+	FreeLabel(EventLabelKind k, Event pos, SAddr addr, uint64_t size,
 		  const EventDeps &deps = EventDeps())
 		: FreeLabel(k, pos, MemOrdering::NotAtomic, addr, size, deps)
 	{}
 
 public:
-	FreeLabel(Event pos, MemOrdering ord, SAddr addr, unsigned int size,
+	FreeLabel(Event pos, MemOrdering ord, SAddr addr, uint64_t size,
 		  const EventDeps &deps = EventDeps())
 		: FreeLabel(Free, pos, ord, addr, size, deps)
 	{}
-	FreeLabel(Event pos, SAddr addr, unsigned int size, const EventDeps &deps = EventDeps())
+	FreeLabel(Event pos, SAddr addr, uint64_t size, const EventDeps &deps = EventDeps())
 		: FreeLabel(pos, MemOrdering::NotAtomic, addr, size, deps)
 	{}
 	FreeLabel(Event pos, SAddr addr, const EventDeps &deps = EventDeps())
@@ -1582,10 +1582,10 @@ public:
 	SAddr getFreedAddr() const { return freeAddr; }
 
 	/** Getter for the size of the memory freed */
-	unsigned int getFreedSize() const { return freedSize; }
+	uint64_t getFreedSize() const { return freedSize; }
 
 	/** Setter for the size of the memory freed */
-	void setFreedSize(unsigned int size) { freedSize = size; }
+	void setFreedSize(uint64_t size) { freedSize = size; }
 
 	/** Getter for the corresponding allocating event */
 	MallocLabel *getAlloc() const { return aLab; }
@@ -1613,7 +1613,7 @@ private:
 	SAddr freeAddr;
 
 	/** The size of the memory freed */
-	unsigned int freedSize{};
+	uint64_t freedSize{};
 
 	/** The corresponding allocation */
 	MallocLabel *aLab{};
@@ -1627,11 +1627,11 @@ private:
 class HpRetireLabel : public FreeLabel {
 
 public:
-	HpRetireLabel(Event pos, MemOrdering ord, SAddr addr, unsigned int size,
+	HpRetireLabel(Event pos, MemOrdering ord, SAddr addr, uint64_t size,
 		      const EventDeps &deps = EventDeps())
 		: FreeLabel(HpRetire, pos, ord, addr, size, deps)
 	{}
-	HpRetireLabel(Event pos, SAddr addr, unsigned int size, const EventDeps &deps = EventDeps())
+	HpRetireLabel(Event pos, SAddr addr, uint64_t size, const EventDeps &deps = EventDeps())
 		: HpRetireLabel(pos, MemOrdering::NotAtomic, addr, size, deps)
 	{}
 	HpRetireLabel(Event pos, SAddr addr, const EventDeps &deps = EventDeps())

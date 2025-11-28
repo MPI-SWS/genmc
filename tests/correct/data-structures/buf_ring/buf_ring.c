@@ -21,7 +21,7 @@
 
 #define caddr_t char*
 #define atomic_cmpset_int(dst, expect, src) \
-        __atomic_compare_exchange_n(dst, &expect, src, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQ_REL)
+        __atomic_compare_exchange_n(dst, &expect, src, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)
 #define cpu_spinwait() __VERIFIER_assume(0)
 
 #define await_while while

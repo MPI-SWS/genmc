@@ -121,9 +121,9 @@ static llvm::cl::opt<std::string>
 static llvm::cl::opt<bool> clCheckLiveness("check-liveness", llvm::cl::cat(clGeneral),
 					   llvm::cl::desc("Check for liveness violations"));
 
-static llvm::cl::opt<bool> clDisableInstructionCaching(
-	"disable-instruction-caching", llvm::cl::cat(clGeneral),
-	llvm::cl::desc("Disable instruction caching (pure stateless exploration)"));
+static llvm::cl::opt<bool> clCacheInstructions(
+	"cache-instructions", llvm::cl::cat(clGeneral),
+	llvm::cl::desc("Cache instructions for efficiency (non-stateless exploration)"));
 
 static llvm::cl::opt<bool> clDisableRaceDetection("disable-race-detection",
 						  llvm::cl::cat(clGeneral),
@@ -403,7 +403,7 @@ static void saveConfigOptions(Config &conf, LLIConfig &lliConfig)
 	conf.finalWrite = !clDisableFinalWrite;
 	conf.printErrorTrace = clPrintErrorTrace;
 	conf.checkLiveness = clCheckLiveness;
-	conf.instructionCaching = !clDisableInstructionCaching;
+	conf.instructionCaching = clCacheInstructions;
 	conf.disableRaceDetection = clDisableRaceDetection;
 	conf.disableBAM = clDisableBAM;
 	conf.ipr = !clDisableIPR;

@@ -11,25 +11,32 @@
 # MIT License:
 #     https://opensource.org/licenses/MIT
 
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
 # Get binary's full path
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GenMC="${GenMC:-$DIR/../RelWithDebInfo/genmc}"
 GENMCFLAGS="${GENMCFLAGS:-}"
 MODELS=(rc11 imm)
 
+CONFIG_FILE="$(dirname "${GenMC}")/include/config.h"
+
 # Set the directories for testing
 if [ -z ${CORRECT_DIRS+x} ]
 then
     CORRECT_DIRS=(infr litmus saver ipr sr liveness synthetic data-structures)
-    CORRECT_DIRS=("${CORRECT_DIRS[@]/#/${DIR}/../tests/correct/}" )
+    CORRECT_DIRS=("${CORRECT_DIRS[@]/#/${SCRIPT_DIR}/../tests/correct/}" )
 fi
 if [ -z ${WRONG_DIRS+x} ]
 then
     WRONG_DIRS=(safety liveness infr racy memory locking barriers helper)
-    WRONG_DIRS=("${WRONG_DIRS[@]/#/${DIR}/../tests/wrong/}" )
+    WRONG_DIRS=("${WRONG_DIRS[@]/#/${SCRIPT_DIR}/../tests/wrong/}" )
 fi
 
-source "${DIR}/terminal.sh"
+source "${SCRIPT_DIR}/terminal.sh"
+
+# We need to get the LLVM version for this particular configuration
+LLVM_VERSION=`cat ${CONFIG_FILE} | awk '/LLVM_VERSION/ {gsub(/"/, "", $3); print $3}'`
 
 # test whether arrays are supported
 arrtest[0]='test' ||
@@ -114,7 +121,7 @@ do
 	then
 	    check_blocked="yes"
 	fi
-	source "${DIR}/runcorrect.sh" # the env variables for runcorrect.sh are set
+	source "${SCRIPT_DIR}/runcorrect.sh" # the env variables for runcorrect.sh are set
 	increase_total_time
     done
 done
@@ -143,7 +150,7 @@ do
 	# then
 	#     suppress_diff=1
 	# fi
-	source "${DIR}/runwrong.sh"
+	source "${SCRIPT_DIR}/runwrong.sh"
 	increase_total_time
     done
 done

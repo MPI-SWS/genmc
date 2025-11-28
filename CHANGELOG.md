@@ -11,6 +11,18 @@ released.
 - Documentation for LLVM-based Rust frontend
 
 
+## [0.16.0] - 2025.11.28
+
+### Fixes
+
+- Various bug fixes
+- Minor documentation update
+
+### Changes
+
+- Instruction caching is off by default (enabled with `-cache-instructions`)
+
+
 ## [0.15.1] - 2025.11.16
 
 ### Fixes

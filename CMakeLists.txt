@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12...4.0)
-project(genmc VERSION 0.15.1 LANGUAGES CXX C)
+project(genmc VERSION 0.16.0 LANGUAGES CXX C)
 
 enable_testing()
 include(CTest)

@@ -71,9 +71,13 @@ inline auto executeRMWBinOp(SVal oldVal, SVal val, ASize size, RMWBinOp op) -> S
 			       ? oldVal
 			       : val;
 	case RMWBinOp::UMax:
-		return oldVal.ugt(val) ? oldVal : val;
+		return SVal(oldVal).truncate(size.getBits()).ugt(SVal(val).truncate(size.getBits()))
+			       ? oldVal
+			       : val;
 	case RMWBinOp::UMin:
-		return oldVal.ult(val) ? oldVal : val;
+		return SVal(oldVal).truncate(size.getBits()).ult(SVal(val).truncate(size.getBits()))
+			       ? oldVal
+			       : val;
 	default:
 		WARN_ONCE("invalid-rmw-op", "Unsupported operation in RMW instruction!\n");
 		return val;

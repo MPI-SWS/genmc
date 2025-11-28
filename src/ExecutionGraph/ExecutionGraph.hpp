@@ -26,6 +26,7 @@
 #include <memory>
 #include <ranges>
 #include <unordered_map>
+#include <utility>
 
 // NOLINTBEGIN(cppcoreguidelines-pro-type-const-cast)
 
@@ -43,6 +44,7 @@
 class ExecutionGraph {
 
 public:
+	/* Type definitions */
 	using Thread = std::vector<std::unique_ptr<EventLabel>>;
 	using ThreadList = std::vector<Thread>;
 	using StoreList = genmc::ilist<WriteLabel>;
@@ -54,6 +56,25 @@ public:
 	using PoLists = std::vector<PoList>;
 	using IoList = genmc::ilist<EventLabel, io_tag>;
 
+	/* Iterators */
+	using iterator = ThreadList::iterator;
+	using const_iterator = ThreadList::const_iterator;
+	using label_iterator = IoList::iterator;
+	using const_label_iterator = IoList::const_iterator;
+	using reverse_label_iterator = IoList::reverse_iterator;
+	using const_reverse_label_iterator = IoList::const_reverse_iterator;
+	using loc_iterator = LocMap::iterator;
+	using const_loc_iterator = LocMap::const_iterator;
+	using po_iterator = PoList::iterator;
+	using const_po_iterator = PoList::const_iterator;
+	using reverse_po_iterator = PoList::reverse_iterator;
+	using const_reverse_po_iterator = PoList::const_reverse_iterator;
+	using co_iterator = StoreList::iterator;
+	using const_co_iterator = StoreList::const_iterator;
+	using reverse_co_iterator = StoreList::reverse_iterator;
+	using const_reverse_co_iterator = StoreList::const_reverse_iterator;
+
+	/* Constructors */
 	ExecutionGraph(InitValGetter f) : initValGetter_(std::move(f))
 	{
 		/* Create an entry for main() and push the "initializer" label */
@@ -67,61 +88,44 @@ public:
 
 	ExecutionGraph(const ExecutionGraph &) = delete;
 	ExecutionGraph(ExecutionGraph &&) noexcept = default;
-
 	auto operator=(const ExecutionGraph &) -> ExecutionGraph & = delete;
 	auto operator=(ExecutionGraph &&) noexcept -> ExecutionGraph & = default;
-
 	virtual ~ExecutionGraph() = default;
 
-	/* Iterators */
-	using iterator = ThreadList::iterator;
-	using const_iterator = ThreadList::const_iterator;
-	using reverse_iterator = ThreadList::reverse_iterator;
-	using const_reverse_iterator = ThreadList::const_reverse_iterator;
-
-	using loc_iterator = LocMap::iterator;
-	using const_loc_iterator = LocMap::const_iterator;
-
-	using label_iterator = IoList::iterator;
-	using const_label_iterator = IoList::const_iterator;
-	using reverse_label_iterator = IoList::reverse_iterator;
-	using const_reverse_label_iterator = IoList::const_reverse_iterator;
-
-	using co_iterator = StoreList::iterator;
-	using const_co_iterator = StoreList::const_iterator;
-	using reverse_co_iterator = StoreList::reverse_iterator;
-	using const_reverse_co_iterator = StoreList::const_reverse_iterator;
-
-	using initrf_iterator = InitLabel::rf_iterator;
-	using const_initrf_iterator = InitLabel::const_rf_iterator;
-
-	using po_iterator = PoList::iterator;
-	using const_po_iterator = PoList::const_iterator;
-	using reverse_po_iterator = PoList::reverse_iterator;
-	using const_reverse_po_iterator = PoList::const_reverse_iterator;
+	/***************************************************************************
+	 * Thread & label traversal
+	 **************************************************************************/
 
 	auto begin() -> iterator { return events.begin(); };
 	auto end() -> iterator { return events.end(); };
 	auto begin() const -> const_iterator { return events.begin(); };
 	auto end() const -> const_iterator { return events.end(); };
 
-	auto rbegin() -> reverse_iterator { return events.rbegin(); };
-	auto rend() -> reverse_iterator { return events.rend(); };
-	auto rbegin() const -> const_reverse_iterator { return events.rbegin(); };
-	auto rend() const -> const_reverse_iterator { return events.rend(); };
-
 	auto label_begin() const { return insertionOrder.begin(); }
 	auto label_end() const { return insertionOrder.end(); }
 	auto labels() const { return std::views::all(insertionOrder); }
-
-	auto label_begin() { return insertionOrder.begin(); }
-	auto label_end() { return insertionOrder.end(); }
 	auto labels() { return std::views::all(insertionOrder); }
 
 	auto rlabels() const { return std::views::reverse(labels()); }
 	auto rlabels() { return std::views::reverse(labels()); }
 
+	auto other_labels(const EventLabel *lab) const
+	{
+		return labels() | std::views::filter([lab](auto &olab) {
+			       return olab.getPos() != lab->getPos();
+		       });
+	}
+
 	auto thr_ids() const { return std::views::iota(0, (int)getNumThreads()); }
+
+	auto loc_begin() -> loc_iterator { return coherence.begin(); }
+	auto loc_begin() const -> const_loc_iterator { return coherence.begin(); };
+	auto loc_end() -> loc_iterator { return coherence.end(); }
+	auto loc_end() const -> const_loc_iterator { return coherence.end(); }
+
+	/***************************************************************************
+	 * Program Order (PO)
+	 **************************************************************************/
 
 	auto po(int tid) const { return std::views::all(poLists[tid]); }
 	auto po(int tid) { return std::views::all(poLists[tid]); }
@@ -162,8 +166,7 @@ public:
 	}
 	auto po_imm_pred(EventLabel *lab) -> EventLabel *
 	{
-		return const_cast<EventLabel *>(
-			static_cast<const ExecutionGraph &>(*this).po_imm_pred(lab));
+		return const_cast<EventLabel *>(std::as_const(*this).po_imm_pred(lab));
 	}
 
 	/* Returns the label in the next position of E.
@@ -176,141 +179,517 @@ public:
 	}
 	auto po_imm_succ(EventLabel *lab) -> EventLabel *
 	{
-		return const_cast<EventLabel *>(
-			static_cast<const ExecutionGraph &>(*this).po_imm_succ(lab));
+		return const_cast<EventLabel *>(std::as_const(*this).po_imm_succ(lab));
 	}
 
-	auto loc_begin() -> loc_iterator { return coherence.begin(); }
-	auto loc_begin() const -> const_loc_iterator { return coherence.begin(); };
-	auto loc_end() -> loc_iterator { return coherence.end(); }
-	auto loc_end() const -> const_loc_iterator { return coherence.end(); }
+	/***************************************************************************
+	 * Program Order - Location (POLOC)
+	 **************************************************************************/
 
-	auto co_begin(SAddr addr) -> co_iterator { return coherence[addr].begin(); }
-	auto co_begin(SAddr addr) const -> const_co_iterator { return coherence.at(addr).begin(); };
-	auto co_end(SAddr addr) -> co_iterator { return coherence[addr].end(); }
-	auto co_end(SAddr addr) const -> const_co_iterator { return coherence.at(addr).end(); }
+	auto poloc_succs(const MemAccessLabel *lab) const
+	{
+		auto locFilter = [lab](const auto &oLab) { return isSameLoc(lab, &oLab); };
+		return po_succs(lab) | std::views::filter(locFilter);
+	}
+	auto poloc_succs(MemAccessLabel *lab)
+	{
+		auto locFilter = [lab](const auto &oLab) { return isSameLoc(lab, &oLab); };
+		return po_succs(lab) | std::views::filter(locFilter);
+	}
+
+	auto poloc_succs(const EventLabel *lab) const
+	{
+		auto locFilter = [lab](const auto &oLab) { return isSameLoc(lab, &oLab); };
+
+		if (const auto *mLab = genmc::dyn_cast<MemAccessLabel>(lab))
+			return po_succs(mLab) | std::views::filter(locFilter);
+		return std::ranges::subrange<const_po_iterator>{} | std::views::filter(locFilter);
+	}
+	auto poloc_succs(EventLabel *lab)
+	{
+		auto locFilter = [lab](const auto &oLab) { return isSameLoc(lab, &oLab); };
+
+		if (auto *mLab = genmc::dyn_cast<MemAccessLabel>(lab))
+			return po_succs(mLab) | std::views::filter(locFilter);
+		return std::ranges::subrange<po_iterator>{} | std::views::filter(locFilter);
+	}
+
+	auto poloc_imm_succ(const EventLabel *lab) const -> const EventLabel *
+	{
+		auto succs = poloc_succs(lab);
+		return succs.empty() ? nullptr : &*succs.begin();
+	}
+
+	auto poloc_preds(const MemAccessLabel *lab) const
+	{
+		auto locFilter = [lab](const auto &oLab) { return isSameLoc(lab, &oLab); };
+		return po_preds(lab) | std::views::filter(locFilter);
+	}
+	auto poloc_preds(MemAccessLabel *lab)
+	{
+		auto locFilter = [lab](const auto &oLab) { return isSameLoc(lab, &oLab); };
+		return po_preds(lab) | std::views::filter(locFilter);
+	}
+
+	auto poloc_preds(const EventLabel *lab) const
+	{
+		auto locFilter = [lab](const auto &oLab) { return isSameLoc(lab, &oLab); };
+
+		if (const auto *mLab = genmc::dyn_cast<MemAccessLabel>(lab))
+			return po_preds(mLab) | std::views::filter(locFilter);
+		return std::ranges::subrange<const_reverse_po_iterator>{} |
+		       std::views::filter(locFilter);
+	}
+	auto poloc_preds(EventLabel *lab)
+	{
+		auto locFilter = [lab](const auto &oLab) { return isSameLoc(lab, &oLab); };
+
+		if (auto *mLab = genmc::dyn_cast<MemAccessLabel>(lab))
+			return po_preds(mLab) | std::views::filter(locFilter);
+		return std::ranges::subrange<reverse_po_iterator>{} | std::views::filter(locFilter);
+	}
+
+	auto poloc_imm_pred(const EventLabel *lab) const -> const EventLabel *
+	{
+		auto preds = poloc_preds(lab);
+		return preds.empty() ? nullptr : &*preds.begin();
+	}
+
+	/***************************************************************************
+	 * Detour
+	 **************************************************************************/
+
+	auto detour_succs(const WriteLabel *lab) const
+	{
+		return po_succs(lab) | std::views::filter(DetourSuccFilter(lab, lab->getPos()));
+	}
+	auto detour_succs(WriteLabel *lab)
+	{
+		return po_succs(lab) | std::views::filter(DetourSuccFilter(lab, lab->getPos()));
+	}
+
+	auto detour_succs(const EventLabel *lab) const
+	{
+		/* decltype works here because DetourSuccFilter is default constructible */
+		using RangeType = decltype(detour_succs(static_cast<const WriteLabel *>(nullptr)));
+		const auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
+		return wLab ? detour_succs(wLab) : RangeType{};
+	}
+	auto detour_succs(EventLabel *lab)
+	{
+		using RangeType = decltype(detour_succs(static_cast<WriteLabel *>(nullptr)));
+		auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
+		return wLab ? detour_succs(wLab) : RangeType{};
+	}
+
+	auto detour_preds(const ReadLabel *lab) const
+	{
+		Event wPos = lab->getRf() ? lab->getRf()->getPos() : Event::getInit();
+		return po_preds(lab) | std::views::filter(DetourPredFilter(lab, wPos));
+	}
+	auto detour_preds(ReadLabel *lab)
+	{
+		Event wPos = lab->getRf() ? lab->getRf()->getPos() : Event::getInit();
+		return po_preds(lab) | std::views::filter(DetourPredFilter(lab, wPos));
+	}
+
+	auto detour_preds(const EventLabel *lab) const
+	{
+		using RangeType = decltype(detour_preds(static_cast<const ReadLabel *>(nullptr)));
+		const auto *rLab = genmc::dyn_cast<ReadLabel>(lab);
+		return rLab ? detour_preds(rLab) : RangeType{};
+	}
+	auto detour_preds(EventLabel *lab)
+	{
+		using RangeType = decltype(detour_preds(static_cast<ReadLabel *>(nullptr)));
+		auto *rLab = genmc::dyn_cast<ReadLabel>(lab);
+		return rLab ? detour_preds(rLab) : RangeType{};
+	}
+
+	/***************************************************************************
+	 * Preserved Program Order (PPO)
+	 **************************************************************************/
+
+#define DEFINE_PPO_ACC(NAME)                                                                       \
+	auto NAME##_preds(const EventLabel *lab) const                                             \
+	{                                                                                          \
+		return std::ranges::subrange(lab->NAME());                                         \
+	}                                                                                          \
+	auto NAME##_preds(EventLabel *lab) { return std::ranges::subrange(lab->NAME()); }          \
+	auto NAME##_preds(Event e) const { return getEventLabel(e)->NAME(); }
+
+	DEFINE_PPO_ACC(data);
+	DEFINE_PPO_ACC(addr);
+	DEFINE_PPO_ACC(ctrl);
+#undef DEFINE_PPO_ACC
+
+	/***************************************************************************
+	 * Thread Creation / Join
+	 **************************************************************************/
+
+	auto tc_succ(const EventLabel *lab) const -> const ThreadStartLabel *
+	{
+		auto *tcLab = genmc::dyn_cast<ThreadCreateLabel>(lab);
+		return tcLab ? getFirstThreadLabel(tcLab->getChildId()) : nullptr;
+	}
+
+	auto tc_pred(const EventLabel *lab) const -> const ThreadCreateLabel *
+	{
+		auto *tsLab = genmc::dyn_cast<ThreadStartLabel>(lab);
+		return tsLab ? tsLab->getCreate() : nullptr;
+	}
+
+	auto tj_succ(const EventLabel *lab) const -> const ThreadJoinLabel *
+	{
+		auto *eLab = genmc::dyn_cast<ThreadFinishLabel>(lab);
+		return eLab ? eLab->getParentJoin() : nullptr;
+	}
+
+	auto tj_pred(const EventLabel *lab) const -> const ThreadFinishLabel *
+	{
+		auto *tjLab = genmc::dyn_cast<ThreadJoinLabel>(lab);
+		return tjLab ? genmc::dyn_cast_if_present<ThreadFinishLabel>(
+				       getLastThreadLabel(tjLab->getChildId()))
+			     : nullptr;
+	}
+
+	/***************************************************************************
+	 * Read-From (RF)
+	 **************************************************************************/
+
+	auto rf_succs(const WriteLabel *lab) const { return std::ranges::subrange(lab->readers()); }
+	auto rf_succs(WriteLabel *lab) { return std::ranges::subrange(lab->readers()); }
+
+	auto rf_succs(const EventLabel *lab) const
+	{
+		using RangeType = decltype(rf_succs(static_cast<const WriteLabel *>(nullptr)));
+		const auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
+		return wLab ? rf_succs(wLab) : RangeType{};
+	}
+	auto rf_succs(EventLabel *lab)
+	{
+		using RangeType = decltype(rf_succs(static_cast<WriteLabel *>(nullptr)));
+		auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
+		return wLab ? rf_succs(wLab) : RangeType{};
+	}
+
+	auto rf_pred(const ReadLabel *lab) const -> const EventLabel *
+	{
+		return (!lab || !lab->getRf()) ? nullptr : lab->getRf();
+	}
+
+	auto rf_pred(const EventLabel *lab) const -> const EventLabel *
+	{
+		const auto *rLab = genmc::dyn_cast<ReadLabel>(lab);
+		return rLab ? rf_pred(rLab) : nullptr;
+	}
+
+	auto rfe_succs(const EventLabel *lab) const
+	{
+		return rf_succs(lab) | std::views::filter([lab](const auto &oLab) {
+			       return oLab.getThread() != lab->getThread();
+		       });
+	}
+	auto rfe_succs(EventLabel *lab)
+	{
+		return rf_succs(lab) | std::views::filter([lab](const auto &oLab) {
+			       return oLab.getThread() != lab->getThread();
+		       });
+	}
+
+	auto rfe_pred(const EventLabel *lab) const -> const EventLabel *
+	{
+		const auto *rLab = genmc::dyn_cast<ReadLabel>(lab);
+		return (rLab && rLab->readsExt()) ? rLab->getRf() : nullptr;
+	}
+
+	auto rfi_succs(const EventLabel *lab) const
+	{
+		return rf_succs(lab) | std::views::filter([lab](const auto &oLab) {
+			       return oLab.getThread() == lab->getThread();
+		       });
+	}
+	auto rfi_succs(EventLabel *lab)
+	{
+		return rf_succs(lab) | std::views::filter([lab](const auto &oLab) {
+			       return oLab.getThread() == lab->getThread();
+		       });
+	}
+
+	auto rfi_pred(const EventLabel *lab) const -> const EventLabel *
+	{
+		const auto *rLab = genmc::dyn_cast<ReadLabel>(lab);
+		return (rLab && rLab->readsInt()) ? rLab->getRf() : nullptr;
+	}
+
+	/***************************************************************************
+	 * Coherence Order (CO)
+	 **************************************************************************/
+
 	auto co(SAddr addr) { return std::views::all(coherence[addr]); }
 	auto co(SAddr addr) const { return std::views::all(coherence.at(addr)); }
-
-	auto co_rbegin(SAddr addr) -> reverse_co_iterator { return coherence[addr].rbegin(); }
-	auto co_rbegin(SAddr addr) const -> const_reverse_co_iterator
-	{
-		return coherence.at(addr).rbegin();
-	};
-	auto co_rend(SAddr addr) -> reverse_co_iterator { return coherence[addr].rend(); }
-	auto co_rend(SAddr addr) const -> const_reverse_co_iterator
-	{
-		return coherence.at(addr).rend();
-	}
 	auto rco(SAddr addr) { return std::views::all(coherence[addr]) | std::views::reverse; }
 	auto rco(SAddr addr) const
 	{
 		return std::views::all(coherence.at(addr)) | std::views::reverse;
 	}
 
-	auto init_rf_begin(SAddr addr) -> initrf_iterator { return getInitLabel()->rf_begin(addr); }
-	auto init_rf_begin(SAddr addr) const -> const_initrf_iterator
+	auto co_succs(const WriteLabel *lab) const
 	{
-		return getInitLabel()->rf_begin(addr);
-	};
-	auto init_rf_end(SAddr addr) -> initrf_iterator { return getInitLabel()->rf_end(addr); }
-	auto init_rf_end(SAddr addr) const -> const_initrf_iterator
+		return std::ranges::subrange(++const_co_iterator(lab),
+					     coherence.at(lab->getAddr()).end());
+	}
+	auto co_succs(WriteLabel *lab)
 	{
-		return getInitLabel()->rf_end(addr);
+		return std::ranges::subrange(++co_iterator(lab), coherence[lab->getAddr()].end());
 	}
 
-	auto co_succ_begin(WriteLabel *lab) -> co_iterator { return ++co_iterator(lab); }
-	auto co_succ_begin(const WriteLabel *lab) const -> const_co_iterator
+	auto co_succs(const EventLabel *lab) const
 	{
-		return ++const_co_iterator(lab);
+		using RangeType = decltype(co_succs(static_cast<const WriteLabel *>(nullptr)));
+		const auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
+		return wLab ? co_succs(wLab) : RangeType{};
 	}
-	auto co_succ_end(WriteLabel *lab) -> co_iterator { return co_end(lab->getAddr()); }
-	auto co_succ_end(const WriteLabel *lab) const -> const_co_iterator
+	auto co_succs(EventLabel *lab)
 	{
-		return co_end(lab->getAddr());
-	}
-	auto co_imm_succ(const WriteLabel *lab) const -> const WriteLabel *
-	{
-		auto it = co_succ_begin(lab);
-		return it == co_succ_end(lab) ? nullptr : &*it;
+		using RangeType = decltype(co_succs(static_cast<WriteLabel *>(nullptr)));
+		auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
+		return wLab ? co_succs(wLab) : RangeType{};
 	}
 
-	auto co_pred_begin(WriteLabel *lab) -> reverse_co_iterator
+	auto co_imm_succ(const EventLabel *lab) const -> const WriteLabel *
 	{
-		return ++reverse_co_iterator(lab);
+		auto succs = co_succs(lab);
+		return succs.begin() == succs.end() ? nullptr : &*succs.begin();
 	}
-	auto co_pred_begin(const WriteLabel *lab) const -> const_reverse_co_iterator
+
+	auto co_preds(const WriteLabel *lab) const
 	{
-		return ++const_reverse_co_iterator(lab);
+		return std::ranges::subrange(++const_reverse_co_iterator(lab),
+					     coherence.at(lab->getAddr()).rend());
 	}
-	auto co_pred_end(WriteLabel *lab) -> reverse_co_iterator { return co_rend(lab->getAddr()); }
-	auto co_pred_end(const WriteLabel *lab) const -> const_reverse_co_iterator
+	auto co_preds(WriteLabel *lab)
 	{
-		return co_rend(lab->getAddr());
+		return std::ranges::subrange(++reverse_co_iterator(lab),
+					     coherence[lab->getAddr()].rend());
 	}
-	auto co_imm_pred(const WriteLabel *lab) const -> const WriteLabel *
+
+	auto co_preds(const EventLabel *lab) const
 	{
-		auto it = co_pred_begin(lab);
-		return it == co_pred_end(lab) ? nullptr : &*(it);
+		using RangeType = decltype(co_preds(static_cast<const WriteLabel *>(nullptr)));
+		const auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
+		return wLab ? co_preds(wLab) : RangeType{};
+	}
+	auto co_preds(EventLabel *lab)
+	{
+		using RangeType = decltype(co_preds(static_cast<WriteLabel *>(nullptr)));
+		auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
+		return wLab ? co_preds(wLab) : RangeType{};
+	}
+
+	auto co_imm_pred(const EventLabel *lab) const -> const WriteLabel *
+	{
+		auto preds = co_preds(lab);
+		return preds.begin() == preds.end() ? nullptr : &*preds.begin();
 	}
 	auto co_imm_pred(WriteLabel *lab) -> WriteLabel *
 	{
-		return const_cast<WriteLabel *>(
-			static_cast<const ExecutionGraph &>(*this).co_imm_pred(lab));
+		return const_cast<WriteLabel *>(std::as_const(*this).co_imm_pred(lab));
 	}
 
 	auto co_max(SAddr addr) const -> const EventLabel *
 	{
-		return co_begin(addr) == co_end(addr) ? (EventLabel *)getInitLabel()
-						      : (EventLabel *)&*co_rbegin(addr);
+		const auto &list = coherence.at(addr);
+		return list.empty() ? (EventLabel *)getInitLabel() : (EventLabel *)&list.back();
 	}
 	auto co_max(SAddr addr) -> EventLabel *
 	{
-		return const_cast<EventLabel *>(
-			static_cast<const ExecutionGraph &>(*this).co_max(addr));
+		return const_cast<EventLabel *>(std::as_const(*this).co_max(addr));
 	}
 
-	auto fr_succ_begin(ReadLabel *rLab) -> co_iterator
+	/***************************************************************************
+	 * From-read (FR)
+	 **************************************************************************/
+
+	/* Fast path */
+	auto fr_succs(const ReadLabel *lab) const
 	{
-		auto *wLab = genmc::dyn_cast<WriteLabel>(rLab->getRf());
-		return wLab ? co_succ_begin(wLab) : co_begin(rLab->getAddr());
+		const auto *wLab = genmc::dyn_cast<WriteLabel>(lab->getRf());
+		return wLab ? std::ranges::subrange(++const_co_iterator(wLab),
+						    coherence.at(lab->getAddr()).end())
+			    : std::ranges::subrange(coherence.at(lab->getAddr()).begin(),
+						    coherence.at(lab->getAddr()).end());
 	}
-	auto fr_succ_begin(const ReadLabel *rLab) const -> const_co_iterator
+	auto fr_succs(ReadLabel *lab)
 	{
-		auto *wLab = genmc::dyn_cast<WriteLabel>(rLab->getRf());
-		return wLab ? co_succ_begin(wLab) : co_begin(rLab->getAddr());
-	}
-	auto fr_succ_end(ReadLabel *rLab) -> co_iterator { return co_end(rLab->getAddr()); }
-	auto fr_succ_end(const ReadLabel *rLab) const -> const_co_iterator
-	{
-		return co_end(rLab->getAddr());
-	}
-	auto fr_succs(ReadLabel *rLab)
-	{
-		return std::ranges::subrange(fr_succ_begin(rLab), fr_succ_end(rLab));
-	}
-	auto fr_succs(const ReadLabel *rLab) const
-	{
-		return std::ranges::subrange(fr_succ_begin(rLab), fr_succ_end(rLab));
-	}
-	auto fr_imm_succ(const ReadLabel *rLab) const -> const WriteLabel *
-	{
-		auto it = fr_succ_begin(rLab);
-		return it == fr_succ_end(rLab) ? nullptr : &*it;
+		const auto *wLab = genmc::dyn_cast<WriteLabel>(lab->getRf());
+		return wLab ? std::ranges::subrange(++co_iterator(const_cast<WriteLabel *>(wLab)),
+						    coherence[lab->getAddr()].end())
+			    : std::ranges::subrange(coherence[lab->getAddr()].begin(),
+						    coherence[lab->getAddr()].end());
 	}
 
-	auto fr_imm_preds(WriteLabel *wLab)
+	/* Slow path */
+	auto fr_succs(const EventLabel *lab) const
 	{
-		return co_pred_begin(wLab) == co_pred_end(wLab)
-			       ? getInitLabel()->rfs(wLab->getAddr())
-			       : co_pred_begin(wLab)->readers();
+		using RangeType = decltype(fr_succs(static_cast<const ReadLabel *>(nullptr)));
+		const auto *rLab = genmc::dyn_cast<ReadLabel>(lab);
+		return rLab ? fr_succs(rLab) : RangeType{};
 	}
-	auto fr_imm_preds(const WriteLabel *wLab) const
+	auto fr_succs(EventLabel *lab)
 	{
-		return co_pred_begin(wLab) == co_pred_end(wLab)
-			       ? getInitLabel()->rfs(wLab->getAddr())
-			       : co_pred_begin(wLab)->readers();
+		using RangeType = decltype(fr_succs(static_cast<ReadLabel *>(nullptr)));
+		auto *rLab = genmc::dyn_cast<ReadLabel>(lab);
+		return rLab ? fr_succs(rLab) : RangeType{};
 	}
+
+	/* Fast path */
+	auto fr_imm_succ(const ReadLabel *lab) const -> const WriteLabel *
+	{
+		auto succs = fr_succs(lab);
+		return succs.empty() ? nullptr : &*succs.begin();
+	}
+	auto fr_imm_succ(ReadLabel *lab) -> WriteLabel *
+	{
+		auto succs = fr_succs(lab);
+		return succs.empty() ? nullptr : &*succs.begin();
+	}
+
+	/* Slow path */
+	auto fr_imm_succ(const EventLabel *lab) const -> const WriteLabel *
+	{
+		auto succs = fr_succs(lab);
+		return succs.empty() ? nullptr : &*succs.begin();
+	}
+	auto fr_imm_succ(EventLabel *lab) -> WriteLabel *
+	{
+		auto succs = fr_succs(lab);
+		return succs.empty() ? nullptr : &*succs.begin();
+	}
+
+	/* Fast path */
+	auto fr_imm_preds(const WriteLabel *lab) const
+	{
+		auto pIt = ++const_reverse_co_iterator(lab);
+		bool isInit = (pIt == coherence.at(lab->getAddr()).rend());
+
+		return isInit ? std::ranges::subrange(getInitLabel()->rfs(lab->getAddr()))
+			      : std::ranges::subrange(pIt->readers());
+	}
+	auto fr_imm_preds(WriteLabel *lab)
+	{
+		auto pIt = ++reverse_co_iterator(lab);
+		bool isInit = (pIt == coherence[lab->getAddr()].rend());
+
+		return isInit ? std::ranges::subrange(getInitLabel()->rfs(lab->getAddr()))
+			      : std::ranges::subrange(pIt->readers());
+	}
+
+	/* Slow path */
+	auto fr_imm_preds(const EventLabel *lab) const
+	{
+		using RangeType = decltype(fr_imm_preds(static_cast<const WriteLabel *>(nullptr)));
+		const auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
+		return wLab ? fr_imm_preds(wLab) : RangeType{};
+	}
+	auto fr_imm_preds(EventLabel *lab)
+	{
+		using RangeType = decltype(fr_imm_preds(static_cast<WriteLabel *>(nullptr)));
+		auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
+		return wLab ? fr_imm_preds(wLab) : RangeType{};
+	}
+
+	/***************************************************************************
+	 * Allocation / Free
+	 **************************************************************************/
+
+	/* Fast path */
+	auto alloc_succs(const MallocLabel *lab) const
+	{
+		return std::ranges::subrange(lab->accesses());
+	}
+	auto alloc_succs(MallocLabel *lab) { return std::ranges::subrange(lab->accesses()); }
+
+	/* Slow path */
+	auto alloc_succs(const EventLabel *lab) const
+	{
+		using RangeType = decltype(alloc_succs(static_cast<const MallocLabel *>(nullptr)));
+		const auto *aLab = genmc::dyn_cast<MallocLabel>(lab);
+		return aLab ? alloc_succs(aLab) : RangeType{};
+	}
+	auto alloc_succs(EventLabel *lab)
+	{
+		using RangeType = decltype(alloc_succs(static_cast<MallocLabel *>(nullptr)));
+		auto *aLab = genmc::dyn_cast<MallocLabel>(lab);
+		return aLab ? alloc_succs(aLab) : RangeType{};
+	}
+
+	/* Fast path */
+	auto alloc_pred(const MemAccessLabel *lab) const -> const MallocLabel *
+	{
+		return lab->getAlloc();
+	}
+
+	/* Slow path */
+	auto alloc_pred(const EventLabel *lab) const -> const MallocLabel *
+	{
+		const auto *aLab = genmc::dyn_cast<MemAccessLabel>(lab);
+		return aLab ? alloc_pred(aLab) : nullptr;
+	}
+
+	auto free_succ(const MallocLabel *lab) const -> const FreeLabel * { return lab->getFree(); }
+
+	auto free_succ(const EventLabel *lab) const -> const FreeLabel *
+	{
+		const auto *aLab = genmc::dyn_cast<MallocLabel>(lab);
+		return aLab ? free_succ(aLab) : nullptr;
+	}
+
+	auto free_pred(const FreeLabel *lab) const -> const MallocLabel *
+	{
+		return lab->getAlloc();
+	}
+
+	auto free_pred(const EventLabel *lab) const -> const MallocLabel *
+	{
+		const auto *dLab = genmc::dyn_cast<FreeLabel>(lab);
+		return dLab ? free_pred(dLab) : nullptr;
+	}
+
+	/***************************************************************************
+	 * Linearization / Methods (lin)
+	 **************************************************************************/
+
+	auto lin_succs(const MethodEndLabel *lab) const
+	{
+		auto indirectBegin = [](auto *lab) -> MethodBeginLabel & { return *lab; };
+		/* Normalize input to subrange first */
+		return std::ranges::subrange(lab->lin_succs()) |
+		       std::views::transform(indirectBegin);
+	}
+	auto lin_succs(const EventLabel *lab) const
+	{
+		using RangeType = decltype(lin_succs(static_cast<const MethodEndLabel *>(nullptr)));
+		const auto *endLab = genmc::dyn_cast<MethodEndLabel>(lab);
+		return endLab ? lin_succs(endLab) : RangeType{};
+	}
+
+	auto lin_preds(const MethodBeginLabel *lab) const
+	{
+		auto indirectEnd = [](auto *lab) -> MethodEndLabel & { return *lab; };
+		return std::ranges::subrange(lab->lin_preds()) | std::views::transform(indirectEnd);
+	}
+	auto lin_preds(const EventLabel *lab) const
+	{
+		using RangeType =
+			decltype(lin_preds(static_cast<const MethodBeginLabel *>(nullptr)));
+		const auto *begLab = genmc::dyn_cast<MethodBeginLabel>(lab);
+		return begLab ? lin_preds(begLab) : RangeType{};
+	}
+
+	/***************************************************************************
+	 * Utilities & Helpers
+	 **************************************************************************/
 
 	auto samelocs(const EventLabel *lab) const
 	{
@@ -360,8 +739,7 @@ public:
 	}
 	auto getInitLabel() -> InitLabel *
 	{
-		return const_cast<InitLabel *>(
-			static_cast<const ExecutionGraph &>(*this).getInitLabel());
+		return const_cast<InitLabel *>(std::as_const(*this).getInitLabel());
 	}
 
 	/* Returns the maximum stamp used */
@@ -386,8 +764,7 @@ public:
 	}
 	auto getEventLabel(Event e) -> EventLabel *
 	{
-		return const_cast<EventLabel *>(
-			static_cast<const ExecutionGraph &>(*this).getEventLabel(e));
+		return const_cast<EventLabel *>(std::as_const(*this).getEventLabel(e));
 	}
 
 	/* Returns a label as a ReadLabel.
@@ -398,8 +775,7 @@ public:
 	}
 	auto getReadLabel(Event e) -> ReadLabel *
 	{
-		return const_cast<ReadLabel *>(
-			static_cast<const ExecutionGraph &>(*this).getReadLabel(e));
+		return const_cast<ReadLabel *>(std::as_const(*this).getReadLabel(e));
 	}
 
 	/* Returns a label as a WriteLabel.
@@ -410,8 +786,7 @@ public:
 	}
 	auto getWriteLabel(Event e) -> WriteLabel *
 	{
-		return const_cast<WriteLabel *>(
-			static_cast<const ExecutionGraph &>(*this).getWriteLabel(e));
+		return const_cast<WriteLabel *>(std::as_const(*this).getWriteLabel(e));
 	}
 
 	/* Returns the first label in the thread tid */
@@ -422,18 +797,16 @@ public:
 	auto getFirstThreadLabel(int tid) -> ThreadStartLabel *
 	{
 		return const_cast<ThreadStartLabel *>(
-			static_cast<const ExecutionGraph &>(*this).getFirstThreadLabel(tid));
+			std::as_const(*this).getFirstThreadLabel(tid));
 	}
 
-	/* Returns the last label in the thread tid */
 	auto getLastThreadLabel(int thread) const -> const EventLabel *
 	{
 		return poLists[thread].empty() ? nullptr : &poLists[thread].back();
 	}
 	auto getLastThreadLabel(int thread) -> EventLabel *
 	{
-		return const_cast<EventLabel *>(
-			static_cast<const ExecutionGraph &>(*this).getLastThreadLabel(thread));
+		return const_cast<EventLabel *>(std::as_const(*this).getLastThreadLabel(thread));
 	}
 
 	/* Boolean helper functions */
@@ -450,6 +823,7 @@ public:
 		return initVals_.contains(access.getAddr()) ? initVals_.at(access.getAddr())
 							    : initValGetter_(access);
 	}
+
 	void setInitVal(const SAddr &addr, SVal val)
 	{
 		auto result = initVals_.insert({addr, val});
@@ -460,15 +834,24 @@ public:
 	}
 
 	void setInitValGetter(InitValGetter f) { initValGetter_ = std::move(f); }
-
 	auto containsLoc(SAddr addr) const -> bool { return coherence.contains(addr); }
 
-	auto isLocEmpty(SAddr addr) const -> bool { return co_begin(addr) == co_end(addr); }
+	auto isLocEmpty(SAddr addr) const -> bool
+	{
+		auto it = coherence.find(addr);
+		return it == coherence.end() || it->second.empty();
+	}
 
 	/* Whether a location has more than one store */
 	auto hasLocMoreThanOneStore(SAddr addr) const -> bool
 	{
-		return !isLocEmpty(addr) && ++co_begin(addr) != co_end(addr);
+		auto it = coherence.find(addr);
+		if (it == coherence.end() || it->second.empty())
+			return false;
+
+		/* Safe to increment because we checked empty() */
+		auto listIt = it->second.begin();
+		return ++listIt != it->second.end();
 	}
 
 	/* Returns true if the graph contains e */
@@ -477,6 +860,7 @@ public:
 		return e.thread >= 0 && e.thread < getNumThreads() && e.index >= 0 &&
 		       e.index < getThreadSize(e.thread);
 	}
+
 	auto containsLab(const EventLabel *lab) const -> bool
 	{
 		return containsPos(lab->getPos()) && getEventLabel(lab->getPos()) == lab;
@@ -531,6 +915,45 @@ public:
 protected:
 	friend class WriteLabel;
 
+	static auto isSameLoc(const EventLabel *a, const EventLabel *b) -> bool
+	{
+		const auto *mA = genmc::dyn_cast<MemAccessLabel>(a);
+		const auto *mB = genmc::dyn_cast<MemAccessLabel>(b);
+		return mA && mB && mA->getAddr() == mB->getAddr();
+	}
+
+	/* Functor for Detour Successors (Default Constructible for filter_view) */
+	struct DetourSuccFilter {
+		const EventLabel *lab = nullptr;
+		Event pos;
+		DetourSuccFilter() = default;
+		DetourSuccFilter(const EventLabel *l, Event p) : lab(l), pos(p) {}
+
+		auto operator()(const EventLabel &oLab) const -> bool
+		{
+			if (!isSameLoc(lab, &oLab))
+				return false;
+			const auto *rLab = genmc::dyn_cast<ReadLabel>(&oLab);
+			return rLab && rLab->getRf() && rLab->getRf()->getPos() != pos;
+		}
+	};
+
+	/* Functor for Detour Predecessors */
+	struct DetourPredFilter {
+		const EventLabel *lab = nullptr;
+		Event wPos;
+		DetourPredFilter() = default;
+		DetourPredFilter(const EventLabel *l, Event p) : lab(l), wPos(p) {}
+
+		auto operator()(const EventLabel &sLab) const -> bool
+		{
+			if (!isSameLoc(lab, &sLab))
+				return false;
+			const auto *wLab = genmc::dyn_cast<WriteLabel>(&sLab);
+			return wLab && wLab->getPos() != wPos;
+		}
+	};
+
 	static auto indirect(const std::unique_ptr<EventLabel> &ptr) -> EventLabel &
 	{
 		return *ptr;
@@ -553,9 +976,7 @@ protected:
 		-> const EventLabel *;
 
 	void trackCoherenceAtLoc(SAddr addr);
-
 	void copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) const;
-
 	void addInitRfToLoc(ReadLabel *rLab) { getInitLabel()->addReader(rLab); }
 
 	void removeInitRfToLoc(ReadLabel *rLab)
@@ -581,9 +1002,7 @@ protected:
 	Stamp timestamp = 0;
 
 	LocMap coherence;
-
 	IoList insertionOrder;
-
 	PoLists poLists{};
 
 	/* XXX: Temporary map; eventually remove */
@@ -591,7 +1010,6 @@ protected:
 
 	/* XXX: Temporary map; eventually remove */
 	std::unordered_map<SAddr, SVal> initVals_;
-
 	InitValGetter initValGetter_;
 };
 
@@ -621,9 +1039,8 @@ template <> struct std::formatter<ExecutionGraph> {
 		// Format coherence order for each location
 		for (auto lIt = g.loc_begin(), lE = g.loc_end(); lIt != lE; ++lIt) {
 			out = std::format_to(out, "{}: ", lIt->first);
-			for (auto sIt = g.co_begin(lIt->first); sIt != g.co_end(lIt->first);
-			     ++sIt) {
-				out = std::format_to(out, "{} ", sIt->getPos());
+			for (const auto &lab : g.co(lIt->first)) {
+				out = std::format_to(out, "{} ", lab.getPos());
 			}
 			out = std::format_to(out, "\n");
 		}

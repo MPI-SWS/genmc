@@ -193,8 +193,8 @@ void WriteLabel::addCo(EventLabel *predLab)
 {
 	auto &g = *getParent();
 	auto *predLabW = genmc::dyn_cast<WriteLabel>(predLab);
-	g.coherence[getAddr()].insert(
-		predLabW ? ++ExecutionGraph::co_iterator(*predLabW) : g.co_begin(getAddr()), *this);
+	auto &coh = g.coherence[getAddr()];
+	coh.insert(predLabW ? ++ExecutionGraph::co_iterator(*predLabW) : coh.begin(), *this);
 }
 
 void WriteLabel::moveCo(EventLabel *predLab)

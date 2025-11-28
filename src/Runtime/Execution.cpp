@@ -3591,9 +3591,9 @@ void Interpreter::runAtExitHandlers()
 		callFunction(dynState.AtExitHandlers.back(), std::vector<GenericValue>(), nullptr);
 		dynState.AtExitHandlers.pop_back();
 
-		// Don't call run; just run for one frame...
+		// Don't call run; just run until the exit handler function returns...
 		auto size = ECStack().size();
-		while (ECStack().size() == size) {
+		while (ECStack().size() >= size) {
 			llvm::ExecutionContext &SF = ECStack().back();
 			llvm::Instruction &I = *SF.CurInst++;
 			visit(I);

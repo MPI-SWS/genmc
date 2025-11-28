@@ -38,9 +38,7 @@
 class SAddr {
 
 public:
-	using Width = uintptr_t;
-
-	static constexpr Width wordSize = 3;
+	using Width = uint64_t;
 
 	static constexpr Width staticMask = (Width)1 << 63;
 	static constexpr Width automaticMask = (Width)1 << 62;
@@ -64,8 +62,8 @@ protected:
 		BUG_ON(index > SAddr::allocLimit);
 		Width fresh = 0;
 		fresh |= storageMask;
-		fresh ^= (-(unsigned long)(!!durable) ^ fresh) & durableMask;
-		fresh ^= (-(unsigned long)(!!internal) ^ fresh) & internalMask;
+		fresh ^= (-(Width)(!!durable) ^ fresh) & durableMask;
+		fresh ^= (-(Width)(!!internal) ^ fresh) & internalMask;
 		fresh |= (thread << threadStartBit);
 		fresh |= (index);
 		return {fresh};
@@ -105,12 +103,6 @@ public:
 	[[nodiscard]] auto sameStorageAs(const SAddr &other) const -> bool
 	{
 		return (addr & storageMask) == (other.addr & storageMask);
-	}
-
-	/** Return an address aligned to the previous word boundary */
-	[[nodiscard]] auto align() const -> SAddr
-	{
-		return ((Width)(addr >> wordSize) << wordSize);
 	}
 
 	[[nodiscard]] auto get() const -> Width { return addr; }

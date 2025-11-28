@@ -32,19 +32,34 @@ class VectorClock;
  * allocator.
  */
 class SAddrAllocator {
-
 protected:
-	/** Allocates a fresh address at the specified pool */
+	/** Allocates a fresh address at the specified pool. Returns `SAddr(0)` when out of memory.
+	 *  - `alignment` must be a power of 2.
+	 *  - `alignment == 0` is treated as no alignment, meaning 1 byte aligned.
+	 *  - `size` must be at least 1 byte.
+	 * */
 	template <typename F>
-	auto allocate(F &allocFun, SAddr::Width &pool, unsigned int thread, unsigned int size,
-		      unsigned int alignment, bool isDurable = false, bool isInternal = false)
-		-> SAddr
+	auto allocate(F &allocFun, SAddr::Width &pool, unsigned int thread, uint64_t size,
+		      uint64_t alignment, bool isDurable = false, bool isInternal = false) -> SAddr
 	{
-		auto offset = alignment - 1;
-		unsigned newAddr = (pool + offset) & ~offset;
+		BUG_ON(size == 0);
+
+		/* Treat alignment 0 as no alignment requirement, so 1 byte */
+		alignment = std::max(alignment, (uint64_t)1);
+		BUG_ON((alignment & (alignment - 1)) != 0);
+
+		/* Calculate new address (allocFun checks whether it fits into SAddr) */
+		SAddr::Width offset = alignment - 1;
+		SAddr::Width newAddr = (pool + offset) & ~offset;
+
+		/* Check if we are out of memory or had an overflow */
+		if (newAddr + size >= SAddr::allocLimit || newAddr < pool ||
+		    newAddr + size <= newAddr) [[unlikely]]
+			return {};
+
 		pool = newAddr + size;
-		return allocFun(thread, newAddr, static_cast<bool &&>(isDurable),
-				static_cast<bool &&>(isInternal));
+		return allocFun(thread, static_cast<SAddr::Width &&>(newAddr),
+				static_cast<bool &&>(isDurable), static_cast<bool &&>(isInternal));
 	}
 
 public:

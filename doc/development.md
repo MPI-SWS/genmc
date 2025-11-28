@@ -54,3 +54,21 @@ To add a new label, follow these steps:
 for dummy labels or subclasses of existing labels. If e.g., the new
 label has attributes like location then extra changes might be
 required to ensure that iterators, etc still work.
+
+## Running tests
+
+Run some quick tests:
+```shell
+./scripts/fast-driver.sh
+```
+
+Environment variables to affect the testing scripts:
+```shell
+  GenMC="path/to/genmc/executable"  # Select the GenMC executable to use for the test (default: `${SCRIPT_DIR}/../RelWithDebInfo/genmc`)
+  GENMCFLAGS="--flag --another"     # Pass extra flags to any GenMC invocation.
+```
+
+Example:
+```shell
+GenMC="Release/genmc" GENMCFLAGS="--disable-estimation" ./scripts/fast-driver.sh
+```

@@ -148,7 +148,7 @@ void Interpreter::collectStaticAddresses(SAddrAllocator &alloctor)
 
 	for (auto &v : GLOBALS(*M)) {
 		char *ptr = static_cast<char *>(GVTOP(getConstantValue(&v)));
-		unsigned int typeSize = getDataLayout().getTypeAllocSize(v.getValueType());
+		const uint64_t typeSize = getDataLayout().getTypeAllocSize(v.getValueType());
 
 		/* Record whether this is a thread local variable or not */
 		if (v.isThreadLocal()) {
@@ -161,6 +161,7 @@ void Interpreter::collectStaticAddresses(SAddrAllocator &alloctor)
 		auto addr = alloctor.allocStatic(0, typeSize, v.getAlignment(),
 						 v.getSection() == "__genmc_persist",
 						 v.getAddressSpace() == 42);
+		ERROR_ON(addr == SAddr(), "Allocator is out of memory");
 		staticAllocas.insert(std::make_pair(addr, addr + ASize(typeSize - 1)));
 		staticValueMap[addr] = ptr;
 

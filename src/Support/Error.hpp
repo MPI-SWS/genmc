@@ -37,7 +37,7 @@
 
 #define WARN_ON(condition, fmt, ...)                                                               \
 	do {                                                                                       \
-		if (condition) {                                                                   \
+		if (condition) [[unlikely]] {                                                      \
 			LOG(VerbosityLevel::Warning, fmt, ##__VA_ARGS__);                          \
 		}                                                                                  \
 	} while (0)
@@ -46,7 +46,7 @@
 
 #define WARN_ON_ONCE(condition, id, fmt, ...)                                                      \
 	do {                                                                                       \
-		if (condition) {                                                                   \
+		if (condition) [[unlikely]] {                                                      \
 			LOG_ONCE(id, VerbosityLevel::Warning, fmt, ##__VA_ARGS__);                 \
 		}                                                                                  \
 	} while (0)
@@ -63,7 +63,7 @@
 
 #define ERROR_ON(condition, fmt, ...)                                                              \
 	({                                                                                         \
-		if (condition) {                                                                   \
+		if (condition) [[unlikely]] {                                                      \
 			ERROR(fmt, ##__VA_ARGS__);                                                 \
 		}                                                                                  \
 	})
@@ -81,7 +81,7 @@
 #ifdef ENABLE_GENMC_DEBUG
 #define BUG_ON(condition)                                                                          \
 	do {                                                                                       \
-		if (condition)                                                                     \
+		if (condition) [[unlikely]]                                                        \
 			BUG();                                                                     \
 	} while (0)
 #else

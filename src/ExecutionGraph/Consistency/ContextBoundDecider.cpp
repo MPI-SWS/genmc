@@ -14,7 +14,6 @@
 #include "ContextBoundDecider.hpp"
 #include "ADT/View.hpp"
 #include "ExecutionGraph/ExecutionGraph.hpp"
-#include "ExecutionGraph/GraphIterators.hpp"
 
 #include <ranges>
 
@@ -39,17 +38,17 @@ auto isEnabled(const ExecutionGraph &g, const View &v, int t) -> bool
 		return false;
 
 	if (genmc::isa<ThreadJoinLabel>(nLab))
-		return v.contains(tj_pred(g, nLab)->getPos());
+		return v.contains(g.tj_pred(nLab)->getPos());
 
 	/* Special cases for locks and barriers */
 	if (auto *lLab = genmc::dyn_cast<LockCasReadLabel>(nLab)) {
 		auto addr = lLab->getAddr();
 		// Get latest store in the view
-		auto it = std::find_if(g.co_rbegin(addr), g.co_rend(addr),
-				       [&](const auto &w) { return v.contains(w.getPos()); });
+		auto it = std::ranges::find_if(
+			g.rco(addr), [&](const auto &w) { return v.contains(w.getPos()); });
 
 		// No such store exists
-		if (it == g.co_rend(addr)) {
+		if (it == std::ranges::end(g.rco(addr))) {
 			return std::none_of(g.getInitLabel()->rf_begin(addr),
 					    g.getInitLabel()->rf_end(addr),
 					    [&](const auto &e) { return v.contains(e.getPos()); });
@@ -63,10 +62,10 @@ auto isEnabled(const ExecutionGraph &g, const View &v, int t) -> bool
 	if (auto *bLab = genmc::dyn_cast<BWaitReadLabel>(nLab)) {
 		auto addr = bLab->getAddr();
 		// Get barrrier initialization value
-		auto *iwLab = genmc::dyn_cast<WriteLabel>(&*g.co_begin(addr));
+		auto *iwLab = genmc::dyn_cast<WriteLabel>(&*std::ranges::begin(g.co(addr)));
 		BUG_ON(!iwLab);
-		auto it = std::find_if(g.co_rbegin(addr), g.co_rend(addr),
-				       [&](const auto &w) { return v.contains(w.getPos()); });
+		auto it = std::ranges::find_if(
+			g.rco(addr), [&](const auto &w) { return v.contains(w.getPos()); });
 		auto *wLab = genmc::dyn_cast<WriteLabel>(&*it);
 		BUG_ON(!wLab);
 		return iwLab->getVal() == wLab->getVal();
@@ -81,7 +80,7 @@ auto isSCMaximal(const ExecutionGraph &g, const View &v, int t) -> bool
 	auto *lab = g.getEventLabel(pos);
 
 	if (genmc::isa<ThreadFinishLabel>(lab)) {
-		auto *tjLab = tj_succ(g, lab);
+		auto *tjLab = g.tj_succ(lab);
 		return !tjLab || !v.contains(tjLab->getPos());
 	}
 
@@ -107,7 +106,7 @@ auto isSCMaximal(const ExecutionGraph &g, const View &v, int t) -> bool
 	if (g.isLocEmpty(addr))
 		return true;
 
-	auto *succLab = genmc::isa<InitLabel>(wLab) ? &*g.co_begin(addr)
+	auto *succLab = genmc::isa<InitLabel>(wLab) ? &*std::ranges::begin(g.co(addr))
 						    : g.co_imm_succ(genmc::cast<WriteLabel>(wLab));
 	return !succLab || !v.contains(succLab->getPos());
 }

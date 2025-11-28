@@ -68,6 +68,15 @@ public:
 		return *this;
 	}
 
+	/** Truncates the value to the specified width W.
+	 * Pre: 0 < W <= SVal::width */
+	auto truncate(unsigned w) -> SVal &
+	{
+		BUG_ON(w == 0 || w > width);
+		value = get() & ((uint64_t(1) << w) - 1);
+		return *this;
+	}
+
 	/** Equality operators */
 
 	auto operator==(const SVal &v) const -> bool { return v.value == value; }

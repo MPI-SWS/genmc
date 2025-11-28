@@ -15,7 +15,6 @@
 #include "ADT/View.hpp"
 #include "ExecutionGraph/Event.hpp"
 #include "ExecutionGraph/EventLabel.hpp"
-#include "ExecutionGraph/GraphIterators.hpp"
 #include "ExecutionGraph/GraphUtils.hpp"
 #include "Support/Cast.hpp"
 #include "Support/Error.hpp"
@@ -122,7 +121,7 @@ void Scheduler::resetExplorationOptions(const ExecutionGraph &g)
 		if (!rLab)
 			continue;
 
-		auto rpreds = po_preds(g, rLab);
+		auto rpreds = g.po_preds(rLab);
 		auto oLabIt = std::ranges::find_if(rpreds, [&](auto &oLab) {
 			return genmc::isa<SpeculativeReadLabel>(&oLab);
 		});
@@ -288,7 +287,7 @@ void Scheduler::cacheEventLabel(const ExecutionGraph &g, const EventLabel *lab)
 static auto findNextLabelToAdd(const ExecutionGraph &g, int thread) -> Event
 {
 	const auto *firstLab = g.getFirstThreadLabel(thread);
-	auto succs = po_succs(g, firstLab);
+	auto succs = g.po_succs(firstLab);
 	auto it = std::ranges::find_if(succs,
 				       [&](auto &lab) { return genmc::isa<EmptyLabel>(&lab); });
 	return it == succs.end() ? g.getLastThreadLabel(thread)->getPos().next() : (*it).getPos();

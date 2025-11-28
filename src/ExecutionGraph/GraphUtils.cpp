@@ -14,7 +14,6 @@
 #include "ExecutionGraph/GraphUtils.hpp"
 #include "ExecutionGraph/EventLabel.hpp"
 #include "ExecutionGraph/ExecutionGraph.hpp"
-#include "ExecutionGraph/GraphIterators.hpp"
 #include "Support/Cast.hpp"
 #include <algorithm>
 #include <ranges>
@@ -27,7 +26,7 @@ auto isHazptrProtected(const MemAccessLabel *mLab) -> bool
 	auto *aLab = mLab->getAlloc();
 	BUG_ON(!aLab);
 
-	auto mpreds = po_preds(g, mLab);
+	auto mpreds = g.po_preds(mLab);
 	auto pLabIt = std::ranges::find_if(mpreds, [&](auto &lab) {
 		auto *pLab = genmc::dyn_cast<HpProtectLabel>(&lab);
 		return pLab && aLab->contains(pLab->getProtectedAddr());
@@ -169,12 +168,10 @@ auto findPendingRMW(const WriteLabel *sLab) -> const WriteLabel *
 	}
 
 	/* Slowpath: scan init rfs */
-	std::for_each(g.init_rf_begin(pLab->getAddr()), g.init_rf_end(pLab->getAddr()),
-		      [&](auto &rLab) {
-			      if (rLab.getRf() == pLab->getRf() && &rLab != pLab && rLab.isRMW())
-				      pending.push_back(
-					      genmc::dyn_cast<WriteLabel>(g.po_imm_succ(&rLab)));
-		      });
+	for (const auto &rLab : g.getInitLabel()->rfs(pLab->getAddr())) {
+		if (rLab.getRf() == pLab->getRf() && &rLab != pLab && rLab.isRMW())
+			pending.push_back(genmc::dyn_cast<WriteLabel>(g.po_imm_succ(&rLab)));
+	}
 	return getMinimumStampLabel(pending);
 }
 

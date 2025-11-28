@@ -17,7 +17,6 @@
 #include "ExecutionGraph/Consistency/SymmetryChecker.hpp"
 #include "ExecutionGraph/DepExecutionGraph.hpp"
 #include "ExecutionGraph/EventLabel.hpp"
-#include "ExecutionGraph/GraphIterators.hpp"
 #include "ExecutionGraph/GraphUtils.hpp"
 #include "ExecutionGraph/LabelVisitor.hpp"
 #include "Support/Cast.hpp"
@@ -235,14 +234,12 @@ void GenMCDriver::checkHelpingCasAnnotation()
 		/* Check that all stores that would make this helping
 		 * CAS succeed are read by a helped CAS.
 		 * We don't need to check the swap value of the helped CAS */
-		if (std::any_of(
-			    g.co_begin(hLab->getAddr()), g.co_end(hLab->getAddr()),
-			    [&](auto &sLab) {
-				    return hLab->getExpected() == sLab.getVal() &&
-					   std::ranges::none_of(sLab.readers(), [&](auto &rLab) {
-						   return genmc::isa<HelpedCasReadLabel>(&rLab);
-					   });
-			    }))
+		if (std::ranges::any_of(g.co(hLab->getAddr()), [&](auto &sLab) {
+			    return hLab->getExpected() == sLab.getVal() &&
+				   std::ranges::none_of(sLab.readers(), [&](auto &rLab) {
+					   return genmc::isa<HelpedCasReadLabel>(&rLab);
+				   });
+		    }))
 			ERROR("Helped/Helping CAS annotation error! "
 			      "Unordered store to helping CAS location!");
 
@@ -309,11 +306,11 @@ static const auto maybeTimeRelinche = [](auto &&relinche, auto &&g) {
 static void printGraph(const ExecutionGraph &g, const GenMCDriver::GraphDbgInfo &dbgInfo,
 		       std::ostream &s = std::cerr);
 
-void GenMCDriver::handleExecutionEnd()
+auto GenMCDriver::handleExecutionEnd() -> std::optional<VerificationError>
 {
 	if (isMoot()) {
 		GENMC_DEBUG(++result.exploredMoot;);
-		return;
+		return {};
 	}
 
 	/* Helper: Check helping CAS annotation */
@@ -335,12 +332,13 @@ void GenMCDriver::handleExecutionEnd()
 		if (getConf()->printBlockedExecs)
 			printGraph(g, dbgInfo_);
 		if (getConf()->checkLiveness)
-			checkLiveness();
-		return;
+			return checkLiveness();
+		return {};
 	}
 
 	if (getConf()->warnUnfreedMemory)
-		checkUnfreedMemory();
+		if (const auto err = checkUnfreedMemory())
+			return err;
 	if (getConf()->printExecGraphs)
 		printGraph(g, dbgInfo_);
 
@@ -351,10 +349,10 @@ void GenMCDriver::handleExecutionEnd()
 		++result.boundExceeding;
 
 	if (isHalting() || g.isBlocked() || isMoot())
-		return;
+		return {};
 
 	if (inEstimationMode())
-		return;
+		return {};
 
 	/* Relinche: Collect/check abstract behavior */
 	if (getConf()->collectLinSpec)
@@ -366,8 +364,10 @@ void GenMCDriver::handleExecutionEnd()
 			reportError(std::ranges::begin(g.rlabels())->getPos(),
 				    {Event::getBottom(), *result.status,
 				     result.relincheResult.status->toString()});
+			return {VerificationError::VE_LinearizabilityError};
 		}
 	}
+	return {};
 }
 
 bool GenMCDriver::done()
@@ -616,7 +616,7 @@ SVal GenMCDriver::getRecReadRetValue(const ReadLabel *rLab)
 	auto &g = getExec().getGraph();
 
 	/* Find and read from the latest sameloc store */
-	auto preds = po_preds(g, rLab);
+	auto preds = g.po_preds(rLab);
 	auto wLabIt = std::ranges::find_if(preds, [rLab](auto &lab) {
 		auto *wLab = genmc::dyn_cast<WriteLabel>(&lab);
 		return wLab && wLab->getAddr() == rLab->getAddr();
@@ -700,12 +700,13 @@ std::optional<VerificationError> GenMCDriver::checkFinalAnnotations(const WriteL
 	if (g.hasLocMoreThanOneStore(wLab->getAddr()))
 		return {};
 	if ((wLab->isFinal() &&
-	     std::any_of(g.co_begin(wLab->getAddr()), g.co_end(wLab->getAddr()),
-			 [&](auto &sLab) {
-				 return !getConsChecker().getHbView(wLab).contains(sLab.getPos());
-			 })) ||
-	    (!wLab->isFinal() && std::any_of(g.co_begin(wLab->getAddr()), g.co_end(wLab->getAddr()),
-					     [&](auto &sLab) { return sLab.isFinal(); }))) {
+	     std::ranges::any_of(g.co(wLab->getAddr()),
+				 [&](auto &sLab) {
+					 return !getConsChecker().getHbView(wLab).contains(
+						 sLab.getPos());
+				 })) ||
+	    (!wLab->isFinal() && std::ranges::any_of(g.co(wLab->getAddr()),
+						     [&](auto &sLab) { return sLab.isFinal(); }))) {
 		reportError(wLab->getPos(), {wLab->getPos(), VerificationError::VE_Annotation,
 					     "Multiple stores at final location!"});
 		return {VerificationError::VE_Annotation};
@@ -719,9 +720,9 @@ std::optional<VerificationError> GenMCDriver::checkIPRValidity(const ReadLabel *
 		return {};
 
 	auto &g = getExec().getGraph();
-	auto racyIt = std::find_if(g.co_begin(rLab->getAddr()), g.co_end(rLab->getAddr()),
-				   [&](auto &wLab) { return wLab.hasAttr(WriteAttr::WWRacy); });
-	if (racyIt == g.co_end(rLab->getAddr()))
+	auto racyIt = std::ranges::find_if(
+		g.co(rLab->getAddr()), [&](auto &wLab) { return wLab.hasAttr(WriteAttr::WWRacy); });
+	if (racyIt == std::ranges::end(g.co(rLab->getAddr())))
 		return {};
 
 	auto msg = "Unordered writes do not constitute a bug per se, though they often "
@@ -767,10 +768,10 @@ static auto threadReadsMaximal(const ExecutionGraph &g, int tid) -> bool
 	BUG();
 }
 
-void GenMCDriver::checkLiveness()
+auto GenMCDriver::checkLiveness() -> std::optional<VerificationError>
 {
 	if (isHalting())
-		return;
+		return {};
 
 	const auto &g = getExec().getGraph();
 
@@ -782,7 +783,7 @@ void GenMCDriver::checkLiveness()
 	}
 
 	if (spinBlocked.empty())
-		return;
+		return {};
 
 	/* And check whether all of them are live or not */
 	auto nonTermTID = 0u;
@@ -795,14 +796,15 @@ void GenMCDriver::checkLiveness()
 		reportError(lastPos,
 			    {lastPos, VerificationError::VE_Liveness,
 			     "Non-terminating spinloop: thread " + std::to_string(nonTermTID)});
+		return {VerificationError::VE_Liveness};
 	}
-	return;
+	return {};
 }
 
-void GenMCDriver::checkUnfreedMemory()
+auto GenMCDriver::checkUnfreedMemory() -> std::optional<VerificationError>
 {
 	if (isHalting())
-		return;
+		return {};
 
 	auto &g = getExec().getGraph();
 	const MallocLabel *unfreedAlloc = nullptr;
@@ -810,8 +812,11 @@ void GenMCDriver::checkUnfreedMemory()
 		    unfreedAlloc = genmc::dyn_cast<MallocLabel>(&lab);
 		    return unfreedAlloc && unfreedAlloc->getFree() == nullptr;
 	    })) {
-		reportWarningOnce(unfreedAlloc->getPos(), VerificationError::VE_UnfreedMemory);
+		/* Return an error only if the warning was upgraded to an error */
+		if (reportWarningOnce(unfreedAlloc->getPos(), VerificationError::VE_UnfreedMemory))
+			return {VerificationError::VE_UnfreedMemory};
 	}
+	return {};
 }
 
 void GenMCDriver::filterConflictingBarriers(const ReadLabel *lab, std::vector<EventLabel *> &stores)
@@ -1241,7 +1246,7 @@ void GenMCDriver::checkReconsiderFaiSpinloop(const MemAccessLabel *lab)
 			continue;
 
 		/* Check whether this access affects the spinloop variable */
-		auto epreds = po_preds(g, eLab);
+		auto epreds = g.po_preds(eLab);
 		auto faiLabIt = std::ranges::find_if(
 			epreds, [](auto &lab) { return genmc::isa<FaiWriteLabel>(&lab); });
 		BUG_ON(faiLabIt == std::ranges::end(epreds));
@@ -1341,7 +1346,7 @@ void GenMCDriver::filterAtomicityViolations(const ReadLabel *rLab,
 								       rLab.getAccessValue(
 									       rLab.getAccess()));
 						});
-				return std::ranges::any_of(rf_succs(g, sLab), [&](auto &rLab) {
+				return std::ranges::any_of(g.rf_succs(sLab), [&](auto &rLab) {
 					return rLab.isRMW() &&
 					       valueMakesSuccessfulRMW(
 						       rLab.getAccessValue(rLab.getAccess()));
@@ -1382,7 +1387,7 @@ static void updateNonAtomicValue(MemAccessLabel *lab, SVal val)
 	}
 
 	/* When co-maximal write is not non-atomic, we don't need to update it */
-	auto &wLab = *g.co_rbegin(addr);
+	auto &wLab = *std::ranges::begin(g.rco(addr));
 	if (!wLab.isNotAtomic() || wLab.isComplete())
 		return;
 
@@ -1396,7 +1401,8 @@ GenMCDriver::HandleResult<SVal> GenMCDriver::handleLoad(std::unique_ptr<ReadLabe
 	auto &g = getExec().getGraph();
 
 	auto *lab = genmc::dyn_cast<ReadLabel>(addLabelToGraph(std::move(rLab)));
-	if (auto &&err = checkAccessValidity(lab); err)
+	auto err = checkAccessValidity(lab).or_else([&] { return checkForRaces(lab); });
+	if (err)
 		return {*err}; /* This execution will be blocked */
 
 	/* Check whether the load forces us to reconsider some existing event */
@@ -1436,10 +1442,7 @@ GenMCDriver::HandleResult<SVal> GenMCDriver::handleLoad(std::unique_ptr<ReadLabe
 	}
 
 	/* Ensured the selected rf comes from an initialized memory location */
-	auto err =
-		checkInitializedMem(lab).or_else([&] { return checkForRaces(lab); }).or_else([&] {
-			return checkIPRValidity(lab);
-		});
+	err = checkInitializedMem(lab).or_else([&] { return checkIPRValidity(lab); });
 	if (err)
 		return {*err};
 	if (oldVal)
@@ -1469,9 +1472,10 @@ static auto getRevisitable(WriteLabel *sLab, const VectorClock &before) -> std::
 	};
 
 	/* Fastpath: previous co-max is ppo-before SLAB */
-	auto prevCoMaxIt = std::find_if(g.co_rbegin(sLab->getAddr()), g.co_rend(sLab->getAddr()),
-					[&](auto &lab) { return lab.getPos() != sLab->getPos(); });
-	if (prevCoMaxIt != g.co_rend(sLab->getAddr()) && before.contains(prevCoMaxIt->getPos())) {
+	auto prevCoMaxIt = std::ranges::find_if(
+		g.rco(sLab->getAddr()), [&](auto &lab) { return lab.getPos() != sLab->getPos(); });
+	if (prevCoMaxIt != std::ranges::end(g.rco(sLab->getAddr())) &&
+	    before.contains(prevCoMaxIt->getPos())) {
 		for (auto &rLab : prevCoMaxIt->readers()) {
 			if (!rLab.isStable() && !before.contains(rLab.getPos()))
 				loads.push_back(&rLab);
@@ -1604,7 +1608,11 @@ SVal GenMCDriver::handleMalloc(std::unique_ptr<MallocLabel> aLab)
 	if (oldAddr == SAddr())
 		aLab->setAllocAddr(getFreshAddr(&*aLab, getExec().getAllocator()));
 	auto *lab = genmc::dyn_cast<MallocLabel>(addLabelToGraph(std::move(aLab)));
-	return SVal(lab->getAllocAddr().get());
+	auto addr = lab->getAllocAddr();
+	if (addr == SAddr())
+		reportError(lab->getPos(), {lab->getPos(), VerificationError::VE_Allocation,
+					    "Allocator is out of memory\n", nullptr});
+	return SVal(addr.get());
 }
 
 auto GenMCDriver::handleFree(std::unique_ptr<FreeLabel> dLab) -> std::optional<VerificationError>
@@ -1868,7 +1876,7 @@ static void printGraph(const ExecutionGraph &g, const GenMCDriver::GraphDbgInfo 
 				s << "Coherence:\n";
 				header = true;
 			}
-			auto *wLab = &*g.co_begin(locIt->first);
+			auto *wLab = &*std::ranges::begin(g.co(locIt->first));
 			s << printVarName(*wLab, dbgInfo) << ": [ ";
 			for (const auto &w : g.co(locIt->first))
 				s << std::format("{} ", w);
@@ -2004,7 +2012,7 @@ void dotPrintToFile(const std::string &filename, EventLabel *errLab,
 					       {{"color", "blue"}, {"constraint", "false"}});
 
 			// print extension edges
-			for (auto begLab : lin_succs(g, lab))
+			for (auto begLab : g.lin_succs(lab))
 				printlnDotEdge(ss, lab->getPos(), begLab.getPos(),
 					       {{"color", "red"}, {"constraint", "false"}});
 		}
@@ -2110,7 +2118,7 @@ bool GenMCDriver::reportWarningOnce(Event pos, VerificationError wcode,
 				 [&](auto tid) {
 					 return g.getFirstThreadLabel(tid)->getSymmPredTid() != -1;
 				 })) ||
-			(getConf()->ipr && std::ranges::any_of(samelocs(g, lab), [&](auto &oLab) {
+			(getConf()->ipr && std::ranges::any_of(g.samelocs(lab), [&](auto &oLab) {
 				 auto *rLab = genmc::dyn_cast<ReadLabel>(&oLab);
 				 return rLab && rLab->getAnnot();
 			 }));
@@ -2280,10 +2288,9 @@ void GenMCDriver::optimizeUnconfirmedRevisits(const WriteLabel *sLab,
 	auto &g = getExec().getGraph();
 
 	/* If there is already a write with the same value, report a possible ABA */
-	auto valid = std::count_if(
-		g.co_begin(sLab->getAddr()), g.co_end(sLab->getAddr()), [&](auto &wLab) {
-			return wLab.getPos() != sLab->getPos() && wLab.getVal() == sLab->getVal();
-		});
+	auto valid = std::ranges::count_if(g.co(sLab->getAddr()), [&](auto &wLab) {
+		return wLab.getPos() != sLab->getPos() && wLab.getVal() == sLab->getVal();
+	});
 	if (sLab->getAddr().isStatic() &&
 	    g.getInitLabel()->getAccessValue(sLab->getAccess()) == sLab->getVal())
 		++valid;
@@ -2451,9 +2458,8 @@ bool GenMCDriver::isCoBeforeSavedPrefix(const BackwardRevisit &r, const EventLab
 	auto rLab = genmc::dyn_cast<ReadLabel>(mLab);
 	auto wLab = g.getWriteLabel(rLab ? rLab->getRf()->getPos() : mLab->getPos());
 
-	auto succIt = wLab ? g.co_succ_begin(wLab) : g.co_begin(mLab->getAddr());
-	auto succE = wLab ? g.co_succ_end(wLab) : g.co_end(mLab->getAddr());
-	return std::any_of(succIt, succE, [&](auto &sLab) {
+	auto succs = wLab ? g.co_succs(wLab) : g.co(mLab->getAddr());
+	return std::ranges::any_of(succs, [&](auto &sLab) {
 		/* Exclude the write that revisits from the prefix */
 		return sLab.getPos() != r.getRev() && v->contains(sLab.getPos()) &&
 		       (!getConf()->isDepTrackingModel ||
@@ -2468,12 +2474,11 @@ bool GenMCDriver::coherenceSuccRemainInGraph(const BackwardRevisit &r)
 	if (wLab->isRMW())
 		return true;
 
-	auto succIt = g.co_succ_begin(wLab);
-	auto succE = g.co_succ_end(wLab);
-	if (succIt == succE)
+	auto succs = g.co_succs(wLab);
+	if (std::ranges::empty(succs))
 		return true;
 
-	return r.getViewNoRel()->contains(succIt->getPos());
+	return r.getViewNoRel()->contains(&*std::ranges::begin(succs));
 }
 
 bool wasAddedMaximally(const EventLabel *lab)
@@ -2509,26 +2514,6 @@ bool GenMCDriver::isMaximalExtension(const BackwardRevisit &r)
 			return false;
 	}
 	return true;
-}
-
-bool GenMCDriver::revisitModifiesGraph(const BackwardRevisit &r) const
-{
-	auto &g = getExec().getGraph();
-	auto &v = r.getViewNoRel();
-	for (auto i = 0u; i < g.getNumThreads(); i++) {
-		if (v->getMax(i) + 1 != (long)g.getThreadSize(i) &&
-		    !genmc::isa<TerminatorLabel>(g.getEventLabel(Event(i, v->getMax(i) + 1))))
-			return true;
-		if (!getConf()->isDepTrackingModel)
-			continue;
-		for (auto j = 0u; j < g.getThreadSize(i); j++) {
-			auto *lab = g.getEventLabel(Event(i, j));
-			if (!v->contains(lab->getPos()) && !genmc::isa<EmptyLabel>(lab) &&
-			    !genmc::isa<TerminatorLabel>(lab))
-				return true;
-		}
-	}
-	return false;
 }
 
 std::unique_ptr<ExecutionGraph> GenMCDriver::copyGraph(const BackwardRevisit *br,
@@ -2788,7 +2773,7 @@ void GenMCDriver::handleSpinStart(std::unique_ptr<SpinStartLabel> lab)
 	auto *stLab = addLabelToGraph(std::move(lab));
 
 	/* Check whether we can detect some spinloop dynamically */
-	auto stpreds = po_preds(g, stLab);
+	auto stpreds = g.po_preds(stLab);
 	auto lbLabIt = std::ranges::find_if(
 		stpreds, [](auto &lab) { return genmc::isa<LoopBeginLabel>(&lab); });
 
@@ -2830,7 +2815,7 @@ bool GenMCDriver::areFaiZNEConstraintsSat(const FaiZNESpinEndLabel *lab)
 	/* Check that there are no other side-effects since the previous iteration.
 	 * We don't have to look for a BEGIN label since ZNE labels are always
 	 * preceded by a spin-start */
-	auto preds = po_preds(g, lab);
+	auto preds = g.po_preds(lab);
 	auto ssLabIt = std::ranges::find_if(
 		preds, [](auto &lab) { return genmc::isa<SpinStartLabel>(&lab); });
 	BUG_ON(ssLabIt == preds.end());

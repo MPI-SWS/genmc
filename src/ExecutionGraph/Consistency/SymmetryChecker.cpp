@@ -13,7 +13,7 @@
 
 #include "ExecutionGraph/Consistency/SymmetryChecker.hpp"
 #include "ExecutionGraph/EventLabel.hpp"
-#include "ExecutionGraph/GraphIterators.hpp"
+#include "ExecutionGraph/ExecutionGraph.hpp"
 
 static auto calcLargestSymmPrefixBeforeSR(int symm, const EventLabel *lab) -> int
 {
@@ -61,14 +61,14 @@ auto SymmetryChecker::isEcoBefore(const EventLabel *lab, int tid) const -> bool
 	// 	return wLab.getPos() == symmPos;
 	// }))
 	// 	return true;
-	if (std::ranges::any_of(co_succs(g, lab), [&](auto &sLab) {
+	if (std::ranges::any_of(g.co_succs(lab), [&](auto &sLab) {
 		    return sLab.getPos() == symmPos ||
 			   std::ranges::any_of(sLab.readers(), [&](auto &rLab) {
 				   return rLab.getPos() == symmPos;
 			   });
 	    }))
 		return true;
-	if (std::ranges::any_of(fr_succs(g, lab), [&](auto &sLab) {
+	if (std::ranges::any_of(g.fr_succs(lab), [&](auto &sLab) {
 		    return sLab.getPos() == symmPos ||
 			   std::ranges::any_of(sLab.readers(), [&](auto &rLab) {
 				   return rLab.getPos() == symmPos;
