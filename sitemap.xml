@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://mpi-sws.github.io/genmc/</loc>
+         <lastmod>2026-04-08</lastmod>
+    </url>
+    <url>
+         <loc>https://mpi-sws.github.io/genmc/api/</loc>
+         <lastmod>2026-04-08</lastmod>
+    </url>
+    <url>
+         <loc>https://mpi-sws.github.io/genmc/cli/</loc>
+         <lastmod>2026-04-08</lastmod>
+    </url>
+    <url>
+         <loc>https://mpi-sws.github.io/genmc/features/</loc>
+         <lastmod>2026-04-08</lastmod>
+    </url>
+    <url>
+         <loc>https://mpi-sws.github.io/genmc/references/</loc>
+         <lastmod>2026-04-08</lastmod>
+    </url>
+    <url>
+         <loc>https://mpi-sws.github.io/genmc/usage/</loc>
+         <lastmod>2026-04-08</lastmod>
+    </url>
+</urlset>
