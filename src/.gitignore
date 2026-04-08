@@ -1,7 +1,0 @@
-*.dwo
-
-.deps
-librcmc.a
-
-Makefile
-Makefile.in

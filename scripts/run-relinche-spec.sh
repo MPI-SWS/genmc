@@ -13,7 +13,7 @@
 
 # Get binary's full path
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-GenMC="${GenMC:-${DIR}/../RelWithDebInfo/genmc}"
+GenMC="${GenMC:-${DIR}/../RelWithDebInfo/bin/genmc}"
 GENMCFLAGS="${GENMCFLAGS:---disable-estimation --disable-mm-detector}"
 SPEC_ARGS=("-DSYNC_VAL" "-DSYNC_INS" "-DSYNC_REM" "-DSYNC_INS -DSYNC_REM")
 

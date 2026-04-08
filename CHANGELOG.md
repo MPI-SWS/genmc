@@ -11,6 +11,26 @@ released.
 - Documentation for LLVM-based Rust frontend
 
 
+## [0.17.0] - 2026.04.08
+
+### Added
+
+- Build option to not add non-atomic labels to graph (`-DEMIT_NA_LABELS=OFF`; Miri only)
+- VS Code extension for GenMC (work in progress)
+- Mode for random exploration
+- Documentation website (https://mpi-sws.github.io/genmc)
+
+### Fixes
+
+- Various bug fixes
+
+### Changes
+
+- IMM is temporarily disabled
+- Manual is converted to Markdown
+- Refactored/redesigned various internal primitives
+- Project folders restructured
+
 ## [0.16.1] - 2025.11.28
 
 ### Fixes

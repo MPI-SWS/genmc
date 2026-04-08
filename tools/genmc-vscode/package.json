@@ -1,0 +1,85 @@
+{
+  "name": "genmc-vscode",
+  "displayName": "genmc-vscode",
+  "description": "genmc-vscode",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.108.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:genmc.runOnActiveFile"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "genmc.configure",
+        "title": "GenMC: Configure"
+      },
+      {
+        "command": "genmc.runOnActiveFile",
+        "title": "GenMC: Run on Active File"
+      }
+    ],
+    "configuration": {
+      "title": "GenMC",
+      "properties": {
+        "genmc.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the GenMC executable (absolute path or 'genmc' if it is on PATH)."
+        },
+        "genmc.mode": {
+          "type": "string",
+          "default": "verify",
+          "enum": ["verify", "random", "estimate"],
+          "description": "Default GenMC mode."
+        },
+        "genmc.model": {
+          "type": "string",
+          "default": "rc11",
+          "enum": ["sc", "tso", "ra", "rc11", "imm"],
+          "description": "Memory model to use (maps to --sc/--tso/--ra/--rc11/--imm)."
+        },
+        "genmc.budget": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 1,
+          "description": "Random mode only: number of executions to sample (maps to --budget)."
+        },
+        "genmc.scheduleSeed": {
+          "type": "string",
+          "default": "",
+          "description": "Random mode only: scheduling seed (maps to --schedule-seed). Leave empty to let GenMC choose."
+        },
+        "genmc.printScheduleSeed": {
+          "type": "boolean",
+          "default": false,
+          "description": "Random mode only: print the seed used for randomized scheduling (maps to --print-schedule-seed)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.109.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "typescript-eslint": "^8.54.0",
+    "eslint": "^9.39.2",
+    "typescript": "^5.9.3",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2"
+  }
+}

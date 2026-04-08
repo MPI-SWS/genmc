@@ -12,7 +12,7 @@
 #     https://opensource.org/licenses/MIT
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-GenMC="${GenMC:-$DIR/../RelWithDebInfo/genmc}"
+GenMC="${GenMC:-$DIR/../RelWithDebInfo/bin/genmc}"
 
 source "${DIR}/terminal.sh"
 

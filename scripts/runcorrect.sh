@@ -12,7 +12,7 @@
 #     https://opensource.org/licenses/MIT
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-GenMC="${GenMC:-$DIR/../RelWithDebInfo/genmc}"
+GenMC="${GenMC:-$DIR/../RelWithDebInfo/bin/genmc}"
 
 source "${DIR}/terminal.sh"
 
@@ -286,11 +286,9 @@ do
     if test -n "${fastrun}"
     then
 	case "${dir##*/}" in
-	    "big1"|"big2"|"fib_bench"|"lastzero"|\
-		"pord-wr+wr-N-unord"|\
-		"pord-wr+wr-N-join-thr"|\
-		"pord-rd-wr+wr-N-cont")           continue;;
-		"big0"|"barrier2")         test -n "${bound_type}" && continue;;
+	    "spin-no-bisim")           continue;;
+	    "big1"|"big2"|"fib_bench"|"lastzero")           continue;;
+	    "big0"|"barrier2")         test -n "${bound_type}" && continue;;
 	    *)                                    		;;
 	esac
     fi

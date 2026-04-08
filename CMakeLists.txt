@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12...4.0)
-project(genmc VERSION 0.16.1 LANGUAGES CXX C)
+project(genmc VERSION 0.17.0 LANGUAGES CXX C)
 
 enable_testing()
 include(CTest)
@@ -13,11 +13,21 @@ set(PACKAGE_BUGREPORT "michalis.kokologiannakis@inf.ethz.ch")
 set(PACKAGE_URL "https://plv.mpi-sws.org/genmc")
 set(PACKAGE_VERSION "${CMAKE_PROJECT_VERSION}")
 set(INCLUDE_DIR "${CMAKE_INSTALL_PREFIX}/${PKG_INCLUDE_DIR}")
-set(SRC_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/include")
-set(RUST_DIR "${CMAKE_SOURCE_DIR}/rust")
+set(SRC_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/lli/runtime-include/c")
+set(RUST_DIR "${CMAKE_SOURCE_DIR}/lli/runtime-include/rust")
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-install(DIRECTORY include/ DESTINATION "${PKG_INCLUDE_DIR}" FILES_MATCHING PATTERN "*.h")
+# Executable output goes to bin/ to avoid conflict with genmc/ library directory
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+### Whether debugging infra is enabled
+option(GENMC_DEBUG "Enable GenMC debugging infrastructure (ON for Debug)" OFF)
+
+### Interface library for includes and compile features
+add_library(genmc_config_includes INTERFACE)
+target_compile_features(genmc_config_includes INTERFACE cxx_std_23)
+target_include_directories(genmc_config_includes INTERFACE ${CMAKE_BINARY_DIR}/include)
+
+install(DIRECTORY lli/runtime-include/c/ DESTINATION "${PKG_INCLUDE_DIR}" FILES_MATCHING PATTERN "*.h")
 
 ### Whether to build lli-based binary
 option(BUILD_LLI "Build lli-based executable (requires LLVM)" ON)
@@ -40,6 +50,16 @@ if(BUILD_LLI)
   execute_process(COMMAND "${LLVM_CONFIG_PATH}" --build-mode OUTPUT_VARIABLE LLVM_BUILDMODE
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 endif()
+
+### Whether to build lli-based binary
+option(EMIT_NA_LABELS "Whether to emit labels for non-atomic events" ON)
+if(BUILD_LLI AND NOT EMIT_NA_LABELS)
+  message(FATAL_ERROR "BUILD_LLI=ON requires EMIT_NA_LABELS=ON.")
+endif()
+target_compile_definitions(genmc_config_includes INTERFACE
+    $<$<OR:$<CONFIG:Debug>,$<BOOL:${GENMC_DEBUG}>>:ENABLE_GENMC_DEBUG>
+    EMIT_NA_LABELS=$<BOOL:${EMIT_NA_LABELS}>
+)
 
 ### Whether to build lli binary with Rust support
 option(ENABLE_RUST "Enable compiling using Rust inputs" OFF)
@@ -101,8 +121,32 @@ if(ENABLE_LINT)
   )
 endif()
 
-add_subdirectory(src)
+### Generate config headers (after all variables are set)
+# Bridge the cmake option name to the C++ preprocessor guard for configure_file.
+set(ENABLE_GENMC_DEBUG ${GENMC_DEBUG})
+# config.h: library-public flags (installed with the library)
+configure_file(${CMAKE_SOURCE_DIR}/config.h.in ${CMAKE_BINARY_DIR}/include/genmc/config.h)
+install(FILES ${CMAKE_BINARY_DIR}/include/genmc/config.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/genmc)
+# lli_config.h: tool-private paths and package info (not installed)
+configure_file(${CMAKE_SOURCE_DIR}/lli_config.h.in ${CMAKE_BINARY_DIR}/include/genmc/lli_config.h)
+
+### Component subdirectories
+add_subdirectory(genmc)                    # Core library (always built)
+
+option(BUILD_PASSES "Build LLVM instrumentation passes" ${BUILD_LLI})
+if(BUILD_PASSES OR BUILD_LLI)
+  add_subdirectory(passes)                 # LLVM passes (needs LLVM)
+endif()
+
+if(BUILD_LLI)
+  add_subdirectory(lli)                    # Interpreter frontend (needs LLVM)
+endif()
+
+option(BUILD_TESTS "Enable test building" OFF)
+if(BUILD_TESTS)
 add_subdirectory(tests)
+endif()
+
 OPTION(BUILD_DOC "Enable documentation building" OFF)
 if(BUILD_DOC)
   add_subdirectory(${CMAKE_SOURCE_DIR}/doc)

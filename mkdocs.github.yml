@@ -1,0 +1,4 @@
+INHERIT: mkdocs.base.yml
+site_url: https://mpi-sws.github.io/genmc
+repo_url: https://github.com/MPI-SWS/genmc
+edit_uri: edit/master/doc/manual/

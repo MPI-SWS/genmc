@@ -15,7 +15,7 @@ struct queue_node *new_node();
  ***********************************************************/
 
 struct queue_node {
-	int data;
+	_Atomic int data;
 	_Atomic(struct queue_node *) next;
 };
 
@@ -59,7 +59,7 @@ int queue_try_enq(struct queue *q, int data)
 		return -3; /* OOM */
 	}
 
-	node->data = data;
+	atomic_store_explicit(&node->data, data, memory_order_relaxed);
 	atomic_store_explicit(&node->next, NULL, memory_order_relaxed);
 
 	struct queue_node *tail = NULL;
@@ -89,7 +89,7 @@ int queue_try_deq(struct queue *q, int *ret_data)
 	if (atomic_compare_exchange_strong_explicit(&q->head, &head, node,
 						    memory_order_relaxed,
 						    memory_order_relaxed)) {
-		*ret_data = node->data;
+		*ret_data = atomic_load_explicit(&node->data, memory_order_relaxed);
 		return 0; /* CAVEAT: memory leak */
 	}
 

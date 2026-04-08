@@ -21,3 +21,6 @@ add_test(NAME run-relinche-spec
     COMMAND bash -c "${SCRIPT_DIR}/run-relinche-spec.sh > ${SCRIPT_DIR}/run-relinche-spec.log"
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
+
+# Unit tests
+add_subdirectory(unit)

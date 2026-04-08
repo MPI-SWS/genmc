@@ -1,0 +1,24 @@
+#ifndef GENMC_LLI_CONFIG_H
+#define GENMC_LLI_CONFIG_H
+
+/* Package information. */
+#define PACKAGE_NAME "@PACKAGE_NAME@"
+#define PACKAGE_URL "@PACKAGE_URL@"
+#define PACKAGE_VERSION "@PACKAGE_VERSION@"
+#define GIT_COMMIT "@GIT_COMMIT@"
+
+/* Include directories. */
+#define INCLUDE_DIR "@INCLUDE_DIR@"
+#define SRC_INCLUDE_DIR "@SRC_INCLUDE_DIR@"
+
+/* Rust related defines. */
+#define RUST_DIR "@RUST_DIR@"
+#cmakedefine RUSTC_PATH "@CONFIG_RUSTC_PATH@"
+#cmakedefine CARGO_PATH "@CONFIG_CARGO_PATH@"
+
+/* Information about linked LLVM (undefined if not linked). */
+#cmakedefine CLANGPATH "@CLANGPATH@"
+#cmakedefine LLVM_BUILDMODE "@LLVM_BUILDMODE@"
+#cmakedefine LLVM_VERSION "@LLVM_PACKAGE_VERSION@"
+
+#endif /* GENMC_LLI_CONFIG_H */

@@ -73,8 +73,14 @@ buf_ring_enqueue_bytes(struct buf_ring *br, void *buf, int nbytes)
 	int success;
 
 	do {
+#ifdef ENQUEUE_NONATOMIC
 		prod_head = br->br_prod_head;
 		cons_tail = br->br_cons_tail;
+#else
+		prod_head = __atomic_load_n(&br->br_prod_head, __ATOMIC_RELAXED);
+		cons_tail = __atomic_load_n(&br->br_cons_tail, __ATOMIC_RELAXED);
+#endif
+
 		prod_next = (prod_head + 1) & br->br_prod_mask;
 		if (prod_next == cons_tail) return (-1);
 		success = atomic_cmpset_int(&br->br_prod_head, prod_head,
@@ -88,12 +94,14 @@ buf_ring_enqueue_bytes(struct buf_ring *br, void *buf, int nbytes)
 
 #ifdef ENQUEUE_NONATOMIC
 	br->br_ring[prod_head] = buf;
+	await_while(br->br_prod_tail != prod_head) cpu_spinwait();
+	br->br_prod_tail = prod_next;
 #else
 	__atomic_store_n(&br->br_ring[prod_head], buf, __ATOMIC_RELAXED);
+	await_while(__atomic_load_n(&br->br_prod_tail, __ATOMIC_RELAXED) != prod_head)
+		cpu_spinwait();
+	__atomic_store_n(&br->br_prod_tail, prod_next, __ATOMIC_RELAXED);
 #endif
-	await_while (br->br_prod_tail != prod_head) cpu_spinwait();
-
-	br->br_prod_tail = prod_next;
 
 	return (0);
 }
@@ -114,8 +122,13 @@ buf_ring_dequeue_mc(struct buf_ring *br)
 	int success;
 
 	do {
+#ifdef DEQUEUE_NONATOMIC
 		cons_head = br->br_cons_head;
 		prod_tail = br->br_prod_tail;
+#else
+		cons_head = __atomic_load_n(&br->br_cons_head, __ATOMIC_RELAXED);
+		prod_tail = __atomic_load_n(&br->br_prod_tail, __ATOMIC_RELAXED);
+#endif
 		cons_next = (cons_head + 1) & br->br_cons_mask;
 		if (cons_head == prod_tail) return (NULL);
 		success = atomic_cmpset_int(&br->br_cons_head, cons_head,
@@ -125,15 +138,20 @@ buf_ring_dequeue_mc(struct buf_ring *br)
 
 #ifdef DEQUEUE_NONATOMIC
 	buf = br->br_ring[cons_head];
+	await_while (br->br_cons_tail != cons_head) cpu_spinwait();
 #else
 	buf = __atomic_load_n(&br->br_ring[cons_head], __ATOMIC_RELAXED);
+	await_while (__atomic_load_n(&br->br_cons_tail, __ATOMIC_RELAXED) != cons_head) cpu_spinwait();
 #endif
-	await_while (br->br_cons_tail != cons_head) cpu_spinwait();
 
 #ifndef DISABLE_DEQUEUE_BARRIER
 	__sync_synchronize();
 #endif
+#ifdef DEQUEUE_NONATOMIC
 	br->br_cons_tail = cons_next;
+#else
+	__atomic_store_n(&br->br_cons_tail, cons_next, __ATOMIC_RELAXED);
+#endif
 
 	return (buf);
 }

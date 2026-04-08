@@ -1,0 +1,11 @@
+node_modules/
+out/
+.vscode-test/
+*.vsix
+*.tgz
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.vscode/
+!.vscode/launch.json
+!.vscode/tasks.json

@@ -1,0 +1,231 @@
+/*
+ * GenMC -- Generic Model Checking.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-3.0.html.
+ *
+ * Author: Michalis Kokologiannakis <michalis@mpi-sws.org>
+ */
+
+/*** NOTE: No include guard ***/
+#ifndef FIRST_LABEL
+#define FIRST_LABEL(name, arg)
+#endif
+#ifndef LAST_LABEL
+#define LAST_LABEL(name, arg)
+#endif
+#ifndef HANDLE_LABEL
+#define HANDLE_LABEL(name)
+#endif
+
+/*
+ * Define handlers for label classes. These do not necessarily
+ * correspond to the label hierarchy, but rather to handlers for
+ * labels (e.g., in the driver).
+ *
+ * If a specific handler isn't defined, default to the more general ones.
+ * This ensures backward compatibility for other parts of the system.
+ */
+#ifndef HANDLE_LOAD_LABEL
+#define HANDLE_LOAD_LABEL(name) HANDLE_LABEL(name)
+#endif
+
+#ifndef HANDLE_CAS_LOAD_LABEL
+#define HANDLE_CAS_LOAD_LABEL(name) HANDLE_LOAD_LABEL(name)
+#endif
+
+#ifndef HANDLE_LOCK_LOAD_LABEL
+#define HANDLE_LOCK_LOAD_LABEL(name) HANDLE_CAS_LOAD_LABEL(name)
+#endif
+
+#ifndef HANDLE_FAI_LOAD_LABEL
+#define HANDLE_FAI_LOAD_LABEL(name) HANDLE_LOAD_LABEL(name)
+#endif
+
+#ifndef HANDLE_STORE_LABEL
+#define HANDLE_STORE_LABEL(name) HANDLE_LABEL(name)
+#endif
+
+#ifndef HANDLE_CAS_STORE_LABEL
+#define HANDLE_CAS_STORE_LABEL(name) HANDLE_STORE_LABEL(name)
+#endif
+
+#ifndef HANDLE_LOCK_STORE_LABEL
+#define HANDLE_LOCK_STORE_LABEL(name) HANDLE_CAS_STORE_LABEL(name)
+#endif
+
+#ifndef HANDLE_FAI_STORE_LABEL
+#define HANDLE_FAI_STORE_LABEL(name) HANDLE_STORE_LABEL(name)
+#endif
+
+#ifndef HANDLE_FENCE_LABEL
+#define HANDLE_FENCE_LABEL(name) HANDLE_LABEL(name)
+#endif
+
+/*
+ * Begin labels - these denote the start of a given thread.
+ * A start might be the initial label (for main) or a start event (for others).
+ * Every thread has to have such a label.
+ */
+FIRST_LABEL(ThreadStart, ThreadStart)
+HANDLE_LABEL(ThreadStart)
+HANDLE_LABEL(Init)
+LAST_LABEL(ThreadStart, Init)
+
+/*
+ * Terminator labels - these denote the termination of a thread.
+ * A termination might be a block label (denoting blockage), a kill label
+ * (denoting the reach of unrolling bound), or a finish label (normal termination).
+ * Block labels have different types, depending on the blockage.
+ */
+FIRST_LABEL(Terminator, SpinloopBlock)
+FIRST_LABEL(Block, SpinloopBlock)
+HANDLE_LABEL(SpinloopBlock)
+HANDLE_LABEL(FaiZNEBlock)
+HANDLE_LABEL(LockZNEBlock)
+HANDLE_LABEL(HelpedCASBlock)
+HANDLE_LABEL(ConfirmationBlock)
+HANDLE_LABEL(BarrierBlock)
+HANDLE_LABEL(ErrorBlock)
+HANDLE_LABEL(UserBlock)
+HANDLE_LABEL(JoinBlock)
+HANDLE_LABEL(ReadOptBlock)
+LAST_LABEL(Block, ReadOptBlock)
+
+HANDLE_LABEL(ThreadKill)
+HANDLE_LABEL(ThreadFinish)
+LAST_LABEL(Terminator, ThreadFinish)
+
+/*
+ * Memory operation labels - these denote operations that touch the memory subsystem.
+ * They are further divided into memory accesses (i.e., read and write labels,
+ * in turn either plain, CAS or FAI) and "lifecycle" operations (i.e., malloc/free).
+ */
+FIRST_LABEL(Mem, Read)
+
+FIRST_LABEL(MemAccess, Read)
+FIRST_LABEL(Read, Read)
+HANDLE_LOAD_LABEL(Read)
+
+HANDLE_LOAD_LABEL(BWaitRead)
+HANDLE_LOAD_LABEL(SpeculativeRead)
+HANDLE_LOAD_LABEL(ConfirmingRead)
+HANDLE_LOAD_LABEL(CondVarWaitRead)
+
+FIRST_LABEL(CasRead, CasRead)
+HANDLE_CAS_LOAD_LABEL(CasRead)
+
+FIRST_LABEL(LockCasRead, LockCasRead)
+HANDLE_LOCK_LOAD_LABEL(LockCasRead)
+HANDLE_LOCK_LOAD_LABEL(AbstractLockCasRead)
+LAST_LABEL(LockCasRead, AbstractLockCasRead)
+
+HANDLE_LOCK_LOAD_LABEL(TrylockCasRead)
+HANDLE_CAS_LOAD_LABEL(HelpedCasRead)
+HANDLE_CAS_LOAD_LABEL(ConfirmingCasRead)
+LAST_LABEL(CasRead, ConfirmingCasRead)
+
+FIRST_LABEL(FaiRead, FaiRead)
+HANDLE_FAI_LOAD_LABEL(FaiRead)
+HANDLE_FAI_LOAD_LABEL(NoRetFaiRead)
+HANDLE_FAI_LOAD_LABEL(BIncFaiRead)
+LAST_LABEL(FaiRead, BIncFaiRead)
+LAST_LABEL(Read, BIncFaiRead)
+
+FIRST_LABEL(Write, Write)
+HANDLE_STORE_LABEL(Write)
+
+HANDLE_STORE_LABEL(CondVarInitWrite)
+HANDLE_STORE_LABEL(CondVarSignalWrite)
+HANDLE_STORE_LABEL(CondVarBcastWrite)
+HANDLE_STORE_LABEL(CondVarDestroyWrite)
+
+FIRST_LABEL(UnlockWrite, UnlockWrite)
+HANDLE_STORE_LABEL(UnlockWrite)
+HANDLE_STORE_LABEL(AbstractUnlockWrite)
+LAST_LABEL(UnlockWrite, AbstractUnlockWrite)
+
+FIRST_LABEL(CasWrite, CasWrite)
+HANDLE_CAS_STORE_LABEL(CasWrite)
+
+FIRST_LABEL(LockCasWrite, LockCasWrite)
+HANDLE_LOCK_STORE_LABEL(LockCasWrite)
+HANDLE_LOCK_STORE_LABEL(AbstractLockCasWrite)
+LAST_LABEL(LockCasWrite, AbstractLockCasWrite)
+
+HANDLE_LOCK_STORE_LABEL(TrylockCasWrite)
+HANDLE_CAS_STORE_LABEL(HelpedCasWrite)
+HANDLE_CAS_STORE_LABEL(ConfirmingCasWrite)
+LAST_LABEL(CasWrite, ConfirmingCasWrite)
+
+FIRST_LABEL(FaiWrite, FaiWrite)
+HANDLE_FAI_STORE_LABEL(FaiWrite)
+HANDLE_FAI_STORE_LABEL(NoRetFaiWrite)
+HANDLE_FAI_STORE_LABEL(BIncFaiWrite)
+LAST_LABEL(FaiWrite, BIncFaiWrite)
+LAST_LABEL(Write, BIncFaiWrite)
+LAST_LABEL(MemAccess, BIncFaiWrite)
+
+FIRST_LABEL(MemLifecycle, Malloc)
+FIRST_LABEL(Malloc, Malloc)
+HANDLE_LABEL(Malloc)
+LAST_LABEL(Malloc, Malloc)
+
+FIRST_LABEL(Free, Free)
+HANDLE_LABEL(Free)
+HANDLE_LABEL(HpRetire)
+LAST_LABEL(Free, HpRetire)
+LAST_LABEL(MemLifecycle, HpRetire)
+
+LAST_LABEL(Mem, HpRetire)
+
+/*
+ * Fence labels - these represent a memory fence.
+ */
+FIRST_LABEL(Fence, Fence)
+HANDLE_FENCE_LABEL(Fence)
+LAST_LABEL(Fence, Fence)
+
+/*
+ * Other labels - other operations that GenMC needs to track.
+ */
+FIRST_LABEL(Other, ThreadCreate)
+HANDLE_LABEL(ThreadCreate)
+HANDLE_LABEL(ThreadJoin)
+HANDLE_LABEL(HpProtect)
+HANDLE_LABEL(HelpingCas)
+HANDLE_LABEL(Optional)
+HANDLE_LABEL(LoopBegin)
+HANDLE_LABEL(SpinStart)
+HANDLE_LABEL(FaiZNESpinEnd)
+HANDLE_LABEL(LockZNESpinEnd)
+HANDLE_LABEL(Empty)
+HANDLE_LABEL(MethodBegin)
+HANDLE_LABEL(MethodEnd)
+HANDLE_LABEL(Output)
+HANDLE_LABEL(Error)
+LAST_LABEL(Other, Error)
+
+#undef FIRST_LABEL
+#undef LAST_LABEL
+#undef HANDLE_LABEL
+#undef HANDLE_LOAD_LABEL
+#undef HANDLE_STORE_LABEL
+#undef HANDLE_CAS_LOAD_LABEL
+#undef HANDLE_LOCK_LOAD_LABEL
+#undef HANDLE_CAS_STORE_LABEL
+#undef HANDLE_LOCK_STORE_LABEL
+#undef HANDLE_FAI_LOAD_LABEL
+#undef HANDLE_FAI_STORE_LABEL
+#undef HANDLE_FENCE_LABEL

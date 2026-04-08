@@ -1,7 +1,7 @@
-GenMC: Generic Model Checking for C Programs
+GenMC: Generic Model Checker for Concurrent Programs
 =====
 
-GenMC is a stateless model checker for C programs that works on the
+GenMC is a stateless model checker for C/C++ and Rust programs that works on the
 level of LLVM Intermediate Representation.
 
 This repository mirrors an internal repository and is only updated periodically.
@@ -66,6 +66,20 @@ To run a subset of all the tests that come with the system to see if the system 
 
 		cd RelWithDebInfo && ctest -R fast-driver
 
+#### Enabling Rust support (experimental)
+
+To build GenMC with support for verifying Rust programs, you must set the `ENABLE_RUST` flag.
+Ensure that you compile GenMC against the same LLVM major version as the one used by your Rust installation (check with `rustc -vV`).
+
+Example configuration for Rust 1.69.0 (which uses LLVM 15):
+
+```bash
+cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+      -DCMAKE_PREFIX_PATH="/usr/lib/llvm-15/cmake;/root/.rustup/toolchains/1.69.0-x86_64-unknown-linux-gnu/bin" \
+      -DENABLE_RUST=ON \
+      -B RelWithDebInfo -S .
+```
+
 <a name="usage">Usage</a>
 -------------------------
 
@@ -77,7 +91,7 @@ To run a subset of all the tests that come with the system to see if the system 
 
 		./RelWithDebInfo/genmc [options] <file>
 
-* For more detailed usage examples please refer to the [manual](doc/manual.md).
+* For more detailed usage examples please refer to the [manual](doc/manual/index.md).
 
 <a name="troubleshooting">Troubleshooting</a>
 ---------------------------------------------
@@ -114,12 +128,11 @@ These parts are licensed under the University of Illinois/NCSA
 Open Source License as well as under Apache/MIT. Please see the LLVMLICENSE
 file for details on the University of Illinois/NCSA Open Source License.
 
-		src/Interpreter.h
-		src/Interpreter.cpp
-		src/Execution.cpp
-		src/ExternalFunctions.cpp
+		lli/Runtime/Interpreter.h
+		lli/Runtime/Execution.cpp
+		lli/Runtime/ExternalFunctions.cpp
 
-Also note that the `include` and `tests` directories contain files
+Also note that the `lli/runtime-include` and `tests` directories contain files
 that are copied from other codebases. Please inspect the source code for
 more information on the license of the respective files.
 

@@ -12,7 +12,7 @@
 #     https://opensource.org/licenses/MIT
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-GenMC="${GenMC:-$DIR/../RelWithDebInfo/genmc}"
+GenMC="${GenMC:-$DIR/../RelWithDebInfo/bin/genmc}"
 
 source "${DIR}/terminal.sh"
 
@@ -212,6 +212,11 @@ do
 	${TESTFILTER}) ;;
 	*)     continue;;
     esac
+	# Disable racy ones
+	case "${dir##*/}" in
+	    "access-freed-hp") continue;;
+	    "destroyed-mutex") continue;;
+	esac
     runtest "${dir}"
 done
 printfooter

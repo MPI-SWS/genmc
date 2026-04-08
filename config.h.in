@@ -1,31 +1,14 @@
 #ifndef GENMC_CONFIG_H
 #define GENMC_CONFIG_H
 
-/* FIXME: split up the config.h.in file. */
-
-/* Package information. */
-#define PACKAGE_NAME "@PACKAGE_NAME@"
+/* Bug report contact information. */
 #define PACKAGE_BUGREPORT "@PACKAGE_BUGREPORT@"
-#define PACKAGE_URL "@PACKAGE_URL@"
-#define PACKAGE_VERSION "@PACKAGE_VERSION@"
-#define GIT_COMMIT "@GIT_COMMIT@"
 
-/* Include directories. */
-#define INCLUDE_DIR "@INCLUDE_DIR@"
-#define SRC_INCLUDE_DIR "@SRC_INCLUDE_DIR@"
-
-/* Rust related defines. */
-#define RUST_DIR "@RUST_DIR@"
-#cmakedefine RUSTC_PATH "@CONFIG_RUSTC_PATH@"
-#cmakedefine CARGO_PATH "@CONFIG_CARGO_PATH@"
-
-/* Information about linked LLVM (undefined if not linked). */
-#cmakedefine CLANGPATH "@CLANGPATH@"
-#cmakedefine LLVM_BUILDMODE "@LLVM_BUILDMODE@"
-#cmakedefine LLVM_VERSION "@LLVM_PACKAGE_VERSION@"
-
-/* Enable/disable additional debug checks, prints and options. */
+/* Compile-time feature flags (also available as compile definitions via genmc_config_includes). */
 #cmakedefine BUILD_LLI
+#ifndef ENABLE_GENMC_DEBUG
 #cmakedefine ENABLE_GENMC_DEBUG
+#endif
+#cmakedefine01 EMIT_NA_LABELS
 
 #endif /* GENMC_CONFIG_H */
