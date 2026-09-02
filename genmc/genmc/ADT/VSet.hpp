@@ -49,25 +49,25 @@ public:
 	using const_iterator = typename Set::const_iterator;
 	using const_reverse_iterator = typename Set::const_reverse_iterator;
 
-	auto begin() const -> const_iterator { return vset_.begin(); };
-	auto end() const -> const_iterator { return vset_.end(); };
-	auto rbegin() const -> const_reverse_iterator { return vset_.rbegin(); };
-	auto rend() const -> const_reverse_iterator { return vset_.rend(); };
+	[[nodiscard]] auto begin() const -> const_iterator { return vset_.begin(); };
+	[[nodiscard]] auto end() const -> const_iterator { return vset_.end(); };
+	[[nodiscard]] auto rbegin() const -> const_reverse_iterator { return vset_.rbegin(); };
+	[[nodiscard]] auto rend() const -> const_reverse_iterator { return vset_.rend(); };
 
 	auto insert(const T &el) -> std::pair<const_iterator, bool>;
 	auto insert(const VSet<T> &s) -> int;
 	template <typename ITER> void insert(ITER begin, ITER end);
 
 	auto erase(const T &el) -> int;
-	auto erase(const VSet<T> &S) -> int;
+	auto erase(const VSet<T> &other) -> int;
 
 	/** Return the number of elements in the set */
-	auto count(const T &el) const -> int;
+	[[nodiscard]] auto count(const T &el) const -> int;
 
 	/** Returns whether the set contains EL */
-	auto contains(const T &el) const -> bool;
+	[[nodiscard]] auto contains(const T &el) const -> bool;
 
-	auto find(const T &el) const -> const_iterator;
+	[[nodiscard]] auto find(const T &el) const -> const_iterator;
 
 	[[nodiscard]] auto size() const -> size_t { return vset_.size(); };
 
@@ -78,19 +78,19 @@ public:
 	void clear() { vset_.clear(); };
 
 	/** Returns whether `THIS` is a subset of `S` */
-	auto subsetOf(const VSet<T> &s) const -> bool;
+	[[nodiscard]] auto subsetOf(const VSet<T> &s) const -> bool;
 
 	/** Returns whether the intersection of `THIS` with `S` is non-empty */
-	auto intersects(const VSet<T> &s) const -> bool;
+	[[nodiscard]] auto intersects(const VSet<T> &s) const -> bool;
 
 	/** Returns the intersection of `THIS` and `S` */
-	auto intersectWith(const VSet<T> &s) const -> VSet<T>;
+	[[nodiscard]] auto intersectWith(const VSet<T> &s) const -> VSet<T>;
 
 	/** Returns the set `THIS\S` */
-	auto diff(const VSet<T> &s) const -> VSet<T>;
+	[[nodiscard]] auto diff(const VSet<T> &s) const -> VSet<T>;
 
-	auto min() const -> const T & { return vset_[0]; };
-	auto max() const -> const T & { return vset_.back(); };
+	[[nodiscard]] auto min() const -> const T & { return vset_[0]; };
+	[[nodiscard]] auto max() const -> const T & { return vset_.back(); };
 
 	auto operator[](int i) const -> const T & { return vset_[i]; };
 
@@ -131,6 +131,7 @@ template <typename T> template <typename ITER> VSet<T>::VSet(ITER begin, ITER en
 
 template <typename T> VSet<T>::VSet(std::initializer_list<T> il)
 {
+	// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 	for (auto it = il.begin(); it != il.end(); ++it) {
 		if (size() && max() < *it) {
 			vset_.push_back(*it);
@@ -188,27 +189,27 @@ template <typename T> auto VSet<T>::insert(const VSet<T> &s) -> int
 	 * over the two sets in parallel
 	 */
 	auto count = 0;
-	auto a = begin();
-	auto b = s.begin();
-	while (a != end() && b != s.end()) {
-		/* If a[i] < b[i], maybe b[i] exists later in a */
-		if (*a < *b) {
-			++a;
-		} else if (*a == *b) { /* b[i] exists in a, skip */
-			++a;
-			++b;
-		} else { /* b[i] does not exist in a, increase count */
-			++b;
+	auto aIt = begin();
+	auto bIt = s.begin();
+	while (aIt != end() && bIt != s.end()) {
+		/* If aIt[i] < bIt[i], maybe bIt[i] exists later in aIt */
+		if (*aIt < *bIt) {
+			++aIt;
+		} else if (*aIt == *bIt) { /* bIt[i] exists in aIt, skip */
+			++aIt;
+			++bIt;
+		} else { /* bIt[i] does not exist in aIt, increase count */
+			++bIt;
 			++count;
 		}
 	}
 
 	/*
-	 * If there are still elements in b that have not been processed,
-	 * these should all should be inserted in a
+	 * If there are still elements in bIt that have not been processed,
+	 * these should all should be inserted in aIt
 	 */
-	if (b != s.end())
-		count += s.end() - b;
+	if (bIt != s.end())
+		count += s.end() - bIt;
 
 	if (count == 0)
 		return 0;
@@ -219,15 +220,15 @@ template <typename T> auto VSet<T>::insert(const VSet<T> &s) -> int
 	 * because we need to resize a, and this would invalidate them.
 	 */
 
-	/* Keep the index of the last elements of a and b before resizing */
+	/* Keep the index of the last elements of aIt and bIt before resizing */
 	int idxA = size() - 1;
 	int idxB = s.size() - 1;
-	vset_.resize(vset_.size() + count, vset_[0]); /* a is not empty */
+	vset_.resize(vset_.size() + count, vset_[0]); /* aIt is not empty */
 
-	/* Iterate over the new a, and move fill each position appropriately */
+	/* Iterate over the new aIt, and move fill each position appropriately */
 	for (int i = size() - 1; i >= 0; i--) {
 		if (idxA < 0 || (idxB >= 0 && (*this)[idxA] < s[idxB])) {
-			/* No more elements in a, or a[idxA] < b[idxB] */
+			/* No more elements in aIt, or aIt[idxA] < bIt[idxB] */
 			vset_[i] = s[idxB];
 			--idxB;
 		} else if (idxA >= 0 && idxB >= 0 && (*this)[idxA] == s[idxB]) {
@@ -236,7 +237,7 @@ template <typename T> auto VSet<T>::insert(const VSet<T> &s) -> int
 			--idxA;
 			--idxB;
 		} else {
-			/* No more elements in b, or a[i] > b[i] */
+			/* No more elements in bIt, or aIt[i] > bIt[i] */
 			vset_[i] = (*this)[idxA];
 			--idxA;
 		}
@@ -267,46 +268,46 @@ template <typename T> auto VSet<T>::erase(const T &el) -> int
 }
 
 /* A slightly optimized function for bulk deletion */
-template <typename T> auto VSet<T>::erase(const VSet<T> &s) -> int
+template <typename T> auto VSet<T>::erase(const VSet<T> &other) -> int
 {
-	if (empty() || s.empty())
+	if (empty() || other.empty())
 		return 0;
 
 	auto erased = 0;
-	auto a = 0;    /* index in this */
-	auto b = 0;    /* index in other */
-	auto aMov = 0; /* Next position of this set to be filled */
+	auto aIdx = 0U; /* index in this */
+	auto bIdx = 0U; /* index in other */
+	auto aMov = 0U; /* Next position of this set to be filled */
 
-	/* While iterating over the two sets, fill a appropriately */
-	while (a < size() && b < s.size()) {
+	/* While iterating over the two sets, fill aIdx appropriately */
+	while (aIdx < size() && bIdx < other.size()) {
 		/*
-		 * This element of a should be erased. aMov is left unchanged; *
+		 * This element of aIdx should be erased. aMov is left unchanged; *
 		 * it is pointing to the next position that needs to be filled.
-		 * We will iterate over a and b to find the appropriate element
-		 * to fill *aMov (this should be an element of a)
+		 * We will iterate over aIdx and bIdx to find the appropriate element
+		 * to fill *aMov (this should be an element of aIdx)
 		 */
-		if (vset_[a] == s.vset_[b]) {
-			++a;
-			++b;
+		if (vset_[aIdx] == other.vset_[bIdx]) {
+			++aIdx;
+			++bIdx;
 			++erased;
-		} else if (vset_[a] < s.vset_[b]) {
-			/* This element of a should remain in the set */
-			if (aMov != a)
-				vset_[aMov] = vset_[a];
-			++a;
+		} else if (vset_[aIdx] < other.vset_[bIdx]) {
+			/* This element of aIdx should remain in the set */
+			if (aMov != aIdx)
+				vset_[aMov] = vset_[aIdx];
+			++aIdx;
 			++aMov;
 		} else {
-			/* *a > *b, we need to check if *a appears later in b */
-			++b;
+			/* *aIdx > *bIdx, we need to check if *aIdx appears later in bIdx */
+			++bIdx;
 		}
 	}
 
 	/* If we stopped whilst trying to find the next element for aMov... */
-	if (aMov != a) {
-		/* If a is not over copy the remaining elements */
-		while (a < size()) {
-			vset_[aMov] = vset_[a];
-			++a;
+	if (aMov != aIdx) {
+		/* If aIdx is not over copy the remaining elements */
+		while (aIdx < size()) {
+			vset_[aMov] = vset_[aIdx];
+			++aIdx;
 			++aMov;
 		}
 		/* Resize the vector appropriately */
@@ -320,21 +321,21 @@ template <typename T> auto VSet<T>::subsetOf(const VSet<T> &s) const -> bool
 	if (size() > s.size())
 		return false;
 
-	auto a = begin();
-	auto b = s.begin();
-	while (a != end()) {
-		/* If the remaining elements of a are more than those of b */
-		if ((end() - a) > (s.end() - b))
+	auto aIt = begin();
+	auto bIt = s.begin();
+	while (aIt != end()) {
+		/* If the remaining elements of aIt are more than those of bIt */
+		if ((end() - aIt) > (s.end() - bIt))
 			return false;
-		/* If a contains an element not in b */
-		if (*a < *b)
+		/* If aIt contains an element not in bIt */
+		if (*aIt < *bIt)
 			return false;
 
-		if (*a == *b) {
-			++a;
-			++b;
+		if (*aIt == *bIt) {
+			++aIt;
+			++bIt;
 		} else {
-			++b; /* Need to check further in b */
+			++bIt; /* Need to check further in bIt */
 		}
 	}
 	return true;
@@ -342,16 +343,16 @@ template <typename T> auto VSet<T>::subsetOf(const VSet<T> &s) const -> bool
 
 template <typename T> auto VSet<T>::intersects(const VSet<T> &s) const -> bool
 {
-	auto a = begin();
-	auto b = s.begin();
-	while (a != end() && b != s.end()) {
-		if (*a == *b)
+	auto aIt = begin();
+	auto bIt = s.begin();
+	while (aIt != end() && bIt != s.end()) {
+		if (*aIt == *bIt)
 			return true;
 
-		if (*a < *b)
-			++a;
+		if (*aIt < *bIt)
+			++aIt;
 		else
-			++b;
+			++bIt;
 	}
 	return false;
 }
@@ -360,17 +361,17 @@ template <typename T> auto VSet<T>::intersectWith(const VSet<T> &s) const -> VSe
 {
 	VSet<T> result;
 
-	auto a = begin();
-	auto b = s.begin();
-	while (a != end() && b != s.end()) {
-		if (*a == *b) {
-			result.insert(*a);
-			++a;
-			++b;
-		} else if (*a < *b) {
-			++a;
+	auto aIt = begin();
+	auto bIt = s.begin();
+	while (aIt != end() && bIt != s.end()) {
+		if (*aIt == *bIt) {
+			result.insert(*aIt);
+			++aIt;
+			++bIt;
+		} else if (*aIt < *bIt) {
+			++aIt;
 		} else {
-			++b;
+			++bIt;
 		}
 	}
 	return result;

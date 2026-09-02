@@ -100,7 +100,7 @@ inline maximal_range maximals(const View &v)
 }
 
 #define FOREACH_MAXIMAL(result, graph, view)                                                       \
-	for (auto i = 0u; i < view.size(); i++)                                                    \
+	for (auto i = 0; i < view.size(); i++)                                                     \
 		if (auto *result = graph.getEventLabel(Event(i, view.getMax(i))); true)
 
 #endif /*__MAXIMAL_ITERATOR_HPP__ */

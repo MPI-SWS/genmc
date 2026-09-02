@@ -27,7 +27,7 @@ public:
 	auto run(Function &F, FunctionAnalysisManager &FAM) -> Result;
 
 	/* Returns all bisimilar points in a given function */
-	auto getFuncBsPoints(Function &F) -> Result { return funcBsPoints_; }
+	auto getFuncBsPoints(Function & /*F*/) -> Result { return funcBsPoints_; }
 
 private:
 	friend AnalysisInfoMixin<BisimilarityAnalysis>;
@@ -46,6 +46,7 @@ public:
 	auto run(Function &F, FunctionAnalysisManager &FAM) -> PreservedAnalyses;
 
 private:
+	// NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
 	std::vector<BisimilarityAnalysis::BisimilarityPoint> &bsps_;
 };
 

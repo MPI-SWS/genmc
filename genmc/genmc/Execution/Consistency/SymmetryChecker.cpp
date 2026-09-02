@@ -14,6 +14,11 @@
 #include "genmc/Execution/Consistency/SymmetryChecker.hpp"
 #include "genmc/Execution/EventLabel.hpp"
 #include "genmc/Execution/ExecutionGraph.hpp"
+#include "genmc/Support/Cast.hpp"
+#include "genmc/Support/Error.hpp"
+
+#include <algorithm>
+#include <vector>
 
 static auto calcLargestSymmPrefixBeforeSR(int symm, const EventLabel *lab) -> int
 {
@@ -22,7 +27,7 @@ static auto calcLargestSymmPrefixBeforeSR(int symm, const EventLabel *lab) -> in
 	if (symm < 0 || symm >= g.getNumThreads())
 		return -1;
 
-	auto limit = std::min((long)lab->getIndex(), (long)g.getThreadSize(symm) - 1);
+	auto limit = std::min(lab->getIndex(), g.getThreadSize(symm) - 1);
 	for (auto j = 0; j < limit; j++) {
 		const auto *labA = g.getEventLabel(Event(symm, j));
 		const auto *labB = g.getEventLabel(Event(lab->getThread(), j));
@@ -42,18 +47,19 @@ static auto calcLargestSymmPrefixBeforeSR(int symm, const EventLabel *lab) -> in
 	return limit;
 }
 
+// now but designed for future state
 auto SymmetryChecker::sharePrefixSR(int symm, const EventLabel *lab) const -> bool
 {
 	return calcLargestSymmPrefixBeforeSR(symm, lab) == lab->getIndex();
 }
 
-auto SymmetryChecker::isEcoBefore(const EventLabel *lab, int tid) const -> bool
+auto SymmetryChecker::isEcoBefore(const EventLabel *lab, int symm) const -> bool
 {
 	const auto &g = *lab->getParent();
 	if (!genmc::isa<MemAccessLabel>(lab))
 		return false;
 
-	auto symmPos = Event(tid, lab->getIndex());
+	auto symmPos = Event(symm, lab->getIndex());
 	// if (auto *wLab = rf_pred(g, lab); wLab) {
 	// 	return wLab.getPos() == symmPos;
 	// }))
@@ -75,7 +81,7 @@ auto SymmetryChecker::isEcoBefore(const EventLabel *lab, int tid) const -> bool
 	return false;
 }
 
-static auto isEcoSymmetric(const EventLabel *lab, int tid) -> bool
+[[maybe_unused]] static auto isEcoSymmetric(const EventLabel *lab, int tid) -> bool
 {
 	const auto &g = *lab->getParent();
 

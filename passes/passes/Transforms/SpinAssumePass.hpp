@@ -25,7 +25,7 @@ class SpinAssumePass : public PassInfoMixin<SpinAssumePass> {
 public:
 	SpinAssumePass(bool markStarts = false) : markStarts_(markStarts) {}
 
-	auto run(Module &M, ModuleAnalysisManager &MAM) -> PreservedAnalyses;
+	auto run(Module &M, ModuleAnalysisManager &MAM) const -> PreservedAnalyses;
 
 private:
 	/** Whether we should mark spinloop starts */

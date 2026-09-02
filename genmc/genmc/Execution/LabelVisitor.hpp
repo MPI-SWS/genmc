@@ -14,11 +14,12 @@
 #ifndef GENMC_LABEL_VISITOR_HPP
 #define GENMC_LABEL_VISITOR_HPP
 
-#include "genmc/Execution/EventLabel.hpp"
+#include "genmc/Execution/EventLabel.hpp" // NOLINT(misc-header-include-cycle)
 #include "genmc/Support/Error.hpp"
 
 #include <format>
 #include <sstream>
+#include <utility>
 
 /*******************************************************************************
  **                           LabelVisitor Class
@@ -35,11 +36,13 @@ public:
 	void visit(const EventLabel &lab)
 	{
 		switch (lab.getKind()) {
+// NOLINTBEGIN(cppcoreguidelines-pro-type-static-cast-downcast)
 #define HANDLE_LABEL(NAME)                                                                         \
 	case EventLabel::NAME:                                                                     \
 		return static_cast<Subclass *>(this)->visit##NAME##Label(                          \
 			static_cast<const NAME##Label &>(lab));
 #include "genmc/Execution/EventLabel.def"
+		// NOLINTEND(cppcoreguidelines-pro-type-static-cast-downcast)
 		default:
 			UNREACHABLE();
 		}
@@ -242,7 +245,7 @@ public:
 	 * If no one else could handle this particular instruction,
 	 * call the generic handler
 	 */
-	void visitEventLabel(const EventLabel &lab) { return; }
+	void visitEventLabel(const EventLabel & /*lab*/) {}
 };
 
 /*******************************************************************************
@@ -262,11 +265,11 @@ public:
 	LabelPrinterBase()
 		: fmtFun([&](const MemAccessLabel &lab) {
 			  return std::format("{}", lab.getAddr());
-		  }),
-		  valFun()
+		  })
+
 	{}
 	LabelPrinterBase(FmterT addrFmter, GetterT readValGetter)
-		: fmtFun(addrFmter), valFun(readValGetter)
+		: fmtFun(std::move(addrFmter)), valFun(std::move(readValGetter))
 	{}
 
 	void printVal(const SVal &val) { out << val.get(); }
@@ -349,8 +352,11 @@ public:
 	}
 
 protected:
+	// NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
 	std::ostringstream out;
+	// NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
 	FmterT fmtFun;
+	// NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
 	GetterT valFun;
 };
 
@@ -361,10 +367,12 @@ public:
 	using FmterT = LabelPrinterBase<LabelPrinter>::FmterT;
 	using GetterT = LabelPrinterBase<LabelPrinter>::GetterT;
 
-	LabelPrinter() : LabelPrinterBase() {};
-	LabelPrinter(FmterT fmter, GetterT getter) : LabelPrinterBase(fmter, getter) {}
+	LabelPrinter() = default;
+	LabelPrinter(FmterT fmter, GetterT getter)
+		: LabelPrinterBase(std::move(fmter), std::move(getter))
+	{}
 
-	std::string toString(const EventLabel &lab)
+	auto toString(const EventLabel &lab) -> std::string
 	{
 		out.str("");
 		out.clear();
@@ -398,10 +406,12 @@ public:
 	using FmterT = LabelPrinterBase<DotPrinter>::FmterT;
 	using GetterT = LabelPrinterBase<DotPrinter>::GetterT;
 
-	DotPrinter() : LabelPrinterBase() {};
-	DotPrinter(FmterT fmter, GetterT getter) : LabelPrinterBase(fmter, getter) {}
+	DotPrinter() = default;
+	DotPrinter(FmterT fmter, GetterT getter)
+		: LabelPrinterBase(std::move(fmter), std::move(getter))
+	{}
 
-	std::string toString(const EventLabel &lab)
+	auto toString(const EventLabel &lab) -> std::string
 	{
 		out.str("");
 		out.clear();

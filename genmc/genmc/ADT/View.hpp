@@ -18,11 +18,14 @@
 #include "genmc/ADT/SmallVector.hpp"
 #include "genmc/ADT/VectorClock.hpp"
 #include "genmc/Execution/Event.hpp"
+#include "genmc/Support/Cast.hpp"
+#include "genmc/Support/Error.hpp"
 
 #include <format>
 #include <ranges>
+#include <utility>
 
-class AdaptiveView;
+struct AdaptiveView;
 
 namespace detail {
 /**
@@ -43,7 +46,11 @@ public:
 	~ViewBase() = default;
 
 	/** Returns the size of this view (i.e., number of threads seen) */
-	[[nodiscard]] auto size() const -> unsigned int { return view_.size(); }
+	[[nodiscard]] auto size() const -> int
+	{
+		VERIFY(view_.size() <= static_cast<size_t>(std::numeric_limits<int>::max()));
+		return static_cast<int>(view_.size());
+	}
 
 	/** Returns true if this view is empty */
 	[[nodiscard]] auto empty() const -> bool { return view_.empty(); }
@@ -60,13 +67,14 @@ public:
 		if (v.size() > size())
 			return false;
 
-		const int *A = view_.data();
-		const int *B = v.view_.data();
-		size_t n = v.size();
-		size_t i = 0;
+		const int *lhsData = view_.data();
+		const int *rhsData = v.view_.data();
+		const auto size = v.size();
+		auto i = 0;
 
-		for (; i < n; i++) {
-			if (B[i] > A[i])
+		for (; i < size; i++) {
+			// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			if (rhsData[i] > lhsData[i])
 				return false;
 		}
 		return true;
@@ -85,7 +93,7 @@ public:
 
 	[[nodiscard]] auto getMax(int thread) const -> int
 	{
-		if (thread < (int)view_.size())
+		if (std::cmp_less(thread, view_.size()))
 			return view_[thread];
 		return 0;
 	}
@@ -169,10 +177,10 @@ public:
 	~View() override = default;
 
 	/** Returns the size of this view (i.e., number of threads seen) */
-	[[nodiscard]] auto size() const -> unsigned int override
+	[[nodiscard]] auto size() const -> int override
 	{
 		auto base_size = base_ ? base_->size() : 0;
-		auto diff_size = diff_.isInitializer() ? 0 : diff_.thread + 1U;
+		auto diff_size = diff_.isInitializer() ? 0 : diff_.thread + 1;
 		return std::max(base_size, diff_size);
 	}
 
@@ -200,7 +208,7 @@ public:
 	/** Returns true if es are all contained in the clock */
 	template <std::ranges::input_range R> [[nodiscard]] auto contains(const R &es) const -> bool
 	{
-		return std::ranges::all_of(es, [this](auto &&e) { return contains(e); });
+		return std::ranges::all_of(es, [this](auto &&e) { return this->contains(e); });
 	}
 
 	[[nodiscard]] auto contains(const AdaptiveView &me) const -> bool;
@@ -243,7 +251,7 @@ public:
 			return true;
 
 		auto sz = std::max(size(), rhs.size());
-		for (auto i = 0; i < (int)sz; i++) {
+		for (auto i = 0; std::cmp_less(i, sz); i++) {
 			if (getMax(i) != rhs.getMax(i))
 				return false;
 		}

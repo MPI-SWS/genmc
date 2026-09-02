@@ -14,7 +14,12 @@
 #include "VectorClock.hpp"
 #include "genmc/ADT/DepView.hpp"
 #include "genmc/ADT/View.hpp"
+#include "genmc/Execution/Event.hpp"
 #include "genmc/Execution/EventLabel.hpp"
+#include "genmc/Support/Cast.hpp"
+#include "genmc/Support/Error.hpp"
+
+#include <memory>
 
 auto VectorClock::contains(const EventLabel *lab) const -> bool { return contains(lab->getPos()); }
 
@@ -22,9 +27,9 @@ auto VectorClock::clone() const -> std::unique_ptr<VectorClock>
 {
 	switch (getKind()) {
 	case VC_View:
-		return std::make_unique<View>(*static_cast<const View *>(this));
+		return std::make_unique<View>(*genmc::cast<View>(this));
 	case VC_DepView:
-		return std::make_unique<DepView>(*static_cast<const DepView *>(this));
+		return std::make_unique<DepView>(*genmc::cast<DepView>(this));
 	}
 	UNREACHABLE();
 }

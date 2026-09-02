@@ -13,8 +13,13 @@
 
 #include "genmc/Support/Error.hpp"
 
+#include <cctype>
 #include <cstdlib>
+#include <format>
 #include <iostream>
+#include <source_location>
+#include <string>
+#include <string_view>
 #include <unistd.h>
 
 namespace genmc::detail {
@@ -38,7 +43,7 @@ static void debuggable_exit()
 
 	while (true) {
 		std::cerr << "\n(C)ontinue, (A)bort, (S)top/Trap, (G)DB\n" << "> " << std::flush;
-		char result;
+		char result = 0;
 		if (!(std::cin >> result))
 			std::abort();
 
@@ -54,9 +59,9 @@ static void debuggable_exit()
 			// Note: may fail silently if ptrace is restricted
 			// (Yama LSM, /proc/sys/kernel/yama/ptrace_scope=1).
 			// Use 'S' (trap) as a workaround when already in a debugger.
-			std::string cmd = std::format("gdb -p {}", getpid());
+			const std::string cmd = std::format("gdb -p {}", getpid());
 			std::cerr << "Executing: " << cmd << " ...\n";
-			if (std::system(cmd.c_str()) != 0) {
+			if (std::system(cmd.c_str()) != 0) { // NOLINT(concurrency-mt-unsafe)
 				std::cerr << "Failed to start gdb.\n";
 			}
 			return;

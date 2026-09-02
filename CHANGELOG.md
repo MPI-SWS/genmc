@@ -8,7 +8,31 @@ released.
 ## [Unreleased]
 
 - Merge of MIXER [POPL'25] into mainline GenMC
-- Documentation for LLVM-based Rust frontend
+
+
+## [0.18.0] - 2026.09.02
+
+### Added
+
+- Support for weak CASes
+- Support for the failure memory ordering of CASes
+- Support for LLVM 21 and 22
+- More build options, including the ability to link against tcmalloc (see `GENMC_TCMALLOC`)
+
+### Fixes
+
+- Better mixed-size access detection
+- Various bug fixes
+- Minor performance improvements
+
+### Changes
+
+- Temporary IR files now honor `TMPDIR`
+- Formatting changes
+
+### Removed
+
+- Support for LLVM < 19
 
 
 ## [0.17.0] - 2026.04.08

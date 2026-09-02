@@ -20,7 +20,7 @@
 
 namespace llvm {
 class Value;
-}
+} // namespace llvm
 
 /**
  * Contains (unique) identification information for some of the module's

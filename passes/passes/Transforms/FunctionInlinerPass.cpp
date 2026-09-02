@@ -13,12 +13,21 @@
 
 #include "FunctionInlinerPass.hpp"
 #include "passes/InternalFunctions.hpp"
+
 #include <llvm/ADT/SCCIterator.h>
 #include <llvm/Analysis/CallGraph.h>
 #include <llvm/Analysis/PostDominators.h>
+#include <llvm/Config/llvm-config.h>
 #include <llvm/IR/InstIterator.h>
+#include <llvm/IR/InstrTypes.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
+#include <llvm/Support/Casting.h>
 #include <llvm/Transforms/Utils/Cloning.h>
+
+#include <algorithm>
+#include <vector>
 
 using namespace llvm;
 
@@ -43,15 +52,11 @@ static auto isInlinable(CallGraph &CG, Function &F) -> bool
 	return !F.isDeclaration() && !isInternalFunction(F.getName().str()) && !isRecursive(CG, F);
 }
 
-static auto inlineCall(CallBase *cb) -> bool
+static auto inlineCall(CallBase *callBase) -> bool
 {
 	llvm::InlineFunctionInfo ifi;
 
-#if LLVM_VERSION_MAJOR >= 11
-	return InlineFunction(*cb, ifi).isSuccess();
-#else
-	return InlineFunction(*cb, ifi);
-#endif
+	return InlineFunction(*callBase, ifi).isSuccess();
 }
 
 static auto inlineFunction(Module &M, Function *toInline) -> bool
@@ -65,9 +70,9 @@ static auto inlineFunction(Module &M, Function *toInline) -> bool
 			if (!isa<InvokeInst>(&iit) && !isa<CallInst>(&iit))
 				continue;
 
-			auto *cb = dyn_cast<CallBase>(&iit);
-			if (cb->getCalledFunction() == toInline)
-				calls.push_back(cb);
+			auto *callBase = cast<CallBase>(&iit);
+			if (callBase->getCalledFunction() == toInline)
+				calls.push_back(callBase);
 		}
 	}
 
@@ -78,7 +83,7 @@ static auto inlineFunction(Module &M, Function *toInline) -> bool
 	return changed;
 }
 
-auto FunctionInlinerPass::run(Module &M, ModuleAnalysisManager &AM) -> PreservedAnalyses
+auto FunctionInlinerPass::run(Module &M, ModuleAnalysisManager & /*AM*/) -> PreservedAnalyses
 {
 	CallGraph CG(M);
 

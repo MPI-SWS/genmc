@@ -14,8 +14,8 @@
 #ifndef GENMC_DEP_EXECUTION_GRAPH_HPP
 #define GENMC_DEP_EXECUTION_GRAPH_HPP
 
-#include "genmc/ADT/DepView.hpp"
 #include "ExecutionGraph.hpp"
+#include "genmc/ADT/DepView.hpp"
 
 /*******************************************************************************
  **                        DepExecutionGraph Class
@@ -29,16 +29,17 @@
 class DepExecutionGraph : public ExecutionGraph {
 
 public:
-	DepExecutionGraph(ExecutionGraph::Config cfg) : ExecutionGraph(std::move(cfg))
+	DepExecutionGraph(ExecutionGraph::Config cfg) : ExecutionGraph(cfg)
 	{
 		getEventLabel(Event::getInit())->setPrefixView(std::make_unique<DepView>());
 	}
 
-	std::unique_ptr<VectorClock> getViewFromStamp(Stamp) const override;
+	auto getViewFromStamp(Stamp /*st*/ /*stamp*/) const
+		-> std::unique_ptr<VectorClock> override;
 
 	void cutToStamp(Stamp st) override;
 
-	std::unique_ptr<ExecutionGraph> getCopyUpTo(const VectorClock &v) const override;
+	auto getCopyUpTo(const VectorClock &v) const -> std::unique_ptr<ExecutionGraph> override;
 };
 
 #endif /* GENMC_DEP_EXECUTION_GRAPH_HPP */

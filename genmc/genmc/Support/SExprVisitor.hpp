@@ -47,11 +47,11 @@ public:
 		return static_cast<Subclass<T> *>(this)->visit##NAME##Expr(                        \
 			static_cast<NAME##Expr<T> &>(e));
 
-	RetTy visit(SExpr<T> *e) { return visit(*e); }
-	RetTy visit(const std::unique_ptr<SExpr<T>> &e) { return visit(*e); }
-	RetTy visit(const std::shared_ptr<SExpr<T>> &e) { return visit(*e); }
+	auto visit(SExpr<T> *e) -> RetTy { return visit(*e); }
+	auto visit(const std::unique_ptr<SExpr<T>> &e) -> RetTy { return visit(*e); }
+	auto visit(const std::shared_ptr<SExpr<T>> &e) -> RetTy { return visit(*e); }
 
-	RetTy visit(SExpr<T> &e)
+	auto visit(SExpr<T> &e) -> RetTy
 	{
 		switch (e.getKind()) {
 			VISIT_EXPR(Concrete);
@@ -96,55 +96,55 @@ public:
 #define DELEGATE_EXPR(TO_CLASS)                                                                    \
 	return static_cast<Subclass<T> *>(this)->visit##TO_CLASS(static_cast<TO_CLASS<T> &>(e));
 
-	RetTy visitConcreteExpr(ConcreteExpr<T> &e) { DELEGATE_EXPR(SExpr); }
-	RetTy visitRegisterExpr(RegisterExpr<T> &e) { DELEGATE_EXPR(SExpr); }
-	RetTy visitSelectExpr(SelectExpr<T> &e) { DELEGATE_EXPR(SExpr); }
+	auto visitConcreteExpr(ConcreteExpr<T> &e) -> RetTy { DELEGATE_EXPR(SExpr); }
+	auto visitRegisterExpr(RegisterExpr<T> &e) -> RetTy { DELEGATE_EXPR(SExpr); }
+	auto visitSelectExpr(SelectExpr<T> &e) -> RetTy { DELEGATE_EXPR(SExpr); }
 	// RetTy visitConcatExpr(ConcatExpr<T> &e) { DELEGATE_EXPR(SExpr); }
 	// RetTy visitExtractExpr(ExtractExpr<T> &e) { DELEGATE_EXPR(SExpr); }
-	RetTy visitConjunctionExpr(ConjunctionExpr<T> &e) { DELEGATE_EXPR(LogicalExpr); }
-	RetTy visitDisjunctionExpr(DisjunctionExpr<T> &e) { DELEGATE_EXPR(LogicalExpr); }
-	RetTy visitZExtExpr(ZExtExpr<T> &e) { DELEGATE_EXPR(CastExpr); }
-	RetTy visitSExtExpr(SExtExpr<T> &e) { DELEGATE_EXPR(CastExpr); }
-	RetTy visitTruncExpr(TruncExpr<T> &e) { DELEGATE_EXPR(CastExpr); }
-	RetTy visitNotExpr(NotExpr<T> &e) { DELEGATE_EXPR(SExpr); }
-	RetTy visitAddExpr(AddExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
-	RetTy visitSubExpr(SubExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
-	RetTy visitMulExpr(MulExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
-	RetTy visitUDivExpr(UDivExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
-	RetTy visitSDivExpr(SDivExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
-	RetTy visitURemExpr(URemExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
-	RetTy visitSRemExpr(SRemExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
-	RetTy visitAndExpr(AndExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
-	RetTy visitOrExpr(OrExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
-	RetTy visitXorExpr(XorExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
-	RetTy visitShlExpr(ShlExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
-	RetTy visitLShrExpr(LShrExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
-	RetTy visitAShrExpr(AShrExpr<T> &e) { DELEGATE_EXPR(BinaryExpr); }
-	RetTy visitEqExpr(EqExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
-	RetTy visitNeExpr(NeExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
-	RetTy visitUltExpr(UltExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
-	RetTy visitUleExpr(UleExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
-	RetTy visitUgtExpr(UgtExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
-	RetTy visitUgeExpr(UgeExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
-	RetTy visitSltExpr(SltExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
-	RetTy visitSleExpr(SleExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
-	RetTy visitSgtExpr(SgtExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
-	RetTy visitSgeExpr(SgeExpr<T> &e) { DELEGATE_EXPR(CmpExpr); }
+	auto visitConjunctionExpr(ConjunctionExpr<T> &e) -> RetTy { DELEGATE_EXPR(LogicalExpr); }
+	auto visitDisjunctionExpr(DisjunctionExpr<T> &e) -> RetTy { DELEGATE_EXPR(LogicalExpr); }
+	auto visitZExtExpr(ZExtExpr<T> &e) -> RetTy { DELEGATE_EXPR(CastExpr); }
+	auto visitSExtExpr(SExtExpr<T> &e) -> RetTy { DELEGATE_EXPR(CastExpr); }
+	auto visitTruncExpr(TruncExpr<T> &e) -> RetTy { DELEGATE_EXPR(CastExpr); }
+	auto visitNotExpr(NotExpr<T> &e) -> RetTy { DELEGATE_EXPR(SExpr); }
+	auto visitAddExpr(AddExpr<T> &e) -> RetTy { DELEGATE_EXPR(BinaryExpr); }
+	auto visitSubExpr(SubExpr<T> &e) -> RetTy { DELEGATE_EXPR(BinaryExpr); }
+	auto visitMulExpr(MulExpr<T> &e) -> RetTy { DELEGATE_EXPR(BinaryExpr); }
+	auto visitUDivExpr(UDivExpr<T> &e) -> RetTy { DELEGATE_EXPR(BinaryExpr); }
+	auto visitSDivExpr(SDivExpr<T> &e) -> RetTy { DELEGATE_EXPR(BinaryExpr); }
+	auto visitURemExpr(URemExpr<T> &e) -> RetTy { DELEGATE_EXPR(BinaryExpr); }
+	auto visitSRemExpr(SRemExpr<T> &e) -> RetTy { DELEGATE_EXPR(BinaryExpr); }
+	auto visitAndExpr(AndExpr<T> &e) -> RetTy { DELEGATE_EXPR(BinaryExpr); }
+	auto visitOrExpr(OrExpr<T> &e) -> RetTy { DELEGATE_EXPR(BinaryExpr); }
+	auto visitXorExpr(XorExpr<T> &e) -> RetTy { DELEGATE_EXPR(BinaryExpr); }
+	auto visitShlExpr(ShlExpr<T> &e) -> RetTy { DELEGATE_EXPR(BinaryExpr); }
+	auto visitLShrExpr(LShrExpr<T> &e) -> RetTy { DELEGATE_EXPR(BinaryExpr); }
+	auto visitAShrExpr(AShrExpr<T> &e) -> RetTy { DELEGATE_EXPR(BinaryExpr); }
+	auto visitEqExpr(EqExpr<T> &e) -> RetTy { DELEGATE_EXPR(CmpExpr); }
+	auto visitNeExpr(NeExpr<T> &e) -> RetTy { DELEGATE_EXPR(CmpExpr); }
+	auto visitUltExpr(UltExpr<T> &e) -> RetTy { DELEGATE_EXPR(CmpExpr); }
+	auto visitUleExpr(UleExpr<T> &e) -> RetTy { DELEGATE_EXPR(CmpExpr); }
+	auto visitUgtExpr(UgtExpr<T> &e) -> RetTy { DELEGATE_EXPR(CmpExpr); }
+	auto visitUgeExpr(UgeExpr<T> &e) -> RetTy { DELEGATE_EXPR(CmpExpr); }
+	auto visitSltExpr(SltExpr<T> &e) -> RetTy { DELEGATE_EXPR(CmpExpr); }
+	auto visitSleExpr(SleExpr<T> &e) -> RetTy { DELEGATE_EXPR(CmpExpr); }
+	auto visitSgtExpr(SgtExpr<T> &e) -> RetTy { DELEGATE_EXPR(CmpExpr); }
+	auto visitSgeExpr(SgeExpr<T> &e) -> RetTy { DELEGATE_EXPR(CmpExpr); }
 
 	/*
 	 * If none of the above matched, propagate to the next level before
 	 * calling the generic visitExpr
 	 */
-	RetTy visitLogicalExpr(LogicalExpr<T> &e) { DELEGATE_EXPR(SExpr); }
-	RetTy visitCastExpr(CastExpr<T> &e) { DELEGATE_EXPR(SExpr); }
-	RetTy visitBinaryExpr(BinaryExpr<T> &e) { DELEGATE_EXPR(SExpr); }
-	RetTy visitCmpExpr(CmpExpr<T> &e) { DELEGATE_EXPR(SExpr); }
+	auto visitLogicalExpr(LogicalExpr<T> &e) -> RetTy { DELEGATE_EXPR(SExpr); }
+	auto visitCastExpr(CastExpr<T> &e) -> RetTy { DELEGATE_EXPR(SExpr); }
+	auto visitBinaryExpr(BinaryExpr<T> &e) -> RetTy { DELEGATE_EXPR(SExpr); }
+	auto visitCmpExpr(CmpExpr<T> &e) -> RetTy { DELEGATE_EXPR(SExpr); }
 
 	/*
 	 * If no one else could handle this particular instruction, we ignore it.
 	 * Note: If a subclass overrides RetTy, this function needs to be overrided too
 	 */
-	RetTy visitSExpr(SExpr<T> &e) { return; }
+	auto visitSExpr(SExpr<T> & /*e*/) -> RetTy { return; }
 };
 
 /*******************************************************************************
@@ -158,7 +158,7 @@ public:
 template <typename T> class SExprPrinter : public SExprVisitor<SExprPrinter, T> {
 
 public:
-	const std::string &toString(SExpr<T> &e)
+	auto toString(SExpr<T> &e) -> const std::string &
 	{
 		this->visit(e);
 		return getOutput();
@@ -204,11 +204,11 @@ public:
 	void visitBinaryExpr(BinaryExpr<T> &e);
 	void visitCmpExpr(CmpExpr<T> &e);
 
-	void visitSExpr(SExpr<T> &e) { output += "unhandled"; }
+	void visitSExpr(SExpr<T> & /*e*/) { output += "unhandled"; }
 
 private:
 	/** Returns the output constructed so far */
-	const std::string &getOutput() const { return output; }
+	[[nodiscard]] auto getOutput() const -> const std::string & { return output; }
 
 	std::string output;
 };
@@ -220,6 +220,7 @@ template <typename U> struct std::formatter<SExpr<U>> {
 	auto format(const SExpr<U> &annot, std::format_context &ctx) const
 	{
 		return std::format_to(ctx.out(), "{}",
+				      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
 				      SExprPrinter<U>().toString(const_cast<SExpr<U> &>(annot)));
 	}
 };
@@ -245,12 +246,13 @@ public:
 	using VMap = std::unordered_map<T, RetTy>;
 
 	/** BFE: Evaluates the given expression replacing _all_ symbolic variables with v */
-	RetTy evaluate(const SExpr<T> *e, SVal v, size_t *numUnknown = nullptr)
+	auto evaluate(const SExpr<T> *e, SVal v, size_t *numUnknown = nullptr) -> RetTy
 	{
 		bruteForce = true;
 		val = v;
 		unknown.clear();
 		valueMapping = nullptr;
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
 		auto res = this->visit(const_cast<SExpr<T> *>(e));
 		if (numUnknown)
 			*numUnknown = unknown.size();
@@ -259,70 +261,72 @@ public:
 	}
 
 	/** NBFE: Evaluates according to a given mapping */
-	RetTy evaluate(const SExpr<T> *e, const VMap &map, size_t *numUnknown = nullptr)
+	auto evaluate(const SExpr<T> *e, const VMap &map, size_t *numUnknown = nullptr) -> RetTy
 	{
 		valueMapping = &map;
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
 		auto res = this->visit(const_cast<SExpr<T> *>(e));
 		if (numUnknown)
 			*numUnknown = unknown.size();
 		return res;
 	}
 
-	RetTy visitConcreteExpr(ConcreteExpr<T> &e);
-	RetTy visitRegisterExpr(RegisterExpr<T> &e);
-	RetTy visitSelectExpr(SelectExpr<T> &e);
+	auto visitConcreteExpr(ConcreteExpr<T> &e) -> RetTy;
+	auto visitRegisterExpr(RegisterExpr<T> &e) -> RetTy;
+	auto visitSelectExpr(SelectExpr<T> &e) -> RetTy;
 	// RetTy visitConcatExpr(ConcatExpr<T> &e);
 	// RetTy visitExtractExpr(ExtractExpr<T> &e);
-	RetTy visitConjunctionExpr(ConjunctionExpr<T> &e);
-	RetTy visitDisjunctionExpr(DisjunctionExpr<T> &e);
-	RetTy visitZExtExpr(ZExtExpr<T> &e);
-	RetTy visitSExtExpr(SExtExpr<T> &e);
-	RetTy visitTruncExpr(TruncExpr<T> &e);
-	RetTy visitNotExpr(NotExpr<T> &e);
-	RetTy visitAddExpr(AddExpr<T> &e);
-	RetTy visitSubExpr(SubExpr<T> &e);
-	RetTy visitMulExpr(MulExpr<T> &e);
-	RetTy visitUDivExpr(UDivExpr<T> &e);
-	RetTy visitSDivExpr(SDivExpr<T> &e);
-	RetTy visitURemExpr(URemExpr<T> &e);
-	RetTy visitSRemExpr(SRemExpr<T> &e);
-	RetTy visitAndExpr(AndExpr<T> &e);
-	RetTy visitOrExpr(OrExpr<T> &e);
-	RetTy visitXorExpr(XorExpr<T> &e);
-	RetTy visitShlExpr(ShlExpr<T> &e);
-	RetTy visitLShrExpr(LShrExpr<T> &e);
-	RetTy visitAShrExpr(AShrExpr<T> &e);
-	RetTy visitEqExpr(EqExpr<T> &e);
-	RetTy visitNeExpr(NeExpr<T> &e);
-	RetTy visitUltExpr(UltExpr<T> &e);
-	RetTy visitUleExpr(UleExpr<T> &e);
-	RetTy visitUgtExpr(UgtExpr<T> &e);
-	RetTy visitUgeExpr(UgeExpr<T> &e);
-	RetTy visitSltExpr(SltExpr<T> &e);
-	RetTy visitSleExpr(SleExpr<T> &e);
-	RetTy visitSgtExpr(SgtExpr<T> &e);
-	RetTy visitSgeExpr(SgeExpr<T> &e);
+	auto visitConjunctionExpr(ConjunctionExpr<T> &e) -> RetTy;
+	auto visitDisjunctionExpr(DisjunctionExpr<T> &e) -> RetTy;
+	auto visitZExtExpr(ZExtExpr<T> &e) -> RetTy;
+	auto visitSExtExpr(SExtExpr<T> &e) -> RetTy;
+	auto visitTruncExpr(TruncExpr<T> &e) -> RetTy;
+	auto visitNotExpr(NotExpr<T> &e) -> RetTy;
+	auto visitAddExpr(AddExpr<T> &e) -> RetTy;
+	auto visitSubExpr(SubExpr<T> &e) -> RetTy;
+	auto visitMulExpr(MulExpr<T> &e) -> RetTy;
+	auto visitUDivExpr(UDivExpr<T> &e) -> RetTy;
+	auto visitSDivExpr(SDivExpr<T> &e) -> RetTy;
+	auto visitURemExpr(URemExpr<T> &e) -> RetTy;
+	auto visitSRemExpr(SRemExpr<T> &e) -> RetTy;
+	auto visitAndExpr(AndExpr<T> &e) -> RetTy;
+	auto visitOrExpr(OrExpr<T> &e) -> RetTy;
+	auto visitXorExpr(XorExpr<T> &e) -> RetTy;
+	auto visitShlExpr(ShlExpr<T> &e) -> RetTy;
+	auto visitLShrExpr(LShrExpr<T> &e) -> RetTy;
+	auto visitAShrExpr(AShrExpr<T> &e) -> RetTy;
+	auto visitEqExpr(EqExpr<T> &e) -> RetTy;
+	auto visitNeExpr(NeExpr<T> &e) -> RetTy;
+	auto visitUltExpr(UltExpr<T> &e) -> RetTy;
+	auto visitUleExpr(UleExpr<T> &e) -> RetTy;
+	auto visitUgtExpr(UgtExpr<T> &e) -> RetTy;
+	auto visitUgeExpr(UgeExpr<T> &e) -> RetTy;
+	auto visitSltExpr(SltExpr<T> &e) -> RetTy;
+	auto visitSleExpr(SleExpr<T> &e) -> RetTy;
+	auto visitSgtExpr(SgtExpr<T> &e) -> RetTy;
+	auto visitSgeExpr(SgeExpr<T> &e) -> RetTy;
 
-	RetTy visitSExpr(SExpr<T> &e) { UNREACHABLE(); }
+	auto visitSExpr(SExpr<T> & /*e*/) -> RetTy { UNREACHABLE(); }
 
 private:
 	/** NBFE: Checks whether a symbolic variable has a mapping */
-	bool hasKnownMapping(const T &reg) const
+	[[nodiscard]] auto hasKnownMapping(const T &reg) const -> bool
 	{
-		return valueMapping && valueMapping->count(reg);
+		return valueMapping && valueMapping->contains(reg);
 	}
 
 	/** NBFE: Returns the value of a symbolic variable */
-	RetTy getMappingFor(const T &reg) const
+	[[nodiscard]] auto getMappingFor(const T &reg) const -> RetTy
 	{
+		// NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 		return (hasKnownMapping(reg)) ? valueMapping->at(reg) : SVal(42);
 	}
 
 	/** BFE: Returns the value we are evaluating with in a brute-force eval */
-	RetTy getVal() const { return val; }
+	[[nodiscard]] auto getVal() const -> RetTy { return val; }
 
 	/** NBFE: Value mapping we are evaluating with */
-	const std::unordered_map<T, RetTy> *valueMapping;
+	const std::unordered_map<T, RetTy> *valueMapping = nullptr;
 
 	/** BFE: Value we are evaluating with */
 	RetTy val;
@@ -346,7 +350,8 @@ template <typename T> class SExprRegSubstitutor : public SExprVisitor<SExprRegSu
 
 public:
 	/** Performs the substitution (returns a new expression) */
-	std::unique_ptr<SExpr<T>> substitute(const SExpr<T> *orig, T &&reg, const SExpr<T> *r)
+	auto substitute(const SExpr<T> *orig, const T &reg, const SExpr<T> *r)
+		-> std::unique_ptr<SExpr<T>>
 	{
 		auto e = orig->clone();
 		if (auto *re = genmc::dyn_cast<RegisterExpr<T>>(e.get()))
@@ -361,7 +366,7 @@ public:
 
 	void visitSExpr(SExpr<T> &e)
 	{
-		for (auto i = 0u; i < e.getNumKids(); i++) {
+		for (auto i = 0U; i < e.getNumKids(); i++) {
 			this->visit(e.getKid(i));
 			if (auto *re = genmc::dyn_cast<RegisterExpr<T>>(e.getKid(i)))
 				if (re->getRegister() == getRegToReplace())
@@ -370,8 +375,8 @@ public:
 	}
 
 private:
-	const T &getRegToReplace() const { return replaceReg; }
-	const SExpr<T> *getReplaceExpr() const { return replaceExpr; }
+	auto getRegToReplace() const -> const T & { return replaceReg; }
+	auto getReplaceExpr() const -> const SExpr<T> * { return replaceExpr; }
 
 	T replaceReg;
 	const SExpr<T> *replaceExpr;
@@ -391,7 +396,7 @@ public:
 	using ReplaceMap = std::map<T, std::pair<SVal, ASize>>;
 
 	/** Performs the concretization (returns a new expression) */
-	std::unique_ptr<SExpr<T>> concretize(const SExpr<T> *orig, const ReplaceMap &rMap)
+	auto concretize(const SExpr<T> *orig, const ReplaceMap &rMap) -> std::unique_ptr<SExpr<T>>
 	{
 		replaceMap = &rMap;
 		auto e = orig->clone();
@@ -406,7 +411,7 @@ public:
 
 	void visitSExpr(SExpr<T> &e)
 	{
-		for (auto i = 0u; i < e.getNumKids(); i++) {
+		for (auto i = 0U; i < e.getNumKids(); i++) {
 			this->visit(e.getKid(i));
 			if (auto *re = genmc::dyn_cast<RegisterExpr<T>>(e.getKid(i)))
 				if (shouldReplace(re->getRegister()))
@@ -417,9 +422,9 @@ public:
 	}
 
 private:
-	bool shouldReplace(const T &reg) const { return replaceMap->count(reg); }
-	SVal getReplaceVal(const T &reg) const { return replaceMap->at(reg).first; }
-	typename SExpr<T>::Width getReplaceValSize(const T &reg) const
+	auto shouldReplace(const T &reg) const -> bool { return replaceMap->count(reg); }
+	auto getReplaceVal(const T &reg) const -> SVal { return replaceMap->at(reg).first; }
+	auto getReplaceValSize(const T &reg) const -> typename SExpr<T>::Width
 	{
 		return replaceMap->at(reg).second.get();
 	}
@@ -443,51 +448,52 @@ public:
 	using RetTy = std::unique_ptr<SExpr<ModuleVarID>>;
 
 	/** Performs the transformation (returns a new expression) */
-	template <typename F> RetTy transform(SExpr<T> *orig, F &&fun)
+	// NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward)
+	template <typename F> auto transform(SExpr<T> *orig, F &&fun) -> RetTy
 	{
 		transformer = fun;
 		return this->visit(*orig);
 	}
 
-	RetTy visitConcreteExpr(ConcreteExpr<T> &e);
-	RetTy visitRegisterExpr(RegisterExpr<T> &e);
-	RetTy visitSelectExpr(SelectExpr<T> &e);
+	auto visitConcreteExpr(ConcreteExpr<T> &e) -> RetTy;
+	auto visitRegisterExpr(RegisterExpr<T> &e) -> RetTy;
+	auto visitSelectExpr(SelectExpr<T> &e) -> RetTy;
 	// RetTy visitConcatExpr(ConcatExpr<T> &e);
 	// RetTy visitExtractExpr(ExtractExpr<T> &e);
-	RetTy visitConjunctionExpr(ConjunctionExpr<T> &e);
-	RetTy visitDisjunctionExpr(DisjunctionExpr<T> &e);
-	RetTy visitZExtExpr(ZExtExpr<T> &e);
-	RetTy visitSExtExpr(SExtExpr<T> &e);
-	RetTy visitTruncExpr(TruncExpr<T> &e);
-	RetTy visitNotExpr(NotExpr<T> &e);
-	RetTy visitAddExpr(AddExpr<T> &e);
-	RetTy visitSubExpr(SubExpr<T> &e);
-	RetTy visitMulExpr(MulExpr<T> &e);
-	RetTy visitUDivExpr(UDivExpr<T> &e);
-	RetTy visitSDivExpr(SDivExpr<T> &e);
-	RetTy visitURemExpr(URemExpr<T> &e);
-	RetTy visitSRemExpr(SRemExpr<T> &e);
-	RetTy visitAndExpr(AndExpr<T> &e);
-	RetTy visitOrExpr(OrExpr<T> &e);
-	RetTy visitXorExpr(XorExpr<T> &e);
-	RetTy visitShlExpr(ShlExpr<T> &e);
-	RetTy visitLShrExpr(LShrExpr<T> &e);
-	RetTy visitAShrExpr(AShrExpr<T> &e);
-	RetTy visitEqExpr(EqExpr<T> &e);
-	RetTy visitNeExpr(NeExpr<T> &e);
-	RetTy visitUltExpr(UltExpr<T> &e);
-	RetTy visitUleExpr(UleExpr<T> &e);
-	RetTy visitUgtExpr(UgtExpr<T> &e);
-	RetTy visitUgeExpr(UgeExpr<T> &e);
-	RetTy visitSltExpr(SltExpr<T> &e);
-	RetTy visitSleExpr(SleExpr<T> &e);
-	RetTy visitSgtExpr(SgtExpr<T> &e);
-	RetTy visitSgeExpr(SgeExpr<T> &e);
+	auto visitConjunctionExpr(ConjunctionExpr<T> &e) -> RetTy;
+	auto visitDisjunctionExpr(DisjunctionExpr<T> &e) -> RetTy;
+	auto visitZExtExpr(ZExtExpr<T> &e) -> RetTy;
+	auto visitSExtExpr(SExtExpr<T> &e) -> RetTy;
+	auto visitTruncExpr(TruncExpr<T> &e) -> RetTy;
+	auto visitNotExpr(NotExpr<T> &e) -> RetTy;
+	auto visitAddExpr(AddExpr<T> &e) -> RetTy;
+	auto visitSubExpr(SubExpr<T> &e) -> RetTy;
+	auto visitMulExpr(MulExpr<T> &e) -> RetTy;
+	auto visitUDivExpr(UDivExpr<T> &e) -> RetTy;
+	auto visitSDivExpr(SDivExpr<T> &e) -> RetTy;
+	auto visitURemExpr(URemExpr<T> &e) -> RetTy;
+	auto visitSRemExpr(SRemExpr<T> &e) -> RetTy;
+	auto visitAndExpr(AndExpr<T> &e) -> RetTy;
+	auto visitOrExpr(OrExpr<T> &e) -> RetTy;
+	auto visitXorExpr(XorExpr<T> &e) -> RetTy;
+	auto visitShlExpr(ShlExpr<T> &e) -> RetTy;
+	auto visitLShrExpr(LShrExpr<T> &e) -> RetTy;
+	auto visitAShrExpr(AShrExpr<T> &e) -> RetTy;
+	auto visitEqExpr(EqExpr<T> &e) -> RetTy;
+	auto visitNeExpr(NeExpr<T> &e) -> RetTy;
+	auto visitUltExpr(UltExpr<T> &e) -> RetTy;
+	auto visitUleExpr(UleExpr<T> &e) -> RetTy;
+	auto visitUgtExpr(UgtExpr<T> &e) -> RetTy;
+	auto visitUgeExpr(UgeExpr<T> &e) -> RetTy;
+	auto visitSltExpr(SltExpr<T> &e) -> RetTy;
+	auto visitSleExpr(SleExpr<T> &e) -> RetTy;
+	auto visitSgtExpr(SgtExpr<T> &e) -> RetTy;
+	auto visitSgeExpr(SgeExpr<T> &e) -> RetTy;
 
-	RetTy visitSExpr(SExpr<T> &e) { UNREACHABLE(); }
+	auto visitSExpr(SExpr<T> & /*e*/) -> RetTy { UNREACHABLE(); }
 
 private:
-	const std::function<ModuleVarID(T)> &getTransformer() const { return transformer; }
+	auto getTransformer() const -> const std::function<ModuleVarID(T)> & { return transformer; }
 
 	std::function<ModuleVarID(T)> transformer;
 };
@@ -531,7 +537,7 @@ template <typename T> void SExprPrinter<T>::visitSelectExpr(SelectExpr<T> &e)
 
 template <typename T> void SExprPrinter<T>::visitConjunctionExpr(ConjunctionExpr<T> &e)
 {
-	for (auto i = 0u; i < e.getNumKids(); i++) {
+	for (auto i = 0U; i < e.getNumKids(); i++) {
 		this->visit(e.getKid(i));
 		if (i != e.getNumKids() - 1)
 			output += " /\\ ";
@@ -540,7 +546,7 @@ template <typename T> void SExprPrinter<T>::visitConjunctionExpr(ConjunctionExpr
 
 template <typename T> void SExprPrinter<T>::visitDisjunctionExpr(DisjunctionExpr<T> &e)
 {
-	for (auto i = 0u; i < e.getNumKids(); i++) {
+	for (auto i = 0U; i < e.getNumKids(); i++) {
 		this->visit(e.getKid(i));
 		if (i != e.getNumKids() - 1)
 			output += " \\/ ";
@@ -652,7 +658,7 @@ template <typename T> void SExprPrinter<T>::visitSgeExpr(SgeExpr<T> &e)
 template <typename T> void SExprPrinter<T>::visitLogicalExpr(LogicalExpr<T> &e)
 {
 	output += "LogOp(";
-	for (auto i = 0u; i < e.getNumKids(); i++) {
+	for (auto i = 0U; i < e.getNumKids(); i++) {
 		this->visit(e.getKid(i));
 		if (i != e.getNumKids() - 1)
 			output += ", ";
@@ -689,15 +695,13 @@ template <typename T> void SExprPrinter<T>::visitCmpExpr(CmpExpr<T> &e)
  **                           SExprEvaluator Class
  ******************************************************************************/
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitConcreteExpr(ConcreteExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitConcreteExpr(ConcreteExpr<T> &e) -> RetTy
 {
 
 	return e.getValue();
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitRegisterExpr(RegisterExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitRegisterExpr(RegisterExpr<T> &e) -> RetTy
 {
 	if (bruteForce)
 		return getVal();
@@ -707,8 +711,7 @@ typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitRegisterExpr(RegisterE
 	return getMappingFor(e.getRegister());
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitSelectExpr(SelectExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitSelectExpr(SelectExpr<T> &e) -> RetTy
 {
 	return this->visit(e.getKid(0)).getBool() ? this->visit(e.getKid(1))
 						  : this->visit(e.getKid(2));
@@ -730,14 +733,12 @@ typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitSelectExpr(SelectExpr<
 		return SVal(1);                                                                    \
 	return SVal(0);
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitConjunctionExpr(ConjunctionExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitConjunctionExpr(ConjunctionExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_LOGOP(std::all_of);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitDisjunctionExpr(DisjunctionExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitDisjunctionExpr(DisjunctionExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_LOGOP(std::any_of);
 }
@@ -745,26 +746,22 @@ typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitDisjunctionExpr(Disjun
 /* No special care taken using SVals */
 #define IMPLEMENT_CAST(op) return this->visit(e.getKid(0))
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitZExtExpr(ZExtExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitZExtExpr(ZExtExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_CAST(zext);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitSExtExpr(SExtExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitSExtExpr(SExtExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_CAST(sext);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitTruncExpr(TruncExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitTruncExpr(TruncExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_CAST(trunc);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitNotExpr(NotExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitNotExpr(NotExpr<T> &e) -> RetTy
 {
 	return SVal(!e.getKid(0));
 }
@@ -773,79 +770,67 @@ typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitNotExpr(NotExpr<T> &e)
 
 #define IMPLEMENT_BINOP_NONMEM(op) return this->visit(e.getKid(0)) op this->visit(e.getKid(1))
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitAddExpr(AddExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitAddExpr(AddExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_BINOP_NONMEM(+);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitSubExpr(SubExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitSubExpr(SubExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_BINOP_NONMEM(-);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitMulExpr(MulExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitMulExpr(MulExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_BINOP_NONMEM(*);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitUDivExpr(UDivExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitUDivExpr(UDivExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_BINOP_NONMEM(/);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitSDivExpr(SDivExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitSDivExpr(SDivExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_BINOP_NONMEM(/);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitURemExpr(URemExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitURemExpr(URemExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_BINOP_NONMEM(/);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitSRemExpr(SRemExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitSRemExpr(SRemExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_BINOP_NONMEM(/);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitAndExpr(AndExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitAndExpr(AndExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_BINOP_NONMEM(&);
 }
 
-template <typename T> typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitOrExpr(OrExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitOrExpr(OrExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_BINOP_NONMEM(|);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitXorExpr(XorExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitXorExpr(XorExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_BINOP_NONMEM(^);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitShlExpr(ShlExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitShlExpr(ShlExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_BINOP_NONMEM(<<);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitLShrExpr(LShrExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitLShrExpr(LShrExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_BINOP_NONMEM(>>);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitAShrExpr(AShrExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitAShrExpr(AShrExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_BINOP_NONMEM(>>);
 }
@@ -855,12 +840,12 @@ typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitAShrExpr(AShrExpr<T> &
 		return SVal(1);                                                                    \
 	return SVal(0);
 
-template <typename T> typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitEqExpr(EqExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitEqExpr(EqExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_EQOP(==);
 }
 
-template <typename T> typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitNeExpr(NeExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitNeExpr(NeExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_EQOP(!=);
 }
@@ -868,50 +853,42 @@ template <typename T> typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visit
 #define IMPLEMENT_CMPOP(op)                                                                        \
 	return (this->visit(e.getKid(0)).op(this->visit(e.getKid(1)))) ? SVal(1) : SVal(0);
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitUltExpr(UltExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitUltExpr(UltExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_CMPOP(ult);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitUleExpr(UleExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitUleExpr(UleExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_CMPOP(ule);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitUgtExpr(UgtExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitUgtExpr(UgtExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_CMPOP(ugt);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitUgeExpr(UgeExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitUgeExpr(UgeExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_CMPOP(uge);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitSltExpr(SltExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitSltExpr(SltExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_CMPOP(slt);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitSleExpr(SleExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitSleExpr(SleExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_CMPOP(sle);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitSgtExpr(SgtExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitSgtExpr(SgtExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_CMPOP(sgt);
 }
 
-template <typename T>
-typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitSgeExpr(SgeExpr<T> &e)
+template <typename T> auto SExprEvaluator<T>::visitSgeExpr(SgeExpr<T> &e) -> RetTy
 {
 	IMPLEMENT_CMPOP(sge);
 }
@@ -921,23 +898,25 @@ typename SExprEvaluator<T>::RetTy SExprEvaluator<T>::visitSgeExpr(SgeExpr<T> &e)
  ******************************************************************************/
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitConcreteExpr(ConcreteExpr<T> &e)
+auto SExprTransformer<T>::visitConcreteExpr(ConcreteExpr<T> &e) ->
+	typename SExprTransformer<T>::RetTy
 {
 	return ConcreteExpr<ModuleVarID>::create(e.getWidth(), e.getValue());
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitRegisterExpr(RegisterExpr<T> &e)
+auto SExprTransformer<T>::visitRegisterExpr(RegisterExpr<T> &e) ->
+	typename SExprTransformer<T>::RetTy
 {
 	return RegisterExpr<ModuleVarID>::create(e.getWidth(), getTransformer()(e.getRegister()),
-						  e.getName());
+						 e.getName());
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitSelectExpr(SelectExpr<T> &e)
+auto SExprTransformer<T>::visitSelectExpr(SelectExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	return SelectExpr<ModuleVarID>::create(e.getWidth(), this->visit(e.getKid(0)),
-						this->visit(e.getKid(1)), this->visit(e.getKid(2)));
+					       this->visit(e.getKid(1)), this->visit(e.getKid(2)));
 }
 
 // template<typename T>
@@ -953,19 +932,21 @@ typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitSelectExpr(SelectE
 // }
 
 #define TRANSFORM_LOGOP(name)                                                                      \
-	std::vector<std::unique_ptr<SExpr<ModuleVarID>>> kids;                                    \
-	for (auto &k : e.getKids())                                                                \
-		kids.push_back(this->visit(*k));                                                   \
+	std::vector<std::unique_ptr<SExpr<ModuleVarID>>> kids;                                     \
+	for (auto &kid : e.getKids())                                                              \
+		kids.push_back(this->visit(*kid));                                                 \
 	return name##Expr<ModuleVarID>::create(std::move(kids));
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitConjunctionExpr(ConjunctionExpr<T> &e)
+auto SExprTransformer<T>::visitConjunctionExpr(ConjunctionExpr<T> &e) ->
+	typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_LOGOP(Conjunction);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitDisjunctionExpr(DisjunctionExpr<T> &e)
+auto SExprTransformer<T>::visitDisjunctionExpr(DisjunctionExpr<T> &e) ->
+	typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_LOGOP(Disjunction);
 }
@@ -974,107 +955,107 @@ typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitDisjunctionExpr(Di
 	return name##Expr<ModuleVarID>::create(this->getWidth(), this->visit(e.getKid(0)));
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitZExtExpr(ZExtExpr<T> &e)
+auto SExprTransformer<T>::visitZExtExpr(ZExtExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	IMPLEMENT_CAST(ZExt);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitSExtExpr(SExtExpr<T> &e)
+auto SExprTransformer<T>::visitSExtExpr(SExtExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	IMPLEMENT_CAST(SExt);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitTruncExpr(TruncExpr<T> &e)
+auto SExprTransformer<T>::visitTruncExpr(TruncExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	IMPLEMENT_CAST(Trunc);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitNotExpr(NotExpr<T> &e)
+auto SExprTransformer<T>::visitNotExpr(NotExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	return NotExpr<ModuleVarID>::create(this->visit(e.getKid(0)));
 }
 
 #define TRANSFORM_BINOP(name)                                                                      \
-	return name##Expr<ModuleVarID>::create(e.getWidth(), this->visit(e.getKid(0)),            \
-						this->visit(e.getKid(1)));
+	return name##Expr<ModuleVarID>::create(e.getWidth(), this->visit(e.getKid(0)),             \
+					       this->visit(e.getKid(1)));
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitAddExpr(AddExpr<T> &e)
+auto SExprTransformer<T>::visitAddExpr(AddExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_BINOP(Add);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitSubExpr(SubExpr<T> &e)
+auto SExprTransformer<T>::visitSubExpr(SubExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_BINOP(Sub);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitMulExpr(MulExpr<T> &e)
+auto SExprTransformer<T>::visitMulExpr(MulExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_BINOP(Mul);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitUDivExpr(UDivExpr<T> &e)
+auto SExprTransformer<T>::visitUDivExpr(UDivExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_BINOP(UDiv);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitSDivExpr(SDivExpr<T> &e)
+auto SExprTransformer<T>::visitSDivExpr(SDivExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_BINOP(SDiv);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitURemExpr(URemExpr<T> &e)
+auto SExprTransformer<T>::visitURemExpr(URemExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_BINOP(URem);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitSRemExpr(SRemExpr<T> &e)
+auto SExprTransformer<T>::visitSRemExpr(SRemExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_BINOP(SRem);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitAndExpr(AndExpr<T> &e)
+auto SExprTransformer<T>::visitAndExpr(AndExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_BINOP(And);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitOrExpr(OrExpr<T> &e)
+auto SExprTransformer<T>::visitOrExpr(OrExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_BINOP(Or);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitXorExpr(XorExpr<T> &e)
+auto SExprTransformer<T>::visitXorExpr(XorExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_BINOP(Xor);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitShlExpr(ShlExpr<T> &e)
+auto SExprTransformer<T>::visitShlExpr(ShlExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_BINOP(Shl);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitLShrExpr(LShrExpr<T> &e)
+auto SExprTransformer<T>::visitLShrExpr(LShrExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_BINOP(LShr);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitAShrExpr(AShrExpr<T> &e)
+auto SExprTransformer<T>::visitAShrExpr(AShrExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_BINOP(AShr);
 }
@@ -1083,61 +1064,61 @@ typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitAShrExpr(AShrExpr<
 	return name##Expr<ModuleVarID>::create(this->visit(e.getKid(0)), this->visit(e.getKid(1)));
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitEqExpr(EqExpr<T> &e)
+auto SExprTransformer<T>::visitEqExpr(EqExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_CMPOP(Eq);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitNeExpr(NeExpr<T> &e)
+auto SExprTransformer<T>::visitNeExpr(NeExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_CMPOP(Ne);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitUltExpr(UltExpr<T> &e)
+auto SExprTransformer<T>::visitUltExpr(UltExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_CMPOP(Ult);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitUleExpr(UleExpr<T> &e)
+auto SExprTransformer<T>::visitUleExpr(UleExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_CMPOP(Ule);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitUgtExpr(UgtExpr<T> &e)
+auto SExprTransformer<T>::visitUgtExpr(UgtExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_CMPOP(Ugt);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitUgeExpr(UgeExpr<T> &e)
+auto SExprTransformer<T>::visitUgeExpr(UgeExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_CMPOP(Uge);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitSltExpr(SltExpr<T> &e)
+auto SExprTransformer<T>::visitSltExpr(SltExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_CMPOP(Slt);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitSleExpr(SleExpr<T> &e)
+auto SExprTransformer<T>::visitSleExpr(SleExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_CMPOP(Sle);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitSgtExpr(SgtExpr<T> &e)
+auto SExprTransformer<T>::visitSgtExpr(SgtExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_CMPOP(Sgt);
 }
 
 template <typename T>
-typename SExprTransformer<T>::RetTy SExprTransformer<T>::visitSgeExpr(SgeExpr<T> &e)
+auto SExprTransformer<T>::visitSgeExpr(SgeExpr<T> &e) -> typename SExprTransformer<T>::RetTy
 {
 	TRANSFORM_CMPOP(Sge);
 }

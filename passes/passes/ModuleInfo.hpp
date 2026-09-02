@@ -16,10 +16,10 @@
 
 #include "genmc/ADT/VSet.hpp"
 #include "genmc/Execution/LoadAnnotation.hpp"
-#include "passes/ModuleID.hpp"
 #include "genmc/Support/NameInfo.hpp"
 #include "genmc/Support/SExpr.hpp"
 #include "genmc/Verification/Config.hpp"
+#include "passes/ModuleID.hpp"
 #include <llvm/ADT/BitVector.h>
 #include <llvm/ADT/IndexedMap.h>
 #include <llvm/IR/DerivedTypes.h>
@@ -34,7 +34,7 @@
 
 namespace llvm {
 class Value;
-};
+} // namespace llvm
 
 /*
  * Information kept about the module under test by the interpreter.
@@ -97,19 +97,16 @@ struct ModuleInfo {
 
 	/* Collects all IDs for the given module.
 	 * Should be manually called after the module is modified */
-	void collectIDs();
+	void collectIDs(const llvm::Module &mod);
 
 	/* Assumes only statis information have been collected */
-	std::unique_ptr<ModuleInfo> clone(const llvm::Module &mod) const;
+	auto clone(const llvm::Module &mod) const -> std::unique_ptr<ModuleInfo>;
 
 	ModuleID idInfo;
 	VariableInfo<ModuleID::ID> varInfo;
 	AnnotationInfo<ModuleID::ID, ModuleID::ID> annotInfo;
 	std::optional<ModelType> determinedMM;
 	std::optional<BarrierRetResult> barrierResultsUsed;
-
-private:
-	const llvm::Module &mod;
 };
 
 #endif /* GENMC_MODULE_INFO_HPP */

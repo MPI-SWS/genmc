@@ -72,9 +72,9 @@ protected:
 public:
 	SAddr() : addr(0) {}
 	SAddr(Width addr) : addr(addr) {}
-	SAddr(void *addr) : addr((Width)addr) {}
+	SAddr(void *addr) : addr((Width)addr) {} // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
 
-	static constexpr SAddr max() { return {(Width)-1}; }
+	static constexpr auto max() -> SAddr { return {(Width)-1}; }
 
 	/** Helper methods to create a new address */
 	template <typename... Ts> static auto createStatic(Ts &&...params) -> SAddr
@@ -158,7 +158,7 @@ template <> struct std::formatter<SAddr> {
 
 	auto format(const SAddr &addr, std::format_context &ctx) const
 	{
-		auto internal = addr.isInternal() ? "I" : "";
+		const auto *internal = addr.isInternal() ? "I" : "";
 
 		std::string_view prefix;
 		if (addr.isStatic())
@@ -185,6 +185,5 @@ template <> struct hash<SAddr> {
 	};
 };
 } // namespace std
-
 
 #endif /* GENMC_SADDR_HPP */

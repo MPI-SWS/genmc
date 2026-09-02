@@ -26,8 +26,8 @@ class ExecutionGraph;
 class ConsistencyChecker;
 
 /** Abstract class for linearizability checking errors */
-struct LinearizabilityError {
-	virtual auto toString() const -> std::string = 0;
+struct LinearizabilityError { // NOLINT(cppcoreguidelines-special-member-functions)
+	[[nodiscard]] virtual auto toString() const -> std::string = 0;
 
 	virtual ~LinearizabilityError() = default;
 };
@@ -39,9 +39,10 @@ public:
 		std::unique_ptr<LinearizabilityError> status;
 		uint32_t hintsChecked = 0;
 #ifdef ENABLE_GENMC_DEBUG
-		std::chrono::high_resolution_clock::duration analysisTime;
+		std::chrono::high_resolution_clock::duration analysisTime{};
 #endif
 
+		// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
 		auto operator+=(Result &&other) -> Result &
 		{
 			/* Propagate latest error */

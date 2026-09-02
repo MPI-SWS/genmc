@@ -15,9 +15,9 @@
 #define GENMC_VECTOR_CLOCK_HPP
 
 #include "genmc/Execution/Event.hpp"
-#include "genmc/Support/Cast.hpp"
 
 #include <format>
+#include <memory>
 
 /*******************************************************************************
  **                        VectorClock Class (Abstract)
@@ -43,22 +43,22 @@ public:
 
 	/** Discriminator for LLVM-style RTTI (dyn_cast<> et al).
 	 * It is public to allow clients perform a switch() on it */
-	enum VectorClockKind {
+	enum VectorClockKind : std::uint8_t { // NOLINT(cppcoreguidelines-use-enum-class)
 		VC_View,
 		VC_DepView,
 	};
 
 protected:
-	VectorClock(VectorClockKind k) : kind(k) {}
+	VectorClock(VectorClockKind kind) : kind(kind) {}
 
 public:
-	virtual ~VectorClock() {};
+	virtual ~VectorClock() = default;
 
 	/** Returns the kind of this vector clock */
 	[[nodiscard]] auto getKind() const -> VectorClockKind { return kind; }
 
 	/** Returns the size of this vector clock */
-	[[nodiscard]] virtual auto size() const -> unsigned int = 0;
+	[[nodiscard]] virtual auto size() const -> int = 0;
 
 	/** Returns true if this vector clock is empty */
 	[[nodiscard]] auto empty() const -> bool;
@@ -96,7 +96,10 @@ private:
 
 /** Helper cloner class */
 struct VectorClockCloner {
-	auto operator()(const VectorClock &x) const -> VectorClock * { return x.clone().release(); }
+	auto operator()(const VectorClock &clock) const -> VectorClock *
+	{
+		return clock.clone().release();
+	}
 	// VectorClock *operator()(VectorClock &&x) const { return new VectorClock(std::move(x)); }
 };
 

@@ -13,18 +13,17 @@
 
 #include "LocalSimplifyCFGPass.hpp"
 #include "passes/LLVMUtils.hpp"
+#include <llvm/IR/PassManager.h>
+#include <llvm/Support/Casting.h>
 
-#include <llvm/ADT/STLExtras.h>
-#include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/Function.h>
-#include <llvm/IR/InstIterator.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Utils/Local.h>
 
 using namespace llvm;
 
-static auto foldSuccessors(BasicBlock *bb) -> bool
+[[maybe_unused]] static auto foldSuccessors(BasicBlock *bb) -> bool
 {
 	auto *bi = dyn_cast<BranchInst>(bb->getTerminator());
 	if (!bi || !bi->isConditional())
@@ -68,7 +67,7 @@ static auto localSimplifyCFG(Function &F) -> bool
 	return modified;
 }
 
-auto LocalSimplifyCFGPass::run(Function &F, FunctionAnalysisManager &FAM) -> PreservedAnalyses
+auto LocalSimplifyCFGPass::run(Function &F, FunctionAnalysisManager & /*FAM*/) -> PreservedAnalyses
 {
 	return localSimplifyCFG(F) ? PreservedAnalyses::none() : PreservedAnalyses::all();
 }

@@ -12,14 +12,14 @@
  */
 
 #include "Runtime/Interpreter.h"
-#include "passes/LLIConfig.hpp"
-#include "passes/LLVMModule.hpp"
-#include "genmc/lli_config.h"
 #include "genmc/Support/Error.hpp"
 #include "genmc/Support/Logger.hpp"
 #include "genmc/Support/ThreadPool.hpp"
 #include "genmc/Verification/Config.hpp"
 #include "genmc/Verification/GenMCDriver.hpp"
+#include "genmc/lli_config.h"
+#include "passes/LLIConfig.hpp"
+#include "passes/LLVMModule.hpp"
 
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/DynamicLibrary.h>
@@ -35,6 +35,7 @@
 #include <iostream>
 #include <memory>
 #include <random>
+#include <system_error>
 #include <unistd.h>
 
 namespace fs = std::filesystem;
@@ -515,14 +516,23 @@ static void parseConfig(int argc, char **argv, Config &conf, LLIConfig &lliConfi
 
 static auto getOutFilename(const LLIConfig & /* lliConfig */) -> std::string
 {
-	static char filenameTemplate[] = "/tmp/__genmc.ll.XXXXXX";
+	static std::string filename;
 	static bool createdFilename = false;
 
-	if (!createdFilename) {
-		close(mkstemp(filenameTemplate));
-		createdFilename = true;
-	}
-	return {filenameTemplate};
+	if (createdFilename)
+		return filename;
+
+	/* Honor the system temp directory (e.g., $TMPDIR), falling back to /tmp */
+	std::error_code ec;
+	auto dir = std::filesystem::temp_directory_path(ec);
+	if (ec)
+		dir = "/tmp";
+
+	auto tmpl = (dir / "__genmc.ll.XXXXXX").string();
+	close(mkstemp(tmpl.data()));
+	filename = std::move(tmpl);
+	createdFilename = true;
+	return filename;
 }
 
 static auto buildCompilationArgs(const LLIConfig &lliConfig) -> std::string
@@ -861,8 +871,8 @@ auto estimate(const LLIConfig &lliConfig, std::shared_ptr<const Config> conf,
 	auto driver = GenMCDriver::create(conf, nullptr,
 					  GenMCDriver::EstimationMode{conf->estimationMax});
 	std::string buf;
-	auto EE = llvm::Interpreter::create(
-		std::move(newmod), std::move(newMI), &*driver, &lliConfig, &buf);
+	auto EE = llvm::Interpreter::create(std::move(newmod), std::move(newMI), &*driver,
+					    &lliConfig, &buf);
 	run(&*driver, &*EE);
 	return std::move(driver->getResult());
 }
@@ -873,8 +883,8 @@ auto sample(const LLIConfig &lliConfig, std::shared_ptr<const Config> conf,
 {
 	auto driver = GenMCDriver::create(conf, nullptr, GenMCDriver::RandomMode{conf->randomMax});
 	std::string buf;
-	auto EE = llvm::Interpreter::create(
-		std::move(mod), std::move(modInfo), &*driver, &lliConfig, &buf);
+	auto EE = llvm::Interpreter::create(std::move(mod), std::move(modInfo), &*driver,
+					    &lliConfig, &buf);
 	run(&*driver, &*EE);
 	return std::move(driver->getResult());
 }
@@ -887,8 +897,8 @@ auto verify(const LLIConfig &lliConfig, std::shared_ptr<const Config> conf,
 	if (lliConfig.threads == 1) {
 		auto driver = GenMCDriver::create(conf, nullptr, GenMCDriver::VerificationMode{});
 		std::string buf;
-		auto EE = llvm::Interpreter::create(
-			std::move(mod), std::move(modInfo), &*driver, &lliConfig, &buf);
+		auto EE = llvm::Interpreter::create(std::move(mod), std::move(modInfo), &*driver,
+						    &lliConfig, &buf);
 		run(&*driver, &*EE);
 		return std::move(driver->getResult());
 	}

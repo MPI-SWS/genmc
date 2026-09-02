@@ -18,7 +18,7 @@
 
 using namespace llvm;
 
-class PassModuleInfo;
+struct PassModuleInfo;
 enum class BarrierRetResult : std::uint8_t;
 
 class BarrierResultAnalysis : public AnalysisInfoMixin<BarrierResultAnalysis> {
@@ -32,7 +32,7 @@ private:
 	friend AnalysisInfoMixin<BarrierResultAnalysis>;
 	static inline AnalysisKey Key;
 
-	Result resultsUsed{};
+	Result resultsUsed;
 };
 
 class BarrierResultCheckerPass : public PassInfoMixin<BarrierResultCheckerPass> {
@@ -42,7 +42,7 @@ public:
 	auto run(Module &M, ModuleAnalysisManager &MAM) -> PreservedAnalyses;
 
 private:
-	PassModuleInfo &PMI;
+	PassModuleInfo &PMI; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 };
 
 #endif /* GENMC_BARRIER_RETURN_UNUSED_PASS_HPP */

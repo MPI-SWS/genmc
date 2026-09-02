@@ -111,7 +111,8 @@ public:
 		-> std::optional<std::pair<SAddr, SAddr>>;
 
 	[[nodiscard]] auto getLastMemAccess(int thread) const -> int;
-	/* Returns the index of the previous NA read/write and a boolean indicating whether it was a read */
+	/* Returns the index of the previous NA read/write and a boolean indicating whether it was a
+	 * read */
 	[[nodiscard]] auto getPreviousNA(int thread) const -> std::pair<int, bool>;
 
 	/* Use of this assumes NA labels are not in the graph */
@@ -206,7 +207,7 @@ private:
 	void updateSideEffects(Event pos);
 
 	void updateHpCount(SAddr addr, int count);
-	void recordMemAccess(AdaptiveViewMap &m, const AAccess &access, Event pos,
+	void recordMemAccess(AdaptiveViewMap &accessMap, const AAccess &access, Event pos,
 			     const View &view);
 	void recordNAWrite(const AAccess &access, Event pos, const View &view);
 	void updateLastWriteType(const AAccess &access, bool isAtomic);
@@ -243,7 +244,8 @@ private:
 	View lastMemAccess_;
 
 	/* moot execution */
-	std::unordered_map<int, std::pair<int, bool>> previousNA_; /* thread id -> {index, isRead} */
+	std::unordered_map<int, std::pair<int, bool>>
+		previousNA_; /* thread id -> {index, isRead} */
 
 	/* hazard pointers */
 	std::unordered_map<SAddr, SAddr> hpProtectMap_; /* hp addr -> protected addr */

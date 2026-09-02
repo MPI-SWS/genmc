@@ -14,10 +14,20 @@
 #include "genmc/Execution/EventLabel.hpp"
 #include "genmc/Execution/Consistency/ConsistencyChecker.hpp"
 #include "genmc/Execution/ExecutionGraph.hpp"
+#include "genmc/Execution/LoadAnnotation.hpp"
+#include "genmc/Support/Cast.hpp"
+#include "genmc/Support/Error.hpp"
+#include "genmc/Support/MemAccess.hpp"
 #include "genmc/Support/ModuleVarID.hpp"
+#include "genmc/Support/RMWOps.hpp"
 #include "genmc/Support/SExprVisitor.hpp"
+#include "genmc/Support/SVal.hpp"
 
-SVal EventLabel::getAccessValue(const AAccess &access) const
+#include <algorithm>
+#include <memory>
+#include <ranges>
+
+auto EventLabel::getAccessValue(const AAccess &access) const -> SVal
 {
 	const auto &g = *getParent();
 
@@ -26,21 +36,21 @@ SVal EventLabel::getAccessValue(const AAccess &access) const
 	return g.resolveAccessValue(rLab ? rLab->getRf() : this, access);
 }
 
-SVal EventLabel::getReturnValue() const
+auto EventLabel::getReturnValue() const -> SVal
 {
-	if (auto *rLab = genmc::dyn_cast<ReadLabel>(this)) {
+	if (const auto *rLab = genmc::dyn_cast<ReadLabel>(this)) {
 		VERIFY(rLab->getRf());
 		return getAccessValue(rLab->getAccess());
 	}
-	if (auto *tsLab = genmc::dyn_cast<ThreadStartLabel>(this)) {
+	if (const auto *tsLab = genmc::dyn_cast<ThreadStartLabel>(this)) {
 		return tsLab->getThreadInfo().arg;
 	}
-	if (auto *jLab = genmc::dyn_cast<ThreadJoinLabel>(this)) {
-		auto *eLab = genmc::dyn_cast<ThreadFinishLabel>(
+	if (const auto *jLab = genmc::dyn_cast<ThreadJoinLabel>(this)) {
+		const auto *eLab = genmc::dyn_cast<ThreadFinishLabel>(
 			jLab->getParent()->getLastThreadLabel(jLab->getChildId()));
 		return eLab->getRetVal();
 	}
-	if (auto *oLab = genmc::dyn_cast<OptionalLabel>(this)) {
+	if (const auto *oLab = genmc::dyn_cast<OptionalLabel>(this)) {
 		return SVal(oLab->isExpanded());
 	}
 	UNREACHABLE();
@@ -80,43 +90,43 @@ void MethodEndLabel::addSucc(MethodBeginLabel *succLab)
 	succLab->addPredNoCascade(this);
 }
 
-bool WriteLabel::isRMW() const
+auto WriteLabel::isRMW() const -> bool
 {
 	return CasWriteLabel::classofKind(getKind()) || FaiWriteLabel::classofKind(getKind());
 }
 
-bool ReadLabel::isRMW() const
+auto ReadLabel::isRMW() const -> bool
 {
 	if (!CasReadLabel::classofKind(getKind()) && !FaiReadLabel::classofKind(getKind()))
 		return false;
 
-	auto &g = *getParent();
-	auto *nLab = genmc::dyn_cast_if_present<WriteLabel>(g.po_imm_succ(this));
+	const auto &g = *getParent();
+	const auto *nLab = genmc::dyn_cast_if_present<WriteLabel>(g.po_imm_succ(this));
 	return nLab && nLab->isRMW() && nLab->getAddr() == getAddr();
 }
 
-bool WriteLabel::isEffectful() const
+auto WriteLabel::isEffectful() const -> bool
 {
-	auto &g = *getParent();
-	auto *xLab = genmc::dyn_cast<FaiWriteLabel>(this);
-	auto *rLab = genmc::dyn_cast<FaiReadLabel>(g.po_imm_pred(this));
+	const auto &g = *getParent();
+	const auto *xLab = genmc::dyn_cast<FaiWriteLabel>(this);
+	const auto *rLab = genmc::dyn_cast<FaiReadLabel>(g.po_imm_pred(this));
 	if (!xLab || rLab->getOp() != RMWBinOp::Xchg)
 		return true;
 
 	return rLab->getAccessValue(rLab->getAccess()) != xLab->getVal();
 }
 
-bool ReadLabel::valueMakesRMWSucceed(const SVal &val) const
+auto ReadLabel::valueMakesRMWSucceed(const SVal &val) const -> bool
 {
 	if (FaiReadLabel::classofKind(getKind()))
 		return true;
 	if (!CasReadLabel::classofKind(getKind()))
 		return false;
-	auto *casLab = static_cast<const CasReadLabel *>(this);
+	const auto *casLab = genmc::cast<CasReadLabel>(this);
 	return val == casLab->getExpected();
 }
 
-bool ReadLabel::valueMakesAssumeSucceed(const SVal &val) const
+auto ReadLabel::valueMakesAssumeSucceed(const SVal &val) const -> bool
 {
 	using Evaluator = SExprEvaluator<ModuleVarID>;
 	return getAnnot() && Evaluator().evaluate(&*getAnnot()->expr, val);
@@ -155,8 +165,16 @@ void ReadLabel::setRf(EventLabel *rfLab)
 	} else
 		UNREACHABLE();
 
-	/* and adjust the max flag */
+	/* and adjust the max flag... */
 	this->setAddedMax(getParent()->co_max(this->getAddr()) == rfLab);
+
+	/* as well as orderings for CASes. Don't try to resolve values from
+	 * reads of uninitialized dynamic memory */
+	auto *cLab = genmc::dyn_cast<CasReadLabel>(this);
+	if (cLab && !(rfLab->getPos().isInitializer() && getAddr().isDynamic()))
+		cLab->setOrdering(valueMakesRMWSucceed(getReturnValue())
+					  ? cLab->getSuccessOrdering()
+					  : cLab->getFailOrdering());
 }
 
 void WriteLabel::addCo(EventLabel *predLab)

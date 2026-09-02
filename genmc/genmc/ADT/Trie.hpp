@@ -43,6 +43,7 @@ public:
 		auto operator=(Node &&) -> Node & = delete;
 		Node(const Node &) = delete;
 		auto operator=(const Node &) -> Node & = delete;
+		~Node() = default;
 
 		explicit Node(const Payload &data, const Seq &label = {}) : lab(label), dat(data) {}
 		explicit Node(Payload &&data, Seq &&label = {})
@@ -50,25 +51,25 @@ public:
 		{}
 
 		auto begin() -> iterator { return children.begin(); }
-		auto begin() const -> const_iterator { return children.begin(); }
+		[[nodiscard]] auto begin() const -> const_iterator { return children.begin(); }
 		auto end() -> iterator { return children.end(); }
-		auto end() const -> const_iterator { return children.end(); }
+		[[nodiscard]] auto end() const -> const_iterator { return children.end(); }
 
 		[[nodiscard]] auto size() const -> size_t { return children.size(); }
 		[[nodiscard]] auto empty() const -> bool { return children.empty(); }
-		auto front() const -> const Node *& { return children.front(); }
+		[[nodiscard]] auto front() const -> const Node *& { return children.front(); }
 		auto front() -> Node *& { return children.front(); }
-		auto back() const -> const Node *& { return children.back(); }
+		[[nodiscard]] auto back() const -> const Node *& { return children.back(); }
 		auto back() -> Node *& { return children.back(); }
 
-		auto data() const -> const Payload & { return dat; }
+		[[nodiscard]] auto data() const -> const Payload & { return dat; }
 		void setData(Payload &&data) { dat = std::move(data); }
 
-		auto label() const -> const Seq & { return lab; }
+		[[nodiscard]] auto label() const -> const Seq & { return lab; }
 
 		auto getEdge(value_type id) -> Node *
 		{
-			Node *fNode = NULL;
+			Node *fNode = nullptr; // NOLINT(misc-const-correctness)
 			auto it = std::lower_bound(begin(), end(), id, NodeCmp());
 			if (it != end() && (*it)->label()[0] == id)
 				fNode = *it;
@@ -87,7 +88,7 @@ public:
 #endif /* ifdef ENABLE_GENMC_DEBUG */
 
 	private:
-		enum class QueryResult : std::int8_t {
+		enum class QueryResult : std::int8_t { // NOLINT(readability-enum-initial-value)
 			Same = -3,
 			StringIsPrefix = -2,
 			LabelIsPrefix = -1,
@@ -97,43 +98,43 @@ public:
 
 		/** Node comparators */
 		struct NodeCmp {
-			auto operator()(const Node *n1, const Node *n2) -> bool
+			auto operator()(const Node *lhs, const Node *rhs) -> bool
 			{
-				return ValCmp()(n1->label()[0], n2->label()[0]);
+				return ValCmp()(lhs->label()[0], rhs->label()[0]);
 			}
-			auto operator()(const Node *n, value_type id) -> bool
+			auto operator()(const Node *node, value_type id) -> bool
 			{
-				return ValCmp()(n->label()[0], id);
+				return ValCmp()(node->label()[0], id);
 			}
 		};
 
-		void addEdge(Node *n)
+		void addEdge(Node *node)
 		{
 			if (this->empty())
-				children.push_back(n);
+				children.push_back(node);
 			else {
-				auto it = std::lower_bound(begin(), end(), n, NodeCmp());
+				auto it = std::lower_bound(begin(), end(), node, NodeCmp());
 				// FIXME: no dups are allowed
-				children.insert(it, n);
+				children.insert(it, node);
 			}
 		}
 
-		void setEdge(Node *n)
+		void setEdge(Node *node)
 		{
-			auto id = n->label()[0];
+			auto id = node->label()[0];
 			auto it = std::lower_bound(begin(), end(), id, NodeCmp());
 			VERIFY(it != end(), "Node does not exists!");
-			*it = n;
+			*it = node;
 		}
 
-		auto query(typename Seq::const_iterator sBeg,
-			   typename Seq::const_iterator sEnd) const -> QueryResult
+		[[nodiscard]] auto query(typename Seq::const_iterator sBeg,
+					 typename Seq::const_iterator sEnd) const -> QueryResult
 		{
-			unsigned l1 = std::distance(sBeg, sEnd);
-			unsigned l2 = label().size();
+			const unsigned l1 = std::distance(sBeg, sEnd);
+			const unsigned l2 = label().size();
 
 			/** Find the length of common part */
-			unsigned l = std::min(l1, l2);
+			const unsigned l = std::min(l1, l2);
 			unsigned i = 0;
 			while ((i < l) && (*(sBeg + i) == label()[i]))
 				++i;
@@ -159,7 +160,7 @@ public:
 		addNode(Payload()); // FIXME
 	}
 	explicit Trie(const Payload &root) { addNode(root); }
-	explicit Trie(Payload &&root) { addNode(root); }
+	explicit Trie(Payload &&root) { addNode(std::move(root)); }
 
 	~Trie() = default;
 
@@ -171,14 +172,14 @@ public:
 	auto addSeq(const Seq &s, Payload &&data) -> bool
 	{
 		Node *cNode = getRoot();
-		Node *tNode = NULL;
+		Node *tNode = nullptr;
 
 		if (s.empty())
 			return false;
 
 		auto sBeg = s.begin();
 		auto sEnd = s.end();
-		while (tNode == NULL) {
+		while (tNode == nullptr) {
 			auto id = *sBeg;
 			if (auto *nNode = cNode->getEdge(id)) {
 				auto r = nNode->query(sBeg, sEnd);
@@ -216,10 +217,10 @@ public:
 		return true;
 	}
 
-	auto findLongestCommonPrefix(const Seq &s) const -> unsigned
+	[[nodiscard]] auto findLongestCommonPrefix(const Seq &s) const -> unsigned
 	{
 		Node *cNode = getRoot();
-		Node *tNode = nullptr;
+		const Node *tNode = nullptr;
 		unsigned result = 0;
 
 		if (s.empty())
@@ -228,8 +229,8 @@ public:
 		auto sBeg = s.begin();
 		auto sEnd = s.end();
 		while (tNode == nullptr) {
-			auto Id = *sBeg;
-			if (auto *nNode = cNode->getEdge(Id)) {
+			auto edgeKey = *sBeg;
+			if (auto *nNode = cNode->getEdge(edgeKey)) {
 				auto r = nNode->query(sBeg, sEnd);
 
 				switch (r) {
@@ -257,10 +258,10 @@ public:
 		return result;
 	}
 
-	auto lookup(const Seq &s) const -> const Payload *
+	[[nodiscard]] auto lookup(const Seq &s) const -> const Payload *
 	{
 		Node *cNode = getRoot();
-		Node *tNode = nullptr;
+		const Node *tNode = nullptr;
 
 		if (s.empty())
 			return &cNode->data();
@@ -268,8 +269,8 @@ public:
 		auto sBeg = s.begin();
 		auto sEnd = s.end();
 		while (tNode == nullptr) {
-			auto Id = *sBeg;
-			if (auto *nNode = cNode->getEdge(Id)) {
+			auto edgeKey = *sBeg;
+			if (auto *nNode = cNode->getEdge(edgeKey)) {
 				auto r = nNode->query(sBeg, sEnd);
 
 				switch (r) {
@@ -311,13 +312,13 @@ public:
 #ifdef ENABLE_GENMC_DEBUG
 	void dump()
 	{
-		for (auto &n : nodes)
-			n->dump();
+		for (auto &node : nodes)
+			node->dump();
 	}
 #endif /* ifdef ENABLE_GENMC_DEBUG */
 
 private:
-	auto getRoot() const -> Node * { return &*nodes[0]; }
+	[[nodiscard]] auto getRoot() const -> Node * { return &*nodes[0]; }
 
 	auto addNode(Payload &&data, const Seq &label = {}) -> Node *
 	{
@@ -326,9 +327,9 @@ private:
 		return &*nodes.back();
 	}
 
-	auto splitEdge(Node *n, value_type id, size_t index) -> Node *
+	auto splitEdge(Node *node, value_type id, size_t index) -> Node *
 	{
-		auto *eNode = n->getEdge(id);
+		auto *eNode = node->getEdge(id);
 		VERIFY(eNode, "Node doesn't exist");
 
 		auto &l = eNode->label();
@@ -337,7 +338,7 @@ private:
 		auto l2 = Seq(l.begin() + index, l.end());
 
 		auto *nNode = addNode(Payload(), l1);
-		n->setEdge(nNode);
+		node->setEdge(nNode);
 
 		eNode->lab = l2;
 		nNode->addEdge(eNode);

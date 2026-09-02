@@ -28,7 +28,7 @@ struct MonoidBool {
 	bool val = false;
 
 	MonoidBool() = default;
-	MonoidBool(bool b) : val(b) {}
+	MonoidBool(bool val) : val(val) {}
 
 	auto operator+=(const MonoidBool &rhs) -> MonoidBool &
 	{
@@ -85,8 +85,8 @@ public:
 		MapIterator endIt;
 	};
 
-	auto begin() const -> Iterator { return {map_.begin(), map_.end()}; }
-	auto end() const -> Iterator { return {map_.end(), map_.end()}; }
+	[[nodiscard]] auto begin() const -> Iterator { return {map_.begin(), map_.end()}; }
+	[[nodiscard]] auto end() const -> Iterator { return {map_.end(), map_.end()}; }
 
 	/** Returns whether POINT is in the set */
 	[[nodiscard]] auto contains(const Key &point) const -> bool { return map_.contains(point); }
@@ -100,12 +100,14 @@ public:
 	/** Returns whether the set overlaps with [start, end) */
 	[[nodiscard]] auto intersects(Key start, Key end) const -> bool
 	{
-		return map_.lower_bound(start, end) != map_.end();
+		auto it = map_.lower_bound(start, end);
+		return it != map_.end() && (*it).first.start < end;
 	}
 
 	[[nodiscard]] auto overlaps(const Interval<Key> &iv) const -> bool
 	{
-		return map_.lower_bound(iv) != map_.end();
+		auto it = map_.lower_bound(iv);
+		return it != map_.end() && (*it).first.start < iv.end;
 	}
 
 	/** Returns whether the set is empty */

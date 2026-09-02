@@ -13,11 +13,18 @@
 
 #include "RoundBoundDecider.hpp"
 #include "genmc/ADT/View.hpp"
+#include "genmc/Execution/Event.hpp"
+#include "genmc/Execution/EventLabel.hpp"
 #include "genmc/Execution/ExecutionGraph.hpp"
+#include "genmc/Support/Cast.hpp"
+#include "genmc/Support/Error.hpp"
 
-auto areSCPredsInView(const ExecutionGraph &g, const View &v, Event e) -> bool
+#include <algorithm>
+#include <utility>
+
+static auto areSCPredsInView(const ExecutionGraph &g, const View &v, Event e) -> bool
 {
-	auto *lab = g.getEventLabel(e);
+	const auto *lab = g.getEventLabel(e);
 	if (genmc::isa<ThreadStartLabel>(lab))
 		return v.contains(g.tc_pred(lab)->getPos());
 
@@ -27,12 +34,12 @@ auto areSCPredsInView(const ExecutionGraph &g, const View &v, Event e) -> bool
 	if (!genmc::isa<MemAccessLabel>(lab))
 		return true;
 
-	if (auto *rLab = genmc::dyn_cast<ReadLabel>(lab))
+	if (const auto *rLab = genmc::dyn_cast<ReadLabel>(lab))
 		return v.contains(rLab->getRf()->getPos());
 
-	auto *sLab = genmc::dyn_cast<WriteLabel>(lab);
+	const auto *sLab = genmc::dyn_cast<WriteLabel>(lab);
 	VERIFY(sLab);
-	auto *pLab = g.co_imm_pred(sLab);
+	const auto *pLab = g.co_imm_pred(sLab);
 	if (pLab && !v.contains(pLab->getPos()))
 		return false;
 
@@ -43,16 +50,16 @@ auto areSCPredsInView(const ExecutionGraph &g, const View &v, Event e) -> bool
 auto RoundBoundDecider::doesExecutionExceedBound(unsigned int bound) const -> bool
 {
 
-	auto &g = getGraph();
+	const auto &g = getGraph();
 	const auto full = *genmc::dyn_cast<View>(g.getViewFromStamp(g.getMaxStamp()).get());
 	View curr;
-	for (auto i = 1; i < (int)g.getNumThreads(); i++)
+	for (auto i = 1; std::cmp_less(i, g.getNumThreads()); i++)
 		curr.setMax(Event(i, -1));
 
 	do {
 		auto exists = false;
 		auto done = true;
-		for (auto i = 0U; i < g.getNumThreads(); i++) {
+		for (auto i = 0; i < g.getNumThreads(); i++) {
 			for (auto j = curr.getMax(i); j < full.getMax(i); j++) {
 				auto next = Event(i, j + 1);
 				if (!areSCPredsInView(g, curr, next)) {
@@ -73,7 +80,7 @@ auto RoundBoundDecider::doesExecutionExceedBound(unsigned int bound) const -> bo
 #ifdef ENABLE_GENMC_DEBUG
 auto RoundBoundDecider::calculate() const -> unsigned
 {
-	auto &g = getGraph();
+	const auto &g = getGraph();
 	const auto full = *genmc::dyn_cast<View>(g.getViewFromStamp(g.getMaxStamp()).get());
 	View curr;
 	unsigned bound = 0;
@@ -81,7 +88,7 @@ auto RoundBoundDecider::calculate() const -> unsigned
 	while (true) {
 		auto exists = false;
 		auto done = true;
-		for (auto i = 0U; i < g.getNumThreads(); i++) {
+		for (auto i = 0; i < g.getNumThreads(); i++) {
 			for (auto j = curr.getMax(i); j < full.getMax(i); j++) {
 				auto next = Event(i, j + 1);
 				if (!areSCPredsInView(g, curr, next)) {

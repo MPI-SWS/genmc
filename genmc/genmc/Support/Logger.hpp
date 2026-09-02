@@ -47,7 +47,7 @@ template <StreamTag U> class Logger {
 
 protected:
 	/* So that derived classes can bypass the initial write to buffer */
-	Logger(VerbosityLevel l, bool) : out_(::detail::to_stream<U>()) {}
+	Logger(VerbosityLevel /*l*/, bool /*unused*/) : out_(::detail::to_stream<U>()) {}
 
 	/* Allow derived classes to print the level the same way this class does. */
 	void printLevel(VerbosityLevel l) const
@@ -73,9 +73,12 @@ public:
 #else
 		*out_ << std::format(fmt, std::forward<Args>(args)...);
 #endif /* __cpp_lib_print */
+		if constexpr (std::is_same_v<U, out_tag>)
+			out_->flush();
 	}
 
 protected:
+	// NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
 	std::ostream *out_;
 };
 
@@ -86,7 +89,7 @@ public:
 	/* In case multiple `LoggerOnce` are created with the same id, the one that was created
 	 * first will be used. */
 	LoggerOnce(const std::string &id, VerbosityLevel l = VerbosityLevel::Warning)
-		: Logger<U>(l, true), shouldPrint_(ids_.count(id) == 0)
+		: Logger<U>(l, true), shouldPrint_(!ids_.contains(id))
 	{
 		if (shouldPrint_) {
 			ids_.insert(id);
@@ -101,11 +104,12 @@ public:
 	}
 
 private:
-	const bool shouldPrint_{};
+	const bool shouldPrint_{}; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 
 	static thread_local inline std::set<std::string> ids_;
 };
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 inline VerbosityLevel logLevel = VerbosityLevel::Tip;
 
 /** Logs a formatted message (adds newline), in `std::format` style */

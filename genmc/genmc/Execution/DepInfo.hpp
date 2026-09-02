@@ -14,8 +14,8 @@
 #ifndef GENMC_DEP_INFO_HPP
 #define GENMC_DEP_INFO_HPP
 
-#include "genmc/ADT/VSet.hpp"
 #include "Event.hpp"
+#include "genmc/ADT/VSet.hpp"
 
 #include <format>
 
@@ -46,7 +46,7 @@ public:
 	void clear() { set_.clear(); }
 
 	/** Returns true if e is contained in the dependencies */
-	[[nodiscard]] auto contains(Event e) const -> bool { return set_.count(e); }
+	[[nodiscard]] auto contains(Event e) const -> bool { return set_.contains(e); }
 
 	/** Returns true if there are no dependencies */
 	[[nodiscard]] auto empty() const -> bool { return set_.empty(); }

@@ -27,12 +27,12 @@
  *     https://opensource.org/licenses/MIT
  */
 
-#include "genmc/Execution/Event.hpp"
 #include "Runtime/Interpreter.h"
-#include "passes/LLVMUtils.hpp"
+#include "genmc/Execution/Event.hpp"
 #include "genmc/Support/Error.hpp"
 #include "genmc/Support/SExprVisitor.hpp"
 #include "genmc/Verification/GenMCDriver.hpp"
+#include "passes/LLVMUtils.hpp"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/IntrinsicLowering.h"
@@ -53,13 +53,9 @@ using namespace llvm;
 
 #define DEBUG_TYPE "interpreter"
 
-#if LLVM_VERSION_MAJOR < 11
-#define LLVM_VECTOR_TYPEID_CASES case llvm::Type::VectorTyID:
-#else
 #define LLVM_VECTOR_TYPEID_CASES                                                                   \
 	case llvm::Type::FixedVectorTyID:                                                          \
 	case llvm::Type::ScalableVectorTyID:
-#endif
 
 // static cl::opt<bool> PrintVolatile("interpreter-print-volatile", cl::Hidden,
 //           cl::desc("make the interpreter print every volatile load and store"));
@@ -1002,71 +998,6 @@ void Interpreter::visitFCmpInst(FCmpInst &I)
 	SetValue(&I, R, SF);
 }
 
-#if LLVM_VERSION_MAJOR < 19
-static GenericValue executeCmpInst(unsigned predicate, GenericValue Src1, GenericValue Src2,
-				   Type *Ty)
-{
-	GenericValue Result;
-	switch (predicate) {
-	case ICmpInst::ICMP_EQ:
-		return executeICMP_EQ(Src1, Src2, Ty);
-	case ICmpInst::ICMP_NE:
-		return executeICMP_NE(Src1, Src2, Ty);
-	case ICmpInst::ICMP_UGT:
-		return executeICMP_UGT(Src1, Src2, Ty);
-	case ICmpInst::ICMP_SGT:
-		return executeICMP_SGT(Src1, Src2, Ty);
-	case ICmpInst::ICMP_ULT:
-		return executeICMP_ULT(Src1, Src2, Ty);
-	case ICmpInst::ICMP_SLT:
-		return executeICMP_SLT(Src1, Src2, Ty);
-	case ICmpInst::ICMP_UGE:
-		return executeICMP_UGE(Src1, Src2, Ty);
-	case ICmpInst::ICMP_SGE:
-		return executeICMP_SGE(Src1, Src2, Ty);
-	case ICmpInst::ICMP_ULE:
-		return executeICMP_ULE(Src1, Src2, Ty);
-	case ICmpInst::ICMP_SLE:
-		return executeICMP_SLE(Src1, Src2, Ty);
-	case FCmpInst::FCMP_ORD:
-		return executeFCMP_ORD(Src1, Src2, Ty);
-	case FCmpInst::FCMP_UNO:
-		return executeFCMP_UNO(Src1, Src2, Ty);
-	case FCmpInst::FCMP_OEQ:
-		return executeFCMP_OEQ(Src1, Src2, Ty);
-	case FCmpInst::FCMP_UEQ:
-		return executeFCMP_UEQ(Src1, Src2, Ty);
-	case FCmpInst::FCMP_ONE:
-		return executeFCMP_ONE(Src1, Src2, Ty);
-	case FCmpInst::FCMP_UNE:
-		return executeFCMP_UNE(Src1, Src2, Ty);
-	case FCmpInst::FCMP_OLT:
-		return executeFCMP_OLT(Src1, Src2, Ty);
-	case FCmpInst::FCMP_ULT:
-		return executeFCMP_ULT(Src1, Src2, Ty);
-	case FCmpInst::FCMP_OGT:
-		return executeFCMP_OGT(Src1, Src2, Ty);
-	case FCmpInst::FCMP_UGT:
-		return executeFCMP_UGT(Src1, Src2, Ty);
-	case FCmpInst::FCMP_OLE:
-		return executeFCMP_OLE(Src1, Src2, Ty);
-	case FCmpInst::FCMP_ULE:
-		return executeFCMP_ULE(Src1, Src2, Ty);
-	case FCmpInst::FCMP_OGE:
-		return executeFCMP_OGE(Src1, Src2, Ty);
-	case FCmpInst::FCMP_UGE:
-		return executeFCMP_UGE(Src1, Src2, Ty);
-	case FCmpInst::FCMP_FALSE:
-		return executeFCMP_BOOL(Src1, Src2, Ty, false);
-	case FCmpInst::FCMP_TRUE:
-		return executeFCMP_BOOL(Src1, Src2, Ty, true);
-	default:
-		dbgs() << "Unhandled Cmp predicate\n";
-		llvm_unreachable(nullptr);
-	}
-}
-#endif
-
 void Interpreter::visitBinaryOperator(BinaryOperator &I)
 {
 	ExecutionContext &SF = ECStack().back();
@@ -1679,16 +1610,17 @@ void Interpreter::visitAtomicCmpXchgInst(AtomicCmpXchgInst &I)
 #define IMPLEMENT_CAS_VISIT(__kindR, __kindW)                                                      \
 	case switchPair(EventLabel::__kindR, EventLabel::__kindW): {                               \
 		auto ret = CALL_DRIVER(handle##__kindR, currDbgInfo(ptr), currPos(),               \
-				       toGenMCOrdering(I.getSuccessOrdering()), ptr, size,         \
+				       toGenMCOrdering(I.getSuccessOrdering()),                    \
+				       toGenMCOrdering(I.getFailureOrdering()), ptr, size,         \
 				       GV_TO_SVAL(cmpVal, typ), GV_TO_SVAL(newVal, typ),           \
-				       getWriteAttr(I), nullptr, getCurrentAnnotConcretized(),     \
-				       GET_DEPS(lDeps));                                           \
+				       getWriteAttr(I), I.isWeak(), nullptr,                       \
+				       getCurrentAnnotConcretized(), GET_DEPS(lDeps));             \
                                                                                                    \
-		auto retVal = std::get_if<SVal>(&ret);                                             \
+		auto retVal = std::get_if<GenMCDriver::CasReadResult>(&ret);                       \
 		if (!retVal)                                                                       \
 			return;                                                                    \
-		res = *retVal;                                                                     \
-		cmpRes = res == GV_TO_SVAL(cmpVal, typ);                                           \
+		res = retVal->val;                                                                 \
+		cmpRes = retVal->success;                                                          \
 		updateDataDeps(getCurThr().id, &I, currPos());                                     \
 		updateAddrPoDeps(getCurThr().id, I.getPointerOperand());                           \
 		if (!cmpRes)                                                                       \
@@ -2780,24 +2712,6 @@ GenericValue Interpreter::getConstantExprValue(ConstantExpr *CE, ExecutionContex
 	switch (CE->getOpcode()) {
 	case Instruction::Trunc:
 		return executeTruncInst(CE->getOperand(0), CE->getType(), SF);
-#if LLVM_VERSION_MAJOR < 19
-	case Instruction::ZExt:
-		return executeZExtInst(CE->getOperand(0), CE->getType(), SF);
-	case Instruction::SExt:
-		return executeSExtInst(CE->getOperand(0), CE->getType(), SF);
-	case Instruction::FPTrunc:
-		return executeFPTruncInst(CE->getOperand(0), CE->getType(), SF);
-	case Instruction::FPExt:
-		return executeFPExtInst(CE->getOperand(0), CE->getType(), SF);
-	case Instruction::UIToFP:
-		return executeUIToFPInst(CE->getOperand(0), CE->getType(), SF);
-	case Instruction::SIToFP:
-		return executeSIToFPInst(CE->getOperand(0), CE->getType(), SF);
-	case Instruction::FPToUI:
-		return executeFPToUIInst(CE->getOperand(0), CE->getType(), SF);
-	case Instruction::FPToSI:
-		return executeFPToSIInst(CE->getOperand(0), CE->getType(), SF);
-#endif
 	case Instruction::PtrToInt:
 		return executePtrToIntInst(CE->getOperand(0), CE->getType(), SF);
 	case Instruction::IntToPtr:
@@ -2807,18 +2721,6 @@ GenericValue Interpreter::getConstantExprValue(ConstantExpr *CE, ExecutionContex
 	case Instruction::GetElementPtr:
 		return executeGEPOperation(CE->getOperand(0), gep_type_begin(CE), gep_type_end(CE),
 					   SF);
-#if LLVM_VERSION_MAJOR < 19
-	case Instruction::FCmp:
-	case Instruction::ICmp:
-		return executeCmpInst(CE->getPredicate(), getOperandValue(CE->getOperand(0), SF),
-				      getOperandValue(CE->getOperand(1), SF),
-				      CE->getOperand(0)->getType());
-	case Instruction::Select:
-		return executeSelectInst(getOperandValue(CE->getOperand(0), SF),
-					 getOperandValue(CE->getOperand(1), SF),
-					 getOperandValue(CE->getOperand(2), SF),
-					 CE->getOperand(0)->getType());
-#endif
 	default:
 		break;
 	}
@@ -2828,9 +2730,6 @@ GenericValue Interpreter::getConstantExprValue(ConstantExpr *CE, ExecutionContex
 	GenericValue Op0 = getOperandValue(CE->getOperand(0), SF);
 	GenericValue Op1 = getOperandValue(CE->getOperand(1), SF);
 	GenericValue Dest;
-#if LLVM_VERSION_MAJOR < 19
-	Type *Ty = CE->getOperand(0)->getType();
-#endif
 	switch (CE->getOpcode()) {
 	case Instruction::Add:
 		Dest.IntVal = Op0.IntVal + Op1.IntVal;
@@ -2841,55 +2740,12 @@ GenericValue Interpreter::getConstantExprValue(ConstantExpr *CE, ExecutionContex
 	case Instruction::Mul:
 		Dest.IntVal = Op0.IntVal * Op1.IntVal;
 		break;
-#if LLVM_VERSION_MAJOR < 19
-	case Instruction::FAdd:
-		executeFAddInst(Dest, Op0, Op1, Ty);
-		break;
-	case Instruction::FSub:
-		executeFSubInst(Dest, Op0, Op1, Ty);
-		break;
-	case Instruction::FMul:
-		executeFMulInst(Dest, Op0, Op1, Ty);
-		break;
-	case Instruction::FDiv:
-		executeFDivInst(Dest, Op0, Op1, Ty);
-		break;
-	case Instruction::FRem:
-		executeFRemInst(Dest, Op0, Op1, Ty);
-		break;
-	case Instruction::SDiv:
-		Dest.IntVal = Op0.IntVal.sdiv(Op1.IntVal);
-		break;
-	case Instruction::UDiv:
-		Dest.IntVal = Op0.IntVal.udiv(Op1.IntVal);
-		break;
-	case Instruction::URem:
-		Dest.IntVal = Op0.IntVal.urem(Op1.IntVal);
-		break;
-	case Instruction::SRem:
-		Dest.IntVal = Op0.IntVal.srem(Op1.IntVal);
-		break;
-	case Instruction::And:
-		Dest.IntVal = Op0.IntVal & Op1.IntVal;
-		break;
-	case Instruction::Or:
-		Dest.IntVal = Op0.IntVal | Op1.IntVal;
-		break;
-#endif
 	case Instruction::Xor:
 		Dest.IntVal = Op0.IntVal ^ Op1.IntVal;
 		break;
 	case Instruction::Shl:
 		Dest.IntVal = Op0.IntVal.shl(Op1.IntVal.getZExtValue());
 		break;
-#if LLVM_VERSION_MAJOR < 19
-	case Instruction::LShr:
-		Dest.IntVal = Op0.IntVal.lshr(Op1.IntVal.getZExtValue());
-		break;
-	case Instruction::AShr:
-		Dest.IntVal = Op0.IntVal.ashr(Op1.IntVal.getZExtValue());
-		break;
-#endif
 	default:
 		dbgs() << "Unhandled ConstantExpr: " << *CE << "\n";
 		llvm_unreachable("Unhandled ConstantExpr");
@@ -3230,7 +3086,7 @@ void Interpreter::callMutexLock(Function *F, const std::vector<GenericValue> &Ar
 	Type *typ = F->getReturnType();
 	GenericValue result;
 
-	handleLock(ptr, getTypeSize(typ), &*specialDeps);
+	handleLock(ptr, getTypeSize(typ), specialDeps.get());
 
 	/*
 	 * We need to return a result anyway, because even if the current thread
@@ -3250,7 +3106,7 @@ void Interpreter::callMutexUnlock(Function *F, const std::vector<GenericValue> &
 	Type *typ = F->getReturnType();
 	GenericValue result;
 
-	handleUnlock(ptr, getTypeSize(typ), &*specialDeps);
+	handleUnlock(ptr, getTypeSize(typ), specialDeps.get());
 
 	result.IntVal = APInt(typ->getIntegerBitWidth(), 0); /* Success */
 	returnValueToCaller(F->getReturnType(), result);
@@ -3490,12 +3346,12 @@ void Interpreter::callOutput(Function *F, const std::vector<GenericValue> &ArgVa
 	CALL_DRIVER(handleOutput, currDbgInfo(), currPos(), msg);
 }
 
-bool isInternalCall(Function *F) { return internalFunNames.count(F->getName().str()); }
+bool Interpreter::isInternalCall(const Function *F) const { return internalFunCache_.contains(F); }
 
 void Interpreter::callInternalFunction(Function *F, const std::vector<GenericValue> &ArgVals,
 				       const std::unique_ptr<EventDeps> &specialDeps)
 {
-	auto fCode = internalFunNames.at(F->getName().str());
+	auto fCode = internalFunCache_.lookup(F);
 
 	switch (fCode) {
 #define HANDLE_FUNCTION(NUM, FUN, NAME)                                                            \

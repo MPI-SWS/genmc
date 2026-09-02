@@ -34,17 +34,17 @@ public:
 	void visitBlockLabel(const BlockLabel &lab)
 	{
 		driver->handleBlock(std::unique_ptr<BlockLabel>(
-			static_cast<BlockLabel *>(lab.clone().release())));
+			genmc::cast<BlockLabel>(lab.clone().release())));
 	}
 	void visitThreadKillLabel(const ThreadKillLabel &lab)
 	{
 		driver->handleThreadKill(std::unique_ptr<ThreadKillLabel>(
-			static_cast<ThreadKillLabel *>(lab.clone().release())));
+			genmc::cast<ThreadKillLabel>(lab.clone().release())));
 	}
 	void visitThreadFinishLabel(const ThreadFinishLabel &lab)
 	{
 		driver->handleThreadFinish(std::unique_ptr<ThreadFinishLabel>(
-			static_cast<ThreadFinishLabel *>(lab.clone().release())));
+			genmc::cast<ThreadFinishLabel>(lab.clone().release())));
 	}
 
 	void visitReadLabel(const ReadLabel &lab)
@@ -53,7 +53,7 @@ public:
 			driver->handleNALoad(lab.getPos(), lab.getAddr(), lab.getSize());
 		} else {
 			driver->handleLoad(std::unique_ptr<ReadLabel>(
-						   static_cast<ReadLabel *>(lab.clone().release())),
+						   genmc::cast<ReadLabel>(lab.clone().release())),
 					   std::nullopt);
 		}
 	}
@@ -64,8 +64,8 @@ public:
 			driver->handleNAStore(lab.getPos(), lab.getAddr(), lab.getSize(),
 					      lab.getVal());
 		} else {
-			driver->handleStore(std::unique_ptr<WriteLabel>(static_cast<WriteLabel *>(
-						    lab.clone().release())),
+			driver->handleStore(std::unique_ptr<WriteLabel>(
+						    genmc::cast<WriteLabel>(lab.clone().release())),
 					    std::nullopt);
 		}
 	}
@@ -73,13 +73,13 @@ public:
 	void visitFenceLabel(const FenceLabel &lab)
 	{
 		driver->handleFence(std::unique_ptr<FenceLabel>(
-			static_cast<FenceLabel *>(lab.clone().release())));
+			genmc::cast<FenceLabel>(lab.clone().release())));
 	}
 
 	void visitOptionalLabel(const OptionalLabel &lab)
 	{
 		driver->handleOptional(std::unique_ptr<OptionalLabel>(
-			static_cast<OptionalLabel *>(lab.clone().release())));
+			genmc::cast<OptionalLabel>(lab.clone().release())));
 	}
 
 	void visitMallocLabel(const MallocLabel &lab)
@@ -102,61 +102,62 @@ public:
 	void visitThreadCreateLabel(const ThreadCreateLabel &lab)
 	{
 		driver->handleThreadCreate(std::unique_ptr<ThreadCreateLabel>(
-			static_cast<ThreadCreateLabel *>(lab.clone().release())));
+			genmc::cast<ThreadCreateLabel>(lab.clone().release())));
 	}
 	void visitThreadJoinLabel(const ThreadJoinLabel &lab)
 	{
 		driver->handleThreadJoin(std::unique_ptr<ThreadJoinLabel>(
-			static_cast<ThreadJoinLabel *>(lab.clone().release())));
+			genmc::cast<ThreadJoinLabel>(lab.clone().release())));
 	}
 	void visitHpProtectLabel(const HpProtectLabel &lab)
 	{
 		driver->handleDummy(std::unique_ptr<HpProtectLabel>(
-			static_cast<HpProtectLabel *>(lab.clone().release())));
+			genmc::cast<HpProtectLabel>(lab.clone().release())));
 	}
 	void visitHelpingCasLabel(const HelpingCasLabel &lab)
 	{
 		driver->handleHelpingCas(std::unique_ptr<HelpingCasLabel>(
-			static_cast<HelpingCasLabel *>(lab.clone().release())));
+			genmc::cast<HelpingCasLabel>(lab.clone().release())));
 	}
 	void visitLoopBeginLabel(const LoopBeginLabel &lab)
 	{
 		driver->handleLoopBegin(std::unique_ptr<LoopBeginLabel>(
-			static_cast<LoopBeginLabel *>(lab.clone().release())));
+			genmc::cast<LoopBeginLabel>(lab.clone().release())));
 	}
 	void visitSpinStartLabel(const SpinStartLabel &lab)
 	{
 		driver->handleSpinStart(std::unique_ptr<SpinStartLabel>(
-			static_cast<SpinStartLabel *>(lab.clone().release())));
+			genmc::cast<SpinStartLabel>(lab.clone().release())));
 	}
 	void visitFaiZNESpinEndLabel(const FaiZNESpinEndLabel &lab)
 	{
 		driver->handleFaiZNESpinEnd(std::unique_ptr<FaiZNESpinEndLabel>(
-			static_cast<FaiZNESpinEndLabel *>(lab.clone().release())));
+			genmc::cast<FaiZNESpinEndLabel>(lab.clone().release())));
 	}
 	void visitLockZNESpinEndLabel(const LockZNESpinEndLabel &lab)
 	{
 		driver->handleLockZNESpinEnd(std::unique_ptr<LockZNESpinEndLabel>(
-			static_cast<LockZNESpinEndLabel *>(lab.clone().release())));
+			genmc::cast<LockZNESpinEndLabel>(lab.clone().release())));
 	}
 
 	void visitMethodBeginLabel(const MethodBeginLabel &lab)
 	{
 		driver->handleDummy(std::unique_ptr<MethodBeginLabel>(
-			static_cast<MethodBeginLabel *>(lab.clone().release())));
+			genmc::cast<MethodBeginLabel>(lab.clone().release())));
 	}
 
 	void visitMethodEndLabel(const MethodEndLabel &lab)
 	{
 		driver->handleDummy(std::unique_ptr<MethodEndLabel>(
-			static_cast<MethodEndLabel *>(lab.clone().release())));
+			genmc::cast<MethodEndLabel>(lab.clone().release())));
 	}
 
 	/* Start,Init etc should never be handled here */
 
-	void visitEventLabel(const EventLabel &lab) { UNREACHABLE(); }
+	void visitEventLabel(const EventLabel & /*lab*/) { UNREACHABLE(); }
 
 protected:
+	// NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
 	GenMCDriver *driver;
 };
 

@@ -12,9 +12,9 @@
  */
 
 #include "ThreadPinner.hpp"
-#include "Error.hpp"
 
 #ifdef HAVE_LIBHWLOC
+#include "Error.hpp"
 
 ThreadPinner::ThreadPinner(unsigned int n) : numTasks(n)
 {

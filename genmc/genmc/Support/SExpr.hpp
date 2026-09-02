@@ -15,7 +15,6 @@
 #define GENMC_S_EXPR_HPP
 
 #include "genmc/Support/Error.hpp"
-#include "genmc/Support/SExpr.hpp"
 #include "genmc/Support/SVal.hpp"
 
 #include <algorithm>
@@ -43,13 +42,14 @@
  * Contains some things all subclasses provide (e.g., the kids for this node).
  * Currently supports expressions with integers only.
  */
-template <typename T> class SExpr {
+template <typename T> class SExpr { // NOLINT(cppcoreguidelines-special-member-functions)
 
 public:
 	using Width = unsigned;
 	static const Width BoolWidth = 1;
 
-	enum Kind {
+	// NOLINTNEXTLINE(cppcoreguidelines-use-enum-class,readability-enum-initial-value)
+	enum Kind : std::int8_t {
 		InvalidKind = -1,
 
 		/* Primitive */
@@ -115,30 +115,30 @@ public:
 	};
 
 protected:
-	SExpr() = delete;
-	SExpr(Kind k, Width w, std::vector<std::unique_ptr<SExpr>> &&kids = {})
-		: kind(k), width(w), kids(std::move(kids))
+	SExpr() = delete; // NOLINT(modernize-use-equals-delete)
+	SExpr(Kind kind, Width w, std::vector<std::unique_ptr<SExpr>> &&kids = {})
+		: kind(kind), width(w), kids(std::move(kids))
 	{}
 
 public:
-	virtual ~SExpr() {}
+	virtual ~SExpr() = default;
 
 	/** The kind of this node (LLVM-style RTTI) */
-	Kind getKind() const { return kind; }
+	[[nodiscard]] auto getKind() const -> Kind { return kind; }
 
 	/** The width of this integer (in bits) */
-	Width getWidth() const { return width; }
+	[[nodiscard]] auto getWidth() const -> Width { return width; }
 
 	/** The kids of this node */
-	size_t getNumKids() const { return kids.size(); }
+	[[nodiscard]] auto getNumKids() const -> size_t { return kids.size(); }
 
 	/** Fetches the i-th kid */
-	const SExpr<T> *getKid(unsigned i) const
+	[[nodiscard]] auto getKid(unsigned i) const -> const SExpr<T> *
 	{
 		ASSERT(i < kids.size(), "Index out of bounds!");
 		return kids[i].get();
 	}
-	SExpr<T> *getKid(unsigned i)
+	auto getKid(unsigned i) -> SExpr<T> *
 	{
 		ASSERT(i < kids.size(), "Index out of bounds!");
 		return kids[i].get();
@@ -151,21 +151,24 @@ public:
 		kids[i] = std::move(e);
 	}
 
-	virtual std::unique_ptr<SExpr> clone() const = 0;
+	[[nodiscard]] virtual auto clone() const -> std::unique_ptr<SExpr> = 0;
 
-	static bool classof(const SExpr<T> *) { return true; }
+	static auto classof(const SExpr<T> * /*unused*/) -> bool { return true; }
 
 protected:
 	template <typename U> friend class SExprEvaluator;
 	template <typename U> friend class SExprTransformer;
 
 	/** Returns a container with this node's kids */
-	const std::vector<std::unique_ptr<SExpr<T>>> &getKids() const { return kids; }
+	[[nodiscard]] auto getKids() const -> const std::vector<std::unique_ptr<SExpr<T>>> &
+	{
+		return kids;
+	}
 
 	/** This function is necessary because we cannot move from initializer lists,
 	 * and also cannot copy unique_ptr<>s. We do need a way to construct a vector
 	 * of unique_ptr<>s from its elements though... */
-	void addKid(std::unique_ptr<SExpr<T>> &&k) { kids.push_back(std::move(k)); }
+	void addKid(std::unique_ptr<SExpr<T>> &&kid) { kids.push_back(std::move(kid)); }
 
 private:
 	Kind kind;
@@ -175,8 +178,8 @@ private:
 
 /** Helper class to clone SExprs w/ value_ptr<>s */
 template <typename T> struct SExprCloner {
-	SExpr<T> *operator()(SExpr<T> const &x) const { return x.clone().release(); }
-	// SExpr *operator()(SExpr &&x) const { return new SExpr(std::move(x)); }
+	auto operator()(const SExpr<T> &expr) const -> SExpr<T> * { return expr.clone().release(); }
+	// SExpr *operator()(SExpr &&expr) const { return new SExpr(std::move(expr)); }
 };
 
 /*******************************************************************************
@@ -197,28 +200,32 @@ protected:
 
 public:
 	/** Returns the constant value */
-	const SVal &getValue() const { return value; }
+	[[nodiscard]] auto getValue() const -> const SVal & { return value; }
 
-	template <typename... Ts> static std::unique_ptr<ConcreteExpr<T>> create(Ts &&...params)
+	template <typename... Ts>
+	static auto create(Ts &&...params) -> std::unique_ptr<ConcreteExpr<T>>
 	{
 		return std::unique_ptr<ConcreteExpr<T>>(
 			new ConcreteExpr(std::forward<Ts>(params)...));
 	}
-	static std::unique_ptr<ConcreteExpr<T>> createTrue()
+	static auto createTrue() -> std::unique_ptr<ConcreteExpr<T>>
 	{
 		return std::unique_ptr<ConcreteExpr<T>>(new ConcreteExpr(1, SVal(1)));
 	}
-	static std::unique_ptr<ConcreteExpr<T>> createFalse()
+	static auto createFalse() -> std::unique_ptr<ConcreteExpr<T>>
 	{
 		return std::unique_ptr<ConcreteExpr<T>>(new ConcreteExpr(1, SVal(0)));
 	}
 
-	std::unique_ptr<SExpr<T>> clone() const override
+	[[nodiscard]] auto clone() const -> std::unique_ptr<SExpr<T>> override
 	{
 		return create(this->getWidth(), getValue());
 	}
 
-	static bool classof(const SExpr<T> *E) { return E->getKind() == Kind::Concrete; }
+	static auto classof(const SExpr<T> *expr) -> bool
+	{
+		return expr->getKind() == Kind::Concrete;
+	}
 
 private:
 	SVal value;
@@ -249,31 +256,35 @@ protected:
 
 public:
 	/** Returns an identifier to this register */
-	const T &getRegister() const { return reg; }
+	[[nodiscard]] auto getRegister() const -> const T & { return reg; }
 
 	/** Returns the name of this register (in LLVM-IR) */
-	const std::string &getName() const { return name; }
+	[[nodiscard]] auto getName() const -> const std::string & { return name; }
 
-	template <typename... Ts> static std::unique_ptr<RegisterExpr<T>> create(Ts &&...params)
+	template <typename... Ts>
+	static auto create(Ts &&...params) -> std::unique_ptr<RegisterExpr<T>>
 	{
 		return std::unique_ptr<RegisterExpr<T>>(
 			new RegisterExpr(std::forward<Ts>(params)...));
 	}
 
-	std::unique_ptr<SExpr<T>> clone() const override
+	[[nodiscard]] auto clone() const -> std::unique_ptr<SExpr<T>> override
 	{
 		return std::unique_ptr<SExpr<T>>(
 			new RegisterExpr(this->getWidth(), getRegister(), getName()));
 	}
 
-	static bool classof(const SExpr<T> *E) { return E->getKind() == Kind::Register; }
+	static auto classof(const SExpr<T> *expr) -> bool
+	{
+		return expr->getKind() == Kind::Register;
+	}
 
 private:
 	/** Unique identifier for the symbolic variable */
 	T reg;
 
 	/** The name of this symbolic variable */
-	const std::string name;
+	const std::string name; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 
 	/** Counter used when creating names for symbolic vars */
 	static unsigned regCount;
@@ -296,27 +307,29 @@ protected:
 	using Kind = typename SExpr<T>::Kind;
 	using Width = typename SExpr<T>::Width;
 
-	SelectExpr(Width w, std::unique_ptr<SExpr<T>> &&c, std::unique_ptr<SExpr<T>> &&t,
+	SelectExpr(Width w, std::unique_ptr<SExpr<T>> &&cond, std::unique_ptr<SExpr<T>> &&trueExpr,
 		   std::unique_ptr<SExpr<T>> &&f)
 		: SExpr<T>(Kind::Select, w)
 	{
-		this->addKid(std::move(c));
-		this->addKid(std::move(t));
+		this->addKid(std::move(cond));
+		this->addKid(std::move(trueExpr));
 		this->addKid(std::move(f));
 	}
 
-	SelectExpr(std::unique_ptr<SExpr<T>> &&c, std::unique_ptr<SExpr<T>> &&t,
+	SelectExpr(std::unique_ptr<SExpr<T>> &&cond, std::unique_ptr<SExpr<T>> &&trueExpr,
 		   std::unique_ptr<SExpr<T>> &&f)
-		: SelectExpr(t->getWidth(), std::move(c), std::move(t), std::move(f))
+		: SelectExpr(trueExpr->getWidth(), std::move(cond), std::move(trueExpr),
+			     std::move(f))
 	{}
 
 public:
-	template <typename... Ts> static std::unique_ptr<SelectExpr<T>> create(Ts &&...params)
+	template <typename... Ts>
+	static auto create(Ts &&...params) -> std::unique_ptr<SelectExpr<T>>
 	{
 		return std::unique_ptr<SelectExpr<T>>(new SelectExpr(std::forward<Ts>(params)...));
 	}
 
-	std::unique_ptr<SExpr<T>> clone() const override
+	[[nodiscard]] auto clone() const -> std::unique_ptr<SExpr<T>> override
 	{
 		auto cCond = this->getKid(0)->clone();
 		auto cTrue = this->getKid(1)->clone();
@@ -325,7 +338,10 @@ public:
 			      std::move(cFalse));
 	}
 
-	static bool classof(const SExpr<T> *E) { return E->getKind() == Kind::Select; }
+	static auto classof(const SExpr<T> *expr) -> bool
+	{
+		return expr->getKind() == Kind::Select;
+	}
 };
 
 /*******************************************************************************
@@ -344,32 +360,32 @@ protected:
 	using Kind = typename SExpr<T>::Kind;
 	using Width = typename SExpr<T>::Width;
 
-	LogicalExpr(Kind k, Width w, std::vector<std::unique_ptr<SExpr<T>>> &&es)
-		: SExpr<T>(k, w, std::move(es))
+	LogicalExpr(Kind kind, Width w, std::vector<std::unique_ptr<SExpr<T>>> &&es)
+		: SExpr<T>(kind, w, std::move(es))
 	{
 		ASSERT(!this->getKids().empty());
 	}
-	LogicalExpr(Kind k, std::vector<std::unique_ptr<SExpr<T>>> &&es)
-		: LogicalExpr(k, SExpr<T>::BoolWidth, std::move(es))
+	LogicalExpr(Kind kind, std::vector<std::unique_ptr<SExpr<T>>> &&es)
+		: LogicalExpr(kind, SExpr<T>::BoolWidth, std::move(es))
 	{}
 
 	/** For convenience */
-	LogicalExpr(Kind k, std::unique_ptr<SExpr<T>> &&e) : SExpr<T>(k, SExpr<T>::BoolWidth)
+	LogicalExpr(Kind kind, std::unique_ptr<SExpr<T>> &&e) : SExpr<T>(kind, SExpr<T>::BoolWidth)
 	{
 		this->addKid(std::move(e));
 	}
-	LogicalExpr(Kind k, std::unique_ptr<SExpr<T>> &&e1, std::unique_ptr<SExpr<T>> &&e2)
-		: SExpr<T>(k, SExpr<T>::BoolWidth)
+	LogicalExpr(Kind kind, std::unique_ptr<SExpr<T>> &&e1, std::unique_ptr<SExpr<T>> &&e2)
+		: SExpr<T>(kind, SExpr<T>::BoolWidth)
 	{
 		this->addKid(std::move(e1));
 		this->addKid(std::move(e2));
 	}
 
 public:
-	static bool classof(const SExpr<T> *E)
+	static auto classof(const SExpr<T> *expr) -> bool
 	{
-		auto k = E->getKind();
-		return Kind::LogicalKindFirst <= k && k <= Kind::LogicalKindLast;
+		auto kind = expr->getKind();
+		return Kind::LogicalKindFirst <= kind && kind <= Kind::LogicalKindLast;
 	}
 };
 
@@ -395,13 +411,13 @@ public:
                                                                                                    \
 	public:                                                                                    \
 		template <typename... Ts>                                                          \
-		static std::unique_ptr<_class_kind##Expr<T>> create(Ts &&...params)                \
+		static auto create(Ts &&...params) -> std::unique_ptr<_class_kind##Expr<T>>        \
 		{                                                                                  \
 			return std::unique_ptr<_class_kind##Expr<T>>(                              \
 				new _class_kind##Expr(std::forward<Ts>(params)...));               \
 		}                                                                                  \
                                                                                                    \
-		std::unique_ptr<SExpr<T>> clone() const override                                   \
+		auto clone() const -> std::unique_ptr<SExpr<T>> override                           \
 		{                                                                                  \
 			std::vector<std::unique_ptr<SExpr<T>>> kidsCopy;                           \
 			std::for_each(this->getKids().begin(), this->getKids().end(),              \
@@ -411,9 +427,9 @@ public:
 			return create(std::move(kidsCopy));                                        \
 		}                                                                                  \
                                                                                                    \
-		static bool classof(const SExpr<T> *E)                                             \
+		static auto classof(const SExpr<T> *expr) -> bool                                  \
 		{                                                                                  \
-			return E->getKind() == SExpr<T>::_class_kind;                              \
+			return expr->getKind() == SExpr<T>::_class_kind;                           \
 		}                                                                                  \
 	};
 
@@ -430,17 +446,17 @@ protected:
 	NotExpr(std::unique_ptr<SExpr<T>> &&e) : LogicalExpr<T>(Kind::Not, std::move(e)) {}
 
 public:
-	template <typename... Ts> static std::unique_ptr<NotExpr<T>> create(Ts &&...params)
+	template <typename... Ts> static auto create(Ts &&...params) -> std::unique_ptr<NotExpr<T>>
 	{
 		return std::unique_ptr<NotExpr<T>>(new NotExpr(std::forward<Ts>(params)...));
 	}
 
-	std::unique_ptr<SExpr<T>> clone() const override
+	[[nodiscard]] auto clone() const -> std::unique_ptr<SExpr<T>> override
 	{
 		return create(this->getKid(0)->clone());
 	}
 
-	static bool classof(const SExpr<T> *E) { return E->getKind() == Kind::Not; }
+	static auto classof(const SExpr<T> *expr) -> bool { return expr->getKind() == Kind::Not; }
 };
 
 /*******************************************************************************
@@ -457,16 +473,16 @@ protected:
 	using Kind = typename SExpr<T>::Kind;
 	using Width = typename SExpr<T>::Width;
 
-	CastExpr(Kind k, Width w, std::unique_ptr<SExpr<T>> &&e) : SExpr<T>(k, w)
+	CastExpr(Kind kind, Width w, std::unique_ptr<SExpr<T>> &&e) : SExpr<T>(kind, w)
 	{
 		this->addKid(std::move(e));
 	}
 
 public:
-	static bool classof(const SExpr<T> *E)
+	static auto classof(const SExpr<T> *expr) -> bool
 	{
-		auto k = E->getKind();
-		return Kind::CastKindFirst <= k && k <= Kind::CastKindLast;
+		auto kind = expr->getKind();
+		return Kind::CastKindFirst <= kind && kind <= Kind::CastKindLast;
 	}
 };
 
@@ -483,20 +499,20 @@ public:
                                                                                                    \
 	public:                                                                                    \
 		template <typename... Ts>                                                          \
-		static std::unique_ptr<_class_kind##Expr<T>> create(Ts &&...params)                \
+		static auto create(Ts &&...params) -> std::unique_ptr<_class_kind##Expr<T>>        \
 		{                                                                                  \
 			return std::unique_ptr<_class_kind##Expr<T>>(                              \
 				new _class_kind##Expr(std::forward<Ts>(params)...));               \
 		}                                                                                  \
                                                                                                    \
-		std::unique_ptr<SExpr<T>> clone() const override                                   \
+		auto clone() const -> std::unique_ptr<SExpr<T>> override                           \
 		{                                                                                  \
 			return create(this->getWidth(), this->getKid(0)->clone());                 \
 		}                                                                                  \
                                                                                                    \
-		static bool classof(const SExpr<T> *E)                                             \
+		static auto classof(const SExpr<T> *expr) -> bool                                  \
 		{                                                                                  \
-			return E->getKind() == SExpr<T>::_class_kind;                              \
+			return expr->getKind() == SExpr<T>::_class_kind;                           \
 		}                                                                                  \
 	};
 
@@ -520,21 +536,21 @@ protected:
 	using Kind = typename SExpr<T>::Kind;
 	using Width = typename SExpr<T>::Width;
 
-	BinaryExpr(Kind k, Width w, std::unique_ptr<SExpr<T>> &&l, std::unique_ptr<SExpr<T>> &&r)
-		: SExpr<T>(k, w)
+	BinaryExpr(Kind kind, Width w, std::unique_ptr<SExpr<T>> &&l, std::unique_ptr<SExpr<T>> &&r)
+		: SExpr<T>(kind, w)
 	{
 		this->addKid(std::move(l));
 		this->addKid(std::move(r));
 	}
-	BinaryExpr(Kind k, std::unique_ptr<SExpr<T>> &&l, std::unique_ptr<SExpr<T>> &&r)
-		: BinaryExpr(k, l->getWidth(), std::move(l), std::move(r))
+	BinaryExpr(Kind kind, std::unique_ptr<SExpr<T>> &&l, std::unique_ptr<SExpr<T>> &&r)
+		: BinaryExpr(kind, l->getWidth(), std::move(l), std::move(r))
 	{}
 
 public:
-	static bool classof(const SExpr<T> *E)
+	static auto classof(const SExpr<T> *expr) -> bool
 	{
-		auto k = E->getKind();
-		return Kind::BinaryKindFirst <= k && k <= Kind::BinaryKindLast;
+		auto kind = expr->getKind();
+		return Kind::BinaryKindFirst <= kind && kind <= Kind::BinaryKindLast;
 	}
 };
 
@@ -556,20 +572,20 @@ public:
                                                                                                    \
 	public:                                                                                    \
 		template <typename... Ts>                                                          \
-		static std::unique_ptr<_class_kind##Expr<T>> create(Ts &&...params)                \
+		static auto create(Ts &&...params) -> std::unique_ptr<_class_kind##Expr<T>>        \
 		{                                                                                  \
 			return std::unique_ptr<_class_kind##Expr<T>>(                              \
 				new _class_kind##Expr(std::forward<Ts>(params)...));               \
 		}                                                                                  \
                                                                                                    \
-		std::unique_ptr<SExpr<T>> clone() const override                                   \
+		auto clone() const -> std::unique_ptr<SExpr<T>> override                           \
 		{                                                                                  \
 			return create(this->getKid(0)->clone(), this->getKid(1)->clone());         \
 		}                                                                                  \
                                                                                                    \
-		static bool classof(const SExpr<T> *E)                                             \
+		static auto classof(const SExpr<T> *expr) -> bool                                  \
 		{                                                                                  \
-			return E->getKind() == Kind::_class_kind;                                  \
+			return expr->getKind() == Kind::_class_kind;                               \
 		}                                                                                  \
 	};
 
@@ -606,15 +622,15 @@ protected:
 	using Kind = typename SExpr<T>::Kind;
 	using Width = typename SExpr<T>::Width;
 
-	CmpExpr(Kind k, std::unique_ptr<SExpr<T>> &&l, std::unique_ptr<SExpr<T>> &&r)
-		: BinaryExpr<T>(k, SExpr<T>::BoolWidth, std::move(l), std::move(r))
+	CmpExpr(Kind kind, std::unique_ptr<SExpr<T>> &&l, std::unique_ptr<SExpr<T>> &&r)
+		: BinaryExpr<T>(kind, SExpr<T>::BoolWidth, std::move(l), std::move(r))
 	{}
 
 public:
-	static bool classof(const SExpr<T> *E)
+	static auto classof(const SExpr<T> *expr) -> bool
 	{
-		auto k = E->getKind();
-		return Kind::CmpKindFirst <= k && k <= Kind::CmpKindLast;
+		auto kind = expr->getKind();
+		return Kind::CmpKindFirst <= kind && kind <= Kind::CmpKindLast;
 	}
 };
 
@@ -631,20 +647,20 @@ public:
                                                                                                    \
 	public:                                                                                    \
 		template <typename... Ts>                                                          \
-		static std::unique_ptr<_class_kind##Expr<T>> create(Ts &&...params)                \
+		static auto create(Ts &&...params) -> std::unique_ptr<_class_kind##Expr<T>>        \
 		{                                                                                  \
 			return std::unique_ptr<_class_kind##Expr<T>>(                              \
 				new _class_kind##Expr(std::forward<Ts>(params)...));               \
 		}                                                                                  \
                                                                                                    \
-		std::unique_ptr<SExpr<T>> clone() const override                                   \
+		auto clone() const -> std::unique_ptr<SExpr<T>> override                           \
 		{                                                                                  \
 			return create(this->getKid(0)->clone(), this->getKid(1)->clone());         \
 		}                                                                                  \
                                                                                                    \
-		static bool classof(const SExpr<T> *E)                                             \
+		static auto classof(const SExpr<T> *expr) -> bool                                  \
 		{                                                                                  \
-			return E->getKind() == Kind::_class_kind;                                  \
+			return expr->getKind() == Kind::_class_kind;                               \
 		}                                                                                  \
 	};
 

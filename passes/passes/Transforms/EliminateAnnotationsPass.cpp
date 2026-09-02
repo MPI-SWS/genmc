@@ -12,10 +12,10 @@
  */
 
 #include "EliminateAnnotationsPass.hpp"
+#include "genmc/ADT/VSet.hpp"
+#include "genmc/Support/Error.hpp"
 #include "passes/InternalFunctions.hpp"
 #include "passes/LLVMUtils.hpp"
-#include "genmc/Support/Error.hpp"
-#include "genmc/Verification/Config.hpp"
 
 #include <llvm/Analysis/PostDominators.h>
 #include <llvm/IR/Constants.h>
@@ -23,6 +23,12 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/InstIterator.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/PassManager.h>
+#include <llvm/Support/Casting.h>
+
+#include <algorithm>
+#include <cstdint>
+#include <vector>
 
 using namespace llvm;
 using AnnotationOptions = EliminateAnnotationsPass::AnnotationOptions;
@@ -130,7 +136,7 @@ static auto annotateInstructions(CallInst *begin, CallInst *end, const Annotatio
 static auto findMatchingEnd(CallInst *begin, const std::vector<CallInst *> &ends, DominatorTree &DT,
 			    PostDominatorTree &PDT) -> CallInst *
 {
-	auto it = std::find_if(ends.begin(), ends.end(), [&](auto *ei) {
+	auto it = std::ranges::find_if(ends, [&](auto *ei) {
 		return getAnnotationValue(begin) == getAnnotationValue(ei) &&
 		       DT.dominates(begin, ei) &&
 		       std::none_of(ends.begin(), ends.end(), [&](auto *ei2) {

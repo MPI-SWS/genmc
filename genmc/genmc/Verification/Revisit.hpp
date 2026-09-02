@@ -23,17 +23,18 @@
 class ReadRevisit;
 
 /** Abstract class representing a revisit operation */
-class Revisit {
+class Revisit { // NOLINT(cppcoreguidelines-special-member-functions)
 
 public:
 	/** LLVM-style RTTI discriminator */
-	enum Kind {
+	enum Kind : std::uint8_t { // NOLINT(cppcoreguidelines-use-enum-class)
 		RV_FRev,
 		RV_FRevRead,
 		RV_FRevMO,
 		RV_FRevOpt,
 		RV_FRevRerun,
 		RV_FRevReplay,
+		RV_FRevWeakCasFail,
 		RV_FRevLast,
 		RV_BRev,
 		RV_BRevLast,
@@ -42,22 +43,22 @@ public:
 
 protected:
 	/** Constructors */
-	Revisit() = delete;
-	Revisit(Kind k, Event p) : kind(k), pos(p) {}
+	Revisit() = delete; // NOLINT(modernize-use-equals-delete)
+	Revisit(Kind kind, Event pos) : kind(kind), pos(pos) {}
 
 public:
 	/** Returns the kind of this item */
-	Kind getKind() const { return kind; }
+	[[nodiscard]] auto getKind() const -> Kind { return kind; }
 
 	/** Returns the event for which we are exploring an alternative exploration option */
-	Event getPos() const { return pos; }
+	[[nodiscard]] auto getPos() const -> Event { return pos; }
 
-	static bool classofKind(Kind K) { return true; }
-	static ReadRevisit *castToReadRevisit(const Revisit *);
-	static Revisit *castFromReadRevisit(const ReadRevisit *);
+	static auto classofKind(Kind /*K*/) -> bool { return true; }
+	static auto castToReadRevisit(const Revisit * /*r*/) -> ReadRevisit *;
+	static auto castFromReadRevisit(const ReadRevisit * /*r*/) -> Revisit *;
 
 	/** Destructor and printing facilities */
-	virtual ~Revisit() {}
+	virtual ~Revisit() = default;
 
 private:
 	Kind kind;
@@ -68,13 +69,13 @@ private:
 class ReadRevisit {
 
 protected:
-	ReadRevisit(Revisit::Kind k, Event rev) : revisitKind(k), rev(rev) {}
+	ReadRevisit(Revisit::Kind kind, Event rev) : revisitKind(kind), rev(rev) {}
 
 public:
-	Event getRev() const { return rev; }
+	[[nodiscard]] auto getRev() const -> Event { return rev; }
 
-	Revisit::Kind getRevisitKind() const { return revisitKind; }
-	static bool classof(const Revisit *r)
+	[[nodiscard]] auto getRevisitKind() const -> Revisit::Kind { return revisitKind; }
+	static auto classof(const Revisit *r) -> bool
 	{
 		return r->getKind() == Revisit::RV_FRevRead ||
 		       (r->getKind() >= Revisit::RV_BRev && r->getKind() <= Revisit::RV_BRevLast);
@@ -91,11 +92,11 @@ private:
 class ForwardRevisit : public Revisit {
 
 protected:
-	ForwardRevisit() = delete;
-	ForwardRevisit(Kind k, Event p) : Revisit(k, p) {}
+	ForwardRevisit() = delete; // NOLINT(modernize-use-equals-delete)
+	ForwardRevisit(Kind kind, Event pos) : Revisit(kind, pos) {}
 
 public:
-	static bool classof(const Revisit *item)
+	static auto classof(const Revisit *item) -> bool
 	{
 		return item->getKind() >= RV_FRev && item->getKind() <= RV_FRevLast;
 	}
@@ -107,19 +108,21 @@ class ReadForwardRevisit : public ForwardRevisit, public ReadRevisit {
 public:
 	/** Constructors */
 	ReadForwardRevisit() = delete;
-	ReadForwardRevisit(Event p, Event r, bool m = false)
-		: ForwardRevisit(RV_FRevRead, p), maximal(m), ReadRevisit(RV_FRevRead, r)
+	ReadForwardRevisit(Event pos, Event r, bool isMax = false)
+		: ForwardRevisit(RV_FRevRead, pos), ReadRevisit(RV_FRevRead, r), maximal(isMax)
 	{}
 
-	bool isMaximal() const { return maximal; }
+	[[nodiscard]] auto isMaximal() const -> bool { return maximal; }
 
-	static bool classof(const Revisit *item) { return item->getKind() == RV_FRevRead; }
-	static ReadRevisit *castToReadRevisit(const ReadForwardRevisit *r)
+	static auto classof(const Revisit *item) -> bool { return item->getKind() == RV_FRevRead; }
+	static auto castToReadRevisit(const ReadForwardRevisit *r) -> ReadRevisit *
 	{
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast,cppcoreguidelines-pro-type-const-cast)
 		return static_cast<ReadRevisit *>(const_cast<ReadForwardRevisit *>(r));
 	}
-	static ReadForwardRevisit *castFromReadRevisit(const ReadRevisit *r)
+	static auto castFromReadRevisit(const ReadRevisit *r) -> ReadForwardRevisit *
 	{
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast,cppcoreguidelines-pro-type-const-cast)
 		return static_cast<ReadForwardRevisit *>(const_cast<ReadRevisit *>(r));
 	}
 
@@ -131,16 +134,19 @@ private:
 class WriteForwardRevisit : public ForwardRevisit {
 
 protected:
-	WriteForwardRevisit(Kind k, Event p, Event moPred) : ForwardRevisit(k, p), moPred(moPred) {}
+	WriteForwardRevisit(Kind kind, Event pos, Event moPred)
+		: ForwardRevisit(kind, pos), moPred(moPred)
+	{}
 
 public:
-	WriteForwardRevisit(Event p, Event moPred) : WriteForwardRevisit(RV_FRevMO, p, moPred) {}
+	WriteForwardRevisit(Event pos, Event moPred) : WriteForwardRevisit(RV_FRevMO, pos, moPred)
+	{}
 
 	/** Returns the new MO predecessor of the event for which
 	 * we are exploring alternative exploration options */
-	Event getPred() const { return moPred; }
+	[[nodiscard]] auto getPred() const -> Event { return moPred; }
 
-	static bool classof(const Revisit *item) { return item->getKind() == RV_FRevMO; }
+	static auto classof(const Revisit *item) -> bool { return item->getKind() == RV_FRevMO; }
 
 private:
 	Event moPred;
@@ -150,9 +156,9 @@ private:
 class OptionalForwardRevisit : public ForwardRevisit {
 
 public:
-	OptionalForwardRevisit(Event p) : ForwardRevisit(RV_FRevOpt, p) {}
+	OptionalForwardRevisit(Event pos) : ForwardRevisit(RV_FRevOpt, pos) {}
 
-	static bool classof(const Revisit *item) { return item->getKind() == RV_FRevOpt; }
+	static auto classof(const Revisit *item) -> bool { return item->getKind() == RV_FRevOpt; }
 };
 
 /** Represents an execution "rerun".  Helpful e.g., when operating under EstimationMode */
@@ -161,7 +167,7 @@ class RerunForwardRevisit : public ForwardRevisit {
 public:
 	RerunForwardRevisit() : ForwardRevisit(RV_FRevRerun, Event::getInit()) {}
 
-	static bool classof(const Revisit *item) { return item->getKind() == RV_FRevRerun; }
+	static auto classof(const Revisit *item) -> bool { return item->getKind() == RV_FRevRerun; }
 };
 
 /** Represents an execution replay.  Helpful in error reporting */
@@ -172,25 +178,49 @@ public:
 		: ForwardRevisit(RV_FRevReplay, pos), details_(std::move(details))
 	{}
 
-	const ErrorDetails &getDetails() const { return details_; }
+	[[nodiscard]] auto getDetails() const -> const ErrorDetails & { return details_; }
 
-	static bool classof(const Revisit *item) { return item->getKind() == RV_FRevReplay; }
+	static auto classof(const Revisit *item) -> bool
+	{
+		return item->getKind() == RV_FRevReplay;
+	}
 
 private:
 	ErrorDetails details_;
+};
+
+/** Represents the spurious-failure option of a weak CAS (always non-maximal).
+ * Should not perform the actions of a ReadRevisit, hence not a subclass. */
+class WeakCasFailureRevisit : public ForwardRevisit {
+
+public:
+	WeakCasFailureRevisit(Event pos, Event rev)
+		: ForwardRevisit(RV_FRevWeakCasFail, pos), rev(rev)
+	{}
+
+	/** The store the spuriously-failing CAS reads from */
+	[[nodiscard]] auto getRev() const -> Event { return rev; }
+
+	static auto classof(const Revisit *item) -> bool
+	{
+		return item->getKind() == RV_FRevWeakCasFail;
+	}
+
+private:
+	Event rev;
 };
 
 /** Represents a backward revisit */
 class BackwardRevisit : public Revisit, public ReadRevisit {
 
 protected:
-	BackwardRevisit(Kind k, Event p, Event r, std::unique_ptr<VectorClock> view)
-		: Revisit(k, p), view(std::move(view)), ReadRevisit(k, r)
+	BackwardRevisit(Kind kind, Event pos, Event r, std::unique_ptr<VectorClock> view)
+		: Revisit(kind, pos), ReadRevisit(kind, r), view(std::move(view))
 	{}
 
 public:
-	BackwardRevisit(Event p, Event r, std::unique_ptr<VectorClock> view)
-		: BackwardRevisit(RV_BRev, p, r, std::move(view))
+	BackwardRevisit(Event pos, Event r, std::unique_ptr<VectorClock> view)
+		: BackwardRevisit(RV_BRev, pos, r, std::move(view))
 	{}
 	BackwardRevisit(const ReadLabel *rLab, const WriteLabel *wLab,
 			std::unique_ptr<VectorClock> view)
@@ -198,21 +228,26 @@ public:
 	{}
 
 	/** Returns (releases) the prefix of the revisiting event */
-	std::unique_ptr<VectorClock> getViewRel() { return std::move(view); }
+	auto getViewRel() -> std::unique_ptr<VectorClock> { return std::move(view); }
 
 	/** Returns (but does not release) the prefix of the revisiting event */
-	const std::unique_ptr<VectorClock> &getViewNoRel() const { return view; }
+	[[nodiscard]] auto getViewNoRel() const -> const std::unique_ptr<VectorClock> &
+	{
+		return view;
+	}
 
-	static bool classof(const Revisit *item)
+	static auto classof(const Revisit *item) -> bool
 	{
 		return item->getKind() >= RV_BRev && item->getKind() <= RV_BRevLast;
 	}
-	static ReadRevisit *castToReadRevisit(const BackwardRevisit *r)
+	static auto castToReadRevisit(const BackwardRevisit *r) -> ReadRevisit *
 	{
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast,cppcoreguidelines-pro-type-const-cast)
 		return static_cast<ReadRevisit *>(const_cast<BackwardRevisit *>(r));
 	}
-	static BackwardRevisit *castFromReadRevisit(const ReadRevisit *r)
+	static auto castFromReadRevisit(const ReadRevisit *r) -> BackwardRevisit *
 	{
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast,cppcoreguidelines-pro-type-const-cast)
 		return static_cast<BackwardRevisit *>(const_cast<ReadRevisit *>(r));
 	}
 
@@ -224,26 +259,30 @@ private:
  **                             Static methods
  *******************************************************************************/
 
-inline Revisit *Revisit::castFromReadRevisit(const ReadRevisit *r)
+inline auto Revisit::castFromReadRevisit(const ReadRevisit *r) -> Revisit *
 {
 	auto rk = r->getRevisitKind();
 	switch (rk) {
 	case Revisit::Kind::RV_FRevRead:
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast,cppcoreguidelines-pro-type-const-cast)
 		return static_cast<ReadForwardRevisit *>(const_cast<ReadRevisit *>(r));
 	case Revisit::Kind::RV_BRev:
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast,cppcoreguidelines-pro-type-const-cast)
 		return static_cast<BackwardRevisit *>(const_cast<ReadRevisit *>(r));
 	default:
 		return nullptr;
 	}
 }
 
-inline ReadRevisit *Revisit::castToReadRevisit(const Revisit *r)
+inline auto Revisit::castToReadRevisit(const Revisit *r) -> ReadRevisit *
 {
 	auto rk = r->getKind();
 	switch (rk) {
 	case Revisit::Kind::RV_FRevRead:
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast,cppcoreguidelines-pro-type-const-cast)
 		return static_cast<ReadForwardRevisit *>(const_cast<Revisit *>(r));
 	case Revisit::Kind::RV_BRev:
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast,cppcoreguidelines-pro-type-const-cast)
 		return static_cast<BackwardRevisit *>(const_cast<Revisit *>(r));
 	default:
 		return nullptr;
@@ -278,10 +317,10 @@ template <> inline auto dyn_cast(::Revisit *Base) -> ::ReadRevisit *
 template <> struct std::formatter<Revisit::Kind> {
 	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
 
-	auto format(const Revisit::Kind &k, std::format_context &ctx) const
+	auto format(const Revisit::Kind &kind, std::format_context &ctx) const
 	{
 		std::string_view str;
-		switch (k) {
+		switch (kind) {
 		case Revisit::RV_FRevRead:
 			str = "FR";
 			break;
@@ -296,6 +335,9 @@ template <> struct std::formatter<Revisit::Kind> {
 			break;
 		case Revisit::RV_FRevMO:
 			str = "MO";
+			break;
+		case Revisit::RV_FRevWeakCasFail:
+			str = "WCF";
 			break;
 		case Revisit::RV_BRev:
 			str = "BR";
@@ -318,21 +360,25 @@ template <> struct std::formatter<Revisit> {
 	{
 		switch (item.getKind()) {
 		case Revisit::RV_FRevRead: {
-			auto &fi = static_cast<const ReadForwardRevisit &>(item);
+			// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
+			const auto &fi = static_cast<const ReadForwardRevisit &>(item);
 			return std::format_to(ctx.out(), "{}({}: {})", fi.getKind(), fi.getPos(),
 					      fi.getRev());
 		}
 		case Revisit::RV_FRevMO: {
-			auto &mi = static_cast<const WriteForwardRevisit &>(item);
+			// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
+			const auto &mi = static_cast<const WriteForwardRevisit &>(item);
 			return std::format_to(ctx.out(), "{}({}: {})", mi.getKind(), mi.getPos(),
 					      mi.getPred());
 		}
 		case Revisit::RV_FRevOpt: {
-			auto &mi = static_cast<const OptionalForwardRevisit &>(item);
+			// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
+			const auto &mi = static_cast<const OptionalForwardRevisit &>(item);
 			return std::format_to(ctx.out(), "{}({})", mi.getKind(), mi.getPos());
 		}
 		case Revisit::RV_BRev: {
-			auto &bi = static_cast<const BackwardRevisit &>(item);
+			// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
+			const auto &bi = static_cast<const BackwardRevisit &>(item);
 			return std::format_to(ctx.out(), "{}({}: [{}, {}])", bi.getKind(),
 					      bi.getPos(), bi.getRev(), *bi.getViewNoRel());
 		}

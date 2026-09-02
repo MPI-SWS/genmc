@@ -22,7 +22,7 @@ TEST(IntervalSetUnitTest, BasicOperations)
 
 	s.insert(20, 30);
 	/* Should be coalesced: [10, 30) */
-	EXPECT_TRUE(s.contains(10, 30));
+	EXPECT_TRUE(s.contains(Interval{10, 30}));
 	EXPECT_TRUE(s.contains(20));
 
 	s.erase(15, 25);
@@ -58,11 +58,11 @@ TEST(IntervalSetUnitTest, IntersectsAndContains)
 	EXPECT_FALSE(s.intersects(20, 30));
 	EXPECT_TRUE(s.intersects(35, 45));
 
-	EXPECT_TRUE(s.contains(12, 18));
-	EXPECT_TRUE(s.contains(10, 20));
-	EXPECT_FALSE(s.contains(10, 21));
-	EXPECT_FALSE(s.contains(5, 15));
-	EXPECT_FALSE(s.contains(15, 35));
+	EXPECT_TRUE(s.contains(Interval{12, 18}));
+	EXPECT_TRUE(s.contains(Interval{10, 20}));
+	EXPECT_FALSE(s.contains(Interval{10, 21}));
+	EXPECT_FALSE(s.contains(Interval{5, 15}));
+	EXPECT_FALSE(s.contains(Interval{15, 35}));
 }
 
 /* Check conformance wrt oracle */

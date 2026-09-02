@@ -29,10 +29,10 @@ public:
 	NameInfo() = default;
 
 	/** Mark name at offset O as N */
-	void addOffsetInfo(unsigned int o, std::string n);
+	void addOffsetInfo(unsigned int offset, const std::string &name);
 
 	/** Returns name at offset O */
-	[[nodiscard]] auto getNameAtOffset(unsigned int o) const -> std::string;
+	[[nodiscard]] auto getNameAtOffset(unsigned int offset) const -> std::string;
 
 	/** Returns the number of different offset information registered */
 	[[nodiscard]] auto size() const -> size_t { return info.size(); }

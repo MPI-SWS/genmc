@@ -13,9 +13,10 @@
 
 #include "RustPrepPass.hpp"
 #include "genmc/ADT/VSet.hpp"
-#include "passes/InternalFunctions.hpp"
 #include "genmc/Support/Error.hpp"
-#include <llvm/ADT/Twine.h>
+#include "passes/InternalFunctions.hpp"
+
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/DebugInfo.h>
 #include <llvm/IR/DerivedTypes.h>
@@ -26,10 +27,16 @@
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/PassManager.h>
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Value.h>
-#include <llvm/Support/Debug.h>
+#include <llvm/Support/Alignment.h>
+#include <llvm/Support/Casting.h>
 #include <llvm/Support/Regex.h>
+
+#include <ranges>
+#include <string>
+#include <vector>
 
 using namespace llvm;
 
@@ -48,13 +55,14 @@ static auto inlineLangStartCall(Module &M) -> bool
 	if (!F) /* Allow for: #![no_main] */
 		return false;
 
-	Regex matchRegex("^.+std.+rt.+lang_start.+"); /* Look for calls to std::rt::lang_start */
+	const Regex matchRegex(
+		"^.+std.+rt.+lang_start.+"); /* Look for calls to std::rt::lang_start */
 	for (auto &I : instructions(F)) {
 		auto *CI = dyn_cast<CallInst>(&I);
 		if (!CI)
 			continue;
 
-		Function *calledF = CI->getCalledFunction();
+		const Function *calledF = CI->getCalledFunction();
 		if (!calledF) /* Skip indirect calls */
 			continue;
 
@@ -64,12 +72,12 @@ static auto inlineLangStartCall(Module &M) -> bool
 		IRBuilder<> builder(CI);
 
 		/* Get the "main" function-pointer passed in the argument */
-		Value *fp = CI->getArgOperand(0);
-		Function *mainF = dyn_cast<Function>(fp);
+		Value *funcPtr = CI->getArgOperand(0);
+		auto *mainF = dyn_cast<Function>(funcPtr);
 		VERIFY(mainF);
 
 		/* Create a new call to Rusts "main" directly */
-		CallInst *newCall = builder.CreateCall(mainF, {});
+		builder.CreateCall(mainF, {});
 
 		/* std::rt::lang_start returns an i64 whereas Rusts "main" returns void.
 		   We replace uses of lang_starts return-value with a 0 as a default. */
@@ -116,20 +124,20 @@ static auto removeInternalFunctionsBody(Module &M) -> bool
  */
 static auto removeAllocShim(Module &M) -> bool
 {
-	GlobalVariable *GV = M.getGlobalVariable("__rust_no_alloc_shim_is_unstable");
-	if (!GV) { // Not required in older Rust-versions
+	GlobalVariable *globalVar = M.getGlobalVariable("__rust_no_alloc_shim_is_unstable");
+	if (!globalVar) { // Not required in older Rust-versions
 		return false;
 	}
 
 	/* Init __rust_no_alloc_shim_is_unstable */
 	Constant *zero = ConstantInt::get(Type::getInt8Ty(M.getContext()), 0);
-	GV->setInitializer(zero);
-	GV->setLinkage(GlobalValue::LinkageTypes::PrivateLinkage);
-	GV->setAlignment(Align(16));
+	globalVar->setInitializer(zero);
+	globalVar->setLinkage(GlobalValue::LinkageTypes::PrivateLinkage);
+	globalVar->setAlignment(Align(16));
 
 	/* Collect the loads to replace, their values are unused */
 	SmallVector<Instruction *, 8> loadsToReplace;
-	for (User *U : GV->users()) {
+	for (User *U : globalVar->users()) {
 		if (auto *LI = dyn_cast<LoadInst>(U)) {
 			loadsToReplace.push_back(LI);
 		}
@@ -142,8 +150,8 @@ static auto removeAllocShim(Module &M) -> bool
 	}
 
 	/* Remove __rust_no_alloc_shim_is_unstable if not used otherwise */
-	if (GV->use_empty()) {
-		GV->eraseFromParent();
+	if (globalVar->use_empty()) {
+		globalVar->eraseFromParent();
 	}
 	return true;
 }
@@ -157,7 +165,7 @@ static auto replaceRustAllocCalls(Function &F) -> bool
 	bool modified = false;
 
 	/* Replacement functions for memory allocation */
-	Module *M = F.getParent();
+	const Module *M = F.getParent();
 	Function *genmc__rust_alloc = M->getFunction("genmc__rust_alloc");
 	Function *genmc__rust_dealloc = M->getFunction("genmc__rust_dealloc");
 	Function *genmc__rust_realloc = M->getFunction("genmc__rust_realloc");
@@ -173,11 +181,11 @@ static auto replaceRustAllocCalls(Function &F) -> bool
 		if (!CI)
 			continue;
 
-		Function *calledF = CI->getCalledFunction();
+		const Function *calledF = CI->getCalledFunction();
 		if (!calledF) // Skip indirect function calls
 			continue;
 
-		std::string fName = calledF->getGlobalIdentifier();
+		const std::string fName = calledF->getName().str();
 		if ("__rust_alloc" == fName) {
 			CI->setCalledFunction(genmc__rust_alloc);
 			modified = true;
@@ -201,7 +209,7 @@ static auto replaceRustAllocCalls(Function &F) -> bool
  * of usage, i.e. instructions on the back of the list have no more instructions
  * using them and themselves use instructions in the further in the front of the list.
  */
-const auto collectDependents(Instruction *I, VSet<Instruction *> &toRemove)
+static void collectDependents(Instruction *I, VSet<Instruction *> &toRemove)
 {
 	std::vector<Instruction *> worklist;
 	worklist.push_back(I);
@@ -211,7 +219,7 @@ const auto collectDependents(Instruction *I, VSet<Instruction *> &toRemove)
 		worklist.pop_back();
 
 		for (User *U : current->users()) {
-			Instruction *userI = dyn_cast<Instruction>(U);
+			auto *userI = dyn_cast<Instruction>(U);
 			if (!userI)
 				continue;
 
@@ -231,14 +239,14 @@ const auto collectDependents(Instruction *I, VSet<Instruction *> &toRemove)
 static auto cleanDbgSpill(Function &F) -> bool
 {
 	SmallVector<Instruction *, 8> toRemove;
-	bool modified = false;
+	const bool modified = false;
 
 	/* Collect *.dbg.spill instructions */
 	for (Instruction &I : instructions(F)) {
 		if (!I.hasName())
 			continue;
 
-		StringRef name = I.getName();
+		const StringRef name = I.getName();
 		if (name.contains(".dbg.spill"))
 			toRemove.push_back(&I);
 	}
@@ -253,16 +261,14 @@ static auto cleanDbgSpill(Function &F) -> bool
 		collectDependents(i, toRemoveDependents);
 
 		/* Remove in reverse order for safety */
-		for (auto it = toRemoveDependents.rbegin(); it != toRemoveDependents.rend(); ++it) {
-			Instruction *I = *it;
-			I->eraseFromParent();
-		}
+		for (auto *toRemoveDependent : std::ranges::reverse_view(toRemoveDependents))
+			toRemoveDependent->eraseFromParent();
 	}
 
 	return modified;
 }
 
-PreservedAnalyses RustPrepPass::run(Module &M, ModuleAnalysisManager &AM)
+auto RustPrepPass::run(Module &M, ModuleAnalysisManager & /*AM*/) -> PreservedAnalyses
 {
 	bool modified = false;
 	modified |= inlineLangStartCall(M);

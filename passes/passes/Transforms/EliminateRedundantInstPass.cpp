@@ -17,8 +17,12 @@
 #include <llvm/IR/DataLayout.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/InstIterator.h>
+#include <llvm/IR/InstrTypes.h>
+#include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/PassManager.h>
+#include <llvm/Support/Casting.h>
 
 using namespace llvm;
 
@@ -36,7 +40,7 @@ static auto eliminateRedundantInst(Function &F) -> bool
 
 	VSet<Instruction *> deleted;
 	for (auto it = inst_begin(F), ie = inst_end(F); it != ie; ++it) {
-		if (deleted.count(&*it))
+		if (deleted.contains(&*it))
 			continue;
 		if (auto *ci = dyn_cast<CastInst>(&*it)) {
 			if (auto *csrc = dyn_cast<CastInst>(ci->getOperand(0))) {
@@ -48,13 +52,14 @@ static auto eliminateRedundantInst(Function &F) -> bool
 			}
 		}
 	}
-	for (auto *d : deleted)
-		d->eraseFromParent();
+	for (auto *inst : deleted)
+		inst->eraseFromParent();
 
 	return modified;
 }
 
-auto EliminateRedundantInstPass::run(Function &F, FunctionAnalysisManager &FAM) -> PreservedAnalyses
+auto EliminateRedundantInstPass::run(Function &F, FunctionAnalysisManager & /*FAM*/)
+	-> PreservedAnalyses
 {
 	return eliminateRedundantInst(F) ? PreservedAnalyses::none() : PreservedAnalyses::all();
 }

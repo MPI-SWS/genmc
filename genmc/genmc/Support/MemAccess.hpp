@@ -31,9 +31,9 @@ struct AAccess {
 	constexpr AAccess(SAddr addr, ASize size) : addr(addr), size(size) {}
 
 	/** Whether the access contains a given address */
-	[[nodiscard]] auto contains(SAddr a) const -> bool
+	[[nodiscard]] auto contains(SAddr point) const -> bool
 	{
-		return addr.sameStorageAs(a) && addr <= a && a < addr + size;
+		return addr.sameStorageAs(point) && addr <= point && point < addr + size;
 	}
 
 	/** Whether the access overlaps with another access */

@@ -12,13 +12,18 @@
  */
 
 #include "genmc/Verification/Relinche/Observation.hpp"
+#include "genmc/ADT/VSet.hpp"
 #include "genmc/Execution/Consistency/ConsistencyChecker.hpp"
+#include "genmc/Execution/Event.hpp"
 #include "genmc/Execution/EventLabel.hpp"
 #include "genmc/Execution/ExecutionGraph.hpp"
 #include "genmc/Support/Cast.hpp"
 #include "genmc/Support/Error.hpp"
 
 #include <algorithm>
+#include <optional>
+#include <ranges>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -39,6 +44,7 @@ static auto isTotallyOrderedOp(const MethodCall &op, const auto &&ops,
 }
 
 /* Collect the set of method calls and non-method RF edges */
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 static void populateOpsRf(ExecutionGraph &g, std::vector<MethodCall> &ops,
 			  VSet<std::pair<int, int>> &rfs)
 {
@@ -50,7 +56,7 @@ static void populateOpsRf(ExecutionGraph &g, std::vector<MethodCall> &ops,
 	std::vector<std::pair<Event, int>> outsideRFs; /* Write event -> index of Read event */
 
 	for (auto tid : g.thr_ids()) {
-		MethodBeginLabel *openBegin = nullptr;
+		MethodBeginLabel *openBegin = nullptr; // NOLINT(misc-const-correctness)
 		for (auto &lab : g.po(tid)) {
 			if (auto *beginLab = genmc::dyn_cast<MethodBeginLabel>(&lab)) {
 				ERROR_ON(openBegin, "Nested method calls are unsupported");

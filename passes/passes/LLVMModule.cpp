@@ -12,7 +12,10 @@
  */
 
 #include "LLVMModule.hpp"
+#include "genmc/Support/Error.hpp"
+#include "genmc/Support/SExprVisitor.hpp"
 #include "passes/LLIConfig.hpp"
+#include "passes/ModuleInfo.hpp"
 #include "passes/Transforms/BarrierResultCheckerPass.hpp"
 #include "passes/Transforms/BisimilarityCheckerPass.hpp"
 #include "passes/Transforms/CallInfoCollectionPass.hpp"
@@ -38,11 +41,13 @@
 #include "passes/Transforms/PropagateAssumesPass.hpp"
 #include "passes/Transforms/RustPrepPass.hpp"
 #include "passes/Transforms/SpinAssumePass.hpp"
-#include "genmc/Support/Error.hpp"
-#include "genmc/Support/SExprVisitor.hpp"
+#include "passes/Transforms/StrengthenCASPass.hpp"
 
+#include <llvm/Analysis/CGSCCPassManager.h>
+#include <llvm/Analysis/LoopAnalysisManager.h>
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
+#include <llvm/Config/llvm-config.h>
 #include <llvm/IR/IRPrintingPasses.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/PassManager.h>
@@ -50,17 +55,29 @@
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/Linker/Linker.h>
 #include <llvm/Passes/PassBuilder.h>
+#if LLVM_VERSION_MAJOR >= 22
+#include <llvm/Plugins/PassPlugin.h>
+#else
 #include <llvm/Passes/PassPlugin.h>
+#endif
 #include <llvm/Support/Debug.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/IPO/DeadArgumentElimination.h>
 #include <llvm/Transforms/Scalar/JumpThreading.h>
+#include <llvm/Transforms/Scalar/LoopPassManager.h>
 #include <llvm/Transforms/Scalar/SROA.h>
 #include <llvm/Transforms/Utils/Mem2Reg.h>
 
+#include <cassert>
+#include <cstddef>
 #include <filesystem>
+#include <memory>
+#include <string>
+#include <system_error>
+#include <utility>
+#include <vector>
 namespace fs = std::filesystem;
 
 namespace LLVMModule {
@@ -75,7 +92,7 @@ auto parseLLVMModule(const std::string &filename, const std::unique_ptr<llvm::LL
 		err.print(filename.c_str(), llvm::dbgs());
 		ERROR("Could not parse LLVM IR!");
 	}
-	return std::move(mod);
+	return mod;
 }
 
 /**
@@ -124,7 +141,7 @@ auto parseLinkAllLLVMModules(const fs::path &dirname, const std::unique_ptr<llvm
 
 	/* Parse all modules */
 	std::vector<std::unique_ptr<Module>> modules;
-	for (auto bc_file : bc_files) {
+	for (const auto &bc_file : bc_files) {
 		std::unique_ptr<Module> module = parseIRFile(bc_file.string(), err, *ctx);
 		if (!module) {
 			err.print(bc_file.c_str(), llvm::dbgs());
@@ -146,39 +163,39 @@ auto cloneModule(const std::unique_ptr<llvm::Module> &mod,
 
 	llvm::WriteBitcodeToFile(*mod, stream);
 
-	llvm::StringRef ref(stream.str());
+	const llvm::StringRef ref(stream.str());
 	std::unique_ptr<llvm::MemoryBuffer> buf(llvm::MemoryBuffer::getMemBuffer(ref));
 
 	return std::move(llvm::parseBitcodeFile(buf->getMemBufferRef(), *ctx).get());
 }
 
-void initializeVariableInfo(ModuleInfo &MI, PassModuleInfo &PI)
+static void initializeVariableInfo(ModuleInfo &MI, PassModuleInfo &PI)
 {
 	for (auto &kv : PI.varInfo.globalInfo)
 		MI.varInfo.globalInfo[MI.idInfo.VID.at(kv.first)] = kv.second;
 	for (auto &kv : PI.varInfo.localInfo) {
-		if (MI.idInfo.VID.count(kv.first))
+		if (MI.idInfo.VID.contains(kv.first))
 			MI.varInfo.localInfo[MI.idInfo.VID.at(kv.first)] = kv.second;
 	}
 	MI.varInfo.internalInfo = PI.varInfo.internalInfo;
 }
 
-void initializeAnnotationInfo(ModuleInfo &MI, PassModuleInfo &PI)
+static void initializeAnnotationInfo(ModuleInfo &MI, PassModuleInfo &PI)
 {
 	using Transformer = SExprTransformer<llvm::Value *>;
-	Transformer tr;
+	Transformer transformer;
 
 	for (auto &kv : PI.annotInfo.annotMap) {
 		MI.annotInfo.annotMap[MI.idInfo.VID.at(kv.first)] = std::make_pair(
-			kv.second.first, tr.transform(&*kv.second.second, [&](llvm::Value *v) {
-				return MI.idInfo.VID.at(v);
-			}));
+			kv.second.first,
+			transformer.transform(&*kv.second.second,
+					      [&](llvm::Value *v) { return MI.idInfo.VID.at(v); }));
 	}
 }
 
-void initializeModuleInfo(ModuleInfo &MI, PassModuleInfo &PI)
+static void initializeModuleInfo(ModuleInfo &MI, PassModuleInfo &PI, const llvm::Module &mod)
 {
-	MI.collectIDs();
+	MI.collectIDs(mod);
 	initializeVariableInfo(MI, PI);
 	initializeAnnotationInfo(MI, PI);
 	MI.determinedMM = PI.determinedMM;
@@ -206,12 +223,12 @@ auto transformLLVMModule(llvm::Module &mod, ModuleInfo &MI, const LLIConfig *con
 	fam.registerPass([&] { return BisimilarityAnalysis(); });
 	fam.registerPass([&] { return LoadAnnotationAnalysis(); });
 
-	llvm::PassBuilder pb;
-	pb.registerModuleAnalyses(mam);
-	pb.registerCGSCCAnalyses(cgam);
-	pb.registerFunctionAnalyses(fam);
-	pb.registerLoopAnalyses(lam);
-	pb.crossRegisterProxies(lam, fam, cgam, mam);
+	llvm::PassBuilder PB;
+	PB.registerModuleAnalyses(mam);
+	PB.registerCGSCCAnalyses(cgam);
+	PB.registerFunctionAnalyses(fam);
+	PB.registerLoopAnalyses(lam);
+	PB.crossRegisterProxies(lam, fam, cgam, mam);
 
 	/* Then create two pass managers: a basic one and one that
 	runs some loop passes */
@@ -231,13 +248,7 @@ auto transformLLVMModule(llvm::Module &mod, ModuleInfo &MI, const LLIConfig *con
 		fpm.addPass(IntrinsicLoweringPass());
 		if (conf->castElimination)
 			fpm.addPass(EliminateCastsPass());
-#if LLVM_VERSION_MAJOR < 14
-		fpm.addPass(SROA());
-#elif LLVM_VERSION_MAJOR < 16
-		fpm.addPass(SROAPass());
-#else
 		fpm.addPass(SROAPass(SROAOptions::PreserveCFG));
-#endif
 		fpm.addPass(PromotePass()); // Mem2Reg
 		basicOptsMGR.addPass(llvm::createModuleToFunctionPassAdaptor(std::move(fpm)));
 	}
@@ -289,34 +300,31 @@ auto transformLLVMModule(llvm::Module &mod, ModuleInfo &MI, const LLIConfig *con
 			fpm.addPass(ConfirmationAnnotationPass());
 		if (conf->loadAnnot)
 			fpm.addPass(LoadAnnotationPass(PI.annotInfo));
+		fpm.addPass(StrengthenCASPass());
 		basicOptsMGR.addPass(llvm::createModuleToFunctionPassAdaptor(std::move(fpm)));
 	}
 
 	preserved.intersect(basicOptsMGR.run(mod, mam));
 
-	initializeModuleInfo(MI, PI);
+	initializeModuleInfo(MI, PI, mod);
 
 	assert(!llvm::verifyModule(mod, &llvm::dbgs()));
 	return true;
 }
 
-void printLLVMModule(llvm::Module &mod, const std::string &out)
+void printLLVMModule(llvm::Module &mod, const std::string &filename)
 {
-	auto flags =
-#if LLVM_VERSION_MAJOR < 13
-		llvm::sys::fs::F_None;
-#else
-		llvm::sys::fs::OF_None;
-#endif
+	auto flags = llvm::sys::fs::OF_None;
 	std::error_code errs;
-	auto os = std::make_unique<llvm::raw_fd_ostream>(out.c_str(), errs, flags);
+	auto out = std::make_unique<llvm::raw_fd_ostream>(filename.c_str(), errs, flags);
 
 	/* TODO: Do we need an exception? If yes, properly handle it */
 	if (errs) {
-		WARN("Failed to write transformed module to file {}: {}\n", out, errs.message());
+		WARN("Failed to write transformed module to file {}: {}\n", filename,
+		     errs.message());
 		return;
 	}
-	mod.print(*os, nullptr);
+	mod.print(*out, nullptr);
 }
 
 } // namespace LLVMModule

@@ -21,6 +21,7 @@
 #include "genmc/Support/Error.hpp"
 
 #include <format>
+#include <utility>
 
 /**
  * An instantiation of a vector clock where if an event is contained in the clock,
@@ -43,7 +44,7 @@ private:
 
 		auto operator[](int idx) const -> const Holes &
 		{
-			if (idx < hs_.size())
+			if (std::cmp_less(idx, hs_.size()))
 				return hs_[idx];
 			UNREACHABLE();
 		}
@@ -60,7 +61,7 @@ public:
 	DepView() : VectorClock(VectorClock::VectorClockKind::VC_DepView) {}
 
 	/** Returns the size of the depview (i.e., number of threads seen) */
-	[[nodiscard]] auto size() const -> unsigned int override { return view_.size(); }
+	[[nodiscard]] auto size() const -> int override { return view_.size(); }
 
 	/** Returns true if the clock is empty */
 	[[nodiscard]] auto empty() const -> bool { return size() == 0; }
@@ -90,7 +91,7 @@ public:
 
 	void setMax(Event e) override
 	{
-		if (e.thread >= (int)view_.size())
+		if (std::cmp_greater_equal(e.thread, view_.size()))
 			holes_[e.thread]; // grow
 		auto old = view_.getMax(e.thread);
 		view_.setMax(e);
@@ -103,7 +104,8 @@ public:
 	/** Returns true if there's a hole in E's position */
 	[[nodiscard]] auto hasHole(const Event e) const -> bool
 	{
-		return e.thread < holes_.size() && !holes_[e.thread].count(e.index);
+		return std::cmp_less(e.thread, holes_.size()) &&
+		       !holes_[e.thread].contains(e.index);
 	}
 
 	/** Records that the event in the index of e has not been

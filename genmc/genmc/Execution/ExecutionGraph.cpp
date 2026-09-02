@@ -12,10 +12,32 @@
  */
 
 #include "genmc/Execution/ExecutionGraph.hpp"
+#include "genmc/ADT/Rc.hpp"
+#include "genmc/ADT/VSet.hpp"
+#include "genmc/ADT/View.hpp"
 #include "genmc/Execution/Consistency/ConsistencyChecker.hpp"
+#include "genmc/Execution/EventLabel.hpp"
+#include "genmc/Execution/Stamp.hpp"
+#include "genmc/Support/ASize.hpp"
+#include "genmc/Support/Cast.hpp"
+#include "genmc/Support/Error.hpp"
+#include "genmc/Support/MemAccess.hpp"
+#include "genmc/Support/SVal.hpp"
 
+#include <algorithm>
+#include <climits>
+#include <cstdint>
+#include <format>
 #include <iostream>
 #include <memory>
+#include <optional>
+#include <ranges>
+#include <string>
+#include <unordered_map>
+#include <utility>
+
+/* Mask selecting the least-significant byte of an integer value */
+static constexpr uint64_t BYTE_MASK = 0xFF;
 
 /************************************************************
  ** Basic getter methods
@@ -24,7 +46,7 @@
 [[nodiscard]] auto ExecutionGraph::resolveAccessValue(const EventLabel *lab,
 						      const AAccess &access) const -> SVal
 {
-	auto &state = getState();
+	const auto &state = getState();
 
 	/* Special case for initializer */
 	if (lab->getPos().isInitializer()) {
@@ -51,8 +73,8 @@ auto ExecutionGraph::getViewFromStamp(Stamp stamp) const -> std::unique_ptr<Vect
 {
 	auto preds = std::make_unique<View>();
 
-	for (auto i = 0U; i < getNumThreads(); i++) {
-		for (auto j = (int)getThreadSize(i) - 1; j >= 0; j--) {
+	for (auto i = 0; i < getNumThreads(); i++) {
+		for (auto j = getThreadSize(i) - 1; j >= 0; j--) {
 			const auto *lab = getEventLabel(Event(i, j));
 			if (lab->getStamp() <= stamp) {
 				preds->setMax(Event(i, j));
@@ -70,17 +92,17 @@ auto ExecutionGraph::getCurrentMemValue(SAddr addr, ASize size) -> SVal
 
 	/* TODO: slow version, see how to optimize later */
 	SVal res;
-	for (auto i = 0u; i < size; i++) {
+	for (auto i = 0U; i < size; i++) {
 		auto info = state.getAtomicWriteInfo(addr + i);
 
 		/* Only has initial value */
 		if (!info) {
 			/* TODO: missing check for invalid access */
-			SVal initVal = addr.isDynamic() ? SVal(0)
-							: getInitVal(AAccess(addr + i, 1));
+			const SVal initVal = addr.isDynamic() ? SVal(0)
+							      : getInitVal(AAccess(addr + i, 1));
 			/* TODO (WRD): View{} assumes the graph is complete here */
 			res |= state.reconstructMemValue({addr + i, 1}, View{}, initVal)
-			       << SVal(i * 8);
+			       << SVal(i * CHAR_BIT);
 			continue;
 		}
 
@@ -89,8 +111,9 @@ auto ExecutionGraph::getCurrentMemValue(SAddr addr, ASize size) -> SVal
 		auto *wLab = genmc::cast<WriteLabel>(co_max(atomicAddr));
 		auto offset = addr + i - atomicAddr;
 		res |= state.reconstructMemValue({addr + i, 1}, getConsChecker()->getHbView(wLab),
-						 (wLab->getVal() >> SVal(offset * 8)) & SVal(0xFF))
-		       << SVal(i * 8);
+						 (wLab->getVal() >> SVal(offset * CHAR_BIT)) &
+							 SVal(BYTE_MASK))
+		       << SVal(i * CHAR_BIT);
 	}
 	return res;
 }
@@ -121,7 +144,7 @@ auto ExecutionGraph::addLabelToGraph(std::unique_ptr<EventLabel> lab) -> EventLa
 	auto pos = lab->getPos();
 	auto *lastLab = getLastThreadLabel(pos.thread);
 	if (lastLab && pos.index < lastLab->getIndex()) {
-		auto eLab = getEventLabel(pos);
+		auto *eLab = getEventLabel(pos);
 		ASSERT(!eLab || genmc::isa<EmptyLabel>(eLab));
 		auto &oldLab = *events[pos.thread][pos.index];
 		auto it = poLists[pos.thread].erase(po_iterator(oldLab));
@@ -130,7 +153,7 @@ auto ExecutionGraph::addLabelToGraph(std::unique_ptr<EventLabel> lab) -> EventLa
 		auto &newLab = *events[pos.thread][pos.index];
 		insertionOrder.push_back(newLab);
 		poLists[pos.thread].insert(it, newLab);
-		ASSERT(pos.index <= events[pos.thread].size());
+		ASSERT(std::cmp_less_equal(pos.index, events[pos.thread].size()));
 		return &newLab;
 	}
 	events[pos.thread].push_back(std::move(lab));
@@ -151,9 +174,12 @@ void ExecutionGraph::trackCoherenceAtLoc(SAddr addr)
  ** Graph modification methods
  ***********************************************************/
 
-auto ExecutionGraph::removeLast(unsigned int thread) -> std::unique_ptr<EventLabel>
+auto ExecutionGraph::removeLast(int thread) -> std::unique_ptr<EventLabel>
 {
 	auto *lab = getLastThreadLabel(thread);
+	ASSERT(getConsChecker());
+	getConsChecker()->maybeDecreaseCacheCounters(lab);
+
 	if (auto *rLab = genmc::dyn_cast_if_present<ReadLabel>(lab)) {
 		if (auto *wLab = genmc::dyn_cast_if_present<WriteLabel>(rLab->getRf())) {
 			wLab->removeReader([&](ReadLabel &oLab) { return &oLab == rLab; });
@@ -170,13 +196,13 @@ auto ExecutionGraph::removeLast(unsigned int thread) -> std::unique_ptr<EventLab
 	}
 	if (auto *mLab = genmc::dyn_cast<MemAccessLabel>(lab)) {
 		auto &accesses = accessMap_[mLab->getAddr()];
-		accesses.erase(std::remove(accesses.begin(), accesses.end(), mLab), accesses.end());
+		std::erase(accesses, mLab);
 	}
 	if (auto *dLab = genmc::dyn_cast<FreeLabel>(lab)) {
 		auto &accesses = accessMap_[dLab->getAddr()];
-		accesses.erase(std::remove(accesses.begin(), accesses.end(), dLab), accesses.end());
+		std::erase(accesses, dLab);
 	}
-	if (auto *cLab = genmc::dyn_cast<ThreadCreateLabel>(lab)) {
+	if (genmc::isa<ThreadCreateLabel>(lab)) {
 		if (auto *tsLab = genmc::dyn_cast_if_present<ThreadStartLabel>(
 			    getFirstThreadLabel(lab->getThread())))
 			tsLab->setCreate(nullptr);
@@ -193,6 +219,11 @@ auto ExecutionGraph::removeLast(unsigned int thread) -> std::unique_ptr<EventLab
 	poLists[lab->getThread()].remove(*lab);
 	lab->setParent(nullptr);
 
+	/* Adjust max graph stamp if necessary; remove stamp from label (might be re-added) */
+	if (lab->getStamp() == getMaxStamp())
+		resetStamp(lab->getStamp());
+	lab->setStamp(std::nullopt);
+
 	/* Extract ownership and return */
 	auto &threadEvents = events[thread];
 	auto popped = std::move(threadEvents.back());
@@ -205,8 +236,8 @@ void ExecutionGraph::removeAfter(const VectorClock &preds)
 	VSet<SAddr> keep;
 
 	/* Check which locations should be kept */
-	for (auto i = 0U; i < preds.size(); i++) {
-		for (auto j = 0U; j <= preds.getMax(i); j++) {
+	for (auto i = 0; i < preds.size(); i++) {
+		for (auto j = 0; j <= preds.getMax(i); j++) {
 			auto *lab = getEventLabel(Event(i, j));
 			if (auto *mLab = genmc::dyn_cast<MemAccessLabel>(lab))
 				keep.insert(mLab->getAddr());
@@ -215,7 +246,7 @@ void ExecutionGraph::removeAfter(const VectorClock &preds)
 
 	for (auto lIt = coherence.begin(); lIt != coherence.end(); /* empty */) {
 		/* Should we keep this memory location lying around? */
-		if (!keep.count(lIt->first)) {
+		if (!keep.contains(lIt->first)) {
 			getInitLabel()->initRfs.erase(lIt->first);
 			accessMap_.erase(lIt->first);
 			lIt = coherence.erase(lIt);
@@ -230,16 +261,14 @@ void ExecutionGraph::removeAfter(const VectorClock &preds)
 				return !preds.contains(rLab.getPos());
 			});
 			auto &accesses = accessMap_[lIt->first];
-			accesses.erase(std::remove_if(accesses.begin(), accesses.end(),
-						      [&](auto *lab) {
-							      return !preds.contains(lab->getPos());
-						      }),
-				       accesses.end());
+			std::erase_if(accesses,
+				      [&](auto *lab) { return !preds.contains(lab->getPos()); });
 			++lIt;
 		}
 	}
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void ExecutionGraph::cutToStamp(Stamp stamp)
 {
 	auto preds = getViewFromStamp(stamp);
@@ -256,8 +285,8 @@ void ExecutionGraph::cutToStamp(Stamp stamp)
 	}
 
 	/* Remove any 'pointers' to events that will be removed */
-	for (auto i = 0U; i < getNumThreads(); i++) {
-		for (auto j = 0U; j <= preds->getMax(i); j++) {
+	for (auto i = 0; i < getNumThreads(); i++) {
+		for (auto j = 0; j <= preds->getMax(i); j++) {
 			auto *lab = getEventLabel(Event(i, j));
 			if (auto *wLab = genmc::dyn_cast<WriteLabel>(lab)) {
 				wLab->removeReader([&](ReadLabel &rLab) {
@@ -292,7 +321,7 @@ void ExecutionGraph::cutToStamp(Stamp stamp)
 	}
 
 	/* Restrict the graph according to the view (keeps begins around) */
-	for (auto i = 0U; i < getNumThreads(); i++) {
+	for (auto i = 0; i < getNumThreads(); i++) {
 		auto &thr = events[i];
 		thr.erase(thr.begin() + preds->getMax(i) + 1, thr.end());
 	}
@@ -322,6 +351,7 @@ void ExecutionGraph::cutToStamp(Stamp stamp)
 		lab.setStamp(nextStamp());
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void ExecutionGraph::copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) const
 {
 	/* We resize up to g.size() (instead of v.size()) because there might be a create
@@ -329,7 +359,7 @@ void ExecutionGraph::copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) 
 	 * Will clean up orphaned begins later. */
 	other.events.resize(getNumThreads());
 	other.poLists.resize(getNumThreads());
-	for (auto i = 0u; i < getNumThreads(); i++) {
+	for (auto i = 0; i < getNumThreads(); i++) {
 		/* Skip the initializer */
 		if (i != 0)
 			other.addLabelToGraph(getEventLabel(Event(i, 0))->clone());
@@ -346,8 +376,6 @@ void ExecutionGraph::copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) 
 			}
 			if (auto *mLab = genmc::dyn_cast<MemAccessLabel>(nLab))
 				other.trackCoherenceAtLoc(mLab->getAddr());
-			if (auto *tcLab = genmc::dyn_cast<ThreadCreateLabel>(nLab))
-				;
 		}
 	}
 
@@ -420,8 +448,8 @@ void ExecutionGraph::copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) 
 				rLab->setRfNoCascade(other.getEventLabel(rLab->getRf()->getPos()));
 		}
 		if (auto *wLab = genmc::dyn_cast<WriteLabel>(&lab)) {
-			wLab->removeReader([](auto &rLab) { return true; });
-			for (auto &oLab : getWriteLabel(lab.getPos())->readers())
+			wLab->removeReader([](auto & /*rLab*/) { return true; });
+			for (const auto &oLab : getWriteLabel(lab.getPos())->readers())
 				if (v.contains(oLab.getPos()))
 					wLab->addReader(other.getReadLabel(oLab.getPos()));
 		}
@@ -446,7 +474,7 @@ void ExecutionGraph::copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) 
 			}
 		}
 		if (auto *begLab = genmc::dyn_cast<MethodBeginLabel>(&lab)) {
-			begLab->removePredNoCascade([](auto *endLab) { return true; });
+			begLab->removePredNoCascade([](auto * /*endLab*/) { return true; });
 			for (auto *endLab :
 			     genmc::dyn_cast<MethodBeginLabel>(getEventLabel(lab.getPos()))
 				     ->lin_preds())
@@ -455,7 +483,7 @@ void ExecutionGraph::copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) 
 						other.getEventLabel(endLab->getPos())));
 		}
 		if (auto *endLab = genmc::dyn_cast<MethodEndLabel>(&lab)) {
-			endLab->removeSuccNoCascade([](auto *endLab) { return true; });
+			endLab->removeSuccNoCascade([](auto * /*endLab*/) { return true; });
 			for (auto *begLab :
 			     genmc::dyn_cast<MethodEndLabel>(getEventLabel(lab.getPos()))
 				     ->lin_succs())
@@ -467,27 +495,26 @@ void ExecutionGraph::copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) 
 
 	/* Finally, copy coherence info */
 	for (auto lIt = loc_begin(), lE = loc_end(); lIt != lE; ++lIt) {
-		for (auto sIt = lIt->second.begin(); sIt != lIt->second.end(); ++sIt)
-			if (v.contains(sIt->getPos())) {
-				other.getWriteLabel(sIt->getPos())
-					->addCo(other.co_max(sIt->getAddr()));
+		for (const auto &sIt : lIt->second)
+			if (v.contains(sIt.getPos())) {
+				other.getWriteLabel(sIt.getPos())
+					->addCo(other.co_max(sIt.getAddr()));
 			}
 	}
 	for (auto it = loc_begin(); it != loc_end(); ++it) {
-		auto &initRfs = getInitLabel()->initRfs;
-		for (auto rIt = initRfs.at(it->first).begin(); rIt != initRfs.at(it->first).end();
-		     ++rIt) {
-			if (v.contains(rIt->getPos())) {
-				other.addInitRfToLoc(other.getReadLabel(rIt->getPos()));
+		const auto &initRfs = getInitLabel()->initRfs;
+		for (const auto &rIt : initRfs.at(it->first)) {
+			if (v.contains(rIt.getPos())) {
+				other.addInitRfToLoc(other.getReadLabel(rIt.getPos()));
 			}
 		}
 	}
 	for (auto it = loc_begin(); it != loc_end(); ++it) {
-		auto &accesses = accessMap_.at(it->first);
-		for (auto rIt = accesses.begin(); rIt != accesses.end(); ++rIt) {
-			if (v.contains((*rIt)->getPos())) {
+		const auto &accesses = accessMap_.at(it->first);
+		for (auto *access : accesses) {
+			if (v.contains(access->getPos())) {
 				other.accessMap_[it->first].push_back(
-					other.getEventLabel((*rIt)->getPos()));
+					other.getEventLabel(access->getPos()));
 			}
 		}
 	}
@@ -511,6 +538,7 @@ auto ExecutionGraph::getCopyUpTo(const VectorClock &v) const -> std::unique_ptr<
  ** Debugging methods
  ***********************************************************/
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void ExecutionGraph::validate()
 {
 	for (auto &lab : labels()) {
@@ -547,7 +575,7 @@ void ExecutionGraph::validate()
 			if (std::ranges::any_of(wLab->readers(), [&](auto &rLab) {
 				    return !containsPosNonEmpty(rLab.getPos());
 			    })) {
-				std::string readers = "";
+				std::string readers;
 				for (auto &rLab : wLab->readers())
 					readers += std::format("{} ", rLab.getPos());
 				std::cerr << std::format("Non-existent/non-read reader: "

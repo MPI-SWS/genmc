@@ -1,0 +1,23 @@
+InheritParentConfig: true
+# we additionally disable the following checks due to standard LLVM idioms:
+#  - *-magic-numbers: capacity hints and APInt bitwidths
+#  - *-macro-usage, *-macro-to-enum: function-like macros for IR patterns
+#  - clang-analyzer-{security.ArrayBound,cplusplusNewDeleteLeaks}: custom memory management
+#  - misc-include-cleaner: LLVM headers are version dependent
+Checks: >
+  -readability-convert-member-functions-to-static,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -readability-magic-numbers,
+  -cppcoreguidelines-macro-usage,
+  -cppcoreguidelines-macro-to-enum,
+  -modernize-macro-to-enum,
+  -clang-analyzer-security.ArrayBound,
+  -clang-analyzer-cplusplus.NewDeleteLeaks,
+  -misc-include-cleaner,
+CheckOptions:
+- key: readability-identifier-length.IgnoredVariableNames
+  value: 'i|l|v|v1|v2|op|bb|F|M|I|U|L|DT|DL|MI|LI|AM|MAM|FAM|AR|CI|CG|PI|OI|PB'
+- key: readability-identifier-length.IgnoredLoopCounterNames
+  value: 'i|j|k|l|v|v1|v2|op|bb|F|M|I|U|L|DT|DL|MI|LI|AM|MAM|FAM|AR|CI|CG|PI|OI|PB'
+- key: readability-identifier-length.IgnoredParameterNames
+  value: 'i|l|v|v1|v2|op|bb|F|M|I|U|L|DT|DL|MI|LI|AM|MAM|FAM|AR|CI|CG|PI|OI|PB'

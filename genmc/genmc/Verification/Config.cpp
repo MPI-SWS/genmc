@@ -11,13 +11,15 @@
  *     https://opensource.org/licenses/MIT
  */
 
-#include "genmc/config.h"
-
-#include "genmc/Support/Error.hpp"
 #include "genmc/Verification/Config.hpp"
+#include "genmc/Support/Error.hpp"
+#include "genmc/Verification/MemoryModel.hpp"
 
 #include <filesystem>
 #include <random>
+#include <string>
+#include <utility>
+#include <vector>
 
 static auto doesPolicySupportSeed(const SchedulePolicy policy) -> bool
 {
@@ -32,6 +34,7 @@ static auto doesPolicySupportSeed(const SchedulePolicy policy) -> bool
 	UNREACHABLE(); /* Unknown SchedulePolicy */
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto Config::validate(std::vector<std::string> &warnings) -> ValidationStatus
 {
 	ConfigErrorList errors;

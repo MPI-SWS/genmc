@@ -12,8 +12,15 @@
  */
 
 #include "genmc/Verification/ChoiceMap.hpp"
+#include "genmc/ADT/VSet.hpp"
+#include "genmc/ADT/VectorClock.hpp"
+#include "genmc/Execution/Event.hpp"
+#include "genmc/Execution/EventLabel.hpp"
 
 #include <algorithm>
+#include <iterator>
+#include <utility>
+#include <vector>
 
 void ChoiceMap::update(const ReadLabel *rLab, const std::vector<EventLabel *> &stores)
 {

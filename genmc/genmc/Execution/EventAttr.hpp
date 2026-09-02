@@ -19,7 +19,7 @@
 /**
  * Attributes for write events
  */
-enum class WriteAttr {
+enum class WriteAttr : std::uint8_t {
 	None = 0x0,
 	Local = 0x1,
 	Final = 0x2,

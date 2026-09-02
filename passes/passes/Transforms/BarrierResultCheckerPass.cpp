@@ -13,6 +13,7 @@
 
 #include "BarrierResultCheckerPass.hpp"
 #include "genmc/Execution/LoadAnnotation.hpp"
+#include "passes/InternalFunctions.hpp"
 #include "passes/LLVMUtils.hpp"
 #include "passes/ModuleInfo.hpp"
 
@@ -21,8 +22,13 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/InstIterator.h>
 #include <llvm/IR/Instructions.h>
-#include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/PassManager.h>
+#include <llvm/Support/Casting.h>
+
+#include <algorithm>
+#include <optional>
+#include <type_traits>
 
 /* Checks whether the results of barrier_wait() and co are used.
  * (Info relevant to BAM deployment.) */
@@ -64,10 +70,10 @@ static auto isAllowedResultUse(User *user) -> bool
 		return false;
 
 	/* and all subsequent users are branches leading to the same block */
-	return std::ranges::all_of(icmp->users(), [](auto *u) {
-		if (!llvm::isa<Instruction>(u))
+	return std::ranges::all_of(icmp->users(), [](auto *usr) {
+		if (!llvm::isa<Instruction>(usr))
 			return true;
-		auto *bi = llvm::dyn_cast<BranchInst>(u);
+		auto *bi = llvm::dyn_cast<BranchInst>(usr);
 		if (!bi)
 			return false;
 		return !bi->isConditional() || bi->getSuccessor(0) == bi->getSuccessor(1);
@@ -83,10 +89,11 @@ static auto isBarrierResultUsed(CallInst *ci) -> bool
 	if (siIt == ci->getParent()->end())
 		return false;
 
-	return std::ranges::any_of(siIt->users(), [](auto *u) { return !isAllowedResultUse(u); });
+	return std::ranges::any_of(siIt->users(),
+				   [](auto *usr) { return !isAllowedResultUse(usr); });
 }
 
-auto BarrierResultAnalysis::run(Module &M, ModuleAnalysisManager &MAM)
+auto BarrierResultAnalysis::run(Module &M, ModuleAnalysisManager & /*MAM*/)
 	-> BarrierResultAnalysis::Result
 {
 	auto result = false;

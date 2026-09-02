@@ -30,21 +30,22 @@
 #ifndef LLI_INTERPRETER_H
 #define LLI_INTERPRETER_H
 
+#include "Runtime/DepTracker.hpp"
 #include "genmc/ADT/View.hpp"
 #include "genmc/ADT/value_ptr.hpp"
 #include "genmc/Execution/LoadAnnotation.hpp"
-#include "Runtime/DepTracker.hpp"
-#include "passes/InternalFunctions.hpp"
 #include "genmc/Support/ActionEnums.hpp"
-#include "passes/LLVMUtils.hpp"
-#include "passes/ModuleInfo.hpp"
 #include "genmc/Support/MemAccess.hpp"
 #include "genmc/Support/SAddr.hpp"
 #include "genmc/Support/SVal.hpp"
 #include "genmc/Support/ThreadInfo.hpp"
 #include "genmc/Verification/GenMCDriver.hpp"
 #include "genmc/Verification/VerificationError.hpp"
+#include "passes/InternalFunctions.hpp"
+#include "passes/LLVMUtils.hpp"
+#include "passes/ModuleInfo.hpp"
 
+#include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/IntervalMap.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/GenericValue.h>
@@ -95,7 +96,7 @@
 	})
 
 class GenMCDriver;
-class LLIConfig;
+struct LLIConfig;
 
 namespace llvm {
 
@@ -249,6 +250,9 @@ protected:
 
 	/* Information about the module under test */
 	std::unique_ptr<ModuleInfo> MI;
+
+	/* Maps internal functions to their code. Derived once from internalFunNames */
+	llvm::DenseMap<const llvm::Function *, InternalFunctions> internalFunCache_;
 
 	/* List of thread-local variables, with their initializing values */
 	std::unordered_map<const void *, llvm::GenericValue> threadLocalVars;
@@ -491,11 +495,7 @@ public:
 	void visitSelectInst(SelectInst &I);
 
 	void visitCallInstWrapper(CallInstWrapper CIW);
-#if LLVM_VERSION_MAJOR < 11
-	void visitCallSite(CallSite CS) { visitCallInstWrapper(CallInstWrapper(CS)); }
-#else
 	void visitCallBase(CallBase &CB) { visitCallInstWrapper(CallInstWrapper(CB)); }
-#endif
 	void visitUnreachableInst(UnreachableInst &I);
 
 	void visitShl(BinaryOperator &I);
@@ -578,6 +578,9 @@ private: // Helper functions
 	void call##NAME(Function *F, const std::vector<GenericValue> &ArgVals,                     \
 			const std::unique_ptr<EventDeps> &specialDeps);
 #include "passes/InternalFunction.def"
+
+	/* Returns whether F is an internal function */
+	auto isInternalCall(const Function *F) const -> bool;
 
 	void callInternalFunction(Function *F, const std::vector<GenericValue> &ArgVals,
 				  const std::unique_ptr<EventDeps> &deps);

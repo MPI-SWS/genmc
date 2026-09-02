@@ -16,8 +16,8 @@
 
 #include "genmc/config.h"
 
-#include "genmc/ADT/View.hpp"
 #include "BoundDecider.hpp"
+#include "genmc/ADT/View.hpp"
 
 /** Bound the number of pre-emptive context switches */
 class ContextBoundDecider : public BoundDecider {
@@ -27,11 +27,11 @@ public:
 
 private:
 	[[nodiscard]] auto doesExecutionExceedBound(unsigned int bound) const -> bool override;
-	[[nodiscard]] auto doesPrefixExceedBound(View v, int t, unsigned int bound) const -> bool;
+	[[nodiscard]] auto doesPrefixExceedBound(View v, int tid, unsigned int bound) const -> bool;
 	[[nodiscard]] auto getSlack() const -> unsigned override;
 #ifdef ENABLE_GENMC_DEBUG
 	[[nodiscard]] auto calculate() const -> unsigned override;
-	[[nodiscard]] auto calculate(View v, int t) const -> unsigned;
+	[[nodiscard]] auto calculate(View v, int tid) const -> unsigned;
 #endif
 };
 

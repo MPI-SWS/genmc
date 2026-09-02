@@ -43,16 +43,16 @@ public:
 	auto operator<=>(const Stamp &other) const = default;
 
 #define IMPL_STAMP_BINOP(_op)                                                                      \
-	Stamp &operator _op##=(uint32_t v)                                                         \
+	auto operator _op## = (uint32_t v)->Stamp &                                                \
 	{                                                                                          \
 		value _op## = v;                                                                   \
 		return *this;                                                                      \
 	}                                                                                          \
-	Stamp operator _op(uint32_t v) const                                                       \
+	auto operator _op(uint32_t v) const->Stamp                                                 \
 	{                                                                                          \
-		Stamp n(*this);                                                                    \
-		n _op## = v;                                                                       \
-		return n;                                                                          \
+		Stamp result(*this);                                                               \
+		result _op## = v;                                                                  \
+		return result;                                                                     \
 	}
 
 	IMPL_STAMP_BINOP(+);

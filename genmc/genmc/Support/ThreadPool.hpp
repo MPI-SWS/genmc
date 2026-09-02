@@ -21,6 +21,7 @@
 #include <atomic>
 #include <future>
 #include <memory>
+#include <mutex>
 #include <thread>
 
 /* TODO: Make lli-independent */
@@ -56,21 +57,21 @@ public:
 	/** Returns true if the queue is empty */
 	auto empty() -> bool
 	{
-		std::lock_guard<std::mutex> lock(qMutex);
+		std::scoped_lock lock(qMutex); // NOLINT(misc-const-correctness)
 		return queue.empty();
 	}
 
 	/** Adds a new item to the queue */
 	void push(ItemT item)
 	{
-		std::lock_guard<std::mutex> lock(qMutex);
+		std::scoped_lock lock(qMutex); // NOLINT(misc-const-correctness)
 		queue.push_back(std::move(item));
 	}
 
 	/** Tries to pop an item from the queue */
 	auto tryPop() -> ItemT
 	{
-		std::lock_guard<std::mutex> lock(qMutex);
+		std::scoped_lock lock(qMutex); // NOLINT(misc-const-correctness)
 		if (queue.empty())
 			return nullptr;
 		auto item = std::move(queue.back());
@@ -140,8 +141,8 @@ public:
 	ThreadPool(const ThreadPool &) = delete; /* non-copyable to avoid rcs for now */
 	ThreadPool(ThreadPool &&) = delete;
 	ThreadPool(const LLIConfig &lliConfig, const std::shared_ptr<const Config> &conf,
-		   const std::unique_ptr<llvm::Module> &mod, const std::unique_ptr<ModuleInfo> &MI,
-		   TFunT threadFun);
+		   const std::unique_ptr<llvm::Module> &mod,
+		   const std::unique_ptr<ModuleInfo> &modInfo, TFunT threadFun);
 
 	auto operator=(const ThreadPool &) -> ThreadPool & = delete;
 	auto operator=(ThreadPool &&) -> ThreadPool & = delete;
@@ -156,10 +157,10 @@ public:
 	[[nodiscard]] auto getNumWorkers() const -> unsigned int { return numWorkers_; }
 
 	/** Returns the index of the calling thread */
-	[[nodiscard]] auto getIndex() const -> unsigned int { return index_; }
+	[[nodiscard]] static auto getIndex() -> unsigned int { return index_; }
 
 	/** Sets the index of the calling thread */
-	void setIndex(unsigned int i) { index_ = i; }
+	static void setIndex(unsigned int i) { index_ = i; }
 
 	/*** Tasks-related ***/
 
@@ -180,7 +181,7 @@ public:
 	/** Stops all threads */
 	void halt()
 	{
-		std::lock_guard<std::mutex> lock(stateMtx_);
+		std::scoped_lock lock(stateMtx_); // NOLINT(misc-const-correctness)
 		shouldHalt_.store(true);
 		stateCV_.notify_all();
 	}
@@ -195,13 +196,14 @@ public:
 private:
 	/** Adds a worker thread to the pool */
 	void addWorker(unsigned int index, std::unique_ptr<GenMCDriver> driver,
-		       std::unique_ptr<llvm::Interpreter> EE, TFunT threadFun);
+		       std::unique_ptr<llvm::Interpreter> interp, TFunT threadFun);
 
 	/** Tries to pop a task from the global queue */
 	auto tryPopPoolQueue() -> TaskT;
 
 	/** Tries to steal a task from another thread */
 	auto tryStealOtherQueue() -> TaskT;
+	// -- stub; implementation will access member state
 
 	/** Pops the next task to be executed by a thread */
 	auto popTask() -> TaskT;

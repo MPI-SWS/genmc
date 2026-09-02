@@ -11,36 +11,40 @@
  *     https://opensource.org/licenses/MIT
  */
 
-
 #include "CodeCondenserPass.hpp"
 #include "passes/Transforms/BisimilarityCheckerPass.hpp"
-#include "genmc/Support/Error.hpp"
+
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/PassManager.h>
+#include <llvm/Support/Casting.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
+#include <algorithm>
 #include <unordered_map>
+#include <vector>
 
 using namespace llvm;
 using BsPoint = BisimilarityAnalysis::BisimilarityPoint;
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto CodeCondenserPass::run(Function &F, FunctionAnalysisManager &FAM) -> PreservedAnalyses
 {
 	auto bsps = FAM.getResult<BisimilarityAnalysis>(F);
 
 	/* Map blocks to bisimilarity points */
 	std::unordered_map<BasicBlock *, std::vector<BsPoint>> bbsToBsps;
-	for (const auto &p : bsps)
-		bbsToBsps[p.first->getParent()].push_back(p);
+	for (const auto &bsp : bsps)
+		bbsToBsps[bsp.first->getParent()].push_back(bsp);
 
 	/* Condense the code: */
 	for (auto &bbP : bbsToBsps) {
 		/* find the first bisimilar point within each block (should not be
 		 * TerminatorInst)... */
 		for (auto &i : *bbP.first) {
-			auto pIt = std::find_if(bbP.second.begin(), bbP.second.end(),
-						[&](const BsPoint &p) { return p.first == &i; });
+			auto pIt = std::ranges::find_if(
+				bbP.second, [&](const BsPoint &bsp) { return bsp.first == &i; });
 			if (pIt == bbP.second.end())
 				continue;
 			if (pIt->first->isTerminator())
@@ -61,7 +65,7 @@ auto CodeCondenserPass::run(Function &F, FunctionAnalysisManager &FAM) -> Preser
 			auto predIt = pred_begin(aNewBB);
 			while (predIt != pred_end(aNewBB)) {
 				auto tmpIt = predIt++;
-				auto pred = *tmpIt;
+				auto *pred = *tmpIt;
 				auto *term = dyn_cast<BranchInst>(pred->getTerminator());
 				if (!term)
 					continue;

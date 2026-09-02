@@ -1,0 +1,14 @@
+Error: Mixed-size accesses!
+Event (0, 3) in graph:
+<-1, 0> :
+	(0, 1): Wsc (A, 1) mixed-size-load0.c:13
+	(0, 2): Wsc (A, 1) mixed-size-load0.c:14
+	(0, 3): Rsc (A, 1) [(0, 1)] mixed-size-load0.c:15
+
+Trace to (0, 3):
+[main] mixed-size-load0.c: 13: atomic_store_explicit(&a8[0], 1, memory_order_seq_cst);
+[main] mixed-size-load0.c: 14: atomic_store_explicit(&a8[1], 1, memory_order_seq_cst);
+[main] mixed-size-load0.c: 15: unsigned short val = atomic_load_explicit(&A, memory_order_seq_cst);
+Mixed-size accesses detected: tried to read with a 16-bit access!
+
+Number of complete executions explored: 0

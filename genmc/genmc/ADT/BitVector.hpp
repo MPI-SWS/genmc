@@ -30,6 +30,8 @@
 #ifndef ADT_BITVECTOR_HPP
 #define ADT_BITVECTOR_HPP
 
+// NOLINTBEGIN (vendored from LLVM)
+
 // #include "llvm/ADT/ArrayRef.h"
 // #include "llvm/ADT/DenseMapInfo.h"
 // #include "llvm/ADT/iterator_range.h"
@@ -204,9 +206,9 @@ public:
 		unsigned BitPos;
 
 	public:
-		reference(BitVector &b, unsigned Idx)
+		reference(BitVector &bvec, unsigned Idx)
 		{
-			WordRef = &b.Bits[Idx / BITWORD_SIZE];
+			WordRef = &bvec.Bits[Idx / BITWORD_SIZE];
 			BitPos = Idx % BITWORD_SIZE;
 		}
 
@@ -669,7 +671,7 @@ public:
 	}
 
 	template <class F, class... ArgTys>
-	static BitVector &apply(F &&f, BitVector &Out, BitVector const &Arg, ArgTys const &...Args)
+	static BitVector &apply(F &&f, BitVector &Out, const BitVector &Arg, const ArgTys &...Args)
 	{
 		assert(((Arg.size() == Args.size()) && ...) && "consistent sizes");
 		Out.resize(Arg.size());
@@ -986,4 +988,5 @@ namespace std {
 inline void swap(genmc::BitVector &LHS, genmc::BitVector &RHS) { LHS.swap(RHS); }
 } // end namespace std
 
+// NOLINTEND
 #endif /* ADT_BITVECTOR_HPP */

@@ -26,9 +26,12 @@ enum class InternalFunctions : std::int8_t {
 
 extern const std::unordered_map<std::string, InternalFunctions> internalFunNames;
 
-inline bool isInternalFunction(const std::string &name) { return internalFunNames.count(name); }
+inline auto isInternalFunction(const std::string &name) -> bool
+{
+	return internalFunNames.contains(name);
+}
 
-inline bool isCleanInternalFunction(const std::string &name)
+inline auto isCleanInternalFunction(const std::string &name) -> bool
 {
 	if (!isInternalFunction(name))
 		return false;
@@ -41,13 +44,13 @@ inline bool isCleanInternalFunction(const std::string &name)
 #include "passes/InternalFunction.def"
 }
 
-inline bool isErrorFunction(const std::string &name)
+inline auto isErrorFunction(const std::string &name) -> bool
 {
 	return isInternalFunction(name) &&
 	       internalFunNames.at(name) == InternalFunctions::AssertFail;
 }
 
-inline bool isAssumeFunction(const std::string &name)
+inline auto isAssumeFunction(const std::string &name) -> bool
 {
 	if (!isInternalFunction(name))
 		return false;
@@ -55,7 +58,7 @@ inline bool isAssumeFunction(const std::string &name)
 	return internalFunNames.at(name) == InternalFunctions::Assume;
 }
 
-inline bool isAllocFunction(const std::string &name)
+inline auto isAllocFunction(const std::string &name) -> bool
 {
 	if (!isInternalFunction(name))
 		return false;
@@ -68,7 +71,16 @@ inline bool isAllocFunction(const std::string &name)
 #include "passes/InternalFunction.def"
 }
 
-inline bool isMutexCode(InternalFunctions code)
+inline auto isAllocCode(InternalFunctions code) -> bool
+{
+	auto codeI = static_cast<std::underlying_type_t<InternalFunctions>>(code);
+	return
+#define FIRST_ALLOC_FUNCTION(NUM) codeI >= NUM &&
+#define LAST_ALLOC_FUNCTION(NUM) codeI <= NUM;
+#include "passes/InternalFunction.def"
+}
+
+inline auto isMutexCode(InternalFunctions code) -> bool
 {
 	auto codeI = static_cast<std::underlying_type_t<InternalFunctions>>(code);
 	return
@@ -77,7 +89,7 @@ inline bool isMutexCode(InternalFunctions code)
 #include "passes/InternalFunction.def"
 }
 
-inline bool isCondVarCode(InternalFunctions code)
+inline auto isCondVarCode(InternalFunctions code) -> bool
 {
 	auto codeI = static_cast<std::underlying_type_t<InternalFunctions>>(code);
 	return
@@ -86,7 +98,7 @@ inline bool isCondVarCode(InternalFunctions code)
 #include "passes/InternalFunction.def"
 }
 
-inline bool hasGlobalLoadSemantics(const std::string &name)
+inline auto hasGlobalLoadSemantics(const std::string &name) -> bool
 {
 	if (!isInternalFunction(name))
 		return false;

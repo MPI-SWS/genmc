@@ -57,8 +57,8 @@ struct MethodCall {
 	Id id; /**< Invariant: the id of a call will always be its index in the parent observation
 		*/
 	std::string name;
-	int32_t argVal;
-	int32_t retVal;
+	int32_t argVal = 0;
+	int32_t retVal = 0;
 
 	/* Dynamic information (not (de)serializable) */
 	MethodBeginLabel *beginLab = nullptr;
@@ -170,9 +170,9 @@ template <> struct std::hash<Observation> {
 		for (const auto &call : obs.ops()) {
 			hash_combine(hash, call.retVal);
 		}
-		for (const auto &[from, to] : obs.rfs()) {
+		for (const auto &[from, dst] : obs.rfs()) {
 			hash_combine(hash, from);
-			hash_combine(hash, to);
+			hash_combine(hash, dst);
 		}
 		return hash;
 	}

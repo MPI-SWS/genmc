@@ -42,6 +42,7 @@ public:
 	auto run(Function &F, FunctionAnalysisManager &FAM) -> PreservedAnalyses;
 
 private:
+	// NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
 	LoadAnnotationAnalysisResult &LAI_;
 };
 

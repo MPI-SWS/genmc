@@ -17,10 +17,9 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GenMC="${GenMC:-$DIR/../RelWithDebInfo/bin/genmc}"
 GENMCFLAGS="${GENMCFLAGS:-}"
-# MODELS=(rc11 imm)
 MODELS=(rc11)
 
-CONFIG_FILE="$(dirname "$(dirname "${GenMC}")")/include/config.h"
+CONFIG_FILE="$(dirname "$(dirname "${GenMC}")")/include/genmc/config.h"
 
 # Set the directories for testing
 if [ -z ${CORRECT_DIRS+x} ]

@@ -76,32 +76,35 @@ public:
 			return tmp;
 		}
 
-		auto operator+=(difference_type n) -> const_iterator &
+		auto operator+=(difference_type offset) -> const_iterator &
 		{
-			/* Implicit wrap-around works for negative n */
-			idx_ += static_cast<std::size_t>(n);
+			/* Implicit wrap-around works for negative offset */
+			idx_ += static_cast<std::size_t>(offset);
 			return *this;
 		}
 
-		auto operator-=(difference_type n) -> const_iterator &
+		auto operator-=(difference_type offset) -> const_iterator &
 		{
-			idx_ -= static_cast<std::size_t>(n);
+			idx_ -= static_cast<std::size_t>(offset);
 			return *this;
 		}
 
-		friend auto operator+(const const_iterator &it, difference_type n) -> const_iterator
+		friend auto operator+(const const_iterator &it, difference_type offset)
+			-> const_iterator
 		{
-			return {it.view_, it.idx_ + static_cast<std::size_t>(n)};
+			return {it.view_, it.idx_ + static_cast<std::size_t>(offset)};
 		}
 
-		friend auto operator+(difference_type n, const const_iterator &it) -> const_iterator
+		friend auto operator+(difference_type offset, const const_iterator &it)
+			-> const_iterator
 		{
-			return it + n;
+			return it + offset;
 		}
 
-		friend auto operator-(const const_iterator &it, difference_type n) -> const_iterator
+		friend auto operator-(const const_iterator &it, difference_type offset)
+			-> const_iterator
 		{
-			return {it.view_, it.idx_ - static_cast<std::size_t>(n)};
+			return {it.view_, it.idx_ - static_cast<std::size_t>(offset)};
 		}
 
 		friend auto operator-(const const_iterator &lhs, const const_iterator &rhs)

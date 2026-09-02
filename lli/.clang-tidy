@@ -1,0 +1,2 @@
+# lli/ is vendored (forked from LLVM's interpreter): exempt from clang-tidy.
+Checks: '-*'

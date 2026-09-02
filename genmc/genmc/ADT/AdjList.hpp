@@ -101,13 +101,13 @@ public:
 	[[nodiscard]] auto empty() const -> bool { return size() == 0; }
 
 	/** Adds a node to the graph */
-	void addNode(T a);
+	void addNode(T node);
 
 	/** Adds a new edge to the graph */
-	void addEdge(T a, T b);
+	void addEdge(T src, T dst);
 
 	/** Helper for addEdge() that adds nodes with known IDs */
-	void addEdge(NodeId a, NodeId b);
+	void addEdge(NodeId srcId, NodeId dst);
 
 	/** For each "f" in "froms", adds edges to all the "tos"*/
 	void addEdgesFromTo(const std::vector<T> &froms, const std::vector<T> &tos);
@@ -116,9 +116,9 @@ public:
 	[[nodiscard]] auto getInDegrees() const -> const std::vector<int> &;
 
 	/** Returns true if the in-degree and out-degree of a node is 0 */
-	auto hasNoEdges(T a) const -> bool
+	auto hasNoEdges(T node) const -> bool
 	{
-		return inDegree[getIndex(a)] == 0 && nodeSucc[getIndex(a)].size() == 0;
+		return inDegree[getIndex(node)] == 0 && nodeSucc[getIndex(node)].size() == 0;
 	}
 
 	/** Performs a DFS exploration */
@@ -127,10 +127,10 @@ public:
 	void dfs(FVB &&atEntryV, FET &&atTreeE, FEB &&atBackE, FEF &&atForwE, FVE &&atExitV,
 		 FEND &&atEnd) const;
 
-	/** Visits all reachable nodes starting from a in a DFS manner */
+	/** Visits all reachable nodes starting from start in a DFS manner */
 	template <typename FVB, typename FET, typename FEB, typename FEF, typename FVE,
 		  typename FEND>
-	void visitReachable(T a, FVB &&atEntryV, FET &&atTreeE, FEB &&atBackE, FEF &&atForwE,
+	void visitReachable(T start, FVB &&atEntryV, FET &&atTreeE, FEB &&atBackE, FEF &&atForwE,
 			    FVE &&atExitV, FEND &&atEnd) const;
 
 	/** Returns a topological sorting of the graph */
@@ -148,13 +148,19 @@ public:
 	auto isIrreflexive() -> bool;
 
 	/** Returns true if the respective edge exists */
-	auto operator()(const T a, const T b) const -> bool
+	auto operator()(const T src, const T dst) const -> bool
 	{
-		return transC[getIndex(a)][getIndex(b)];
+		return transC[getIndex(src)][getIndex(dst)];
 	}
-	auto operator()(const T a, NodeId b) const -> bool { return transC[getIndex(a)][b]; }
-	auto operator()(NodeId a, const T b) const -> bool { return transC[a][getIndex(b)]; }
-	auto operator()(NodeId a, NodeId b) const -> bool { return transC[a][b]; }
+	auto operator()(const T src, NodeId dst) const -> bool
+	{
+		return transC[getIndex(src)][dst];
+	}
+	auto operator()(NodeId srcId, const T dst) const -> bool
+	{
+		return transC[srcId][getIndex(dst)];
+	}
+	auto operator()(NodeId srcId, NodeId dst) const -> bool { return transC[srcId][dst]; }
 
 	template <typename U, typename Z>
 	friend auto operator<<(std::ostream &s, const AdjList<U, Z> &l) -> std::ostream &;
@@ -162,9 +168,10 @@ public:
 private:
 	/** Helper for dfs() */
 	template <typename FVB, typename FET, typename FEB, typename FEF, typename FVE>
-	void dfsUtil(NodeId i, Timestamp &t, std::vector<NodeStatus> &m, std::vector<NodeId> &p,
-		     std::vector<Timestamp> &d, std::vector<Timestamp> &f, FVB &&atEntryV,
-		     FET &&atTreeE, FEB &&atBackE, FEF &&atForwE, FVE &&atExitV) const;
+	void dfsUtil(NodeId i, Timestamp &timer, std::vector<NodeStatus> &colors,
+		     std::vector<NodeId> &parent, std::vector<Timestamp> &disc,
+		     std::vector<Timestamp> &f, FVB &&atEntryV, FET &&atTreeE, FEB &&atBackE,
+		     FEF &&atForwE, FVE &&atExitV) const;
 
 	template <typename F>
 	auto allTopoSortUtil(std::vector<T> &current, std::vector<bool> visited,
@@ -195,12 +202,12 @@ private:
 
 /**** AdjList templates ****/
 
-template <typename T, typename H> void AdjList<T, H>::addNode(T a)
+template <typename T, typename H> void AdjList<T, H>::addNode(T node)
 {
 	auto id = elems.size();
 
-	ids[a] = id;
-	elems.push_back(a);
+	ids[node] = id;
+	elems.push_back(node);
 	nodeSucc.push_back({});
 	inDegree.push_back(0);
 
@@ -208,29 +215,29 @@ template <typename T, typename H> void AdjList<T, H>::addNode(T a)
 	transC.push_back(genmc::BitVector(id));
 }
 
-template <typename T, typename H> void AdjList<T, H>::addEdge(NodeId a, NodeId b)
+template <typename T, typename H> void AdjList<T, H>::addEdge(NodeId srcId, NodeId dst)
 {
 	/* If edge already exists, nothing to do */
-	if ((*this)(a, b))
+	if ((*this)(srcId, dst))
 		return;
 
-	nodeSucc[a].push_back(b);
-	transC[a].set(b);
-	++inDegree[b];
+	nodeSucc[srcId].push_back(dst);
+	transC[srcId].set(dst);
+	++inDegree[dst];
 	calculatedTransC = false;
 }
 
-template <typename T, typename H> void AdjList<T, H>::addEdge(T a, T b)
+template <typename T, typename H> void AdjList<T, H>::addEdge(T src, T dst)
 {
-	addEdge(getIndex(a), getIndex(b));
+	addEdge(getIndex(src), getIndex(dst));
 }
 
 template <typename T, typename H>
 void AdjList<T, H>::addEdgesFromTo(const std::vector<T> &froms, const std::vector<T> &tos)
 {
 	for (auto &f : froms)
-		for (auto &t : tos)
-			addEdge(f, t);
+		for (auto &dst : tos)
+			addEdge(f, dst);
 }
 
 template <typename T, typename H>
@@ -241,28 +248,29 @@ auto AdjList<T, H>::getInDegrees() const -> const std::vector<int> &
 
 template <typename T, typename H>
 template <typename FVB, typename FET, typename FEB, typename FEF, typename FVE>
-void AdjList<T, H>::dfsUtil(NodeId i, Timestamp &t, std::vector<NodeStatus> &m,
-			    std::vector<NodeId> &p, std::vector<Timestamp> &d,
+void AdjList<T, H>::dfsUtil(NodeId i, Timestamp &timer, std::vector<NodeStatus> &colors,
+			    std::vector<NodeId> &parent, std::vector<Timestamp> &disc,
 			    std::vector<Timestamp> &f, FVB &&atEntryV, FET &&atTreeE, FEB &&atBackE,
 			    FEF &&atForwE, FVE &&atExitV) const
 {
-	m[i] = NodeStatus::entered;
-	d[i] = ++t;
-	atEntryV(i, t, m, p, d, f);
+	colors[i] = NodeStatus::entered;
+	disc[i] = ++timer;
+	atEntryV(i, timer, colors, parent, disc, f);
 	for (const auto &j : nodeSucc[i]) {
-		if (m[j] == NodeStatus::unseen) {
-			p[j] = i;
-			dfsUtil(j, t, m, p, d, f, atEntryV, atTreeE, atBackE, atForwE, atExitV);
-			atTreeE(i, j, t, m, p, d, f);
-		} else if (m[j] == NodeStatus::entered) {
-			atBackE(i, j, t, m, p, d, f);
+		if (colors[j] == NodeStatus::unseen) {
+			parent[j] = i;
+			dfsUtil(j, timer, colors, parent, disc, f, atEntryV, atTreeE, atBackE,
+				atForwE, atExitV);
+			atTreeE(i, j, timer, colors, parent, disc, f);
+		} else if (colors[j] == NodeStatus::entered) {
+			atBackE(i, j, timer, colors, parent, disc, f);
 		} else {
-			atForwE(i, j, t, m, p, d, f);
+			atForwE(i, j, timer, colors, parent, disc, f);
 		}
 	}
-	m[i] = NodeStatus::left;
-	f[i] = ++t;
-	atExitV(i, t, m, p, d, f);
+	colors[i] = NodeStatus::left;
+	f[i] = ++timer;
+	atExitV(i, timer, colors, parent, disc, f);
 }
 
 template <typename T, typename H>
@@ -270,56 +278,60 @@ template <typename FVB, typename FET, typename FEB, typename FEF, typename FVE, 
 void AdjList<T, H>::dfs(FVB &&atEntryV, FET &&atTreeE, FEB &&atBackE, FEF &&atForwE, FVE &&atExitV,
 			FEND &&atEnd) const
 {
-	Timestamp t = 0;
-	std::vector<NodeStatus> m(nodeSucc.size(), NodeStatus::unseen); /* Node status */
-	std::vector<NodeId> p(nodeSucc.size(), -42);			/* Node parent */
-	std::vector<Timestamp> d(nodeSucc.size(), 0);			/* First visit */
-	std::vector<Timestamp> f(nodeSucc.size(), 0);			/* Last visit */
+	Timestamp timer = 0;
+	std::vector<NodeStatus> colors(nodeSucc.size(), NodeStatus::unseen); /* Node status */
+	std::vector<NodeId> parent(nodeSucc.size(), -42);		     /* Node parent */
+	std::vector<Timestamp> disc(nodeSucc.size(), 0);		     /* First visit */
+	std::vector<Timestamp> f(nodeSucc.size(), 0);			     /* Last visit */
 
 	for (auto i = 0u; i < nodeSucc.size(); i++) {
-		if (m[i] == NodeStatus::unseen)
-			dfsUtil(i, t, m, p, d, f, atEntryV, atTreeE, atBackE, atForwE, atExitV);
+		if (colors[i] == NodeStatus::unseen)
+			dfsUtil(i, timer, colors, parent, disc, f, atEntryV, atTreeE, atBackE,
+				atForwE, atExitV);
 	}
-	atEnd(t, m, p, d, f);
+	atEnd(timer, colors, parent, disc, f);
 }
 
 template <typename T, typename H>
 template <typename FVB, typename FET, typename FEB, typename FEF, typename FVE, typename FEND>
-void AdjList<T, H>::visitReachable(T a, FVB &&atEntryV, FET &&atTreeE, FEB &&atBackE, FEF &&atForwE,
-				   FVE &&atExitV, FEND &&atEnd) const
+void AdjList<T, H>::visitReachable(T start, FVB &&atEntryV, FET &&atTreeE, FEB &&atBackE,
+				   FEF &&atForwE, FVE &&atExitV, FEND &&atEnd) const
 {
-	Timestamp t = 0;
-	std::vector<NodeStatus> m(nodeSucc.size(), NodeStatus::unseen); /* Node status */
-	std::vector<NodeId> p(nodeSucc.size(), -42);			/* Node parent */
-	std::vector<Timestamp> d(nodeSucc.size(), 0);			/* First visit */
-	std::vector<Timestamp> f(nodeSucc.size(), 0);			/* Last visit */
+	Timestamp timer = 0;
+	std::vector<NodeStatus> colors(nodeSucc.size(), NodeStatus::unseen); /* Node status */
+	std::vector<NodeId> parent(nodeSucc.size(), -42);		     /* Node parent */
+	std::vector<Timestamp> disc(nodeSucc.size(), 0);		     /* First visit */
+	std::vector<Timestamp> f(nodeSucc.size(), 0);			     /* Last visit */
 
-	dfsUtil(getIndex(a), t, m, p, d, f, atEntryV, atTreeE, atBackE, atForwE, atExitV);
-	atEnd(t, m, p, d, f);
+	dfsUtil(getIndex(start), timer, colors, parent, disc, f, atEntryV, atTreeE, atBackE,
+		atForwE, atExitV);
+	atEnd(timer, colors, parent, disc, f);
 }
 
 template <typename T, typename H> auto AdjList<T, H>::topoSort() -> std::vector<T>
 {
 	std::vector<T> sort;
 
-	dfs([&](NodeId i, Timestamp &t, std::vector<NodeStatus> &m, std::vector<NodeId> &p,
-		std::vector<Timestamp> &d, std::vector<Timestamp> &f) { return; }, /* atEntryV */
-	    [&](NodeId i, NodeId j, Timestamp &t, std::vector<NodeStatus> &m,
-		std::vector<NodeId> &p, std::vector<Timestamp> &d,
+	dfs([&](NodeId i, Timestamp &timer, std::vector<NodeStatus> &colors,
+		std::vector<NodeId> &parent, std::vector<Timestamp> &disc,
+		std::vector<Timestamp> &f) { return; }, /* atEntryV */
+	    [&](NodeId i, NodeId j, Timestamp &timer, std::vector<NodeStatus> &colors,
+		std::vector<NodeId> &parent, std::vector<Timestamp> &disc,
 		std::vector<Timestamp> &f) { return; }, /* atTreeE */
-	    [&](NodeId i, NodeId j, Timestamp &t, std::vector<NodeStatus> &m,
-		std::vector<NodeId> &p, std::vector<Timestamp> &d,
+	    [&](NodeId i, NodeId j, Timestamp &timer, std::vector<NodeStatus> &colors,
+		std::vector<NodeId> &parent, std::vector<Timestamp> &disc,
 		std::vector<Timestamp> &f) { UNREACHABLE(); }, /* atBackE */
-	    [&](NodeId i, NodeId j, Timestamp &t, std::vector<NodeStatus> &m,
-		std::vector<NodeId> &p, std::vector<Timestamp> &d,
+	    [&](NodeId i, NodeId j, Timestamp &timer, std::vector<NodeStatus> &colors,
+		std::vector<NodeId> &parent, std::vector<Timestamp> &disc,
 		std::vector<Timestamp> &f) { return; }, /* atForwE*/
-	    [&](NodeId i, Timestamp &t, std::vector<NodeStatus> &m, std::vector<NodeId> &p,
-		std::vector<Timestamp> &d, std::vector<Timestamp> &f) { /* atExitV */
-									sort.push_back(elems[i]);
-									return;
+	    [&](NodeId i, Timestamp &timer, std::vector<NodeStatus> &colors,
+		std::vector<NodeId> &parent, std::vector<Timestamp> &disc,
+		std::vector<Timestamp> &f) { /* atExitV */
+					     sort.push_back(elems[i]);
+					     return;
 	    },
-	    [&](Timestamp &t, std::vector<NodeStatus> &m, std::vector<NodeId> &p,
-		std::vector<Timestamp> &d, std::vector<Timestamp> &f) { return; }); /* atEnd */
+	    [&](Timestamp &timer, std::vector<NodeStatus> &colors, std::vector<NodeId> &parent,
+		std::vector<Timestamp> &disc, std::vector<Timestamp> &f) { return; }); /* atEnd */
 
 	std::reverse(sort.begin(), sort.end());
 	return sort;
@@ -436,26 +448,28 @@ template <typename T, typename H> void AdjList<T, H>::transClosure()
 	if (calculatedTransC)
 		return;
 
-	dfs([&](NodeId i, Timestamp &t, std::vector<NodeStatus> &m, std::vector<NodeId> &p,
-		std::vector<Timestamp> &d, std::vector<Timestamp> &f) { return; }, /* atEntryV */
-	    [&](NodeId i, NodeId j, Timestamp &t, std::vector<NodeStatus> &m,
-		std::vector<NodeId> &p, std::vector<Timestamp> &d,
+	dfs([&](NodeId i, Timestamp &timer, std::vector<NodeStatus> &colors,
+		std::vector<NodeId> &parent, std::vector<Timestamp> &disc,
+		std::vector<Timestamp> &f) { return; }, /* atEntryV */
+	    [&](NodeId i, NodeId j, Timestamp &timer, std::vector<NodeStatus> &colors,
+		std::vector<NodeId> &parent, std::vector<Timestamp> &disc,
 		std::vector<Timestamp> &f) { return; }, /* atTreeE */
-	    [&](NodeId i, NodeId j, Timestamp &t, std::vector<NodeStatus> &m,
-		std::vector<NodeId> &p, std::vector<Timestamp> &d,
+	    [&](NodeId i, NodeId j, Timestamp &timer, std::vector<NodeStatus> &colors,
+		std::vector<NodeId> &parent, std::vector<Timestamp> &disc,
 		std::vector<Timestamp> &f) { return; }, /* atBackE*/
-	    [&](NodeId i, NodeId j, Timestamp &t, std::vector<NodeStatus> &m,
-		std::vector<NodeId> &p, std::vector<Timestamp> &d,
+	    [&](NodeId i, NodeId j, Timestamp &timer, std::vector<NodeStatus> &colors,
+		std::vector<NodeId> &parent, std::vector<Timestamp> &disc,
 		std::vector<Timestamp> &f) { return; }, /* atForwE*/
-	    [&](NodeId i, Timestamp &t, std::vector<NodeStatus> &m, std::vector<NodeId> &p,
-		std::vector<Timestamp> &d, std::vector<Timestamp> &f) {
+	    [&](NodeId i, Timestamp &timer, std::vector<NodeStatus> &colors,
+		std::vector<NodeId> &parent, std::vector<Timestamp> &disc,
+		std::vector<Timestamp> &f) {
 		    for (auto &j : nodeSucc[i]) {
 			    transC[i] |= transC[j];
 			    transC[i].set(j);
 		    }
 	    }, /* atExitV*/
-	    [&](Timestamp &t, std::vector<NodeStatus> &m, std::vector<NodeId> &p,
-		std::vector<Timestamp> &d, std::vector<Timestamp> &f) { return; }); /* atEnd */
+	    [&](Timestamp &timer, std::vector<NodeStatus> &colors, std::vector<NodeId> &parent,
+		std::vector<Timestamp> &disc, std::vector<Timestamp> &f) { return; }); /* atEnd */
 
 	calculatedTransC = true;
 }

@@ -16,7 +16,7 @@
 
 #include <format>
 
-enum class VerbosityLevel {
+enum class VerbosityLevel : std::uint8_t {
 	Quiet,
 	Error,
 	Warning,

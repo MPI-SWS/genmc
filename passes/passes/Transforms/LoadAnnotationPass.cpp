@@ -12,21 +12,30 @@
  */
 
 #include "LoadAnnotationPass.hpp"
+#include "genmc/ADT/VSet.hpp"
+#include "genmc/Execution/LoadAnnotation.hpp"
+#include "genmc/Support/Error.hpp"
 #include "passes/InternalFunctions.hpp"
 #include "passes/LLVMUtils.hpp"
 #include "passes/Transforms/InstAnnotator.hpp"
-#include "genmc/Support/Error.hpp"
-#include "genmc/Support/SExpr.hpp"
+
 #include <llvm/IR/Function.h>
 #include <llvm/IR/InstIterator.h>
+#include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/PassManager.h>
+#include <llvm/Support/Casting.h>
 
 #include <algorithm>
+#include <cstdint>
+#include <utility>
+#include <vector>
 
 using namespace llvm;
 
 /* Helper for getSourceLoads() -- see below */
-void calcSourceLoads(Instruction *i, VSet<PHINode *> phis, std::vector<Instruction *> &source)
+static void calcSourceLoads(Instruction *i, VSet<PHINode *> phis,
+			    std::vector<Instruction *> &source)
 {
 	if (!i)
 		return;
@@ -43,18 +52,18 @@ void calcSourceLoads(Instruction *i, VSet<PHINode *> phis, std::vector<Instructi
 
 	/* If this is an already encountered Φ, don't go into circles */
 	if (auto *phi = dyn_cast<PHINode>(i)) {
-		if (phis.count(phi))
+		if (phis.contains(phi))
 			return;
 		phis.insert(phi);
 	}
 
 	/* Otherwise, recurse */
-	for (auto &u : i->operands()) {
-		if (auto *pi = dyn_cast<Instruction>(u.get())) {
+	for (auto &use : i->operands()) {
+		if (auto *pi = dyn_cast<Instruction>(use.get())) {
 			calcSourceLoads(pi, phis, source);
-		} else if (auto *c = dyn_cast<Constant>(u.get())) {
+		} else if (isa<Constant>(use.get())) {
 			if (auto *phi = dyn_cast<PHINode>(i)) {
-				auto *term = phi->getIncomingBlock(u)->getTerminator();
+				auto *term = phi->getIncomingBlock(use)->getTerminator();
 				if (auto *bi = dyn_cast<BranchInst>(term))
 					if (bi->isConditional())
 						calcSourceLoads(
@@ -69,22 +78,22 @@ void calcSourceLoads(Instruction *i, VSet<PHINode *> phis, std::vector<Instructi
  * Returns the source loads of an assume statement, that is,
  * loads the result of which is used in the assume.
  */
-auto getSourceLoads(CallInst *assm) -> std::vector<Instruction *>
+static auto getSourceLoads(CallInst *assm) -> std::vector<Instruction *>
 {
-	VSet<PHINode *> phis;
+	const VSet<PHINode *> phis;
 	std::vector<Instruction *> source;
 
 	if (auto *arg = dyn_cast<Instruction>(assm->getOperand(0)))
 		calcSourceLoads(arg, phis, source);
-	std::sort(source.begin(), source.end());
-	source.erase(std::unique(source.begin(), source.end()), source.end());
+	std::ranges::sort(source);
+	source.erase(std::ranges::unique(source).begin(), source.end());
 	return source;
 }
 
 /*
  * Given an assume's source loads, returns the annotatable ones.
  */
-auto filterAnnotatableFromSource(CallInst *assm, const std::vector<Instruction *> &source)
+static auto filterAnnotatableFromSource(CallInst *assm, const std::vector<Instruction *> &source)
 	-> std::vector<Instruction *>
 {
 	std::vector<Instruction *> result;
@@ -118,14 +127,14 @@ auto filterAnnotatableFromSource(CallInst *assm, const std::vector<Instruction *
 			}
 		});
 	}
-	result.erase(std::unique(result.begin(), result.end()), result.end());
+	result.erase(std::ranges::unique(result).begin(), result.end());
 	return result;
 }
 
 /*
  * Returns all of ASSM's annotatable loads
  */
-auto getAnnotatableLoads(CallInst *assm) -> std::vector<Instruction *>
+static auto getAnnotatableLoads(CallInst *assm) -> std::vector<Instruction *>
 {
 	if (!isAssumeFunction(getCalledFunOrStripValName(*assm)))
 		return {}; /* yet another check... */
@@ -142,7 +151,7 @@ static auto extractAssumeArgument(CallInst *assume) -> uint64_t
 	return arg->getUniqueInteger().getLimitedValue();
 }
 
-auto LoadAnnotationAnalysis::run(Function &F, FunctionAnalysisManager &FAM) -> Result
+auto LoadAnnotationAnalysis::run(Function &F, FunctionAnalysisManager & /*FAM*/) -> Result
 {
 	InstAnnotator annotator;
 
@@ -151,7 +160,9 @@ auto LoadAnnotationAnalysis::run(Function &F, FunctionAnalysisManager &FAM) -> R
 		if (call && isAssumeFunction(getCalledFunOrStripValName(*call))) {
 			auto loads = getAnnotatableLoads(call);
 			for (auto *l : loads) {
-				auto type = AssumeType(extractAssumeArgument(call));
+				auto rawType = extractAssumeArgument(call);
+				VERIFY(rawType <= static_cast<uint64_t>(AssumeType::Spinloop));
+				auto type = static_cast<AssumeType>(rawType);
 				result_.annotMap[l] = std::make_pair(type, annotator.annotate(l));
 			}
 		}

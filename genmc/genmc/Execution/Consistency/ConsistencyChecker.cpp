@@ -12,12 +12,16 @@
  */
 
 #include "genmc/Execution/Consistency/ConsistencyChecker.hpp"
-#include "genmc/Execution/Consistency/IMMChecker.hpp"
-#include "genmc/Execution/Consistency/RAChecker.hpp"
-#include "genmc/Execution/Consistency/RC11Checker.hpp"
-#include "genmc/Execution/Consistency/SCChecker.hpp"
-#include "genmc/Execution/Consistency/TSOChecker.hpp"
+#include "genmc/Execution/Consistency/IMMChecker.hpp"  // NOLINT(misc-include-cleaner)
+#include "genmc/Execution/Consistency/RAChecker.hpp"   // NOLINT(misc-include-cleaner)
+#include "genmc/Execution/Consistency/RC11Checker.hpp" // NOLINT(misc-include-cleaner)
+#include "genmc/Execution/Consistency/SCChecker.hpp"   // NOLINT(misc-include-cleaner)
+#include "genmc/Execution/Consistency/TSOChecker.hpp"  // NOLINT(misc-include-cleaner)
+#include "genmc/Support/Error.hpp"
 #include "genmc/Verification/Config.hpp"
+#include "genmc/Verification/MemoryModel.hpp"
+
+#include <memory>
 
 auto ConsistencyChecker::create(const Config *conf) -> std::unique_ptr<ConsistencyChecker>
 {

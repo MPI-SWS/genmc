@@ -13,9 +13,13 @@
 
 #include "genmc/ADT/View.hpp"
 #include "genmc/ADT/AdaptiveView.hpp"
+#include "genmc/ADT/Rc.hpp"
 #include "genmc/Support/Error.hpp"
 
 #include <algorithm>
+#include <cstddef>
+#include <format>
+#include <utility>
 
 /*******************************************************************************
  **                          ViewBase Class
@@ -28,16 +32,17 @@ auto ViewBase::update(const ViewBase &v) -> ViewBase &
 	if (v.empty())
 		return *this;
 
-	if (view_.size() < v.size())
+	if (std::cmp_less(view_.size(), v.size()))
 		view_.resize(v.size(), 0);
 
 	int *__restrict dst = view_.data();
 	const int *__restrict src = v.view_.data();
-	size_t n = v.size();
+	const size_t size = v.size();
 	size_t i = 0;
 
 	/* The compiler should vectorize this loop */
-	for (; i < n; ++i)
+	for (; i < size; ++i)
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 		dst[i] = std::max(dst[i], src[i]);
 	return *this;
 }
@@ -45,7 +50,7 @@ auto ViewBase::update(const ViewBase &v) -> ViewBase &
 auto ViewBase::formatData(std::format_context &ctx) const -> std::format_context::iterator
 {
 	auto out = std::format_to(ctx.out(), "[ ");
-	for (auto i = 0; i < (int)size(); i++)
+	for (auto i = 0; std::cmp_less(i, size()); i++)
 		out = std::format_to(out, "{}: {}", i, getMax(i));
 	return std::format_to(out, "]");
 }
@@ -143,6 +148,7 @@ void View::hydrate()
 	}
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto View::update(const View &v) -> View &
 {
 	/* Helper function to merge two views */
@@ -215,7 +221,7 @@ auto View::formatData(std::format_context &ctx) const -> std::format_context::it
 	out = std::format_to(out, "> ");
 #endif
 	out = std::format_to(out, "[ ");
-	for (auto i = 0; i < (int)size(); i++)
+	for (auto i = 0; std::cmp_less(i, size()); i++)
 		out = std::format_to(out, "{}:{} ", i, getMax(i));
 	return std::format_to(out, "]");
 }

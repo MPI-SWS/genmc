@@ -18,11 +18,28 @@
 #include "genmc/Execution/ExecutionGraph.hpp"
 #include "genmc/Support/ActionEnums.hpp"
 
+#include <compare>
 #include <optional>
 #include <random>
 #include <vector>
 
-class Config;
+struct Config;
+
+/** Cache keys are of the form <value, fails_spuriously>. */
+struct CacheKey {
+	SVal val;
+	bool spuriouslyFails = false;
+
+	auto operator<=>(const CacheKey &other) const -> std::weak_ordering
+	{
+		if (val.ult(other.val))
+			return std::weak_ordering::less;
+		if (other.val.ult(val))
+			return std::weak_ordering::greater;
+		return spuriouslyFails <=> other.spuriouslyFails;
+	}
+	auto operator==(const CacheKey &other) const -> bool = default;
+};
 
 class Scheduler {
 public:
@@ -82,7 +99,7 @@ protected:
 private:
 	using ValuePrefixT = std::unordered_map<
 		std::pair<unsigned int, unsigned int>, // fun_id, tid
-		Trie<std::vector<SVal>, std::vector<std::unique_ptr<EventLabel>>, SValUCmp>,
+		Trie<std::vector<CacheKey>, std::vector<std::unique_ptr<EventLabel>>>,
 		PairHasher<unsigned int, unsigned int>>;
 
 	/** Opt: Retrieves the next labels to add for THREAD from the cache.
@@ -93,7 +110,7 @@ private:
 	/** Opt: Checks whether SEQ has been seen before for <FUN_ID, TID> and
 	 * if so returns its successors. Returns nullptr otherwise. */
 	auto retrieveCachedSuccessors(std::pair<unsigned int, unsigned int> key,
-				      const std::vector<SVal> &seq)
+				      const std::vector<CacheKey> &seq)
 		-> std::vector<std::unique_ptr<EventLabel>> *
 	{
 		return seenPrefixes[key].lookup(seq);

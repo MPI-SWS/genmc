@@ -127,7 +127,7 @@ public:
 		return ptr_ ? ptr_->use_count() : 0;
 	}
 
-	auto get() const noexcept -> T * { return ptr_; }
+	[[nodiscard]] auto get() const noexcept -> T * { return ptr_; }
 	auto operator*() const noexcept -> T & { return *ptr_; }
 	auto operator->() const noexcept -> T * { return ptr_; }
 	explicit operator bool() const noexcept { return ptr_ != nullptr; }

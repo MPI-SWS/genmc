@@ -16,81 +16,49 @@
 
 #include "genmc/ADT/VSet.hpp"
 #include "genmc/Execution/EventAttr.hpp"
-#include "passes/InternalFunctions.hpp"
 #include "genmc/Support/ActionEnums.hpp"
 #include "genmc/Support/Error.hpp"
+#include "passes/InternalFunctions.hpp"
+
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Value.h>
+
 #include <string>
 
 using TerminatorInst = llvm::Instruction;
 
-#if LLVM_VERSION_MAJOR < 17
-#define GLOBALS(M) (M).getGlobalList()
-#else
 #define GLOBALS(M) (M).globals()
-#endif
-
-#if LLVM_VERSION_MAJOR < 11
-
-#include <llvm/IR/CallSite.h>
 
 class CallInstWrapper {
 
 public:
 	/* Constructors */
-	CallInstWrapper() : CS() {}
-	CallInstWrapper(CallSite CS) : CS(CS) {}
-	CallInstWrapper(CallInst *CI) : CS(CI) {}
+	CallInstWrapper() : callBase(nullptr) {}
+	CallInstWrapper(llvm::CallBase *callBase) : callBase(callBase) {}
+	CallInstWrapper(llvm::CallBase &callBase) : callBase(&callBase) {}
+	CallInstWrapper(llvm::CallInst *CI) : callBase(CI) {}
 
 	/* Getters emulation */
-	llvm::Value *getCalledOperand() { return CS.getCalledValue(); }
-	llvm::Function *getCalledFunction() { return CS.getCalledFunction(); }
-	size_t arg_size() const { return CS.arg_size(); }
-	CallSite::arg_iterator arg_begin() { return CS.arg_begin(); }
-	CallSite::arg_iterator arg_end() { return CS.arg_end(); }
+	auto getCalledOperand() -> llvm::Value * { return callBase->getCalledOperand(); }
+	auto getCalledFunction() -> llvm::Function * { return callBase->getCalledFunction(); }
+	[[nodiscard]] auto arg_size() const -> size_t { return callBase->arg_size(); }
+	auto arg_begin() -> llvm::User::op_iterator { return callBase->arg_begin(); }
+	auto arg_end() -> llvm::User::op_iterator { return callBase->arg_end(); }
 
-	/* Operators to use instead of member functions like
-	 * getInstruction() that do not exist in CallBase */
-	Instruction *operator&() { return CS.getInstruction(); }
+	auto operator&() -> llvm::Instruction * { return callBase; }
 
 private:
-	CallSite CS;
+	llvm::CallBase *callBase;
 };
-
-#else
-
-class CallInstWrapper {
-
-public:
-	/* Constructors */
-	CallInstWrapper() : CB(nullptr) {}
-	CallInstWrapper(llvm::CallBase *CB) : CB(CB) {}
-	CallInstWrapper(llvm::CallBase &CB) : CB(&CB) {}
-	CallInstWrapper(llvm::CallInst *CI) : CB(CI) {}
-
-	/* Getters emulation */
-	auto getCalledOperand() -> llvm::Value * { return CB->getCalledOperand(); }
-	auto getCalledFunction() -> llvm::Function * { return CB->getCalledFunction(); }
-	auto arg_size() const -> size_t { return CB->arg_size(); }
-	auto arg_begin() -> llvm::User::op_iterator { return CB->arg_begin(); }
-	auto arg_end() -> llvm::User::op_iterator { return CB->arg_end(); }
-
-	auto operator&() -> llvm::Instruction * { return CB; }
-
-private:
-	llvm::CallBase *CB;
-};
-#endif
 
 /**
  * Returns true if o1 and o2 are the same ordering as far as a load
  * operation is concerned. This catches cases where e.g.,
- * o1 is acq_rel and o2 is acq.
+ * ord1 is acq_rel and ord2 is acq.
  * */
-auto areSameLoadOrdering(llvm::AtomicOrdering o1, llvm::AtomicOrdering o2) -> bool;
+auto areSameLoadOrdering(llvm::AtomicOrdering ord1, llvm::AtomicOrdering ord2) -> bool;
 
 /**
  * Strips all kinds of casts from val (including trunc, zext ops, etc)
@@ -128,7 +96,7 @@ auto isDependentOn(const llvm::Instruction *i1, const llvm::Instruction *i2) -> 
  * If EI extracts its value from an integer CAS instruction, returns said CAS;
  * otherwise returns nullptr.
  */
-auto extractsFromCAS(llvm::ExtractValueInst *ei) -> llvm::AtomicCmpXchgInst *;
+auto extractsFromCAS(llvm::ExtractValueInst *extract) -> llvm::AtomicCmpXchgInst *;
 
 /**
  * Returns true if its argument has side-effects.
@@ -172,26 +140,27 @@ auto tryThreadSuccessor(llvm::BranchInst *term, llvm::BasicBlock *succ) -> llvm:
  * Extracts the write attribute from an (annotated) instruction.
  * Returns NONE if the instruction is not annotated.
  */
-inline WriteAttr getWriteAttr(llvm::Instruction &I)
+inline auto getWriteAttr(llvm::Instruction &I) -> WriteAttr
 {
-	auto *md = I.getMetadata("genmc.attr");
-	if (!md)
+	auto *metadata = I.getMetadata("genmc.attr");
+	if (!metadata)
 		return WriteAttr::None;
 
-	auto *op = llvm::dyn_cast<llvm::ConstantAsMetadata>(md->getOperand(0));
+	auto *op = llvm::dyn_cast<llvm::ConstantAsMetadata>(metadata->getOperand(0));
 	VERIFY(op);
 
-	auto flags = llvm::dyn_cast<llvm::ConstantInt>(op->getValue())->getZExtValue();
+	auto flags = llvm::cast<llvm::ConstantInt>(op->getValue())->getZExtValue();
 	return static_cast<WriteAttr>(flags);
 }
 
 namespace details {
 template <typename F>
-void foreachInBackPathTo(llvm::BasicBlock *curr, llvm::BasicBlock *to,
+void foreachInBackPathTo(llvm::BasicBlock *curr, llvm::BasicBlock *toBB,
+			 // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward)
 			 llvm::SmallVector<llvm::BasicBlock *, 4> &path, F &&fun)
 {
 	path.push_back(curr);
-	if (curr == to) {
+	if (curr == toBB) {
 		for (auto *bb : path)
 			std::for_each(bb->rbegin(), bb->rend(), fun);
 		path.pop_back();
@@ -199,10 +168,9 @@ void foreachInBackPathTo(llvm::BasicBlock *curr, llvm::BasicBlock *to,
 	}
 
 	for (auto *pred : predecessors(curr))
-		if (std::find(path.begin(), path.end(), pred) == path.end())
-			foreachInBackPathTo(pred, to, path, fun);
+		if (std::ranges::find(path, pred) == path.end())
+			foreachInBackPathTo(pred, toBB, path, fun);
 	path.pop_back();
-	return;
 }
 } // namespace details
 
@@ -212,10 +180,11 @@ void foreachInBackPathTo(llvm::BasicBlock *curr, llvm::BasicBlock *to,
  * FUN is applied in reverse iteration order within a block.
  */
 template <typename F>
-void foreachInBackPathTo(llvm::BasicBlock *from, llvm::BasicBlock *to, F &&fun)
+// NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward)
+void foreachInBackPathTo(llvm::BasicBlock *from, llvm::BasicBlock *toBB, F &&fun)
 {
 	llvm::SmallVector<llvm::BasicBlock *, 4> path;
-	::details::foreachInBackPathTo(from, to, path, fun);
+	::details::foreachInBackPathTo(from, toBB, path, fun);
 }
 
 /*

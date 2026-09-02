@@ -3,9 +3,11 @@
 ## Build options
 
  - `GENMC_DEBUG`: this CMake option will enable diagnostics for GenMC (enabled by default for `Debug` builds)
- - `ENABLE_LINT`: enables linting at every build (default: OFF)
+ - `GENMC_WERROR`: treat compiler warnings as errors for GenMC's own code (`genmc/` and `passes/`); default: OFF, enabled in CI
  - `ENABLE_COVERAGE`: enables coverage reporting (default: OFF)
  - `BUILD_DOCS`: builds documentation (default: OFF)
+ - `SANITIZE`: comma-separated sanitizers to enable, e.g. `address,undefined` or `thread` (default: empty)
+ - `GENMC_TCMALLOC`: link `genmc` against tcmalloc (faster allocator): `AUTO` (default, if found) / `ON` (required) / `OFF`. Needs `libgoogle-perftools-dev`; disabled under `SANITIZE`. Pin `ON`/`OFF` for reproducible builds.
 
 # Testing GenMC
 
@@ -27,11 +29,29 @@ Example:
 GenMC="Release/bin/genmc" GENMCFLAGS="--disable-estimation" ./scripts/fast-driver.sh
 ```
 
+## Building with sanitizers
+
+To build with AddressSanitizer + UBSan:
+```shell
+cmake -DGENMC_DEBUG=ON -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+      -DSANITIZE=address,undefined \
+      -DCMAKE_PREFIX_PATH=/usr/lib/llvm-19/cmake \
+      -B Asan -S .
+cmake --build Asan -j$(nproc)
+ASAN_OPTIONS=detect_leaks=0 ./Asan/bin/unit_tests
+GenMC=./Asan/bin/genmc ASAN_OPTIONS=detect_leaks=0 ./scripts/fast-driver.sh
+```
+
+`ASAN_OPTIONS=detect_leaks=0` suppresses leak reports from LLVM's arena allocators, which
+intentionally do not free on exit. For ThreadSanitizer use `SANITIZE=thread`.
+`address` and `thread` are mutually exclusive.
+
 # Modifying GenMC
 
 ## Pull requests
 
 Please submit PRs as series of atomic, easily reversible commits.
+Code must be formatted with `clang-format` and free of `clang-tidy` warnings (`scripts/lint.sh`).
 
 ## Code conventions
 

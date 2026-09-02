@@ -30,6 +30,8 @@
 #ifndef ADT_SMALLVECTOR_HPP
 #define ADT_SMALLVECTOR_HPP
 
+// NOLINTBEGIN (vendored from LLVM)
+
 // #include "llvm/ADT/DenseMapInfo.h"
 // #include "llvm/Support/Compiler.h"
 #include <algorithm>
@@ -222,7 +224,8 @@ protected:
 
 	/// Check whether Elt will be invalidated by resizing the vector to NewSize.
 
-	void assertSafeToReferenceAfterResize(const void *Elt, size_t NewSize)
+	void assertSafeToReferenceAfterResize([[maybe_unused]] const void *Elt,
+					      [[maybe_unused]] size_t NewSize)
 	{
 		assert(isSafeToReferenceAfterResize(Elt, NewSize) &&
 		       "Attempting to reference an element of the vector in an operation "
@@ -1496,4 +1499,5 @@ swap(genmc::SmallVector<T, N> &LHS, genmc::SmallVector<T, N> &RHS)
 
 } // end namespace std
 
+// NOLINTEND
 #endif /* ADT_SMALLVECTOR_HPP */

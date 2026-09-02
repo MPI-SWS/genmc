@@ -49,6 +49,7 @@ template <> struct std::formatter<ModelType> {
 
 inline auto isStrongerThan(ModelType model, ModelType other) -> bool
 {
+	// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
 	static const bool lookup[5][5] = {
 		//          SC     TSO    RA     RC11   IMM
 		/* SC   */ {false, true, true, true, true},
@@ -57,6 +58,7 @@ inline auto isStrongerThan(ModelType model, ModelType other) -> bool
 		/* RC11 */ {false, false, false, false, true},
 		/* IMM  */ {false, false, false, false, false},
 	};
+	// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
 	return lookup[static_cast<size_t>(model)][static_cast<size_t>(other)];
 }
 

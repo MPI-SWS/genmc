@@ -13,19 +13,28 @@
 
 #include "ConfirmationAnnotationPass.hpp"
 #include "genmc/Execution/LoadAnnotation.hpp"
+#include "genmc/Support/Error.hpp"
 #include "passes/InternalFunctions.hpp"
 #include "passes/LLVMUtils.hpp"
-#include "genmc/Support/Error.hpp"
 
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/Analysis/PostDominators.h>
+#include <llvm/IR/CFG.h>
+#include <llvm/IR/Dominators.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/InstIterator.h>
+#include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/PassManager.h>
+#include <llvm/Support/Casting.h>
+
+#include <algorithm>
+#include <type_traits>
+#include <utility>
 
 using namespace llvm;
 
-auto isSpinEndCall(Instruction *i) -> bool
+static auto isSpinEndCall(Instruction *i) -> bool
 {
 	auto *ci = llvm::dyn_cast<CallInst>(i);
 	if (!ci)
@@ -47,7 +56,7 @@ auto isSpinEndCall(Instruction *i) -> bool
  * returns a candidate confirmation instruction: either a CAS or a CMP
  * between two loads.
  */
-auto getConfirmationCandidate(Instruction *i) -> Instruction *
+static auto getConfirmationCandidate(Instruction *i) -> Instruction *
 {
 	auto *si = stripCastsConstOps(i);
 	if (auto *ei = dyn_cast<ExtractValueInst>(si))
@@ -70,11 +79,11 @@ auto getConfirmationCandidate(Instruction *i) -> Instruction *
  * returns the common candidate confirmation instruction among
  * the block's predecessors.
  */
-auto getCommonConfirmationFromPreds(BasicBlock *bb) -> Instruction *
+static auto getCommonConfirmationFromPreds(BasicBlock *bb) -> Instruction *
 {
 	Instruction *conf = nullptr;
 	if (std::all_of(pred_begin(bb), pred_end(bb), [&conf](const BasicBlock *pred) {
-		    auto *ji = dyn_cast<BranchInst>(pred->getTerminator());
+		    const auto *ji = dyn_cast<BranchInst>(pred->getTerminator());
 		    if (!ji || !ji->isConditional() || !isa<Instruction>(ji->getCondition()))
 			    return false;
 		    auto *res = getConfirmationCandidate(dyn_cast<Instruction>(ji->getCondition()));
@@ -95,20 +104,20 @@ auto getCommonConfirmationFromPreds(BasicBlock *bb) -> Instruction *
  * (e.g., by checking that the loads read from the same place).
  * This should be done separately later.
  */
-auto spinEndsOnConfirmation(CallInst *ci) -> Instruction *
+static auto spinEndsOnConfirmation(CallInst *ci) -> Instruction *
 {
 	auto *endValue = ci->getArgOperand(0);
 	if (auto *i = dyn_cast<Instruction>(endValue)) {
 		return getConfirmationCandidate(i);
 	}
-	if (auto *c = dyn_cast<Constant>(endValue)) {
-		if (c->getType()->isIntegerTy() && c->isZeroValue())
+	if (auto *constant = dyn_cast<Constant>(endValue)) {
+		if (constant->getType()->isIntegerTy() && constant->isZeroValue())
 			return getCommonConfirmationFromPreds(ci->getParent());
 	}
 	return nullptr;
 }
 
-auto getConfirmationPair(Instruction *i, LoopInfo &LI, DominatorTree &DT)
+static auto getConfirmationPair(Instruction *i, LoopInfo &LI, DominatorTree &DT)
 	-> std::pair<LoadInst *, Instruction *>
 {
 	LoadInst *spec = nullptr;
@@ -155,11 +164,11 @@ auto getConfirmationPair(Instruction *i, LoopInfo &LI, DominatorTree &DT)
 							       : std::make_pair(nullptr, nullptr);
 }
 
-void annotateConfPair(Instruction *i, LoopInfo &LI, DominatorTree &DT)
+static void annotateConfPair(Instruction *i, LoopInfo &LI, DominatorTree &DT)
 {
 	auto pair = getConfirmationPair(i, LI, DT);
-	auto spec = pair.first;
-	auto conf = pair.second;
+	auto *spec = pair.first;
+	auto *conf = pair.second;
 	if (!spec || !conf)
 		return;
 
@@ -167,13 +176,13 @@ void annotateConfPair(Instruction *i, LoopInfo &LI, DominatorTree &DT)
 	annotateInstruction(conf, "genmc.attr", GENMC_KIND_CONFIRM);
 }
 
-void annotate(Function &F, LoopInfo &LI, DominatorTree &DT)
+static void annotate(Function &F, LoopInfo &LI, DominatorTree &DT)
 {
 	for (auto it = inst_begin(F), ie = inst_end(F); it != ie; ++it) {
 		if (!isSpinEndCall(&*it))
 			continue;
 
-		if (auto *conf = spinEndsOnConfirmation(dyn_cast<CallInst>(&*it)))
+		if (auto *conf = spinEndsOnConfirmation(cast<CallInst>(&*it)))
 			annotateConfPair(conf, LI, DT);
 	}
 }

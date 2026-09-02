@@ -12,13 +12,23 @@
  */
 
 #include "DepExecutionGraph.hpp"
+#include "genmc/ADT/DepView.hpp"
+#include "genmc/ADT/VectorClock.hpp"
+#include "genmc/Execution/EventLabel.hpp"
+#include "genmc/Execution/ExecutionGraph.hpp"
+#include "genmc/Execution/Stamp.hpp"
+#include "genmc/Support/Cast.hpp"
+#include "genmc/Support/Error.hpp"
 
-std::unique_ptr<VectorClock> DepExecutionGraph::getViewFromStamp(Stamp stamp) const
+#include <memory>
+#include <ranges>
+
+auto DepExecutionGraph::getViewFromStamp(Stamp stamp) const -> std::unique_ptr<VectorClock>
 {
 	auto preds = std::make_unique<DepView>();
 
-	for (auto i = 0u; i < getNumThreads(); i++) {
-		for (auto j = 1u; j < getThreadSize(i); j++) {
+	for (auto i = 0; i < getNumThreads(); i++) {
+		for (auto j = 1; j < getThreadSize(i); j++) {
 			const EventLabel *lab = getEventLabel(Event(i, j));
 			if (lab->getStamp() <= stamp)
 				preds->setMax(Event(i, j));
@@ -27,6 +37,7 @@ std::unique_ptr<VectorClock> DepExecutionGraph::getViewFromStamp(Stamp stamp) co
 	return preds;
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void DepExecutionGraph::cutToStamp(Stamp stamp)
 {
 	/* First remove events from the modification order */
@@ -41,8 +52,8 @@ void DepExecutionGraph::cutToStamp(Stamp stamp)
 	}
 
 	/* Then, restrict the graph */
-	for (auto i = 0u; i < getNumThreads(); i++) {
-		for (auto j = 0u; j <= preds->getMax(i); j++) { /* Keeps begins */
+	for (auto i = 0; i < getNumThreads(); i++) {
+		for (auto j = 0; j <= preds->getMax(i); j++) { /* Keeps begins */
 			auto *lab = getEventLabel(Event(i, j));
 			if (!preds->contains(lab->getPos()))
 				continue;
@@ -82,7 +93,7 @@ void DepExecutionGraph::cutToStamp(Stamp stamp)
 	}
 
 	/* Restrict the graph according to the view (keep begins around) */
-	for (auto i = 0u; i < getNumThreads(); i++) {
+	for (auto i = 0; i < getNumThreads(); i++) {
 		auto &thr = events[i];
 		thr.erase(thr.begin() + preds->getMax(i) + 1, thr.end());
 	}
@@ -113,8 +124,8 @@ void DepExecutionGraph::cutToStamp(Stamp stamp)
 		lab.setStamp(nextStamp());
 
 	/* Finally, do not keep any nullptrs in the graph */
-	for (auto i = 0u; i < getNumThreads(); i++) {
-		for (auto j = 0u; j < getThreadSize(i); j++) {
+	for (auto i = 0; i < getNumThreads(); i++) {
+		for (auto j = 0; j < getThreadSize(i); j++) {
 			if (preds->contains(Event(i, j)))
 				continue;
 			auto it = po_iterator(getEventLabel(Event(i, j)));
@@ -130,7 +141,7 @@ void DepExecutionGraph::cutToStamp(Stamp stamp)
 	getState().clear();
 }
 
-std::unique_ptr<ExecutionGraph> DepExecutionGraph::getCopyUpTo(const VectorClock &v) const
+auto DepExecutionGraph::getCopyUpTo(const VectorClock &v) const -> std::unique_ptr<ExecutionGraph>
 {
 	auto og = std::make_unique<DepExecutionGraph>(ExecutionGraph::Config{
 		.consChecker = this->consChecker_, .emitNALabels = this->haveNAs_});

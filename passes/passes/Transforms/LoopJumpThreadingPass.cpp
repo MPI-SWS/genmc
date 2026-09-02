@@ -12,44 +12,66 @@
  */
 
 #include "LoopJumpThreadingPass.hpp"
+#include "genmc/Support/SExpr.hpp"
+#include "genmc/Support/SExprVisitor.hpp"
 #include "passes/LLVMUtils.hpp"
 #include "passes/Transforms/InstAnnotator.hpp"
-#include "genmc/Support/SExprVisitor.hpp"
+
+#include <llvm/Analysis/LoopAnalysisManager.h>
+#include <llvm/Analysis/LoopInfo.h>
+#include <llvm/IR/CFG.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/PassManager.h>
+#include <llvm/IR/Use.h>
 #include <llvm/IR/Value.h>
+#include <llvm/Support/Casting.h>
+#include <llvm/Transforms/Scalar/LoopPassManager.h>
+
+#include <algorithm>
+#include <cstddef>
+#include <memory>
+#include <utility>
 
 using namespace llvm;
 
-auto inLoopBody(Loop *l, BasicBlock *bb) -> bool { return l->contains(bb) && bb != l->getHeader(); }
-
-auto isNonTrivialUser(User *u, PHINode *criticalPHI) -> bool
+static auto inLoopBody(Loop *l, BasicBlock *bb) -> bool
 {
-	auto *p = dyn_cast<PHINode>(u);
-	return !p || std::any_of(p->user_begin(), p->user_end(),
-				 [criticalPHI](User *us) { return us != criticalPHI; });
+	return l->contains(bb) && bb != l->getHeader();
 }
 
-auto isCriticalPHIUsedTrivially(Loop *l, PHINode *criticalPHI) -> bool
+static auto isNonTrivialUser(User *usr, PHINode *criticalPHI) -> bool
 {
-	return std::none_of(criticalPHI->user_begin(), criticalPHI->user_end(), [&](User *u) {
-		auto *p = dyn_cast<Instruction>(u)->getParent();
-		return (inLoopBody(l, p) && isNonTrivialUser(u, criticalPHI)) ||
-		       (p == l->getHeader() && std::any_of(criticalPHI->incoming_values().begin(),
-							   criticalPHI->incoming_values().end(),
-							   [u](Value *in) { return u == in; }));
+	auto *phi = dyn_cast<PHINode>(usr);
+	return !phi || std::any_of(phi->user_begin(), phi->user_end(),
+				   [criticalPHI](User *phiUser) { return phiUser != criticalPHI; });
+}
+
+static auto isCriticalPHIUsedTrivially(Loop *l, PHINode *criticalPHI) -> bool
+{
+	return std::none_of(criticalPHI->user_begin(), criticalPHI->user_end(), [&](User *usr) {
+		auto *inst = dyn_cast<Instruction>(usr);
+		if (!inst)
+			return false;
+		auto *parent = inst->getParent();
+		return (inLoopBody(l, parent) && isNonTrivialUser(usr, criticalPHI)) ||
+		       (parent == l->getHeader() &&
+			std::any_of(criticalPHI->incoming_values().begin(),
+				    criticalPHI->incoming_values().end(),
+				    [usr](Value *in) { return usr == in; }));
 	});
 }
 
-auto areNonCriticalPHIsUsedInBody(Loop *l, PHINode *criticalPHI) -> bool
+static auto areNonCriticalPHIsUsedInBody(Loop *l, PHINode *criticalPHI) -> bool
 {
 	for (auto &phi : l->getHeader()->phis()) {
 		if (&phi == criticalPHI)
 			continue;
-		for (auto *u : phi.users()) {
-			auto *ui = dyn_cast<Instruction>(u);
-			if (!ui)
+		for (auto *usr : phi.users()) {
+			auto *userInst = dyn_cast<Instruction>(usr);
+			if (!userInst)
 				continue;
-			if (inLoopBody(l, ui->getParent()))
+			if (inLoopBody(l, userInst->getParent()))
 				return true;
 		}
 	}
@@ -63,15 +85,15 @@ auto areNonCriticalPHIsUsedInBody(Loop *l, PHINode *criticalPHI) -> bool
  * are OK because if we prove that the header always jumps to the body,
  * then these uses can be replaced with the initial value.
  */
-auto loopUsesHeaderPHIsTrivially(Loop *l, PHINode *criticalPHI) -> bool
+static auto loopUsesHeaderPHIsTrivially(Loop *l, PHINode *criticalPHI) -> bool
 {
 	return isCriticalPHIUsedTrivially(l, criticalPHI) &&
 	       !areNonCriticalPHIsUsedInBody(l, criticalPHI);
 }
 
-auto getPHIConstEntryValueUsedInCond(Loop *l) -> PHINode *
+static auto getPHIConstEntryValueUsedInCond(Loop *l) -> PHINode *
 {
-	for (auto iit = l->getHeader()->begin(); auto phi = dyn_cast<PHINode>(iit); ++iit) {
+	for (auto iit = l->getHeader()->begin(); auto *phi = dyn_cast<PHINode>(iit); ++iit) {
 		for (auto &v : phi->incoming_values()) {
 			if (isa<ConstantInt>(v) &&
 			    phi->getIncomingBlock(v) == l->getLoopPredecessor() &&
@@ -83,7 +105,7 @@ auto getPHIConstEntryValueUsedInCond(Loop *l) -> PHINode *
 	return nullptr;
 }
 
-auto generateExprJumpsToBody(Loop *l) -> std::unique_ptr<SExpr<Value *>>
+static auto generateExprJumpsToBody(Loop *l) -> std::unique_ptr<SExpr<Value *>>
 {
 	auto condExp = InstAnnotator().annotateBBCond(l->getHeader(), l->getLoopPredecessor());
 	auto *bi = dyn_cast<BranchInst>(l->getHeader()->getTerminator());
@@ -95,30 +117,30 @@ auto generateExprJumpsToBody(Loop *l) -> std::unique_ptr<SExpr<Value *>>
 	return NotExpr<Value *>::create(std::move(condExp));
 }
 
-auto entryAlwaysJumpsToBody(Loop *l) -> bool
+static auto entryAlwaysJumpsToBody(Loop *l) -> bool
 {
 	/* Make sure that the header (conditionally) jumps at the body */
-	auto *h = l->getHeader();
-	if (std::none_of(succ_begin(h), succ_end(h),
+	auto *header = l->getHeader();
+	if (std::none_of(succ_begin(header), succ_end(header),
 			 [&](BasicBlock *bb) { return inLoopBody(l, bb); }))
 		return false;
 
 	/* Get the expression that jumps from the header to the body.. */
-	auto e = generateExprJumpsToBody(l);
+	auto expr = generateExprJumpsToBody(l);
 
 	/* ...and check whether it always evaluates to true */
-	size_t numSeen;
-	auto res = SExprEvaluator<Value *>().evaluate(e.get(), SExprEvaluator<Value *>::VMap(),
+	size_t numSeen = 0;
+	auto res = SExprEvaluator<Value *>().evaluate(expr.get(), SExprEvaluator<Value *>::VMap(),
 						      &numSeen);
 	return (numSeen == 0) && res.getBool();
 }
 
-auto invertLoop(Loop *l, PHINode *criticalPHI) -> bool
+static auto invertLoop(Loop *l, PHINode *criticalPHI) -> bool
 {
-	auto *ph = l->getLoopPredecessor();
-	auto *phbi = dyn_cast<BranchInst>(ph->getTerminator());
-	auto *h = l->getHeader();
-	auto *hbi = dyn_cast<BranchInst>(h->getTerminator());
+	auto *preheader = l->getLoopPredecessor();
+	auto *phbi = dyn_cast<BranchInst>(preheader->getTerminator());
+	auto *header = l->getHeader();
+	auto *hbi = dyn_cast<BranchInst>(header->getTerminator());
 	if (!phbi || !hbi) // sanity check
 		return false;
 
@@ -134,40 +156,42 @@ auto invertLoop(Loop *l, PHINode *criticalPHI) -> bool
 	 * Now, however, we have proven that the critical PHI's value remains unchanged
 	 * as long as the loop is executed, so we can replace all uses with the initial value
 	 */
-	replaceUsesWithIf(criticalPHI, criticalPHI->getIncomingValueForBlock(ph), [&](Use &u) {
-		auto *us = dyn_cast<Instruction>(u.getUser());
-		return us && inLoopBody(l, us->getParent());
-	});
+	replaceUsesWithIf(criticalPHI, criticalPHI->getIncomingValueForBlock(preheader),
+			  [&](Use &use) {
+				  auto *userInst = dyn_cast<Instruction>(use.getUser());
+				  return userInst && inLoopBody(l, userInst->getParent());
+			  });
 
 	// /*
-	//  * Create a new PHI node to the BB of the body the entry jumps to:
+	//  * Create a new PHI node to the bb of the body the entry jumps to:
 	//  * this is gonnab be the new header
 	//  */
 	// auto *newPHI = PHINode::Create(criticalPHI->getType(), 2,
 	// 			       criticalPHI->getName() + ".inv");
-	// newPHI->addIncoming(criticalPHI->getIncomingValueForBlock(ph), ph);
-	// newPHI->addIncoming(criticalPHI, h);
+	// newPHI->addIncoming(criticalPHI->getIncomingValueForBlock(preheader), preheader);
+	// newPHI->addIncoming(criticalPHI, header);
 
 	// /* Replace uses of the old PHI in the loop's body and insert the new PHI */
 	// criticalPHI->replaceAllUsesWith(newPHI);
 	// newPHI->insertBefore(b->begin());
 
 	/* Fix PHI in the old header */
-	h->removePredecessor(ph);
+	header->removePredecessor(preheader);
 
 	/* Set preheader's successor to the loop body */
-	auto phJmpIdx = (phbi->getSuccessor(0) == h) ? 0 : 1;
-	auto *b = (inLoopBody(l, hbi->getSuccessor(0))) ? hbi->getSuccessor(0)
-							: hbi->getSuccessor(1);
-	phbi->setSuccessor(phJmpIdx, b);
+	auto phJmpIdx = (phbi->getSuccessor(0) == header) ? 0 : 1;
+	auto *bodyBB = (inLoopBody(l, hbi->getSuccessor(0))) ? hbi->getSuccessor(0)
+							     : hbi->getSuccessor(1);
+	phbi->setSuccessor(phJmpIdx, bodyBB);
 
 	/* Actually change the header */
-	l->moveToHeader(b);
+	l->moveToHeader(bodyBB);
 	return true;
 }
 
-auto LoopJumpThreadingPass::run(Loop &L, LoopAnalysisManager &AM, LoopStandardAnalysisResults &AR,
-				LPMUpdater &U) -> PreservedAnalyses
+auto LoopJumpThreadingPass::run(Loop &L, LoopAnalysisManager & /*AM*/,
+				LoopStandardAnalysisResults & /*AR*/, LPMUpdater & /*U*/)
+	-> PreservedAnalyses
 {
 	/* The whole point is to get rid of Φ-nodes in the header... */
 	if (!isa<PHINode>(L.getHeader()->begin()))

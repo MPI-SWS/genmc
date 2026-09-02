@@ -12,6 +12,7 @@
  */
 
 #include "EscapeCheckerPass.hpp"
+#include "genmc/ADT/VSet.hpp"
 #include "passes/InternalFunctions.hpp"
 #include "passes/LLVMUtils.hpp"
 #include "passes/Transforms/CallInfoCollectionPass.hpp"
@@ -21,8 +22,12 @@
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/PassManager.h>
+#include <llvm/Support/Casting.h>
 
 #include <algorithm>
+#include <ranges>
+#include <vector>
 
 using namespace llvm;
 
@@ -34,14 +39,16 @@ auto EscapeAnalysisResult::escapes(const Value *v) const -> bool
 	return it == escapePoints.cend() ? false : !it->second.empty();
 }
 
-auto EscapeAnalysisResult::escapesAfter(const Value *a, const Instruction *b,
+auto EscapeAnalysisResult::escapesAfter(const Value *val, const Instruction *inst,
 					DominatorTree &DT) const -> bool
 {
-	auto it = escapePoints.find(a);
+	auto it = escapePoints.find(val);
 	return it == escapePoints.cend()
 		       ? true
 		       : std::all_of(it->second.begin(), it->second.end(),
-				     [&](const Instruction *p) { return DT.dominates(b, p); });
+				     [&](const Instruction *escapePoint) {
+					     return DT.dominates(inst, escapePoint);
+				     });
 }
 
 auto EscapeAnalysisResult::writesDynamicMemory(Value *val /*, AliasAnalysis &AA */) const
@@ -75,6 +82,7 @@ auto EscapeAnalysisResult::writesDynamicMemory(Value *val /*, AliasAnalysis &AA 
 	// 		   });
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void EscapeAnalysisResult::calculate(Function &F, const CallAnalysisResult &CAR)
 {
 	const auto &allocFuns = CAR.alloc;
@@ -94,45 +102,46 @@ void EscapeAnalysisResult::calculate(Function &F, const CallAnalysisResult &CAR)
 			auto *current = worklist.back();
 			worklist.pop_back();
 
-			if (visited.count(current))
+			if (visited.contains(current))
 				continue;
 			visited.insert(current);
 
-			for (auto *u : current->users()) {
-				if (auto *inst = dyn_cast<Instruction>(u))
+			for (auto *usr : current->users()) {
+				if (auto *inst = dyn_cast<Instruction>(usr))
 					worklist.push_back(inst);
 
 				/* Some special function calls first */
-				if (auto *ci = dyn_cast<CallInst>(u)) {
+				if (auto *ci = dyn_cast<CallInst>(usr)) {
 					auto name = getCalledFunOrStripValName(*ci);
 					if (isCleanInternalFunction(name))
 						continue;
 				}
 
 				/* return/call/invoke are escape points */
-				if (isa<ReturnInst>(u) || isa<CallInst>(u) || isa<InvokeInst>(u)) {
-					escapePoints[i].push_back(dyn_cast<Instruction>(u));
+				if (isa<ReturnInst>(usr) || isa<CallInst>(usr) ||
+				    isa<InvokeInst>(usr)) {
+					escapePoints[i].push_back(dyn_cast<Instruction>(usr));
 					continue;
 				}
 
 				/* We have to be careful with stores: we only allow stores
 				 * to dynamically allocated memory */
-				if (auto *si = dyn_cast<StoreInst>(u)) {
+				if (auto *si = dyn_cast<StoreInst>(usr)) {
 					if (!writesDynamicMemory(si->getPointerOperand()))
 						escapePoints[i].push_back(si);
 				}
-				if (auto *casi = dyn_cast<AtomicCmpXchgInst>(u)) {
+				if (auto *casi = dyn_cast<AtomicCmpXchgInst>(usr)) {
 					if (!writesDynamicMemory(casi->getPointerOperand()))
 						escapePoints[i].push_back(casi);
 				}
-				if (auto *faii = dyn_cast<AtomicRMWInst>(u)) {
+				if (auto *faii = dyn_cast<AtomicRMWInst>(usr)) {
 					if (!writesDynamicMemory(faii->getPointerOperand()))
 						escapePoints[i].push_back(faii);
 				}
 				/* We also consider loads as escape points if configured to do so
 				 * (e.g., to catch for-loop counters) */
 				if (canLoadsEscape()) {
-					if (auto *li = dyn_cast<LoadInst>(u))
+					if (auto *li = dyn_cast<LoadInst>(usr))
 						escapePoints[i].push_back(li);
 				}
 			}
@@ -141,19 +150,19 @@ void EscapeAnalysisResult::calculate(Function &F, const CallAnalysisResult &CAR)
 
 	/* Remove duplicates */
 	for (auto &kv : escapePoints) {
-		std::sort(kv.second.begin(), kv.second.end());
-		auto last = std::unique(kv.second.begin(), kv.second.end());
-		kv.second.erase(last, kv.second.end());
+		std::ranges::sort(kv.second);
+		auto dups = std::ranges::unique(kv.second);
+		kv.second.erase(dups.begin(), kv.second.end());
 	}
 }
 
-void EscapeAnalysisResult::print(raw_ostream &s) const
+void EscapeAnalysisResult::print(raw_ostream &out) const
 {
-	for (auto P : escapePoints) {
-		s << P.first->getName() << " has " << P.second.size() << " escape point(s): [";
-		for (auto &p : P.second)
-			s << " " << *p << " ";
-		s << "]\n";
+	for (const auto &kv : escapePoints) {
+		out << kv.first->getName() << " has " << kv.second.size() << " escape point(s): [";
+		for (const auto &escapePoint : kv.second)
+			out << " " << *escapePoint << " ";
+		out << "]\n";
 	}
 }
 
@@ -161,7 +170,8 @@ void EscapeAnalysisResult::print(raw_ostream &s) const
 
 auto EscapeAnalysis::run(Module &M, ModuleAnalysisManager &MAM) -> Result
 {
-	auto &FAM = MAM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
+	[[maybe_unused]] auto &FAM =
+		MAM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
 	auto &CAR = MAM.getResult<CallAnalysis>(M);
 	for (auto &F : M | std::views::filter([&](auto &F) { return !F.isDeclaration(); })) {
 		result_[&F].calculate(F, CAR);

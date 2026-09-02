@@ -12,15 +12,24 @@
  */
 
 #include "genmc/Execution/GraphUtils.hpp"
+#include "genmc/Execution/EventAttr.hpp"
 #include "genmc/Execution/EventLabel.hpp"
 #include "genmc/Execution/ExecutionGraph.hpp"
 #include "genmc/Support/Cast.hpp"
+#include "genmc/Support/Error.hpp"
+#include "genmc/Support/MemAccess.hpp"
+#include "genmc/Support/RMWOps.hpp"
+#include "genmc/Support/SVal.hpp"
+
 #include <algorithm>
+#include <memory>
 #include <ranges>
+#include <utility>
+#include <vector>
 
 auto isHazptrProtected(const MemAccessLabel *mLab) -> bool
 {
-	auto &g = *mLab->getParent();
+	const auto &g = *mLab->getParent();
 	VERIFY(mLab->getAddr().isDynamic());
 
 	AAccess rng(g.getState().getAllocAccess(mLab->getAddr()));
@@ -33,9 +42,9 @@ auto isHazptrProtected(const MemAccessLabel *mLab) -> bool
 	if (pLabIt == mpreds.end() || !genmc::isa<HpProtectLabel>(&*pLabIt))
 		return false;
 
-	auto *pLab = genmc::dyn_cast<HpProtectLabel>(&*pLabIt);
-	for (auto &lab : std::ranges::subrange(std::ranges::begin(mpreds), pLabIt)) {
-		if (auto *oLab = genmc::dyn_cast<HpProtectLabel>(&lab))
+	const auto *pLab = genmc::dyn_cast<HpProtectLabel>(&*pLabIt);
+	for (const auto &lab : std::ranges::subrange(std::ranges::begin(mpreds), pLabIt)) {
+		if (const auto *oLab = genmc::dyn_cast<HpProtectLabel>(&lab))
 			if (oLab->getHpAddr() == pLab->getHpAddr())
 				return false;
 	}
@@ -47,14 +56,14 @@ auto findMatchingLock(const UnlockWriteLabel *uLab) -> const CasWriteLabel *
 	const auto &g = *uLab->getParent();
 	std::vector<const UnlockWriteLabel *> locUnlocks;
 
-	for (auto &lab : g.po_preds(uLab)) {
+	for (const auto &lab : g.po_preds(uLab)) {
 
 		/* In case support for reentrant locks is added... */
-		if (auto *suLab = genmc::dyn_cast<UnlockWriteLabel>(&lab)) {
+		if (const auto *suLab = genmc::dyn_cast<UnlockWriteLabel>(&lab)) {
 			if (suLab->getAddr() == uLab->getAddr())
 				locUnlocks.push_back(suLab);
 		}
-		if (auto *lLab = genmc::dyn_cast<CasWriteLabel>(&lab)) {
+		if (const auto *lLab = genmc::dyn_cast<CasWriteLabel>(&lab)) {
 			if ((genmc::isa<LockCasWriteLabel>(lLab) ||
 			     genmc::isa<TrylockCasWriteLabel>(lLab)) &&
 			    lLab->getAddr() == uLab->getAddr()) {
@@ -73,17 +82,17 @@ auto findMatchingUnlock(const CasWriteLabel *lLab) -> const UnlockWriteLabel *
 	std::vector<const CasWriteLabel *> locLocks;
 
 	VERIFY(genmc::isa<LockCasWriteLabel>(lLab) || genmc::isa<TrylockCasWriteLabel>(lLab));
-	for (auto &lab : g.po_succs(lLab)) {
+	for (const auto &lab : g.po_succs(lLab)) {
 		/* skip next event */
 
 		/* In case support for reentrant locks is added... */
-		if (auto *slLab = genmc::dyn_cast<CasWriteLabel>(&lab)) {
+		if (const auto *slLab = genmc::dyn_cast<CasWriteLabel>(&lab)) {
 			if ((genmc::isa<LockCasWriteLabel>(slLab) ||
 			     genmc::isa<TrylockCasWriteLabel>(slLab)) &&
 			    slLab->getAddr() == lLab->getAddr())
 				locLocks.push_back(slLab);
 		}
-		if (auto *uLab = genmc::dyn_cast<UnlockWriteLabel>(&lab)) {
+		if (const auto *uLab = genmc::dyn_cast<UnlockWriteLabel>(&lab)) {
 			if (uLab->getAddr() == lLab->getAddr()) {
 				if (locLocks.empty())
 					return uLab;
@@ -98,14 +107,14 @@ auto findMatchingSpeculativeRead(const ReadLabel *cLab, const EventLabel *&scLab
 	-> const SpeculativeReadLabel *
 {
 	const auto &g = *cLab->getParent();
-	for (auto &lab : g.po_preds(cLab)) {
+	for (const auto &lab : g.po_preds(cLab)) {
 
 		if (lab.isSC())
 			scLab = &lab;
 
 		/* We don't care whether all previous confirmations are matched;
 		 * the same speculation maybe confirmed multiple times (e.g., baskets) */
-		if (auto *rLab = genmc::dyn_cast<SpeculativeReadLabel>(&lab)) {
+		if (const auto *rLab = genmc::dyn_cast<SpeculativeReadLabel>(&lab)) {
 			if (rLab->getAddr() == cLab->getAddr())
 				return rLab;
 		}
@@ -150,7 +159,8 @@ auto findPendingRMW(const WriteLabel *sLab) -> const WriteLabel *
 
 auto findPendingRMW(WriteLabel *sLab) -> WriteLabel *
 {
-	return const_cast<WriteLabel *>(findPendingRMW(static_cast<const WriteLabel *>(sLab)));
+	// NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+	return const_cast<WriteLabel *>(findPendingRMW(&std::as_const(*sLab)));
 }
 
 auto findBarrierInitValue(const BIncFaiWriteLabel *wLab) -> SVal
@@ -202,16 +212,21 @@ void unblockThread(ExecutionGraph &g, Event pos)
 	g.removeLast(pos.thread);
 }
 
-auto createRMWWriteLabel(const ExecutionGraph &g, const ReadLabel *rLab)
+auto createRMWWriteLabel(const ExecutionGraph & /*g*/, const ReadLabel *rLab)
 	-> std::unique_ptr<WriteLabel>
 {
 	/* Handle non-RMW cases first */
 	if (!rLab->valueMakesRMWSucceed(rLab->getReturnValue()))
 		return nullptr;
 
+	/* A weak CAS instance set to spuriously fail performs no write */
+	if (const auto *casLab = genmc::dyn_cast<CasReadLabel>(rLab);
+	    casLab && casLab->failsSpuriously())
+		return nullptr;
+
 	SVal result;
 	WriteAttr wattr = WriteAttr::None;
-	if (auto *faiLab = genmc::dyn_cast<FaiReadLabel>(rLab)) {
+	if (const auto *faiLab = genmc::dyn_cast<FaiReadLabel>(rLab)) {
 		/* Need to get the rf value within the if, as rLab might be a disk op,
 		 * and we cannot get the value in that case (but it will also not be an RMW)
 		 */
@@ -219,7 +234,7 @@ auto createRMWWriteLabel(const ExecutionGraph &g, const ReadLabel *rLab)
 		result = executeRMWBinOp(rfVal, faiLab->getOpVal(), faiLab->getSize(),
 					 faiLab->getOp());
 		wattr = faiLab->getAttr();
-	} else if (auto *casLab = genmc::dyn_cast<CasReadLabel>(rLab)) {
+	} else if (const auto *casLab = genmc::dyn_cast<CasReadLabel>(rLab)) {
 		result = casLab->getSwapVal();
 		wattr = casLab->getAttr();
 	} else
@@ -247,5 +262,5 @@ auto createRMWWriteLabel(const ExecutionGraph &g, const ReadLabel *rLab)
 		UNREACHABLE();
 	}
 	VERIFY(wLab);
-	return std::move(wLab);
+	return wLab;
 }

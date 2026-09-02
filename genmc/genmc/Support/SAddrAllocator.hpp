@@ -39,7 +39,7 @@ protected:
 	 *  - `size` must be at least 1 byte.
 	 * */
 	template <typename F>
-	auto allocate(F &allocFun, SAddr::Width &pool, unsigned int thread, uint64_t size,
+	auto allocate(F &allocFun, SAddr::Width &pool, int thread, uint64_t size,
 		      uint64_t alignment, bool isDurable = false, bool isInternal = false) -> SAddr
 	{
 		VERIFY(size != 0);
@@ -49,7 +49,7 @@ protected:
 		VERIFY((alignment & (alignment - 1)) == 0);
 
 		/* Calculate new address (allocFun checks whether it fits into SAddr) */
-		SAddr::Width offset = alignment - 1;
+		const SAddr::Width offset = alignment - 1;
 		SAddr::Width newAddr = (pool + offset) & ~offset;
 
 		/* Check if we are out of memory or had an overflow */
@@ -66,17 +66,17 @@ public:
 	SAddrAllocator() = default;
 
 	/** Allocating methods. Param format: thread, size, alignment, durable?, internal?  */
-	template <typename... Ts> auto allocStatic(unsigned thread, Ts &&...params) -> SAddr
+	template <typename... Ts> auto allocStatic(int thread, Ts &&...params) -> SAddr
 	{
 		return allocate(SAddr::createStatic<SAddr::Width, SAddr::Width, bool, bool>,
 				staticPool_[thread], thread, std::forward<Ts>(params)...);
 	}
-	template <typename... Ts> auto allocAutomatic(unsigned thread, Ts &&...params) -> SAddr
+	template <typename... Ts> auto allocAutomatic(int thread, Ts &&...params) -> SAddr
 	{
 		return allocate(SAddr::createAutomatic<SAddr::Width, SAddr::Width, bool, bool>,
 				dynamicPool_[thread], thread, std::forward<Ts>(params)...);
 	}
-	template <typename... Ts> auto allocHeap(unsigned thread, Ts &&...params) -> SAddr
+	template <typename... Ts> auto allocHeap(int thread, Ts &&...params) -> SAddr
 	{
 		return allocate(SAddr::createHeap<SAddr::Width, SAddr::Width, bool, bool>,
 				dynamicPool_[thread], thread, std::forward<Ts>(params)...);
@@ -92,14 +92,14 @@ private:
 	public:
 		WidthProxy(SAddr::Width value = 1 /* default non-zero value */) : value_(value) {}
 		operator auto &() { return value_; }
-		operator auto const &() const { return value_; }
+		operator const auto &() const { return value_; }
 
 	private:
 		SAddr::Width value_;
 	};
 
-	std::unordered_map<unsigned, SAddr::Width> staticPool_;
-	std::unordered_map<unsigned, WidthProxy> dynamicPool_; // Note different type here
+	std::unordered_map<int, SAddr::Width> staticPool_;
+	std::unordered_map<int, WidthProxy> dynamicPool_; // Note different type here
 };
 
 /** Make `SAddrAllocator` formattable with `std::format`. */

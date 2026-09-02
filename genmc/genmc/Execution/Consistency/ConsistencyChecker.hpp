@@ -24,7 +24,7 @@ class EventLabel;
 class ReadLabel;
 class WriteLabel;
 class ExecutionGraph;
-class Config;
+struct Config;
 class VectorClock;
 class View;
 enum class ModelType : std::uint8_t;
@@ -91,6 +91,13 @@ public:
 	}
 
 	[[nodiscard]] virtual auto isDepTracking() const -> bool = 0;
+
+	/* Cache the label counts for tracked predicates. Update counts during add/removeLast,
+	 * and calculate from scratch if the graph is restricted */
+	virtual void resetCacheCounters() const = 0;
+	virtual void recomputeCacheCounters(const ExecutionGraph &g) const = 0;
+	virtual void maybeDecreaseCacheCounters(const EventLabel *lab) const = 0;
+	virtual void maybeIncreaseCacheCounters(const EventLabel *lab) const = 0;
 
 private:
 	/* Keep the config around for convenience (e.g., for optimizing

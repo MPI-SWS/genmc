@@ -110,8 +110,8 @@ public:
 		return data_.contains(obs);
 	}
 
-	[[nodiscard]] auto isRefinedBy(const Observation &) const -> bool;
-	[[nodiscard]] auto refinementMissingEdges(const Observation &) const
+	[[nodiscard]] auto isRefinedBy(const Observation & /*obs*/) const -> bool;
+	[[nodiscard]] auto refinementMissingEdges(const Observation & /*obs*/) const
 		-> std::vector<std::vector<Edge>>;
 
 	void add(ExecutionGraph &g, const ConsistencyChecker *consChecker, bool symmReduction);

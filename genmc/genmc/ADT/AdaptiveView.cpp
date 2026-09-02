@@ -12,8 +12,15 @@
  */
 
 #include "genmc/ADT/AdaptiveView.hpp"
+#include "genmc/ADT/View.hpp"
+#include "genmc/Execution/Event.hpp"
+#include "genmc/Support/Error.hpp"
 
-/* Private helpers (anonymous namespace for internal linkage) */
+#include <algorithm>
+#include <utility>
+#include <variant>
+
+/* Private helpers */
 namespace {
 
 using StorageT = AdaptiveView::StorageT;
@@ -23,7 +30,9 @@ template <class... Ts> struct overloads : Ts... {
 	using Ts::operator()...;
 };
 
-void promoteToView(StorageT &storage)
+} // namespace
+
+static void promoteToView(StorageT &storage)
 {
 	View view;
 
@@ -36,7 +45,7 @@ void promoteToView(StorageT &storage)
 
 /* addEvent() needs to handle storage being both a View and Events, since combine/operator+=()
  * call this method in a loop. In such a case, storage_ is promoted into a view */
-void addEvent(StorageT &storage, const Event &e)
+static void addEvent(StorageT &storage, const Event &e)
 {
 	/* Is storage already a view? */
 	if (auto *v = std::get_if<View>(&storage)) {
@@ -49,7 +58,7 @@ void addEvent(StorageT &storage, const Event &e)
 	auto &es = std::get<Events>(storage);
 
 	/* Can we update existing thread? */
-	auto it = std::ranges::find_if(es, [&](const auto &oe) { return oe.thread == e.thread; });
+	auto *it = std::ranges::find_if(es, [&](const auto &oe) { return oe.thread == e.thread; });
 	if (it != es.end()) {
 		*it = std::max(*it, e);
 		return;
@@ -65,7 +74,7 @@ void addEvent(StorageT &storage, const Event &e)
 	std::get<View>(storage).updateIdx(e);
 }
 
-void unify(StorageT &storage, const Event &rhs)
+static void unify(StorageT &storage, const Event &rhs)
 {
 	ASSERT(std::holds_alternative<Event>(storage));
 	auto &lhs = std::get<Event>(storage);
@@ -80,15 +89,13 @@ void unify(StorageT &storage, const Event &rhs)
 	storage = std::max(lhs, rhs);
 }
 
-}; // namespace
-
 auto AdaptiveView::containedIn(const View &v) const -> bool
 {
 	return std::visit(overloads{[](const Empty &) { return true; },
 				    [&](const Event &e) { return v.contains(e); },
 				    [&](const Events &es) { return v.contains(es); },
 				    [&](const View &view) { return v.contains(view); },
-				    [&](const Update &u) { return v.contains(u.first); }},
+				    [&](const Update &update) { return v.contains(update.first); }},
 			  storage_);
 }
 
@@ -98,8 +105,10 @@ auto AdaptiveView::join(const AdaptiveView &rhs) -> AdaptiveView &
 		return *this;
 
 	/* If current state is Update, convert to Event */
-	if (auto *upd = std::get_if<Update>(&storage_))
-		storage_ = upd->first;
+	if (auto *upd = std::get_if<Update>(&storage_)) {
+		const auto ev = upd->first; /* needed for aliasing protection */
+		storage_ = ev;
+	}
 
 	/* Fastpath: If RHS is empty, exit */
 	if (std::holds_alternative<Empty>(rhs.storage_))
@@ -135,7 +144,8 @@ auto AdaptiveView::join(const AdaptiveView &rhs) -> AdaptiveView &
 					     addEvent(storage_, e);
 			     },
 			     [&](Events &lhs, const View &rhs) {
-				     auto oldLhs = lhs;
+				     /* move out before storage_ = rhs destroys lhs */
+				     auto oldLhs = std::move(lhs);
 				     storage_ = rhs;
 				     std::get<View>(storage_).updateIdxs(oldLhs);
 			     },
@@ -174,8 +184,9 @@ auto AdaptiveView::operator+=(const AdaptiveView &rhs) -> AdaptiveView &
 
 	/* Case C: LHS is Events */
 	if (auto *es = std::get_if<Events>(&storage_)) {
-		es->erase(std::remove_if(es->begin(), es->end(),
-					 [&](const auto &e) { return uView.contains(e); }),
+		es->erase(std::ranges::remove_if(*es,
+						 [&](const auto &e) { return uView.contains(e); })
+				  .begin(),
 			  es->end());
 
 		if (es->empty()) {

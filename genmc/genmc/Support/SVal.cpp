@@ -14,5 +14,7 @@
 #include "SVal.hpp"
 #include "SAddr.hpp"
 
+#include <cstdint>
+
 static_assert(sizeof(SVal::Value) >= sizeof(SAddr::Width), "SVal needs to be able to hold SAddr");
 static_assert(sizeof(SVal::Value) >= sizeof(uintptr_t), "SVal needs to be able to hold pointers");

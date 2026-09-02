@@ -14,8 +14,8 @@
 #ifndef GENMC_ESCAPE_CHECKER_PASS_HPP
 #define GENMC_ESCAPE_CHECKER_PASS_HPP
 
-#include "genmc/ADT/VSet.hpp"
 #include "CallInfoCollectionPass.hpp"
+#include "genmc/ADT/VSet.hpp"
 
 #include <llvm/Passes/PassBuilder.h>
 
@@ -49,7 +49,8 @@ public:
 
 	/* Returns true if all escape points of A are dominated by B.
 	 * If there are no escape points, returns true. */
-	auto escapesAfter(const Value *a, const Instruction *b, DominatorTree &DT) const -> bool;
+	auto escapesAfter(const Value *val, const Instruction *inst, DominatorTree &DT) const
+		-> bool;
 
 	/* If VAL represents local memory, returns the respective allocating instructions */
 	auto writesDynamicMemory(Value *val /*, AliasAnalysis &AA */) const -> Instruction *;
@@ -58,7 +59,7 @@ public:
 	auto alloc_end() const -> VSet<Instruction *>::const_iterator { return allocs_.end(); }
 
 	/* For debugging */
-	void print(raw_ostream &s) const;
+	void print(raw_ostream &out) const;
 
 private:
 	using EPT = std::unordered_map<const Value *, std::vector<const Instruction *>>;
@@ -91,7 +92,7 @@ public:
 	auto run(Module &M, ModuleAnalysisManager &MAM) -> PreservedAnalyses;
 
 private:
-	EscapeAnalysis::Result &EAR_;
+	EscapeAnalysis::Result &EAR_; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 };
 
 #endif /* GENMC_ESCAPE_CHECKER_PASS_HPP_ */

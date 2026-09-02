@@ -18,13 +18,13 @@
 #include <ostream>
 
 template <typename T>
-inline void printDotEdge(std::ostream &os, const T &from, const T &to,
-			 std::map<std::string, std::string> &&attrs = {})
+inline void printDotEdge(std::ostream &os, const T &src, const T &dst,
+			 const std::map<std::string, std::string> &attrs = {})
 {
-	os << std::format("\"{}\"->\"{}\"", from, to);
+	os << std::format(R"("{}"->"{}")", src, dst);
 	if (!attrs.empty()) {
 		os << "[";
-		for (auto const &it : attrs) {
+		for (const auto &it : attrs) {
 			os << it.first << "=" << it.second << " ";
 		}
 		os << "]";
@@ -33,23 +33,23 @@ inline void printDotEdge(std::ostream &os, const T &from, const T &to,
 };
 
 template <typename T>
-inline void printlnDotEdge(std::ostream &os, const T &from, const T &to,
-			   std::map<std::string, std::string> &&attrs = {})
+inline void printlnDotEdge(std::ostream &os, const T &from, const T &dst,
+			   const std::map<std::string, std::string> &attrs = {})
 {
-	printDotEdge(os, from, to, std::move(attrs));
+	printDotEdge(os, from, dst, std::move(attrs));
 	os << "\n";
 };
 
 template <typename T>
 inline void printDotEdge(std::ostream &os, const std::pair<T, T> &e,
-			 std::map<std::string, std::string> &&attrs = {})
+			 const std::map<std::string, std::string> &attrs = {})
 {
 	printDotEdge(os, e.first, e.second, std::move(attrs));
 }
 
 template <typename T>
 inline void printlnDotEdge(std::ostream &os, const std::pair<T, T> &e,
-			   std::map<std::string, std::string> &&attrs = {})
+			   const std::map<std::string, std::string> &attrs = {})
 {
 	printlnDotEdge(os, e.first, e.second, std::move(attrs));
 }

@@ -13,14 +13,26 @@
 
 #include "DefineLibcFunsPass.hpp"
 #include "genmc/Support/Error.hpp"
+
+#include <llvm/ADT/ArrayRef.h>
+#include <llvm/Config/llvm-config.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/PassManager.h>
+#if LLVM_VERSION_MAJOR >= 22
+#include <llvm/Plugins/PassPlugin.h>
+#else
 #include <llvm/Passes/PassPlugin.h>
+#endif
+#include <llvm/Support/Casting.h>
+
+#include <string>
 
 using namespace llvm;
 
-void replaceFunWithNop(Module &M, std::string name)
+static void replaceFunWithNop(Module &M, std::string name)
 {
 	auto *F = M.getFunction(name);
 	if (!F || !F->isDeclaration())
@@ -37,11 +49,11 @@ void replaceFunWithNop(Module &M, std::string name)
 	else
 		WARN("Could not add definition for {}!\n", name);
 
-	auto *BB = BasicBlock::Create(F->getContext(), "", F);
-	ReturnInst::Create(F->getContext(), res, BB);
+	auto *bb = BasicBlock::Create(F->getContext(), "", F);
+	ReturnInst::Create(F->getContext(), res, bb);
 }
 
-auto DefineLibcFunsPass::run(Module &M, ModuleAnalysisManager &AM) -> PreservedAnalyses
+auto DefineLibcFunsPass::run(Module &M, ModuleAnalysisManager & /*AM*/) -> PreservedAnalyses
 {
 	replaceFunWithNop(M, "fclose");
 	replaceFunWithNop(M, "fopen");
@@ -53,10 +65,12 @@ auto DefineLibcFunsPass::run(Module &M, ModuleAnalysisManager &AM) -> PreservedA
 //-----------------------------------------------------------------------------
 // New PM Registration
 //-----------------------------------------------------------------------------
-auto getDefineLibcFunsPluginInfo() -> PassPluginLibraryInfo
+[[maybe_unused]] static auto getDefineLibcFunsPluginInfo() -> PassPluginLibraryInfo
 {
-	return {LLVM_PLUGIN_API_VERSION, "DefineLibcFuns", LLVM_VERSION_STRING,
-		[](PassBuilder &PB) {
+	return {.APIVersion = LLVM_PLUGIN_API_VERSION,
+		.PluginName = "DefineLibcFuns",
+		.PluginVersion = LLVM_VERSION_STRING,
+		.RegisterPassBuilderCallbacks = [](PassBuilder &PB) {
 			PB.registerPipelineParsingCallback(
 				[](StringRef Name, ModulePassManager &MPM,
 				   ArrayRef<PassBuilder::PipelineElement>) {

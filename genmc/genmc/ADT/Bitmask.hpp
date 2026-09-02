@@ -57,9 +57,9 @@ requires EnableBitmaskOperators<Enum>::enable
 
 #define DEFINE_ASSIGNMENT_OPERATOR(_op)                                                            \
 	template <typename Enum>                                                                   \
-	auto operator _op##=(Enum &lhs, Enum rhs)                                                  \
-		->Enum                                                                             \
-	requires EnableBitmaskOperators<Enum>::enable                                              \
+	auto operator _op## = (Enum & lhs, Enum rhs)                                               \
+				      ->Enum                                                       \
+			      requires EnableBitmaskOperators<Enum>::enable                        \
 	{                                                                                          \
 		using underlying = std::underlying_type_t<Enum>;                                   \
 		lhs = static_cast<Enum>(static_cast<underlying>(lhs)                               \

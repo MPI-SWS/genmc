@@ -16,9 +16,12 @@
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/PassManager.h>
+#include <llvm/Support/Casting.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
 #include <algorithm>
+#include <vector>
 
 using namespace llvm;
 
@@ -54,7 +57,6 @@ static auto tryEliminateCASPHI(llvm::PHINode *phi, DominatorTree &DT,
 
 	/* ... while the other needs to be the compare operand of the cas */
 	auto otherId = (phi->getIncomingValue(0) == extract);
-	auto extractId = (otherId == 0);
 	auto *other = phi->getIncomingValue(otherId);
 	if (cas->getCompareOperand() != other)
 		return false;
@@ -66,9 +68,9 @@ static auto tryEliminateCASPHI(llvm::PHINode *phi, DominatorTree &DT,
 
 	/* We know it's eliminable, so go ahead and replace all uses.
 	 * However, also check if we can simplify the CFG a bit */
-	for (auto *u : phi->users()) {
-		if (auto *p = dyn_cast<PHINode>(u)) {
-			if (DT.dominates(p, phi))
+	for (auto *usr : phi->users()) {
+		if (auto *otherPhi = dyn_cast<PHINode>(usr)) {
+			if (DT.dominates(otherPhi, phi))
 				return false;
 		}
 	}
@@ -102,8 +104,8 @@ auto EliminateCASPHIsPass::run(Function &F, FunctionAnalysisManager &FAM) -> Pre
 	auto modified = false;
 
 	auto &DT = FAM.getResult<DominatorTreeAnalysis>(F);
-	for (auto &BB : F) {
-		for (auto it = BB.begin(); auto phi = llvm::dyn_cast<llvm::PHINode>(it); ++it)
+	for (auto &bb : F) {
+		for (auto it = bb.begin(); auto *phi = llvm::dyn_cast<llvm::PHINode>(it); ++it)
 			modified |= tryEliminateCASPHI(phi, DT, toDelete);
 	}
 

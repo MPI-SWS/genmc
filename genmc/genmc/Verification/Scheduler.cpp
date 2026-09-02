@@ -16,14 +16,18 @@
 #include "genmc/Execution/Event.hpp"
 #include "genmc/Execution/EventLabel.hpp"
 #include "genmc/Execution/GraphUtils.hpp"
+#include "genmc/Support/ActionEnums.hpp"
 #include "genmc/Support/Cast.hpp"
 #include "genmc/Support/Error.hpp"
 #include "genmc/Verification/Config.hpp"
 
 #include <algorithm>
+#include <memory>
+#include <optional>
 #include <ranges>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 auto Scheduler::create(const Config *config) -> std::unique_ptr<Scheduler>
@@ -76,7 +80,7 @@ static auto calculateReplaySchedule(const ExecutionGraph &g, const Config *conf,
 	/* Calculate preliminary replay schedule (reversed order) */
 	View view;
 	std::vector<Event> result;
-	for (auto i = 0U; i < g.getNumThreads(); i++)
+	for (auto i = 0; i < g.getNumThreads(); i++)
 		calcPorfReplay(g.getLastThreadLabel(i), view, result);
 
 	/* If we are error-replaying, move error event last */
@@ -208,15 +212,17 @@ auto Scheduler::schedule(ExecutionGraph &g, std::span<Action> runnable) -> std::
 }
 
 static auto extractValPrefix(const ExecutionGraph &g, Event pos)
-	-> std::pair<std::vector<SVal>, std::vector<Event>>
+	-> std::pair<std::vector<CacheKey>, std::vector<Event>>
 {
-	std::vector<SVal> vals;
+	std::vector<CacheKey> vals;
 	std::vector<Event> events;
 
-	for (auto i = 0U; i < pos.index; i++) {
+	for (auto i = 0; i < pos.index; i++) {
 		const auto *lab = g.getEventLabel(Event(pos.thread, i));
 		if (lab->returnsValue()) {
-			vals.push_back(lab->getReturnValue());
+			const auto *cLab = genmc::dyn_cast<CasReadLabel>(lab);
+			vals.push_back({lab->getReturnValue(),
+					cLab != nullptr && cLab->failsSpuriously()});
 			events.push_back(lab->getPos());
 		}
 	}
@@ -238,7 +244,7 @@ void Scheduler::cacheEventLabel(const ExecutionGraph &g, const EventLabel *lab)
 			auto cLab = (i == lab->getIndex())
 					    ? lab->clone()
 					    : g.getEventLabel(Event(lab->getThread(), i))->clone();
-			cLab->reset();
+			(*cLab).reset();
 			labs.push_back(std::move(cLab));
 		}
 		return labs;
@@ -247,7 +253,7 @@ void Scheduler::cacheEventLabel(const ExecutionGraph &g, const EventLabel *lab)
 	/* Extract value prefix and find how much of it has already been cached */
 	auto [vals, indices] = extractValPrefix(g, lab->getPos());
 	auto commonPrefixLen = seenPrefixes[cacheKey].findLongestCommonPrefix(vals);
-	std::vector<SVal> seenVals(vals.begin(), vals.begin() + commonPrefixLen);
+	std::vector<CacheKey> seenVals(vals.begin(), vals.begin() + commonPrefixLen);
 	auto *data = retrieveCachedSuccessors(cacheKey, seenVals);
 	VERIFY(data);
 
@@ -269,7 +275,7 @@ void Scheduler::cacheEventLabel(const ExecutionGraph &g, const EventLabel *lab)
 	auto labs = copyPrefix(fromIdx, lab);
 
 	/* Go ahead and copy */
-	for (auto i = 0U; i < labs.size(); i++) {
+	for (auto i = 0; i < std::ssize(labs); i++) {
 		/* Ensure label has not already been cached */
 		VERIFY(data->empty() || data->back()->getIndex() < labs[i]->getIndex());
 		/* If the last cached label returns a value, then we need

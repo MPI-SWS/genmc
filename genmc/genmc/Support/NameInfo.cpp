@@ -12,11 +12,13 @@
  */
 
 #include "NameInfo.hpp"
+#include "genmc/Support/Error.hpp"
 
 #include <algorithm>
+#include <string>
 
 /* Mark name at offset OFFSET as NAME */
-void NameInfo::addOffsetInfo(unsigned int offset, std::string name)
+void NameInfo::addOffsetInfo(unsigned int offset, const std::string &name)
 {
 	info.emplace_back(offset, name);
 

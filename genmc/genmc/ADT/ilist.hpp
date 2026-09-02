@@ -152,7 +152,7 @@ public:
 		return tmp;
 	}
 
-	auto node() const -> node_pointer { return nodePtr_; }
+	[[nodiscard]] auto node() const -> node_pointer { return nodePtr_; }
 
 	friend auto operator==(const ilist_iterator_base &lhs, const ilist_iterator_base &rhs)
 		-> bool
@@ -202,17 +202,23 @@ public:
 
 	/** Iterators */
 	auto begin() noexcept -> iterator { return ++iterator(sentinel_); }
-	auto begin() const noexcept -> const_iterator { return ++const_iterator(sentinel_); }
+	[[nodiscard]] auto begin() const noexcept -> const_iterator
+	{
+		return ++const_iterator(sentinel_);
+	}
 	auto end() noexcept -> iterator { return iterator(sentinel_); }
-	auto end() const noexcept -> const_iterator { return const_iterator(sentinel_); }
+	[[nodiscard]] auto end() const noexcept -> const_iterator
+	{
+		return const_iterator(sentinel_);
+	}
 
 	auto rbegin() noexcept -> reverse_iterator { return ++reverse_iterator(sentinel_); }
-	auto rbegin() const noexcept -> const_reverse_iterator
+	[[nodiscard]] auto rbegin() const noexcept -> const_reverse_iterator
 	{
 		return ++const_reverse_iterator(sentinel_);
 	}
 	auto rend() noexcept -> reverse_iterator { return reverse_iterator(sentinel_); }
-	auto rend() const noexcept -> const_reverse_iterator
+	[[nodiscard]] auto rend() const noexcept -> const_reverse_iterator
 	{
 		return const_reverse_iterator(sentinel_);
 	}
@@ -225,9 +231,9 @@ public:
 	}
 
 	auto front() noexcept -> reference { return *begin(); }
-	auto front() const noexcept -> const_reference { return *begin(); }
+	[[nodiscard]] auto front() const noexcept -> const_reference { return *begin(); }
 	auto back() noexcept -> reference { return *rbegin(); }
-	auto back() const noexcept -> const_reference { return *rbegin(); }
+	[[nodiscard]] auto back() const noexcept -> const_reference { return *rbegin(); }
 
 	/** Modifiers */
 	auto insert(iterator pos, reference node) -> iterator;
@@ -241,6 +247,7 @@ public:
 	void pop_back() { erase(--end()); }
 
 private:
+	// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
 	void splice(ilist &&other)
 	{
 		/* Pre: empty lists have properly initialized sentinels (e.g., move ops) */

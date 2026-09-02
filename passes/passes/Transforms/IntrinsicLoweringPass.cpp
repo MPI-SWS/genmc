@@ -13,9 +13,12 @@
 
 #include "IntrinsicLoweringPass.hpp"
 #include "genmc/Support/Error.hpp"
+
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/Twine.h>
 #include <llvm/Analysis/MemoryBuiltins.h>
 #include <llvm/CodeGen/IntrinsicLowering.h>
+#include <llvm/Config/llvm-config.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IRBuilder.h>
@@ -23,8 +26,13 @@
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
+#include <llvm/IR/Intrinsics.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/PassManager.h>
 #include <llvm/IR/Type.h>
+#include <llvm/Support/Casting.h>
+
+#include <memory>
 
 using namespace llvm;
 
@@ -72,8 +80,8 @@ static auto replaceExtractValUsers(WithOverflowInst *oi, Value *replace, Value *
 				   SmallVector<Instruction *, 8> &toRemove) -> bool
 {
 	auto result = false;
-	for (auto *u : oi->users()) {
-		auto *evi = dyn_cast<ExtractValueInst>(u);
+	for (auto *usr : oi->users()) {
+		auto *evi = dyn_cast<ExtractValueInst>(usr);
 		if (!evi) {
 			result = true;
 			continue;
@@ -90,13 +98,13 @@ static auto replaceExtractValUsers(WithOverflowInst *oi, Value *replace, Value *
 	return result;
 }
 
-static auto runOnBasicBlock(BasicBlock &BB, IntrinsicLowering *IL) -> bool
+static auto runOnBasicBlock(BasicBlock &bb, IntrinsicLowering *IL) -> bool
 {
-	auto &M = *BB.getParent()->getParent();
+	auto &M = *bb.getParent()->getParent();
 	auto modified = false;
 	SmallVector<Instruction *, 8> toRemove;
 
-	for (auto it = BB.begin(); it != BB.end();) {
+	for (auto it = bb.begin(); it != bb.end();) {
 		auto *I = llvm::dyn_cast<IntrinsicInst>(&*it);
 		/* Iterator is incremented in order for it not to be invalidated */
 		++it;
@@ -104,12 +112,10 @@ static auto runOnBasicBlock(BasicBlock &BB, IntrinsicLowering *IL) -> bool
 		if (!I)
 			continue;
 		switch (I->getIntrinsicID()) {
-#if LLVM_VERSION_MAJOR >= 16
 		/* In case thread-local variables are not accessed directly, make them */
 		case llvm::Intrinsic::threadlocal_address:
 			I->replaceAllUsesWith(I->getOperand(0));
 			break;
-#endif
 		case llvm::Intrinsic::vastart:
 		case llvm::Intrinsic::vaend:
 		case llvm::Intrinsic::vacopy:
@@ -133,7 +139,7 @@ static auto runOnBasicBlock(BasicBlock &BB, IntrinsicLowering *IL) -> bool
 			if (auto *F = llvm::dyn_cast<llvm::Function>(FC.getCallee())) {
 				F->setDoesNotReturn();
 				F->setDoesNotThrow();
-				llvm::CallInst::Create(F, llvm::Twine(), I);
+				llvm::CallInst::Create(F, llvm::Twine(), I->getIterator());
 			}
 			I->eraseFromParent();
 			modified = true;
@@ -175,14 +181,14 @@ static auto runOnBasicBlock(BasicBlock &BB, IntrinsicLowering *IL) -> bool
 	return modified;
 }
 
-auto IntrinsicLoweringPass::run(Function &F, FunctionAnalysisManager &FAM) -> PreservedAnalyses
+auto IntrinsicLoweringPass::run(Function &F, FunctionAnalysisManager & /*FAM*/) -> PreservedAnalyses
 {
 	auto ILUP = std::make_unique<IntrinsicLowering>(F.getParent()->getDataLayout());
 
 	/* Scan through the instructions and lower intrinsic calls */
 	auto modified = false;
-	for (auto &BB : F)
-		modified |= runOnBasicBlock(BB, &*ILUP);
+	for (auto &bb : F)
+		modified |= runOnBasicBlock(bb, &*ILUP);
 
 	return modified ? PreservedAnalyses::none() : PreservedAnalyses::all();
 }

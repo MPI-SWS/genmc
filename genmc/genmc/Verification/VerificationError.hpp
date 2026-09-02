@@ -22,7 +22,7 @@
 #include <unordered_map>
 
 /** Some basic system error codes for the user -- should match include/errno.h */
-enum class SystemError {
+enum class SystemError : std::uint8_t {
 	SE_EPERM = 1,
 	SE_ENOENT = 2,
 	SE_EIO = 5,
@@ -39,7 +39,7 @@ enum class SystemError {
 
 /** Different errors that might be encountered during verification.
  * Public to enable the interpreter utilize it */
-enum class VerificationError {
+enum class VerificationError : std::uint8_t {
 	VE_NonErrorBegin,
 	VE_WWRace,
 	VE_UnfreedMemory,
@@ -84,24 +84,24 @@ inline auto isHardError(VerificationError err) -> bool
 	 * writes to the lock location, which is not guaranteed if
 	 * the lock is unlocked without being locked by the same thread first.
 	 */
-	return !(err >= VerificationError::VE_NonErrorBegin &&
-		 err <= VerificationError::VE_NonErrorLast);
+	return err < VerificationError::VE_NonErrorBegin ||
+	       err > VerificationError::VE_NonErrorLast;
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 inline static SystemError systemErrorNumber; // just to inform the driver
 
 /** Details for an error to be reported */
 struct ErrorDetails {
 	ErrorDetails() = default;
-	ErrorDetails(std::optional<Event> pos, VerificationError r,
-		     std::string err = std::string(), const EventLabel *racyLab = nullptr,
-		     bool shouldHalt = true)
+	ErrorDetails(std::optional<Event> pos, VerificationError r, std::string err = std::string(),
+		     const EventLabel *racyLab = nullptr, bool shouldHalt = true)
 		: pos(pos), type(r), msg(std::move(err)), racyLab(racyLab), shouldHalt(shouldHalt)
 	{}
 
-	std::optional<Event> pos{};
+	std::optional<Event> pos;
 	VerificationError type{};
-	std::string msg{};
+	std::string msg;
 	const EventLabel *racyLab{};
 	bool shouldHalt = true;
 };

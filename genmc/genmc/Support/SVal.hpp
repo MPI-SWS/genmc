@@ -45,12 +45,13 @@ public:
 	/** Returns a (limited) signed representation of this value */
 	[[nodiscard]] auto getSigned() const -> int64_t
 	{
-		int64_t tmp;
+		int64_t tmp = 0;
 		std::memcpy(&tmp, &value, sizeof(tmp));
 		return tmp;
 	}
 
-	/** Returns a pointer representation of this value */
+	/** Returns a pointer representation of this value (SVal stores pointers as integers) */
+	// NOLINTNEXTLINE(performance-no-int-to-ptr,cppcoreguidelines-pro-type-cstyle-cast)
 	[[nodiscard]] auto getPointer() const -> void * { return (void *)(uintptr_t)value; }
 
 	/** Returns a (limited) representation of the Value as a boolean */
@@ -61,10 +62,10 @@ public:
 
 	/** Sign-extends the number in the bottom B bits of X to SVal::width
 	 * Pre: 0 < B <= SVal::width */
-	auto signExtendBottom(unsigned b) -> SVal &
+	auto signExtendBottom(unsigned numBits) -> SVal &
 	{
-		ASSERT(b != 0 && b <= width);
-		value = int64_t(get() << (width - b)) >> (width - b);
+		ASSERT(numBits != 0 && numBits <= width);
+		value = int64_t(get() << (width - numBits)) >> (width - numBits);
 		return *this;
 	}
 
@@ -73,7 +74,7 @@ public:
 	auto truncate(unsigned w) -> SVal &
 	{
 		ASSERT(w != 0 && w <= width);
-		value = w == 64 ? get() : (get() & ((uint64_t(1) << w) - 1));
+		value = w == width ? get() : (get() & ((uint64_t(1) << w) - 1));
 		return *this;
 	}
 
@@ -111,13 +112,13 @@ public:
 	/** Binary operators */
 
 #define IMPL_BINOP(_op)                                                                            \
-	SVal operator _op(const SVal &v) const                                                     \
+	auto operator _op(const SVal &v) const->SVal                                               \
 	{                                                                                          \
-		SVal n(*this);                                                                     \
-		n.value _op## = v.value;                                                           \
-		return n;                                                                          \
+		SVal result(*this);                                                                \
+		result.value _op## = v.value;                                                      \
+		return result;                                                                     \
 	}                                                                                          \
-	SVal &operator _op##=(const SVal & v)                                                      \
+	auto operator _op## = (const SVal &v)->SVal &                                              \
 	{                                                                                          \
 		value _op## = v.value;                                                             \
 		return *this;                                                                      \

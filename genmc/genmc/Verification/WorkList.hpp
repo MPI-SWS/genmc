@@ -42,7 +42,7 @@ public:
 
 		auto item = std::move(wlist_.back());
 		wlist_.pop_back();
-		return std::move(item);
+		return item;
 	}
 
 	friend struct std::formatter<WorkList>;

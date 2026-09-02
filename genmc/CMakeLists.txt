@@ -4,6 +4,7 @@ set(LIB_SOURCES
   genmc/ADT/SmallVector.cpp
   genmc/ADT/VectorClock.cpp
   genmc/ADT/View.cpp
+  genmc/Execution/CBIterator.cpp
   genmc/Execution/DepExecutionGraph.cpp
   genmc/Execution/EventLabel.cpp
   genmc/Execution/ExecutionGraph.cpp
@@ -46,6 +47,7 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/genmc/
         FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.def")
 
 target_include_directories(genmc_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_options(genmc_lib PRIVATE ${GENMC_WARNING_FLAGS})
 target_link_libraries(genmc_lib PUBLIC Threads::Threads genmc_config_includes)
 if(HWLOC)
   target_link_libraries(genmc_lib PRIVATE hwloc)

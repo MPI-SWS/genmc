@@ -109,7 +109,7 @@ print_variant_debug_results() {
     fi
     if test -n "${outcome_failure}" -a -n "${failure}"
     then
-	printf "Test command: ${cmd}\n"
+	printf "Test command: %s\n" "${cmd[*]}"
     fi
 }
 
@@ -157,7 +157,20 @@ runvariants() {
     for t in $dir/variants/*.c $dir/variants/*.cpp
     do
 	vars=$((vars+1))
-	output=`"${GenMC}" "-${model}" -disable-estimation -disable-mm-detector "${unroll}" -print-error-trace $(echo ${checker_args[@]}) -- ${CFLAGS} ${test_args} ${t} 2>&1`
+	cmd=(
+            "${GenMC}"
+            "-${model}"
+            -disable-estimation
+            -disable-mm-detector
+            "${unroll}"
+            -print-error-trace
+            "${checker_args[@]}"
+            --
+            ${CFLAGS}
+            ${test_args}
+            "${t}"
+        )
+        output=$("${cmd[@]}" 2>&1)
 	status="$?"
 	diff_file="${t%.*}.${model}.${coherence}.trace" &&
 	    [[ -f "${t%.*}.${model}.${coherence}.trace-${LLVM_VERSION}" ]] &&

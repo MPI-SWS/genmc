@@ -33,7 +33,7 @@ public:
 private:
 	auto shouldUnroll(llvm::Loop *l) const -> bool
 	{
-		return !noUnroll_.count((*l->block_begin())->getParent()->getName().str());
+		return !noUnroll_.contains((*l->block_begin())->getParent()->getName().str());
 	}
 
 	unsigned int unrollDepth_{};

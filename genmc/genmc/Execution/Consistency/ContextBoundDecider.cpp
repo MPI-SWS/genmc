@@ -13,20 +13,26 @@
 
 #include "ContextBoundDecider.hpp"
 #include "genmc/ADT/View.hpp"
+#include "genmc/Execution/EventLabel.hpp"
 #include "genmc/Execution/ExecutionGraph.hpp"
+#include "genmc/Support/Cast.hpp"
+#include "genmc/Support/Error.hpp"
 
+#include <algorithm>
+#include <optional>
 #include <ranges>
+#include <utility>
 
-auto canBlock(const ExecutionGraph &g, const View &s, int t) -> bool
+static auto canBlock(const ExecutionGraph &g, const View &s, int tid) -> bool
 {
-	const auto *nLab = g.po_imm_succ(g.getEventLabel(Event(t, s.getMax(t))));
+	const auto *nLab = g.po_imm_succ(g.getEventLabel(Event(tid, s.getMax(tid))));
 	return nLab && (genmc::isa<ThreadJoinLabel>(nLab) || genmc::isa<LockCasReadLabel>(nLab) ||
 			genmc::isa<BWaitReadLabel>(nLab));
 }
 
-auto isEnabled(const ExecutionGraph &g, const View &v, int t) -> bool
+static auto isEnabled(const ExecutionGraph &g, const View &v, int tid) -> bool
 {
-	auto last = Event(t, v.getMax(t));
+	auto last = Event(tid, v.getMax(tid));
 	const auto *llab = g.getEventLabel(last);
 	if (genmc::isa<TerminatorLabel>(llab))
 		return false;
@@ -41,7 +47,7 @@ auto isEnabled(const ExecutionGraph &g, const View &v, int t) -> bool
 		return v.contains(g.tj_pred(nLab)->getPos());
 
 	/* Special cases for locks and barriers */
-	if (auto *lLab = genmc::dyn_cast<LockCasReadLabel>(nLab)) {
+	if (const auto *lLab = genmc::dyn_cast<LockCasReadLabel>(nLab)) {
 		auto addr = lLab->getAddr();
 		// Get latest store in the view
 		auto it = std::ranges::find_if(
@@ -54,19 +60,19 @@ auto isEnabled(const ExecutionGraph &g, const View &v, int t) -> bool
 					    [&](const auto &e) { return v.contains(e.getPos()); });
 		}
 		// It is an unlock that is not already read by another completed lock
-		auto *sLab = genmc::dyn_cast<UnlockWriteLabel>(&*it);
+		const auto *sLab = genmc::dyn_cast<UnlockWriteLabel>(&*it);
 		return sLab && std::ranges::none_of(sLab->readers(), [&](const auto &e) {
 			       return v.contains(e.getPos().next());
 		       });
 	}
-	if (auto *bLab = genmc::dyn_cast<BWaitReadLabel>(nLab)) {
+	if (const auto *bLab = genmc::dyn_cast<BWaitReadLabel>(nLab)) {
 		auto addr = bLab->getAddr();
 		// Get barrrier initialization value
-		auto *iwLab = genmc::dyn_cast<WriteLabel>(&*std::ranges::begin(g.co(addr)));
+		const auto *iwLab = genmc::dyn_cast<WriteLabel>(&*std::ranges::begin(g.co(addr)));
 		VERIFY(iwLab);
 		auto it = std::ranges::find_if(
 			g.rco(addr), [&](const auto &w) { return v.contains(w.getPos()); });
-		auto *wLab = genmc::dyn_cast<WriteLabel>(&*it);
+		const auto *wLab = genmc::dyn_cast<WriteLabel>(&*it);
 		VERIFY(wLab);
 		return iwLab->getVal() == wLab->getVal();
 	}
@@ -74,76 +80,77 @@ auto isEnabled(const ExecutionGraph &g, const View &v, int t) -> bool
 	return true;
 }
 
-auto isSCMaximal(const ExecutionGraph &g, const View &v, int t) -> bool
+static auto isSCMaximal(const ExecutionGraph &g, const View &v, int tid) -> bool
 {
-	auto pos = Event(t, v.getMax(t));
-	auto *lab = g.getEventLabel(pos);
+	auto pos = Event(tid, v.getMax(tid));
+	const auto *lab = g.getEventLabel(pos);
 
 	if (genmc::isa<ThreadFinishLabel>(lab)) {
-		auto *tjLab = g.tj_succ(lab);
+		const auto *tjLab = g.tj_succ(lab);
 		return !tjLab || !v.contains(tjLab->getPos());
 	}
 
 	// ThreadStart has offset 0, but conceptually it is
 	// not present in the view if it is the last event
-	if (auto *cLab = genmc::dyn_cast<ThreadCreateLabel>(lab))
+	if (const auto *cLab = genmc::dyn_cast<ThreadCreateLabel>(lab))
 		return !v.getMax(cLab->getChildId());
 
 	if (!genmc::isa<MemAccessLabel>(lab))
 		return true;
 
-	const EventLabel *wLab;
-	if (auto sLab = genmc::dyn_cast<WriteLabel>(lab)) {
+	const EventLabel *wLab = nullptr;
+	if (const auto *sLab = genmc::dyn_cast<WriteLabel>(lab)) {
 		if (std::ranges::any_of(sLab->readers(), [&](const auto &rLab) {
 			    return v.contains(rLab.getPos());
 		    }))
 			return false;
 		wLab = lab;
-	} else if (auto rLab = genmc::dyn_cast<ReadLabel>(lab))
+	} else if (const auto *rLab = genmc::dyn_cast<ReadLabel>(lab))
 		wLab = rLab->getRf();
 
 	auto addr = genmc::cast<MemAccessLabel>(lab)->getAddr();
 	if (g.isLocEmpty(addr))
 		return true;
 
-	auto *succLab = genmc::isa<InitLabel>(wLab) ? &*std::ranges::begin(g.co(addr))
-						    : g.co_imm_succ(genmc::cast<WriteLabel>(wLab));
+	const auto *succLab = genmc::isa<InitLabel>(wLab)
+				      ? &*std::ranges::begin(g.co(addr))
+				      : g.co_imm_succ(genmc::cast<WriteLabel>(wLab));
 	return !succLab || !v.contains(succLab->getPos());
 }
 
-void shrinkViewByOneInPlace(View &v, int t) { v.setMax(Event(t, v.getMax(t)).prev()); }
+static void shrinkViewByOneInPlace(View &v, int tid) { v.setMax(Event(tid, v.getMax(tid)).prev()); }
 
-auto shrinkViewByOne(const View &v, int t) -> View
+static auto shrinkViewByOne(const View &v, int tid) -> View
 {
 	auto vp = v;
-	shrinkViewByOneInPlace(vp, t);
+	shrinkViewByOneInPlace(vp, tid);
 	return vp;
 }
 
-void unfoldPrefix(const ExecutionGraph &g, View &v, int t)
+static void unfoldPrefix(const ExecutionGraph &g, View &v, int tid)
 {
-	while (v.getMax(t) && isSCMaximal(g, v, t) && !canBlock(g, v, t))
-		shrinkViewByOneInPlace(v, t);
+	while (v.getMax(tid) && isSCMaximal(g, v, tid) && !canBlock(g, v, tid))
+		shrinkViewByOneInPlace(v, tid);
 }
 
-auto ContextBoundDecider::doesPrefixExceedBound(View v, int t, unsigned int bound) const -> bool
+auto ContextBoundDecider::doesPrefixExceedBound(View v, int tid, unsigned int bound) const -> bool
 {
-	auto &g = getGraph();
-	unfoldPrefix(g, v, t);
+	const auto &g = getGraph();
+	unfoldPrefix(g, v, tid);
 
 	if (v.empty())
 		return true;
 
 	auto exists = false;
-	for (auto tp = 0u; tp < g.getNumThreads(); tp++) {
-		if (!v.getMax(tp) || !isSCMaximal(g, v, tp))
+	for (auto j = 0; j < g.getNumThreads(); j++) {
+		if (!v.getMax(j) || !isSCMaximal(g, v, j))
 			continue;
 		exists = true;
-		auto sp = shrinkViewByOne(v, tp);
-		if ((tp != t) && isEnabled(g, v, tp)) {
-			if (bound && doesPrefixExceedBound(sp, tp, bound - 1))
+		auto sp = shrinkViewByOne(v, j);
+		if ((std::cmp_not_equal(j, tid)) && isEnabled(g, v, j)) {
+			if (bound && doesPrefixExceedBound(sp, j, bound - 1))
 				return true;
-		} else if (doesPrefixExceedBound(sp, tp, bound))
+		} else if (doesPrefixExceedBound(sp, j, bound))
 			return true;
 	}
 	VERIFY(exists);
@@ -157,7 +164,7 @@ auto ContextBoundDecider::doesExecutionExceedBound(unsigned int bound) const -> 
 	const auto v = *genmc::dyn_cast<View>(g.getViewFromStamp(g.getMaxStamp()).get());
 
 	auto exists = false;
-	for (auto i = 0U; i < g.getNumThreads(); i++) {
+	for (auto i = 0; i < g.getNumThreads(); i++) {
 		if (!v.getMax(i) || !isSCMaximal(g, v, i))
 			continue;
 		exists = true;
@@ -172,49 +179,51 @@ auto ContextBoundDecider::doesExecutionExceedBound(unsigned int bound) const -> 
 
 auto ContextBoundDecider::getSlack() const -> unsigned
 {
-	auto &g = getGraph();
-	auto nonEmptyThreads =
-		std::count_if(g.begin(), g.end(), [](const auto &t) { return t.size() > 1; });
-	auto unstableThreads = std::count_if(g.begin(), g.end(), [](const auto &t) {
-		return std::ranges::any_of(t, [](const auto &lab) { return !lab->isStable(); });
+	const auto &g = getGraph();
+	auto nonEmptyThreads = std::count_if(g.begin(), g.end(),
+					     [](const auto &thread) { return thread.size() > 1; });
+	auto unstableThreads = std::count_if(g.begin(), g.end(), [](const auto &thread) {
+		return std::ranges::any_of(thread,
+					   [](const auto &lab) { return !lab->isStable(); });
 	});
 
-	return std::min(std::max(0l, unstableThreads - 1), std::max(0l, nonEmptyThreads - 2));
+	return std::min(std::max(0L, unstableThreads - 1), std::max(0L, nonEmptyThreads - 2));
 }
 
 #ifdef ENABLE_GENMC_DEBUG
 auto ContextBoundDecider::calculate() const -> unsigned
 {
-	auto &g = getGraph();
+	const auto &g = getGraph();
 	const auto v = *genmc::dyn_cast<View>(g.getViewFromStamp(g.getMaxStamp()).get());
 	std::optional<unsigned> res;
 
-	for (auto i = 0U; i < g.getNumThreads(); i++) {
+	for (auto i = 0; i < g.getNumThreads(); i++) {
 		if (!v.getMax(i) || !isSCMaximal(g, v, i))
 			continue;
 		auto sp = shrinkViewByOne(v, i);
-		auto b = calculate(sp, i);
-		res = res ? std::min(*res, b) : b;
+		auto bound = calculate(sp, i);
+		res = res ? std::min(*res, bound) : bound;
 	}
 
 	return *res;
 }
 
-auto ContextBoundDecider::calculate(View v, int t) const -> unsigned
+auto ContextBoundDecider::calculate(View v, int tid) const -> unsigned
 {
-	auto &g = getGraph();
-	unfoldPrefix(g, v, t);
+	const auto &g = getGraph();
+	unfoldPrefix(g, v, tid);
 
 	if (v.empty())
 		return 0;
 
 	std::optional<unsigned> res;
-	for (auto tp = 0u; tp < g.getNumThreads(); tp++) {
-		/* F(s) = {t' | exists s'. s' ->(t') s} */
-		if (!v.getMax(tp) || !isSCMaximal(g, v, tp))
+	for (auto j = 0; j < g.getNumThreads(); j++) {
+		/* F(s) = {tid' | exists s'. s' ->(tid') s} */
+		if (!v.getMax(j) || !isSCMaximal(g, v, j))
 			continue;
-		auto sp = shrinkViewByOne(v, tp);
-		auto bound = calculate(sp, tp) + ((t != tp) && isEnabled(g, v, tp) ? 1 : 0);
+		auto sp = shrinkViewByOne(v, j);
+		auto bound = calculate(sp, j) +
+			     ((std::cmp_not_equal(tid, j)) && isEnabled(g, v, j) ? 1 : 0);
 		res = res ? std::min(*res, bound) : bound;
 	}
 

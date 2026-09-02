@@ -18,6 +18,8 @@
 #include "genmc/ADT/VectorClock.hpp"
 #include "genmc/ADT/View.hpp"
 #include "genmc/ADT/ilist.hpp"
+#include "genmc/Execution/CBIterator.hpp"
+#include "genmc/Execution/Consistency/ConsistencyChecker.hpp"
 #include "genmc/Execution/Event.hpp"
 #include "genmc/Execution/EventLabel.hpp"
 #include "genmc/Execution/ExecutionState.hpp"
@@ -33,8 +35,6 @@
 #include <ranges>
 #include <unordered_map>
 #include <utility>
-
-class ConsistencyChecker;
 
 // NOLINTBEGIN(cppcoreguidelines-pro-type-const-cast)
 
@@ -111,8 +111,7 @@ public:
 			VERIFY(labelRef_);
 
 			/* Cache raw pointer for removal and add to the graph */
-			label_ = labelRef_.get();
-			graph_.addLabelToGraph(std::move(labelRef_));
+			label_ = graph_.add(std::move(labelRef_));
 		}
 
 		ScopedLabel(const ScopedLabel & /*other*/) = delete;
@@ -123,7 +122,7 @@ public:
 				return;
 
 			auto poppedUP = graph_.removeLast(label_->getThread());
-			labelRef_.reset(static_cast<LabelT *>(poppedUP.release()));
+			labelRef_.reset(genmc::cast<LabelT>(poppedUP.release()));
 		}
 
 		[[nodiscard]] auto get() const -> LabelT * { return label_; }
@@ -143,7 +142,7 @@ public:
 
 	/* Constructors */
 	ExecutionGraph(Config cfg)
-		: state_(cfg.execState), consChecker_(cfg.consChecker), haveNAs_(cfg.emitNALabels)
+		: consChecker_(cfg.consChecker), haveNAs_(cfg.emitNALabels), state_(cfg.execState)
 	{
 		/* Create an entry for main() and push the "initializer" label */
 		events.emplace_back();
@@ -184,7 +183,7 @@ public:
 		       });
 	}
 
-	auto thr_ids() const { return std::views::iota(0, (int)getNumThreads()); }
+	auto thr_ids() const { return std::views::iota(0, getNumThreads()); }
 
 	auto loc_begin() -> loc_iterator { return coherence.begin(); }
 	auto loc_begin() const -> const_loc_iterator { return coherence.begin(); };
@@ -248,6 +247,15 @@ public:
 	auto po_imm_succ(EventLabel *lab) -> EventLabel *
 	{
 		return const_cast<EventLabel *>(std::as_const(*this).po_imm_succ(lab));
+	}
+
+	/***************************************************************************
+	 * CB - Causal predecessors
+	 **************************************************************************/
+
+	auto cb_preds(const EventLabel *lab) const
+	{
+		return std::ranges::subrange(CBIterator(lab), CBIterator());
 	}
 
 	/***************************************************************************
@@ -352,12 +360,12 @@ public:
 
 	auto detour_preds(const ReadLabel *lab) const
 	{
-		Event wPos = lab->getRf() ? lab->getRf()->getPos() : Event::getInit();
+		const Event wPos = lab->getRf() ? lab->getRf()->getPos() : Event::getInit();
 		return po_preds(lab) | std::views::filter(DetourPredFilter(lab, wPos));
 	}
 	auto detour_preds(ReadLabel *lab)
 	{
-		Event wPos = lab->getRf() ? lab->getRf()->getPos() : Event::getInit();
+		const Event wPos = lab->getRf() ? lab->getRf()->getPos() : Event::getInit();
 		return po_preds(lab) | std::views::filter(DetourPredFilter(lab, wPos));
 	}
 
@@ -404,25 +412,25 @@ public:
 
 	auto tc_succ(const EventLabel *lab) const -> const ThreadStartLabel *
 	{
-		auto *tcLab = genmc::dyn_cast<ThreadCreateLabel>(lab);
+		const auto *tcLab = genmc::dyn_cast<ThreadCreateLabel>(lab);
 		return tcLab ? getFirstThreadLabel(tcLab->getChildId()) : nullptr;
 	}
 
 	auto tc_pred(const EventLabel *lab) const -> const ThreadCreateLabel *
 	{
-		auto *tsLab = genmc::dyn_cast<ThreadStartLabel>(lab);
+		const auto *tsLab = genmc::dyn_cast<ThreadStartLabel>(lab);
 		return tsLab ? tsLab->getCreate() : nullptr;
 	}
 
 	auto tj_succ(const EventLabel *lab) const -> const ThreadJoinLabel *
 	{
-		auto *eLab = genmc::dyn_cast<ThreadFinishLabel>(lab);
+		const auto *eLab = genmc::dyn_cast<ThreadFinishLabel>(lab);
 		return eLab ? eLab->getParentJoin() : nullptr;
 	}
 
 	auto tj_pred(const EventLabel *lab) const -> const ThreadFinishLabel *
 	{
-		auto *tjLab = genmc::dyn_cast<ThreadJoinLabel>(lab);
+		const auto *tjLab = genmc::dyn_cast<ThreadJoinLabel>(lab);
 		return tjLab ? genmc::dyn_cast_if_present<ThreadFinishLabel>(
 				       getLastThreadLabel(tjLab->getChildId()))
 			     : nullptr;
@@ -648,7 +656,7 @@ public:
 	auto fr_imm_preds(const WriteLabel *lab) const
 	{
 		auto pIt = ++const_reverse_co_iterator(lab);
-		bool isInit = (pIt == coherence.at(lab->getAddr()).rend());
+		const bool isInit = (pIt == coherence.at(lab->getAddr()).rend());
 
 		return isInit ? std::ranges::subrange(getInitLabel()->rfs(lab->getAddr()))
 			      : std::ranges::subrange(pIt->readers());
@@ -656,7 +664,7 @@ public:
 	auto fr_imm_preds(WriteLabel *lab)
 	{
 		auto pIt = ++reverse_co_iterator(lab);
-		bool isInit = (pIt == coherence[lab->getAddr()].rend());
+		const bool isInit = (pIt == coherence[lab->getAddr()].rend());
 
 		return isInit ? std::ranges::subrange(getInitLabel()->rfs(lab->getAddr()))
 			      : std::ranges::subrange(pIt->readers());
@@ -682,7 +690,7 @@ public:
 
 	auto alloc(const EventLabel *lab) const -> const EventLabel *
 	{
-		auto *mLab = genmc::dyn_cast<MemLabel>(lab);
+		const auto *mLab = genmc::dyn_cast<MemLabel>(lab);
 		if (!mLab || mLab->getAddr().isStatic())
 			return nullptr;
 
@@ -692,7 +700,7 @@ public:
 
 	auto free(const EventLabel *lab) const -> const EventLabel *
 	{
-		auto *mLab = genmc::dyn_cast<MemLabel>(lab);
+		const auto *mLab = genmc::dyn_cast<MemLabel>(lab);
 		if (!mLab || mLab->getAddr().isStatic())
 			return nullptr;
 
@@ -703,7 +711,7 @@ public:
 
 	auto retire(const EventLabel *lab) const -> const EventLabel *
 	{
-		auto *mLab = genmc::dyn_cast<MemLabel>(lab);
+		const auto *mLab = genmc::dyn_cast<MemLabel>(lab);
 		if (!mLab || mLab->getAddr().isStatic())
 			return nullptr;
 
@@ -795,7 +803,7 @@ public:
 	/* Basic getters */
 
 	/* Returns the maximum stamp used */
-	auto getMaxStamp() const -> Stamp { return timestamp; }
+	auto getMaxStamp() const -> Stamp { return timestamp - 1; }
 
 	/* Returns the consistency checke for this graph */
 	auto getConsChecker() const -> const ConsistencyChecker * { return consChecker_; }
@@ -818,10 +826,18 @@ public:
 	};
 
 	/* Returns the number of threads currently in the graph */
-	auto getNumThreads() const -> unsigned int { return events.size(); };
+	auto getNumThreads() const -> int
+	{
+		VERIFY(events.size() <= static_cast<size_t>(std::numeric_limits<int>::max()));
+		return static_cast<int>(events.size());
+	};
 
 	/* Returns the size of the thread tid */
-	auto getThreadSize(int tid) const -> unsigned int { return events[tid].size(); };
+	auto getThreadSize(int tid) const -> int
+	{
+		VERIFY(events[tid].size() <= static_cast<size_t>(std::numeric_limits<int>::max()));
+		return static_cast<int>(events[tid].size());
+	};
 
 	/* Returns true if the thread tid is empty */
 	auto isThreadEmpty(int tid) const -> bool { return events[tid].empty(); };
@@ -836,7 +852,7 @@ public:
 
 	auto getInitLabel() const -> const InitLabel *
 	{
-		return static_cast<const InitLabel *>(getEventLabel(Event(0, 0)));
+		return genmc::cast<InitLabel>(getEventLabel(Event(0, 0)));
 	}
 	auto getInitLabel() -> InitLabel *
 	{
@@ -849,6 +865,8 @@ public:
 	template <typename LabelT> auto add(std::unique_ptr<LabelT> lab) -> LabelT *
 	{
 		auto *raw = lab.get();
+		ASSERT(getConsChecker());
+		getConsChecker()->maybeIncreaseCacheCounters(raw);
 		addLabelToGraph(std::move(lab));
 		return raw;
 	}
@@ -865,7 +883,7 @@ public:
 	/* Removes the last label from THREAD, and returns it.
 	 * If it is a read, updates the rf-lists.
 	 * If it is a write, makes all readers read BOT. */
-	auto removeLast(unsigned int thread) -> std::unique_ptr<EventLabel>;
+	auto removeLast(int thread) -> std::unique_ptr<EventLabel>;
 
 	/* Event getter methods */
 
@@ -1050,11 +1068,11 @@ public:
 protected:
 	friend class WriteLabel;
 
-	static auto isSameLoc(const EventLabel *a, const EventLabel *b) -> bool
+	static auto isSameLoc(const EventLabel *labA, const EventLabel *labB) -> bool
 	{
-		const auto *mA = genmc::dyn_cast<MemAccessLabel>(a);
-		const auto *mB = genmc::dyn_cast<MemAccessLabel>(b);
-		return mA && mB && mA->getAddr() == mB->getAddr();
+		const auto *mLabA = genmc::dyn_cast<MemAccessLabel>(labA);
+		const auto *mLabB = genmc::dyn_cast<MemAccessLabel>(labB);
+		return mLabA && mLabB && mLabA->getAddr() == mLabB->getAddr();
 	}
 
 	/* Functor for Detour Successors (Default Constructible for filter_view) */
@@ -1062,7 +1080,7 @@ protected:
 		const EventLabel *lab = nullptr;
 		Event pos;
 		DetourSuccFilter() = default;
-		DetourSuccFilter(const EventLabel *l, Event p) : lab(l), pos(p) {}
+		DetourSuccFilter(const EventLabel *l, Event pos) : lab(l), pos(pos) {}
 
 		auto operator()(const EventLabel &oLab) const -> bool
 		{
@@ -1078,7 +1096,7 @@ protected:
 		const EventLabel *lab = nullptr;
 		Event wPos;
 		DetourPredFilter() = default;
-		DetourPredFilter(const EventLabel *l, Event p) : lab(l), wPos(p) {}
+		DetourPredFilter(const EventLabel *l, Event wPos) : lab(l), wPos(wPos) {}
 
 		auto operator()(const EventLabel &sLab) const -> bool
 		{
@@ -1123,14 +1141,23 @@ protected:
 	}
 
 	/* A collection of threads and the events for each threads */
+	// NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
 	ThreadList events;
+	// NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
+	IoList insertionOrder;
+	// NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
+	PoLists poLists;
 
+	// NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
+	ConsistencyChecker *consChecker_{};
+	// NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
+	bool haveNAs_{};
+
+private:
 	/* The next available timestamp */
 	Stamp timestamp = 0;
 
 	LocMap coherence;
-	IoList insertionOrder;
-	PoLists poLists{};
 
 	/* XXX: Temporary map; eventually remove */
 	AccessMap accessMap_;
@@ -1139,8 +1166,6 @@ protected:
 	std::unordered_map<SAddr, SVal> initVals_;
 
 	ExecutionState *state_{};
-	ConsistencyChecker *consChecker_{};
-	bool haveNAs_{};
 };
 
 /** Make `ExecutionGraph` formattable with `std::format`. */
@@ -1152,7 +1177,7 @@ template <> struct std::formatter<ExecutionGraph> {
 		auto out = ctx.out();
 
 		// Format threads
-		for (auto i = 0U; i < g.getNumThreads(); i++) {
+		for (auto i = 0; i < g.getNumThreads(); i++) {
 			out = std::format_to(out, "Thread {}:\n", i);
 			for (const auto &lab : g.po(i)) {
 				out = std::format_to(out, "\t{} @ {}\n", lab.getStamp(), lab);
@@ -1161,7 +1186,7 @@ template <> struct std::formatter<ExecutionGraph> {
 
 		// Format thread sizes
 		out = std::format_to(out, "Thread sizes:\n\t");
-		for (auto i = 0U; i < g.getNumThreads(); i++) {
+		for (auto i = 0; i < g.getNumThreads(); i++) {
 			out = std::format_to(out, "{} ", g.getThreadSize(i));
 		}
 		out = std::format_to(out, "\n");
@@ -1187,7 +1212,7 @@ template <> struct hash<ExecutionGraph> {
 
 		/* Use a fixed (non-insertion-order-dependent) iteration order */
 		hash_combine(hash, g.getNumThreads());
-		for (auto i = 0U; i < g.getNumThreads(); i++) {
+		for (auto i = 0; i < g.getNumThreads(); i++) {
 			hash_combine(hash, g.getThreadSize(i));
 			for (const auto &lab : g.po(i)) {
 				if (const auto *rLab = genmc::dyn_cast<ReadLabel>(&lab)) {

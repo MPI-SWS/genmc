@@ -12,20 +12,19 @@
  */
 
 #include "EliminateUnusedCodePass.hpp"
+#include <llvm/ADT/SmallPtrSet.h>
+#include <llvm/Config/llvm-config.h>
+#include <llvm/IR/PassManager.h>
+#include <llvm/IR/Use.h>
+#include <llvm/Support/Casting.h>
 
-#include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/InstIterator.h>
-#include <llvm/IR/Instructions.h>
 #include <llvm/Transforms/Utils/Local.h>
 
-#if LLVM_VERSION_MAJOR < 15
-#define MAY_BE_MEM_DEPENDENT(i) mayBeMemoryDependent(i)
-#else
 #define MAY_BE_MEM_DEPENDENT(i) mayHaveNonDefUseDependency(i)
-#endif
 
 using namespace llvm;
 
@@ -59,7 +58,7 @@ static auto eliminateUnusedCode(Function &F) -> bool
 
 	/* Everything not in ALIVE is dead now */
 	for (auto &i : instructions(F)) {
-		if (!alive.count(&i)) {
+		if (!alive.contains(&i)) {
 			worklist.insert(&i);
 			i.dropAllReferences();
 		}
@@ -70,7 +69,8 @@ static auto eliminateUnusedCode(Function &F) -> bool
 	return !worklist.empty();
 }
 
-auto EliminateUnusedCodePass::run(Function &F, FunctionAnalysisManager &FAM) -> PreservedAnalyses
+auto EliminateUnusedCodePass::run(Function &F, FunctionAnalysisManager & /*FAM*/)
+	-> PreservedAnalyses
 {
 	return eliminateUnusedCode(F) ? PreservedAnalyses::none() : PreservedAnalyses::all();
 }

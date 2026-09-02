@@ -56,6 +56,7 @@ inline auto isValidMemOrdering(Int i) -> bool
 /** Returns whether ord is stronger than other */
 inline auto isStrongerThan(MemOrdering ord, MemOrdering other) -> bool
 {
+	// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
 	static const bool lookup[7][7] = {
 		//               NA      RX     CO     AC     RE     AR     SC
 		/* nonatomic */ {false, false, false, false, false, false, false},
@@ -66,11 +67,13 @@ inline auto isStrongerThan(MemOrdering ord, MemOrdering other) -> bool
 		/* acq_rel   */ {true, true, true, true, true, false, false},
 		/* seq_cst   */ {true, true, true, true, true, true, false},
 	};
+	// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
 	return lookup[static_cast<size_t>(ord)][static_cast<size_t>(other)];
 }
 
 inline auto isAtLeastOrStrongerThan(MemOrdering ord, MemOrdering other) -> bool
 {
+	// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
 	static const bool lookup[7][7] = {
 		//               NA     RX     CO     AC     RE     AR     SC
 		/* nonatomic */ {true, false, false, false, false, false, false},
@@ -81,6 +84,7 @@ inline auto isAtLeastOrStrongerThan(MemOrdering ord, MemOrdering other) -> bool
 		/* acq_rel   */ {true, true, true, true, true, true, false},
 		/* seq_cst   */ {true, true, true, true, true, true, true},
 	};
+	// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
 	return lookup[static_cast<size_t>(ord)][static_cast<size_t>(other)];
 }
 

@@ -20,7 +20,7 @@ using namespace llvm;
 
 class IntrinsicLoweringPass : public PassInfoMixin<IntrinsicLoweringPass> {
 public:
-	auto run(Function &M, FunctionAnalysisManager &FAM) -> PreservedAnalyses;
+	auto run(Function &F, FunctionAnalysisManager & /*FAM*/) -> PreservedAnalyses;
 };
 
 #endif /* GENMC_INTRINSIC_LOWERING_PASS_HPP */

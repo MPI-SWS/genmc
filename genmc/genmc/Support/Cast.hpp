@@ -86,6 +86,7 @@ template <typename Derived, typename Base> inline auto dyn_cast_if_present(Base 
 
 /* unique_ptr specializations */
 template <typename Derived, typename Base>
+// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
 inline auto cast(std::unique_ptr<const Base> &&base) -> std::unique_ptr<const Derived>
 {
 	ASSERT(isa<Derived>(base.get()));
@@ -93,6 +94,7 @@ inline auto cast(std::unique_ptr<const Base> &&base) -> std::unique_ptr<const De
 }
 
 template <typename Derived, typename Base>
+// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
 inline auto cast(std::unique_ptr<Base> &&base) -> std::unique_ptr<Derived>
 {
 	ASSERT(isa<Derived>(base.get()));

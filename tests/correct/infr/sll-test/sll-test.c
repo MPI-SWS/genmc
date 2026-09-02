@@ -17,7 +17,7 @@ void* producer_thread(void* param)
 
 	// Insert node at beginning of the list.
 	node->next = atomic_load(&list);
-	while (!atomic_compare_exchange_weak(&list, &node->next, node))
+	while (!atomic_compare_exchange_strong(&list, &node->next, node))
 		;
 
 	return NULL;

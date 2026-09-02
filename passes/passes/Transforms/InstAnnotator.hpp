@@ -40,21 +40,23 @@ public:
 	using IRExpr = SExpr<Value *>;
 	using IRExprUP = std::unique_ptr<SExpr<Value *>>;
 
-	/* Returns the annotation for a load L */
-	IRExprUP annotate(Instruction *l);
+	/* Returns the annotation for a load */
+	auto annotate(Instruction *curr) -> IRExprUP;
 
-	/* Returns the condition under which BB jumps to its first successor.
+	/* Returns the condition under which bb jumps to its first successor.
 	 * If PRED is non-null, assumes that the predecessor of the basic block is PRED
 	 * during the calculation of the annotation */
-	IRExprUP annotateBBCond(BasicBlock *bb, BasicBlock *pred = nullptr);
+	auto annotateBBCond(BasicBlock *bb, BasicBlock *pred = nullptr) -> IRExprUP;
 
 	/* Returns the annotation for a CAS associated with the backedge LATCH->header(L) */
-	IRExprUP annotateCASWithBackedgeCond(AtomicCmpXchgInst *cas, BasicBlock *latch, Loop *l,
-					     const VSet<llvm::Function *> *cleanSet = nullptr);
+	auto annotateCASWithBackedgeCond(AtomicCmpXchgInst *curr, BasicBlock *latch, Loop *l,
+					 const VSet<llvm::Function *> *cleanSet = nullptr)
+		-> IRExprUP;
 
 private:
 	/* Helper types for the annotation routines */
-	enum Status { unseen, entered, left };
+	// NOLINTNEXTLINE(cppcoreguidelines-use-enum-class)
+	enum Status : std::uint8_t { unseen, entered, left };
 
 	/* InstAnnotMap maps void * so that we can use it both with ID keys and Value *.
 	 * It is a big ugly, but on par with RegisterExpr identifiers (see SExpr.hpp) */
@@ -65,20 +67,21 @@ private:
 	void reset();
 
 	/* Generates an expression for a given instruction operand */
-	IRExprUP generateOperandExpr(Value *op);
+	auto generateOperandExpr(Module *mod, Value *op) -> IRExprUP;
 
 	/* Generates an expression for an instruction */
-	IRExprUP generateInstExpr(Instruction *curr);
+	auto generateInstExpr(Instruction *curr) -> IRExprUP;
 
 	/* Helper that returns the annotation for CURR by propagating SUCC's annotation backwards */
-	IRExprUP propagateAnnotFromSucc(Instruction *curr, Instruction *succ);
+	auto propagateAnnotFromSucc(Instruction *curr, Instruction *succ) -> IRExprUP;
 
 	/* Helper for annotate(); performs the actual annotation */
 	void annotateDFS(Instruction *curr);
 
 	/* Similar to propagateAnnotFromSucc, but for when annotating backedges */
-	IRExprUP propagateAnnotFromSuccInLoop(Instruction *curr, Instruction *succ,
-					      const VSet<BasicBlock *> &latch, Loop *l);
+	auto propagateAnnotFromSuccInLoop(Instruction *curr, Instruction *succ,
+					  const VSet<BasicBlock *> &backedgePaths, Loop *l)
+		-> IRExprUP;
 
 	/* Helper for annotateCASWithBackedgeCond(); performs the actual annotation (for backedge
 	 * paths) */
@@ -89,13 +92,13 @@ private:
 	/* Various getters/setters */
 
 	/* Returns the appropriate key to be used when accessing annotMaps depending on useIDs */
-	Value *getAnnotMapKey(Value *i) const;
+	static auto getAnnotMapKey(Value *i) -> Value *;
 
 	/* Returns the annotation of I */
-	const IRExpr *getAnnot(Instruction *i);
+	auto getAnnot(Instruction *i) -> const IRExpr *;
 
 	/* Assumes ownership of I's annotation */
-	IRExprUP releaseAnnot(Instruction *i);
+	auto releaseAnnot(Instruction *i) -> IRExprUP;
 
 	/* Sets the annotation of I To be ANNOT */
 	void setAnnot(Instruction *i, IRExprUP annot);

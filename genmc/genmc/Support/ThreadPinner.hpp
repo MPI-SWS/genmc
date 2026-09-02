@@ -58,14 +58,17 @@ class ThreadPinner {
 
 public:
 	/*** Constructor ***/
-	explicit ThreadPinner(unsigned int n) {}
+	explicit ThreadPinner(unsigned int /*numThreads*/) {}
 	ThreadPinner() = delete;
 	ThreadPinner(const ThreadPinner &) = delete;
+	auto operator=(const ThreadPinner &) -> ThreadPinner & = delete;
+	ThreadPinner(ThreadPinner &&) = delete;
+	auto operator=(ThreadPinner &&) -> ThreadPinner & = delete;
 
-	void pin(std::thread &t, unsigned int cpu) {}
+	void pin(std::thread & /*thr*/, unsigned int /*cpu*/) {}
 
 	/*** Destructor ***/
-	~ThreadPinner() {}
+	~ThreadPinner() = default;
 };
 
 #endif /* HAVE_LIBHWLOC */

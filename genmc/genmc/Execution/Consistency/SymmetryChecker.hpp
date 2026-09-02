@@ -55,11 +55,10 @@ public:
 private:
 	SymmetryChecker() = default;
 
-	auto isEcoBefore(const EventLabel *lab, int tid) const -> bool;
-	auto isEcoSymmetric(const EventLabel *lab, int tid) const -> bool;
-	auto isPredSymmetryOK(const EventLabel *lab, int tid) const -> bool;
+	auto isEcoBefore(const EventLabel *lab, int symm) const -> bool;
+	auto isPredSymmetryOK(const EventLabel *lab, int symm) const -> bool;
 	auto isPredSymmetryOK(const EventLabel *lab) const -> bool;
-	auto isSuccSymmetryOK(const EventLabel *lab, int tid) const -> bool;
+	auto isSuccSymmetryOK(const EventLabel *lab, int symm) const -> bool;
 	auto isSuccSymmetryOK(const EventLabel *lab) const -> bool;
 };
 

@@ -14,7 +14,10 @@
 #include "BoundDecider.hpp"
 #include "genmc/Execution/Consistency/ContextBoundDecider.hpp"
 #include "genmc/Execution/Consistency/RoundBoundDecider.hpp"
+#include "genmc/Support/Error.hpp"
 #include "genmc/Verification/Config.hpp"
+
+#include <memory>
 
 auto BoundDecider::doesExecutionExceedBound(const ExecutionGraph &g, unsigned int bound,
 					    BoundCalculationStrategy strategy) -> bool

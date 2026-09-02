@@ -11,27 +11,25 @@
  *     https://opensource.org/licenses/MIT
  */
 
-
 #include "LoopUnrollPass.hpp"
 #include "genmc/Support/Error.hpp"
+
+#include <llvm/Analysis/LoopAnalysisManager.h>
+#include <llvm/Config/llvm-config.h>
+#include <llvm/IR/CFG.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/PassManager.h>
+#include <llvm/Transforms/Scalar/LoopPassManager.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
 using TerminatorInst = llvm::Instruction;
 
-#if LLVM_VERSION_MAJOR >= 11
 #define GET_LOADINST_ARG(val)
-#else
-#define GET_LOADINST_ARG(val) (val)->getType()->getPointerElementType(),
-#endif
 
-#if LLVM_VERSION_MAJOR >= 11
 #define GET_BOUND_ALLOCA_ALIGN_ARG(val) llvm::Align(val)
-#else
-#define GET_BOUND_ALLOCA_ALIGN_ARG(val) val
-#endif
 
 using namespace llvm;
 
@@ -42,15 +40,11 @@ using namespace llvm;
  */
 static auto createBoundInit(Loop *l) -> PHINode *
 {
-	Function *parentFun = (*l->block_begin())->getParent();
+	const Function *parentFun = (*l->block_begin())->getParent();
 	Type *int32Typ = Type::getInt32Ty(parentFun->getContext());
 
-	/* Post-dbgrecord migration, begin() iterator should be passed directly */
-#if LLVM_VERSION_MAJOR < 19
-	PHINode *bound = PHINode::Create(int32Typ, 0, "bound.val", &*l->getHeader()->begin());
-#else
+	// NOLINTNEXTLINE(misc-const-correctness)
 	PHINode *bound = PHINode::Create(int32Typ, 0, "bound.val", l->getHeader()->begin());
-#endif
 	return bound;
 }
 
@@ -60,17 +54,13 @@ static auto createBoundInit(Loop *l) -> PHINode *
  */
 static auto createBoundDecrement(Loop *l, PHINode *boundVal) -> BinaryOperator *
 {
-	Function *parentFun = (*l->block_begin())->getParent();
+	const Function *parentFun = (*l->block_begin())->getParent();
 	Type *int32Typ = Type::getInt32Ty(parentFun->getContext());
 
 	Value *minusOne = ConstantInt::get(int32Typ, -1, true);
-#if LLVM_VERSION_MAJOR < 19
-	auto *pt = &*l->getHeader()->getFirstInsertionPt();
-#else
-	auto pt = l->getHeader()->getFirstInsertionPt();
-#endif
+	auto insertPt = l->getHeader()->getFirstInsertionPt();
 	return BinaryOperator::CreateNSW(Instruction::Add, boundVal, minusOne,
-					 l->getName() + ".bound.dec", pt);
+					 l->getName() + ".bound.dec", insertPt);
 }
 
 static void addBoundCmpAndSpinEndBefore(Loop *l, PHINode *val, BinaryOperator *decVal)
@@ -80,15 +70,16 @@ static void addBoundCmpAndSpinEndBefore(Loop *l, PHINode *val, BinaryOperator *d
 	Type *int32Typ = Type::getInt32Ty(parentFun->getContext());
 
 	Value *zero = ConstantInt::get(int32Typ, 0);
-	Value *cmp =
-		new ICmpInst(decVal, ICmpInst::ICMP_EQ, val, zero, l->getName() + ".bound.cmp");
+	Value *cmp = new ICmpInst(decVal->getIterator(), ICmpInst::ICMP_EQ, val, zero,
+				  l->getName() + ".bound.cmp");
 
 	VERIFY(endLoopFun);
-	CallInst::Create(endLoopFun, {cmp}, "", decVal);
+	CallInst::Create(endLoopFun, {cmp}, "", decVal->getIterator());
 }
 
-auto LoopUnrollPass::run(Loop &L, LoopAnalysisManager &AM, LoopStandardAnalysisResults &AR,
-			 LPMUpdater &U) -> PreservedAnalyses
+auto LoopUnrollPass::run(Loop &L, LoopAnalysisManager & /*AM*/,
+			 LoopStandardAnalysisResults & /*AR*/, LPMUpdater & /*U*/)
+	-> PreservedAnalyses
 {
 	if (!shouldUnroll(&L))
 		return PreservedAnalyses::all();

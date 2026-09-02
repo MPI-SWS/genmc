@@ -12,7 +12,10 @@
  */
 
 #include "DeclareInternalsPass.hpp"
-#include "genmc/Support/Error.hpp"
+#include <llvm/ADT/ArrayRef.h>
+#include <llvm/Config/llvm-config.h>
+#include <llvm/IR/Attributes.h>
+#include <llvm/IR/PassManager.h>
 
 #include <llvm/ADT/StringRef.h>
 #include <llvm/IR/Function.h>
@@ -21,12 +24,18 @@
 #include <llvm/IR/Module.h>
 #include <llvm/Pass.h>
 #include <llvm/Passes/PassBuilder.h>
+#if LLVM_VERSION_MAJOR >= 22
+#include <llvm/Plugins/PassPlugin.h>
+#else
 #include <llvm/Passes/PassPlugin.h>
+#endif
+#include <string>
+#include <vector>
 
 using namespace llvm;
 
-auto declareInternal(Module &M, const std::string &name, Type *retTyp,
-		     const ArrayRef<Type *> &argTyps) -> bool
+static auto declareInternal(Module &M, const std::string &name, Type *retTyp,
+			    const ArrayRef<Type *> &argTyps) -> bool
 {
 	auto *fun = M.getFunction(name);
 	if (fun)
@@ -39,7 +48,7 @@ auto declareInternal(Module &M, const std::string &name, Type *retTyp,
 	return true;
 }
 
-PreservedAnalyses DeclareInternalsPass::run(Module &M, ModuleAnalysisManager &AM)
+auto DeclareInternalsPass::run(Module &M, ModuleAnalysisManager & /*AM*/) -> PreservedAnalyses
 {
 	bool modified = false;
 
@@ -65,10 +74,12 @@ PreservedAnalyses DeclareInternalsPass::run(Module &M, ModuleAnalysisManager &AM
 //-----------------------------------------------------------------------------
 // New PM Registration
 //-----------------------------------------------------------------------------
-auto getDeclareInternalsPluginInfo() -> PassPluginLibraryInfo
+[[maybe_unused]] static auto getDeclareInternalsPluginInfo() -> PassPluginLibraryInfo
 {
-	return {LLVM_PLUGIN_API_VERSION, "DeclareInternals", LLVM_VERSION_STRING,
-		[](PassBuilder &PB) {
+	return {.APIVersion = LLVM_PLUGIN_API_VERSION,
+		.PluginName = "DeclareInternals",
+		.PluginVersion = LLVM_VERSION_STRING,
+		.RegisterPassBuilderCallbacks = [](PassBuilder &PB) {
 			PB.registerPipelineParsingCallback(
 				[](StringRef Name, ModulePassManager &MPM,
 				   ArrayRef<PassBuilder::PipelineElement>) {

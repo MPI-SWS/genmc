@@ -13,12 +13,17 @@
 
 #include "genmc/Verification/Relinche/LinearizabilityChecker.hpp"
 #include "genmc/Execution/Consistency/ConsistencyChecker.hpp"
+#include "genmc/Execution/Event.hpp"
 #include "genmc/Execution/ExecutionGraph.hpp"
 #include "genmc/Verification/Relinche/Observation.hpp"
+#include "genmc/Verification/Relinche/Specification.hpp"
 
 #include <algorithm>
+#include <format>
+#include <iterator>
 #include <memory>
 #include <sstream>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -26,7 +31,7 @@ using ExtEdge = std::pair<MethodEndLabel *, MethodBeginLabel *>;
 
 class LinearizabilityStructureError : public LinearizabilityError {
 
-	auto toString() const -> std::string override
+	[[nodiscard]] auto toString() const -> std::string override
 	{
 		return "The library implementation returns incorrect return values\n"
 		       "(forbidden by the supplied specification).";
@@ -36,13 +41,13 @@ class LinearizabilityStructureError : public LinearizabilityError {
 class LinearizabilitySyncError : public LinearizabilityError {
 
 public:
-	explicit LinearizabilitySyncError(std::vector<std::vector<Edge>> &&m)
-		: missingSyncs_(std::move(m))
+	explicit LinearizabilitySyncError(std::vector<std::vector<Edge>> &&syncs)
+		: missingSyncs_(std::move(syncs))
 	{
 		std::ranges::for_each(missingSyncs_, std::ranges::sort);
 	}
 
-	auto toString() const -> std::string override
+	[[nodiscard]] auto toString() const -> std::string override
 	{
 		std::ostringstream s;
 		s << "The library implementation does not induce all the synchronization\n"
@@ -65,16 +70,16 @@ public:
 
 	explicit LinearizabilityExtensionError(const std::vector<ExtEdge> &extensionEdges,
 					       std::vector<KCEdge> &&kcEdges)
-		: kcEdges_(kcEdges)
+		: kcEdges_(std::move(kcEdges))
 	{
 		extensionEdges_.reserve(extensionEdges.size());
-		for (const auto &[a, b] : extensionEdges)
-			extensionEdges_.emplace_back(a->getPos(), b->getPos());
+		for (const auto &[src, dst] : extensionEdges)
+			extensionEdges_.emplace_back(src->getPos(), dst->getPos());
 		std::ranges::sort(extensionEdges_);
 		std::ranges::sort(kcEdges_);
 	}
 
-	auto toString() const -> std::string override
+	[[nodiscard]] auto toString() const -> std::string override
 	{
 		std::ostringstream s;
 		s << "The library implementation returns incorrect return values\n"
@@ -86,12 +91,12 @@ public:
 		     "C-flags after '--' :\n"
 		  << "-DGENERATE_SYNC ";
 		int i = 0;
-		for (const auto &[a, b] : kcEdges_) {
+		for (const auto &[src, dst] : kcEdges_) {
 			++i;
-			s << "-DFROM" << i << "_KIND_IX=" << a.first << " "
-			  << "-DFROM" << i << "_COPY_IX=" << a.second << " "
-			  << "-DTO" << i << "_KIND_IX=" << b.first << " "
-			  << "-DTO" << i << "_COPY_IX=" << b.second << " ";
+			s << "-DFROM" << i << "_KIND_IX=" << src.first << " "
+			  << "-DFROM" << i << "_COPY_IX=" << src.second << " "
+			  << "-DTO" << i << "_KIND_IX=" << dst.first << " "
+			  << "-DTO" << i << "_COPY_IX=" << dst.second << " ";
 		}
 		s << "\n";
 		return s.str();
@@ -144,7 +149,7 @@ static auto combineHints(const Specification &spec, const Observation &obs) -> s
 		/* Increment the vector clock */
 		++clock[0];
 		for (auto i = 0U; i < hintsOfRefining.size(); ++i) {
-			if (clock[i] == hintsOfRefining[i].size()) {
+			if (std::cmp_equal(clock[i], hintsOfRefining[i].size())) {
 				clock[i] = 0;
 				++clock[i + 1];
 			}

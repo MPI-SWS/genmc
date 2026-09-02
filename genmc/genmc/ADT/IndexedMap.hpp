@@ -36,6 +36,8 @@
 #ifndef ADT_INDEXEDMAP_HPP
 #define ADT_INDEXEDMAP_HPP
 
+// NOLINTBEGIN (vendored from LLVM)
+
 #include "genmc/ADT/SmallVector.hpp"
 #include "genmc/Support/Error.hpp"
 
@@ -100,4 +102,5 @@ public:
 
 } /* namespace genmc */
 
+// NOLINTEND
 #endif /* ADT_INDEXEDMAP_HPP */

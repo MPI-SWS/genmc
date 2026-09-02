@@ -18,15 +18,16 @@
 
 template <class T> inline void hash_combine(std::size_t &seed, const T &v)
 {
+	// NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 	seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 
 template <typename T1, typename T2> struct PairHasher {
-	auto operator()(const std::pair<T1, T2> &p) const -> size_t
+	auto operator()(const std::pair<T1, T2> &val) const -> size_t
 	{
 		std::size_t hash = 0;
-		hash_combine(hash, p.first);
-		hash_combine(hash, p.second);
+		hash_combine(hash, val.first);
+		hash_combine(hash, val.second);
 		return hash;
 	}
 };

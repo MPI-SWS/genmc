@@ -14,8 +14,11 @@
 #include "Parser.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <iostream>
+#include <ranges>
+#include <string>
 #include <vector>
 
 namespace genmc {
@@ -24,13 +27,13 @@ auto readFile(const std::string &absPath) -> std::string
 {
 	std::ifstream ifs(absPath.c_str(), std::ios::in | std::ios::binary | std::ios::ate);
 	/* TODO: Error check here? */
-	std::ifstream::pos_type fileSize = ifs.tellg();
+	const std::ifstream::pos_type fileSize = ifs.tellg();
 	ifs.seekg(0, std::ios::beg);
 	/* TODO: Does tellg work on all platforms? */
 	std::vector<char> bytes(fileSize);
 	ifs.read(bytes.data(), fileSize);
 
-	return std::string(bytes.data(), fileSize);
+	return {bytes.data(), static_cast<std::string::size_type>(fileSize)};
 }
 
 auto getFileLineByNumber(const std::string &absPath, int line) -> std::string
@@ -48,9 +51,10 @@ auto getFileLineByNumber(const std::string &absPath, int line) -> std::string
 
 void stripWhitespace(std::string &s)
 {
-	s.erase(s.begin(),
-		std::find_if(s.begin(), s.end(), [](int c) { return !std::isspace(c); }));
-	s.erase(std::find_if(s.rbegin(), s.rend(), [](int c) { return !std::isspace(c); }).base(),
+	s.erase(s.begin(), std::ranges::find_if(s, [](int chr) { return !std::isspace(chr); }));
+	s.erase(std::ranges::find_if(std::ranges::reverse_view(s),
+				     [](int chr) { return !std::isspace(chr); })
+			.base(),
 		s.end());
 }
 

@@ -21,13 +21,14 @@
 #include <limits>
 #include <map>
 #include <optional>
+#include <utility>
 
 namespace genmc {
 
 template <typename T>
 concept IKey =
-	std::strict_weak_order<std::less<T>, T, T> && std::copyable<T> && requires(T a, T b) {
-		{ b - a };
+	std::strict_weak_order<std::less<T>, T, T> && std::copyable<T> && requires(T lhs, T rhs) {
+		{ rhs - lhs };
 	};
 
 template <typename T> constexpr auto key_max()
@@ -85,7 +86,7 @@ public:
 	/* Helper struct for the class iterator */
 	struct Entry {
 		Interval<Key> first;
-		const Val &second;
+		const Val &second; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 	};
 
 	class Iterator {
@@ -148,7 +149,7 @@ public:
 	};
 
 	/* Ctors/dtor */
-	explicit IntervalMap(Val identity = Val()) : id_(identity) {}
+	explicit IntervalMap(Val identity = Val()) : id_(std::move(identity)) {}
 	IntervalMap(const IntervalMap &) = default;
 	IntervalMap(IntervalMap &&) noexcept = default;
 	~IntervalMap() = default;
@@ -156,8 +157,8 @@ public:
 	auto operator=(const IntervalMap &) -> IntervalMap & = default;
 	auto operator=(IntervalMap &&) noexcept -> IntervalMap & = default;
 
-	auto begin() const -> Iterator { return {map_.begin(), map_.end(), id_}; }
-	auto end() const -> Iterator { return {map_.end(), map_.end(), id_}; }
+	[[nodiscard]] auto begin() const -> Iterator { return {map_.begin(), map_.end(), id_}; }
+	[[nodiscard]] auto end() const -> Iterator { return {map_.end(), map_.end(), id_}; }
 
 	/** Returns whether the map is empty */
 	[[nodiscard]] auto empty() const -> bool { return begin() == end(); }
@@ -166,11 +167,11 @@ public:
 	void clear() { map_.clear(); }
 
 	/** Returns a reference to the underlying data-structure (map) */
-	auto data() const -> const std::map<Key, Val> & { return map_; }
+	[[nodiscard]] auto data() const -> const std::map<Key, Val> & { return map_; }
 
 	/** Returns an iterator to the first segment that overlaps or follows [start, end).
 	 * If no such segment exists, returns end() */
-	auto lower_bound(Key start, Key end) const -> Iterator
+	[[nodiscard]] auto lower_bound(Key start, Key end) const -> Iterator
 	{
 		if (start >= end)
 			return this->end();
@@ -182,8 +183,8 @@ public:
 		/* Find the first segment [a,b) such that b > start */
 		while (it != map_.end()) {
 			auto next = std::next(it);
-			Key b = (next == map_.end()) ? key_max<Key>() : next->first;
-			if (b > start)
+			Key segEnd = (next == map_.end()) ? key_max<Key>() : next->first;
+			if (segEnd > start)
 				break;
 			++it;
 		}
@@ -191,14 +192,14 @@ public:
 		return Iterator(it, map_.end(), id_);
 	}
 
-	auto lower_bound(const Interval<Key> &iv) const -> Iterator
+	[[nodiscard]] auto lower_bound(const Interval<Key> &iv) const -> Iterator
 	{
 		return lower_bound(iv.start, iv.end);
 	}
 
 	/** Returns an iterator to the first segment strictly after [start, end).
 	 * If no such segment exists, returns end() */
-	auto upper_bound(Key start, Key end) const -> Iterator
+	[[nodiscard]] auto upper_bound(Key start, Key end) const -> Iterator
 	{
 		if (start >= end)
 			return this->end();
@@ -207,14 +208,14 @@ public:
 		return Iterator(it, map_.end(), id_);
 	}
 
-	auto upper_bound(const Interval<Key> &iv) const -> Iterator
+	[[nodiscard]] auto upper_bound(const Interval<Key> &iv) const -> Iterator
 	{
 		return upper_bound(iv.start, iv.end);
 	}
 
 	/** Returns an iterator to the interval containing POINT.
 	 * If no valid interval covers the point, returns end(). */
-	auto find(const Key &point) const -> Iterator
+	[[nodiscard]] auto find(const Key &point) const -> Iterator
 	{
 		auto it = find_internal(point);
 		if (it == map_.end())
@@ -222,7 +223,7 @@ public:
 		return Iterator(it, map_.end(), id_);
 	}
 
-	auto find(const Interval<Key> &iv) const -> Iterator
+	[[nodiscard]] auto find(const Interval<Key> &iv) const -> Iterator
 	{
 		auto it = find(iv.start);
 		/* find(interval) only returns if it fully contains the interval */
@@ -240,7 +241,10 @@ public:
 		return find_internal(point) != map_.end();
 	}
 
-	auto contains(const Interval<Key> &iv) const -> bool { return find(iv) != end(); }
+	[[nodiscard]] auto contains(const Interval<Key> &iv) const -> bool
+	{
+		return find(iv) != end();
+	}
 
 	/** Adds a (right-open) interval to the map */
 	void add(Key start, Key end, const Val &val)
@@ -275,7 +279,7 @@ public:
 
 	void add(const Interval<Key> &iv, const Val &val) { add(iv.start, iv.end, val); }
 
-	void add(const std::pair<Interval<Key>, Val> &p) { add(p.first, p.second); }
+	void add(const std::pair<Interval<Key>, Val> &entry) { add(entry.first, entry.second); }
 
 	/** Erases a (right-open) interval from the map (sets to identity) */
 	void erase(Key start, Key end)
@@ -380,7 +384,8 @@ private:
 	 * Returns the internal map iterator pointing to the segment covering POINT,
 	 * or map_.end() if the point is empty/identity.
 	 */
-	auto find_internal(const Key &point) const -> std::map<Key, Val>::const_iterator
+	[[nodiscard]] auto find_internal(const Key &point) const
+		-> std::map<Key, Val>::const_iterator
 	{
 		auto it = map_.upper_bound(point);
 		if (it != map_.begin()) {

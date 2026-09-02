@@ -13,6 +13,10 @@
 
 #include "genmc/Verification/Relinche/Linearization.hpp"
 #include "genmc/Support/Error.hpp"
+#include "genmc/Verification/Relinche/Observation.hpp"
+
+#include <utility>
+#include <vector>
 
 /* Ctor helper: keep map from callids to index */
 static void calculateOrder(const std::vector<MethodCall::Id> &lin, std::vector<unsigned> &order)

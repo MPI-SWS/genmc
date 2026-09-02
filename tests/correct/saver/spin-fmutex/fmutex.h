@@ -31,8 +31,9 @@
 #define ATOMIC_LOAD(addr, mem) atomic_load_explicit(addr, mem)
 #define ATOMIC_FETCH_ADD(addr, val, mem) atomic_fetch_add_explicit(addr, val, mem)
 #define ATOMIC_FETCH_SUB(addr, val, mem) atomic_fetch_sub_explicit(addr, val, mem)
-#define ATOMIC_CAS_WEAK(addr, old_val, new_val, mem1, mem2) \
-    atomic_compare_exchange_weak_explicit(addr, &old_val, new_val, mem1, mem2)
+/* GenMC: changed to use a strong CAS here so that it terminates. */
+#define ATOMIC_CAS_WEAK(addr, old_val, new_val, mem1, mem2)                                        \
+	atomic_compare_exchange_strong_explicit(addr, &old_val, new_val, mem1, mem2)
 #define ASSERT(a) assert(a)
 #define LIKELY(a) a
 #define UNLIKELY(a) a

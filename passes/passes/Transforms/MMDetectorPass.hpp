@@ -20,7 +20,7 @@
 
 using namespace llvm;
 
-class PassModuleInfo;
+struct PassModuleInfo;
 enum class ModelType : std::uint8_t;
 
 class MMAnalysis : public AnalysisInfoMixin<MMAnalysis> {
@@ -44,7 +44,7 @@ public:
 	auto run(Module &M, ModuleAnalysisManager &MAM) -> PreservedAnalyses;
 
 private:
-	PassModuleInfo &PMI;
+	PassModuleInfo &PMI; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 };
 
 #endif /* GENMC_MM_DETECTOR_PASS_HPP */

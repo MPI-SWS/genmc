@@ -12,6 +12,8 @@
  */
 
 #include "passes/InternalFunctions.hpp"
+#include <string>
+#include <unordered_map>
 
 const std::unordered_map<std::string, InternalFunctions> internalFunNames = {
 #define HANDLE_FUNCTION(NUM, FUN, NAME) {FUN, InternalFunctions::NAME},

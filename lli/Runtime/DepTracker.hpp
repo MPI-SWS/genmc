@@ -82,7 +82,7 @@ private:
 };
 
 struct DepTrackerCloner {
-	DepTracker *operator()(DepTracker const &x) const { return new DepTracker(x); }
+	DepTracker *operator()(const DepTracker &x) const { return new DepTracker(x); }
 	// DepTracker *operator()(DepTracker &&x) const { return new DepTracker(std::move(x)); }
 };
 

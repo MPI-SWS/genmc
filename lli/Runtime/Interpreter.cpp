@@ -30,10 +30,10 @@
  */
 
 #include "Runtime/Interpreter.h"
-#include "passes/LLIConfig.hpp"
-#include "passes/LLVMUtils.hpp"
 #include "genmc/Support/Error.hpp"
 #include "genmc/Support/Parser.hpp"
+#include "passes/LLIConfig.hpp"
+#include "passes/LLVMUtils.hpp"
 #include <llvm/CodeGen/IntrinsicLowering.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Module.h>
@@ -157,13 +157,12 @@ void Interpreter::collectStaticAddresses()
 		}
 
 		/* Allocate a symbolic address for this global via the driver API */
-		auto addr = driver->allocateGlobal(
-			ASize(typeSize), v.getAlignment(),
+		auto addr = driver->allocateGlobal(ASize(typeSize), v.getAlignment(),
 #if EMIT_NA_LABELS
-			ptr,
+						   ptr,
 #endif
-			v.getSection() == "__genmc_persist",
-			v.getAddressSpace() == 42);
+						   v.getSection() == "__genmc_persist",
+						   v.getAddressSpace() == 42);
 		ERROR_ON(addr == SAddr(), "Allocator is out of memory");
 		staticAllocas.insert(std::make_pair(addr, addr + ASize(typeSize - 1)));
 		staticValueMap[addr] = ptr;
@@ -231,13 +230,12 @@ std::unique_ptr<EventDeps> Interpreter::updateFunArgDeps(unsigned int tid, Funct
 		return nullptr;
 
 	ExecutionContext &SF = ECStack().back();
-	auto name = fun->getName().str();
 
 	/* Handling non-internals is straightforward: the parameters
 	 * of the function called get the data dependencies of the
 	 * actual arguments */
-	bool isInternal = internalFunNames.count(name);
-	if (!isInternal) {
+	auto cacheIt = internalFunCache_.find(fun);
+	if (cacheIt == internalFunCache_.end()) {
 		auto ai = fun->arg_begin();
 		for (auto ci = SF.Caller.arg_begin(), ce = SF.Caller.arg_end(); ci != ce;
 		     ++ci, ++ai) {
@@ -245,16 +243,16 @@ std::unique_ptr<EventDeps> Interpreter::updateFunArgDeps(unsigned int tid, Funct
 		}
 		return nullptr;
 	}
+	auto iFunCode = cacheIt->second;
 
 	/* We have ctrl dependency on the argument of an assume() */
-	if (isAssumeFunction(name)) {
+	if (iFunCode == InternalFunctions::Assume) {
 		for (auto i = SF.Caller.arg_begin(), e = SF.Caller.arg_end(); i != e; ++i) {
 			updateCtrlDeps(tid, *i);
 		}
 		return nullptr;
 	}
 	/* We have addr dependency on the argument of mutex/barrier/condvar calls */
-	auto iFunCode = internalFunNames.at(name);
 	if (isMutexCode(iFunCode) || isCondVarCode(iFunCode)) {
 		return makeEventDeps(getDataDeps(tid, *SF.Caller.arg_begin()), nullptr,
 				     getCtrlDeps(tid), getAddrPoDeps(tid), nullptr);
@@ -264,12 +262,11 @@ std::unique_ptr<EventDeps> Interpreter::updateFunArgDeps(unsigned int tid, Funct
 
 void Interpreter::updateInternalFunRetDeps(unsigned int tid, Function *F, Instruction *CS)
 {
-	auto name = F->getName().str();
-	if (!internalFunNames.count(name))
+	auto it = internalFunCache_.find(F);
+	if (it == internalFunCache_.end())
 		return;
 
-	auto iFunCode = internalFunNames.at(name);
-	if (isAllocFunction(name))
+	if (isAllocCode(it->second))
 		updateDataDeps(tid, CS, threadPos(tid));
 }
 
@@ -349,6 +346,13 @@ Interpreter::Interpreter(std::unique_ptr<Module> M, std::unique_ptr<ModuleInfo> 
 
 	auto mod = Modules.back().get();
 
+	/* Cache internal func codes by ptr, so the hot-call path doesn't build strings */
+	for (auto &F : *mod) {
+		if (auto it = internalFunNames.find(F.getName().str());
+		    it != internalFunNames.end())
+			internalFunCache_.try_emplace(&F, it->second);
+	}
+
 	/* Set up a dependency tracker if the model requires it */
 	if (userConf->isDepTrackingModel)
 		dynState.depTracker = std::make_unique<DepTracker>();
@@ -387,11 +391,7 @@ void *ArgvArray::reset(LLVMContext &C, ExecutionEngine *EE,
 	Array = std::make_unique<char[]>((InputArgv.size() + 1) * PtrSize);
 
 	// LLVM_DEBUG(dbgs() << "JIT: ARGV = " << (void *)Array.get() << "\n");
-#if LLVM_VERSION_MAJOR < 18
-	Type *SBytePtr = Type::getInt8PtrTy(C);
-#else
 	Type *SBytePtr = PointerType::getUnqual(C);
-#endif
 
 	for (unsigned i = 0; i != InputArgv.size(); ++i) {
 		unsigned Size = InputArgv[i].size() + 1;
@@ -479,13 +479,7 @@ void Interpreter::setupStaticCtorsDtors(Module &module, bool isDtors)
 
 		// Setup the ctor/dtor SF and quit
 		if (Function *F = dyn_cast<Function>(FP))
-			setupFunctionCall(F,
-#if LLVM_VERSION_MAJOR >= 16
-					  std::nullopt
-#else
-					  None
-#endif
-			);
+			setupFunctionCall(F, {});
 
 		// FIXME: It is marginally lame that we just do nothing here if we see an
 		// entry we don't recognize. It might not be unreasonable for the verifier
@@ -522,11 +516,7 @@ void Interpreter::setupMain(Function *Fn, const std::vector<std::string> &argv,
 	// Check main() type
 	unsigned NumArgs = Fn->getFunctionType()->getNumParams();
 	FunctionType *FTy = Fn->getFunctionType();
-#if LLVM_VERSION_MAJOR < 18
-	Type *PPInt8Ty = Type::getInt8PtrTy(Fn->getContext())->getPointerTo();
-#else
 	Type *PPInt8Ty = PointerType::get(Fn->getContext(), 0);
-#endif
 
 	// Check the argument types.
 	if (NumArgs > 3)

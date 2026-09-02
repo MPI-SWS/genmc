@@ -11,20 +11,33 @@
  *     https://opensource.org/licenses/MIT
  */
 
-#include "genmc/config.h"
-
+#include "genmc/Verification/Relinche/Specification.hpp"
 #include "genmc/ADT/BitVector.hpp"
 #include "genmc/ADT/Matrix2D.hpp"
+#include "genmc/ADT/SmallVector.hpp"
+#include "genmc/ADT/VSet.hpp"
+#include "genmc/Execution/Event.hpp"
+#include "genmc/Execution/EventLabel.hpp"
 #include "genmc/Execution/ExecutionGraph.hpp"
 #include "genmc/Support/Cast.hpp"
 #include "genmc/Support/DotPrint.hpp"
+#include "genmc/Support/Error.hpp"
+#include "genmc/Support/Logger.hpp"
+#include "genmc/Support/Verbosity.hpp"
+#include "genmc/Verification/Relinche/Linearization.hpp"
 #include "genmc/Verification/Relinche/Observation.hpp"
-#include "genmc/Verification/Relinche/Specification.hpp"
 
 #include <algorithm>
+#include <cstddef>
+#include <ios>
+#include <istream>
+#include <iterator>
+#include <limits>
+#include <ostream>
 #include <queue>
 #include <ranges>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -47,11 +60,11 @@ auto Specification::lookupSync(const Observation &obs) const -> const Specificat
 	ERROR("Observation not found!");
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
 void Specification::addHints(const Observation &obs, std::vector<Hint> &&newHints)
 {
 	auto &hints = lookupSyncOrInsert(obs).hints;
-	for (auto &hint : newHints)
-		hints.emplace_back(std::move(hint));
+	std::ranges::move(newHints, std::back_inserter(hints));
 }
 
 auto Specification::isRefinedBy(const Observation &obs) const -> bool
@@ -85,6 +98,7 @@ auto Specification::refinementMissingEdges(const Observation &obs) const
 	return res;
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
 void Specification::merge(Specification &&other)
 {
 	for (auto &it : other.data_) {
@@ -252,7 +266,7 @@ void Specification::add(ExecutionGraph &g, const ConsistencyChecker *consChecker
 
 auto operator<<(std::ostream &os, const Hint &hint) -> std::ostream &
 {
-	for (auto const &e : hint.edges)
+	for (const auto &e : hint.edges)
 		printDotEdge(os, e);
 	os << "\n";
 	return os;
@@ -271,8 +285,8 @@ public:
 		ExtEvent dst;
 		genmc::BitVector contradictingLins; // whether the edge kill i-th lin
 
-		ExtEdge(MethodCall::Id from, MethodCall::Id to)
-			: src(toEndExtEvent(from)), dst(toBeginExtEvent(to))
+		ExtEdge(MethodCall::Id from, MethodCall::Id toId)
+			: src(toEndExtEvent(from)), dst(toBeginExtEvent(toId))
 		{}
 
 		[[nodiscard]] auto operator==(const ExtEdge &other) const -> bool
@@ -305,15 +319,15 @@ public:
 	}
 
 	/* Whether (a, b) \in EXT u HB  */
-	[[nodiscard]] auto areHbOrdered(ExtEvent a, ExtEvent b) const -> bool
+	[[nodiscard]] auto areHbOrdered(ExtEvent lhs, ExtEvent rhs) const -> bool
 	{
-		return hbext_(a, b);
+		return hbext_(lhs, rhs);
 	}
 
 	/* Whether (a, b) \in (EXT u HB)? */
-	[[nodiscard]] auto areHbOptOrdered(ExtEvent a, ExtEvent b) const -> bool
+	[[nodiscard]] auto areHbOptOrdered(ExtEvent lhs, ExtEvent rhs) const -> bool
 	{
-		return a == b || areHbOrdered(a, b);
+		return lhs == rhs || areHbOrdered(lhs, rhs);
 	}
 
 	/* Whether (a, b) or (b, a) \in EXT u HB */
@@ -387,7 +401,7 @@ private:
 	}
 
 	/* Extension edges */
-	genmc::SmallVector<const ExtEdge *, 8> ext_;
+	genmc::SmallVector<const ExtEdge *, 8> ext_; // NOLINT(*-magic-numbers)
 
 	/* transitive closure of extended happens-before: (hb u ext)+ */
 	Matrix2D<unsigned int> hbext_;
@@ -427,6 +441,7 @@ static auto calculateEdgePool(const Observation &obs, const VSet<Linearization> 
 				continue; // avoid edges that coincide or contradict HB
 
 			for (const auto &lin : lins)
+				// NOLINTNEXTLINE(readability-suspicious-call-argument)
 				edge.contradictingLins.push_back(lin.isBefore(id2, id1));
 
 			result.push_back(std::move(edge));
@@ -461,7 +476,7 @@ auto Specification::calculateObservationHints(const Observation &obs) const -> s
 		auto begin = ext.size() == 0
 				     ? edgePool.begin()
 				     : ++std::ranges::find(edgePool, *ext.getLastAddedEdge());
-		for (auto const &newEdge :
+		for (const auto &newEdge :
 		     std::ranges::subrange(begin, edgePool.end()) | std::views::reverse) {
 			/* Should we consider this edge? */
 			if (ext.areConnected(newEdge))
@@ -497,11 +512,12 @@ auto Specification::calculateObservationHints(const Observation &obs) const -> s
 	for (const auto &ext : extensions)
 		result.emplace_back(ext.toHint());
 
-	GENMC_DEBUG(if (debug) LOG(
-			    VerbosityLevel::Tip,
-			    "Stats: #calls: {}, #hb: {}, #lins: {} => #extension: {}, #hints: {}",
-			    obs.getNumOps(), std::ranges::distance(obs.hb()), lins.size(),
-			    extensionsExplored, result.size()););
+	GENMC_DEBUG(if (debug) {
+		LOG(VerbosityLevel::Tip,
+		    "Stats: #calls: {}, #hb: {}, #lins: {} => #extension: {}, #hints: {}",
+		    obs.getNumOps(), std::ranges::distance(obs.hb()), lins.size(),
+		    extensionsExplored, result.size());
+	});
 	GENMC_DEBUG(extensionsExploredInTotal += extensionsExplored;);
 
 	return result;
@@ -538,7 +554,7 @@ inline static void printlnVector(std::ostream &os, const VectorT &v, FT printEle
 
 void serialize(std::ostream &os, const Specification &spec)
 {
-	auto printEdge = [&](auto const &edge) {
+	auto printEdge = [&](const auto &edge) {
 		os << std::format("{} {}", edge.first, edge.second);
 	};
 	auto printOpCall = [&os](auto &call) {
@@ -553,7 +569,8 @@ void serialize(std::ostream &os, const Specification &spec)
 	os << "# Observations:\n";
 	std::vector<Observation> v;
 	std::ranges::copy(spec.observations(), std::back_inserter(v));
-	std::ranges::sort(v, [](const Observation &a, const Observation &b) { return a < b; });
+	std::ranges::sort(v,
+			  [](const Observation &lhs, const Observation &rhs) { return lhs < rhs; });
 	for (const auto &obs : v) {
 		os << "## Observation (Lins: " << spec.lookupSync(obs).lins.size() << "):\n";
 		os << "## Outcome:\n";
@@ -565,7 +582,7 @@ void serialize(std::ostream &os, const Specification &spec)
 		os << "## Hints:\n";
 		printlnVector(
 			os, spec.lookupSync(obs).hints,
-			[&](auto const &hint) { printlnVector(os, hint.edges, printEdge); },
+			[&](const auto &hint) { printlnVector(os, hint.edges, printEdge); },
 			/*sep=*/"", /*sizeSep=*/"\n");
 	}
 }
@@ -574,7 +591,7 @@ void serialize(std::ostream &os, const Specification &spec)
 template <typename T, typename FT>
 inline static void readVector(std::istream &is, std::vector<T> &v, FT readElem)
 {
-	size_t v_size;
+	size_t v_size = 0;
 	if (!(is >> v_size))
 		return;
 	v.resize(v_size);
@@ -606,9 +623,7 @@ auto deserialize(std::istream &is) -> Specification
 
 	Specification result;
 
-	auto i = 0U;
 	while (!is.eof()) {
-		++i;
 		Observation obs;
 
 		std::vector<MethodCall> ops; // ### Outcome

@@ -12,31 +12,46 @@
  */
 
 #include "LLVMUtils.hpp"
+#include "genmc/ADT/VSet.hpp"
+#include "genmc/Support/ActionEnums.hpp"
+#include "passes/InternalFunctions.hpp"
+
+#include <llvm/ADT/STLFunctionalExtras.h>
+#include <llvm/ADT/SmallPtrSet.h>
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/Constant.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Dominators.h>
+#include <llvm/IR/GlobalValue.h>
+#include <llvm/IR/InstrTypes.h>
+#include <llvm/IR/Instructions.h>
 #include <llvm/IR/ValueHandle.h>
+#include <llvm/Support/AtomicOrdering.h>
+#include <llvm/Support/Casting.h>
 
-#include <unordered_set>
+#include <cstdint>
+#include <string>
 
 using namespace llvm;
 
-bool areSameLoadOrdering(AtomicOrdering o1, AtomicOrdering o2)
+auto areSameLoadOrdering(AtomicOrdering ord1, AtomicOrdering ord2) -> bool
 {
-	return o1 == o2 ||
-	       (o1 == AtomicOrdering::Acquire && o2 == AtomicOrdering::AcquireRelease) ||
-	       (o1 == AtomicOrdering::AcquireRelease && o2 == AtomicOrdering::Acquire) ||
-	       (o1 == AtomicOrdering::Monotonic && o2 == AtomicOrdering::Release) ||
-	       (o1 == AtomicOrdering::Release && o2 == AtomicOrdering::Monotonic);
+	return ord1 == ord2 ||
+	       (ord1 == AtomicOrdering::Acquire && ord2 == AtomicOrdering::AcquireRelease) ||
+	       (ord1 == AtomicOrdering::AcquireRelease && ord2 == AtomicOrdering::Acquire) ||
+	       (ord1 == AtomicOrdering::Monotonic && ord2 == AtomicOrdering::Release) ||
+	       (ord1 == AtomicOrdering::Release && ord2 == AtomicOrdering::Monotonic);
 }
 
-Value *stripCasts(Value *val)
+auto stripCasts(Value *val) -> Value *
 {
 	while (isa<CastInst>(val))
 		val = dyn_cast<CastInst>(val)->getOperand(0);
 	return val;
 }
 
-Value *stripCastsGEPs(Value *val)
+auto stripCastsGEPs(Value *val) -> Value *
 {
 	while (true) {
 		if (auto *ci = dyn_cast<CastInst>(val))
@@ -49,7 +64,7 @@ Value *stripCastsGEPs(Value *val)
 	return val;
 }
 
-Value *getNonConstantOp(const Instruction *i)
+static auto getNonConstantOp(const Instruction *i) -> Value *
 {
 	if (isa<Constant>(i->getOperand(1)))
 		return i->getOperand(0);
@@ -63,17 +78,18 @@ Value *getNonConstantOp(const Instruction *i)
  * returns the other operator of V.
  * If both operators of V are non-const, returns nullptr.
  */
-Value *getNonConstOpFromBinopOrCmp(const Value *v)
+static auto getNonConstOpFromBinopOrCmp(const Value *v) -> Value *
 {
-	if (auto *bop = dyn_cast<BinaryOperator>(v)) {
+	if (const auto *bop = dyn_cast<BinaryOperator>(v)) {
 		return getNonConstantOp(bop);
-	} else if (auto *cop = dyn_cast<CmpInst>(v)) {
+	}
+	if (const auto *cop = dyn_cast<CmpInst>(v)) {
 		return getNonConstantOp(cop);
 	}
 	return nullptr;
 }
 
-Value *stripCastsConstOps(Value *val)
+auto stripCastsConstOps(Value *val) -> Value *
 {
 	while (true) {
 		if (auto *ci = dyn_cast<CastInst>(val)) {
@@ -87,10 +103,11 @@ Value *stripCastsConstOps(Value *val)
 	return val;
 }
 
-std::string getCalledFunOrStripValName(const CallInst &ci)
+auto getCalledFunOrStripValName(const CallInst &ci) -> std::string
 {
 	if (auto *fun = ci.getCalledFunction())
 		return fun->getName().str();
+	// NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
 	return CallInstWrapper(const_cast<CallInst *>(&ci))
 		.getCalledOperand()
 		->stripPointerCasts()
@@ -98,29 +115,30 @@ std::string getCalledFunOrStripValName(const CallInst &ci)
 		.str();
 }
 
-bool isIntrinsicCallNoSideEffects(const Instruction &i)
+auto isIntrinsicCallNoSideEffects(const Instruction &i) -> bool
 {
-	auto *ci = dyn_cast<CallInst>(&i);
+	const auto *ci = dyn_cast<CallInst>(&i);
 	if (!ci)
 		return false;
 
 	return isCleanInternalFunction(getCalledFunOrStripValName(*ci));
 }
 
-AtomicCmpXchgInst *extractsFromCAS(ExtractValueInst *extract)
+auto extractsFromCAS(ExtractValueInst *extract) -> AtomicCmpXchgInst *
 {
 	if (!extract->getType()->isIntegerTy() || extract->getNumIndices() > 1)
 		return nullptr;
 	return dyn_cast<AtomicCmpXchgInst>(extract->getAggregateOperand());
 }
 
-bool isDependentOn(const Instruction *i1, const Instruction *i2, VSet<const Instruction *> chain)
+static auto isDependentOn(const Instruction *i1, const Instruction *i2,
+			  VSet<const Instruction *> chain) -> bool
 {
-	if (!i1 || !i2 || chain.find(i1) != chain.end())
+	if (!i1 || !i2 || chain.contains(i1))
 		return false;
 
-	for (auto &u : i1->operands()) {
-		if (auto *i = dyn_cast<Instruction>(u.get())) {
+	for (const auto &use : i1->operands()) {
+		if (auto *i = dyn_cast<Instruction>(use.get())) {
 			chain.insert(i1);
 			if (i == i2 || isDependentOn(i, i2, chain))
 				return true;
@@ -130,27 +148,29 @@ bool isDependentOn(const Instruction *i1, const Instruction *i2, VSet<const Inst
 	return false;
 }
 
-bool isDependentOn(const Instruction *i1, const Instruction *i2)
+auto isDependentOn(const Instruction *i1, const Instruction *i2) -> bool
 {
-	VSet<const Instruction *> chain;
+	const VSet<const Instruction *> chain;
 	return isDependentOn(i1, i2, chain);
 }
 
-bool hasSideEffects(const Instruction *i, const VSet<Function *> *cleanFuns /* = nullptr */)
+auto hasSideEffects(const Instruction *i, const VSet<Function *> *cleanFuns /* = nullptr */) -> bool
 {
 	if (isa<AllocaInst>(i))
 		return true;
 	if (i->mayHaveSideEffects()) {
-		if (auto *ci = dyn_cast<CallInst>(i)) {
+		if (const auto *ci = dyn_cast<CallInst>(i)) {
 			auto name = getCalledFunOrStripValName(*ci);
 			if (isInternalFunction(name))
 				return !isCleanInternalFunction(name);
 			if (!cleanFuns)
 				return true;
-			CallInstWrapper CW(const_cast<CallInst *>(ci));
-			const auto *fun =
-				dyn_cast<Function>(CW.getCalledOperand()->stripPointerCasts());
-			if (!fun || !cleanFuns->count(const_cast<Function *>(fun)))
+			// NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+			CallInstWrapper callWrapper(const_cast<CallInst *>(ci));
+			const auto *fun = dyn_cast<Function>(
+				callWrapper.getCalledOperand()->stripPointerCasts());
+			// NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+			if (!fun || !cleanFuns->contains(const_cast<Function *>(fun)))
 				return true;
 		} else if (!isa<LoadInst>(i) && !isa<FenceInst>(i)) {
 			return true;
@@ -159,22 +179,24 @@ bool hasSideEffects(const Instruction *i, const VSet<Function *> *cleanFuns /* =
 	return false;
 }
 
-bool isAlloc(const Instruction *i, const VSet<Function *> *allocFuns /* = nullptr */)
+auto isAlloc(const Instruction *i, const VSet<Function *> *allocFuns /* = nullptr */) -> bool
 {
-	auto *si = i->stripPointerCasts();
+	const auto *si = i->stripPointerCasts();
 	if (isa<AllocaInst>(si))
 		return true;
 
-	auto *ci = dyn_cast<CallInst>(si);
+	const auto *ci = dyn_cast<CallInst>(si);
 	if (!ci)
 		return false;
 
 	if (isAllocFunction(getCalledFunOrStripValName(*ci)))
 		return true;
 
-	CallInstWrapper CW(const_cast<CallInst *>(ci));
-	const auto *fun = dyn_cast<Function>(CW.getCalledOperand()->stripPointerCasts());
-	return allocFuns && allocFuns->count(const_cast<Function *>(fun));
+	// NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+	CallInstWrapper callWrapper(const_cast<CallInst *>(ci));
+	const auto *fun = dyn_cast<Function>(callWrapper.getCalledOperand()->stripPointerCasts());
+	// NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+	return allocFuns && allocFuns->contains(const_cast<Function *>(fun));
 }
 
 auto hasLoadSemantics(llvm::Instruction *I) -> bool
@@ -195,13 +217,13 @@ auto getInstKind(llvm::Instruction *I) -> ActionKind
 void annotateInstruction(llvm::Instruction *i, const std::string &type, uint64_t value)
 {
 	auto &ctx = i->getContext();
-	auto *md = i->getMetadata(type);
+	auto *metadata = i->getMetadata(type);
 
 	/* If there are already metadata, accumulate */
 	uint64_t mValue = value;
-	if (md) {
-		auto old = dyn_cast<ConstantInt>(
-				   dyn_cast<ConstantAsMetadata>(md->getOperand(0))->getValue())
+	if (metadata) {
+		auto old = cast<ConstantInt>(
+				   cast<ConstantAsMetadata>(metadata->getOperand(0))->getValue())
 				   ->getZExtValue();
 		mValue |= old;
 	}
@@ -209,10 +231,9 @@ void annotateInstruction(llvm::Instruction *i, const std::string &type, uint64_t
 	auto *node =
 		MDNode::get(ctx, ConstantAsMetadata::get(ConstantInt::get(ctx, APInt(64, mValue))));
 	i->setMetadata(type, node);
-	return;
 }
 
-BasicBlock *tryThreadSuccessor(BranchInst *term, BasicBlock *succ)
+auto tryThreadSuccessor(BranchInst *term, BasicBlock *succ) -> BasicBlock *
 {
 	auto *succTerm = dyn_cast<BranchInst>(succ->getTerminator());
 	if (!succTerm || succTerm != &*succ->begin() || succTerm->isConditional())
@@ -224,7 +245,7 @@ BasicBlock *tryThreadSuccessor(BranchInst *term, BasicBlock *succ)
 	if (isa<PHINode>(&*destBB->begin()))
 		return nullptr;
 
-	for (auto i = 0u; i < term->getNumSuccessors(); i++) {
+	for (auto i = 0U; i < term->getNumSuccessors(); i++) {
 		if (term->getSuccessor(i) == succ) {
 			term->setSuccessor(i, destBB);
 			return destBB;
@@ -242,17 +263,17 @@ void replaceUsesWithIf(Value *Old, Value *New, llvm::function_ref<bool(Use &U)> 
 	SmallVector<TrackingVH<Constant>, 8> Consts;
 	SmallPtrSet<Constant *, 8> Visited;
 
-	for (auto UI = Old->use_begin(), E = Old->use_end(); UI != E;) {
+	for (auto UI = Old->use_begin(), end = Old->use_end(); UI != end;) {
 		Use &U = *UI;
 		++UI;
 		if (!ShouldReplace(U))
 			continue;
 		// Must handle Constants specially, we cannot call replaceUsesOfWith on a
 		// constant because they are uniqued.
-		if (auto *C = dyn_cast<Constant>(U.getUser())) {
-			if (!isa<GlobalValue>(C)) {
-				if (Visited.insert(C).second)
-					Consts.push_back(TrackingVH<Constant>(C));
+		if (auto *constant = dyn_cast<Constant>(U.getUser())) {
+			if (!isa<GlobalValue>(constant)) {
+				if (Visited.insert(constant).second)
+					Consts.push_back(TrackingVH<Constant>(constant));
 				continue;
 			}
 		}

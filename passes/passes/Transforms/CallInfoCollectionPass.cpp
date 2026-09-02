@@ -12,25 +12,31 @@
  */
 
 #include "CallInfoCollectionPass.hpp"
+#include "genmc/ADT/VSet.hpp"
 #include "passes/InternalFunctions.hpp"
 #include "passes/LLVMUtils.hpp"
-#include "genmc/Support/Error.hpp"
+
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/InstIterator.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/PassManager.h>
 #include <llvm/IR/Type.h>
+#include <llvm/Support/Casting.h>
+
+#include <algorithm>
 
 using namespace llvm;
 
-auto hasSideEffects(Function *F, SmallVector<Function *, 4> &chain, VSet<Function *> &clean,
-		    VSet<Function *> &dirty) -> bool
+static auto hasSideEffects(Function *F, SmallVector<Function *, 4> &chain, VSet<Function *> &clean,
+			   VSet<Function *> &dirty) -> bool
 {
-	if (!F || dirty.count(F))
+	if (!F || dirty.contains(F))
 		return true;
-	if (clean.count(F) || std::find(chain.begin(), chain.end(), F) != chain.end())
+	if (clean.contains(F) || std::ranges::find(chain, F) != chain.end())
 		return false;
 	if (F->empty())
 		return !isCleanInternalFunction(F->getName().str());
@@ -57,13 +63,13 @@ auto hasSideEffects(Function *F, SmallVector<Function *, 4> &chain, VSet<Functio
 	return false;
 }
 
-auto hasSideEffects(Function *F, VSet<Function *> &clean, VSet<Function *> &dirty) -> bool
+static auto hasSideEffects(Function *F, VSet<Function *> &clean, VSet<Function *> &dirty) -> bool
 {
 	SmallVector<Function *, 4> chain;
 	return hasSideEffects(F, chain, clean, dirty);
 }
 
-auto isAllocating(Function *F) -> bool
+static auto isAllocating(Function *F) -> bool
 {
 	if (!F->getReturnType()->isPointerTy())
 		return false;
@@ -75,13 +81,13 @@ auto isAllocating(Function *F) -> bool
 						    rets.push_back(ri);
 		      });
 
-	return std::all_of(rets.begin(), rets.end(), [](const ReturnInst *ri) {
+	return std::ranges::all_of(rets, [](const ReturnInst *ri) {
 		auto *rv = ri->getReturnValue();
 		return isa<Instruction>(rv) && isAlloc(dyn_cast<Instruction>(rv));
 	});
 }
 
-auto CallAnalysis::run(Module &M, ModuleAnalysisManager &MAM) -> Result
+auto CallAnalysis::run(Module &M, ModuleAnalysisManager & /*MAM*/) -> Result
 {
 	VSet<Function *> dirty;
 

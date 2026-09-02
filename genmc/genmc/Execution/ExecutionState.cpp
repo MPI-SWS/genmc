@@ -12,32 +12,54 @@
  */
 
 #include "genmc/Execution/ExecutionState.hpp"
+#include "genmc/ADT/AdaptiveView.hpp"
+#include "genmc/ADT/IntervalMap.hpp"
+#include "genmc/ADT/IntervalSet.hpp"
+#include "genmc/Execution/Event.hpp"
+#include "genmc/Support/ASize.hpp"
+#include "genmc/Support/ActionEnums.hpp"
+#include "genmc/Support/Error.hpp"
+#include "genmc/Support/MemAccess.hpp"
+#include "genmc/Support/SAddr.hpp"
+#include "genmc/Support/SVal.hpp"
+#include "genmc/config.h"
+
+#include <algorithm>
+#include <climits>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <optional>
+#include <span>
+#include <utility>
+#include <vector>
 
 using namespace genmc;
 
-namespace {
+/* Mask selecting the least-significant byte of an integer value */
+static constexpr uint64_t BYTE_MASK = 0xFF;
+
 /* Helper to create right-open intervals [addr, addr + size) */
-auto makeInterval(const AAccess &access) -> Interval<SAddr>
+static auto makeInterval(const AAccess &access) -> Interval<SAddr>
 {
 	return {access.addr, access.addr + access.size};
 }
 
 /* Helper to fetch the view matching ACCESS from a map M */
-auto getMaxView(const ExecutionState::AdaptiveViewMap &m, const AAccess &access) -> AdaptiveView
+static auto getMaxView(const ExecutionState::AdaptiveViewMap &viewMap, const AAccess &access)
+	-> AdaptiveView
 {
 	AdaptiveView result;
 
 	auto interval = makeInterval(access);
-	auto it = m.lower_bound(interval);
-	auto ie = m.upper_bound(interval);
+	auto it = viewMap.lower_bound(interval);
+	auto ie = viewMap.upper_bound(interval);
 	while (it != ie) {
 		result.join(it->second);
 		++it;
 	}
 	return result;
 }
-
-}; // namespace
 
 auto ExecutionState::addStaticRange(ASize size, uint64_t alignment, bool persistent, bool internal)
 	-> SAddr
@@ -54,11 +76,11 @@ auto ExecutionState::readStaticInitValue(const AAccess &access) const -> SVal
 	auto it = staticInitData_.find(access.addr);
 	VERIFY(it != staticInitData_.end());
 	auto entry = *it;
-	auto offset = access.addr - entry.first.start;
-	const uint8_t *bytes = entry.second.ptr + offset;
+	auto offset = static_cast<size_t>(access.addr - entry.first.start);
+	const std::span<const uint8_t> bytes{entry.second.ptr, offset + access.size.get()};
 	uint64_t val = 0;
 	for (unsigned i = 0; i < access.size.get(); i++)
-		val |= static_cast<uint64_t>(bytes[i]) << (i * 8);
+		val |= static_cast<uint64_t>(bytes[offset + i]) << (i * CHAR_BIT);
 	return SVal(val);
 }
 #endif
@@ -102,16 +124,13 @@ void ExecutionState::clear()
  * State queries
  ************************************************************/
 
-auto ExecutionState::isAllocated(SAddr addr) const -> bool
-{
-	return allocInfoMap_.find(addr) != allocInfoMap_.end();
-}
+auto ExecutionState::isAllocated(SAddr addr) const -> bool { return allocInfoMap_.contains(addr); }
 
 auto ExecutionState::isStatic(SAddr addr) const -> bool
 {
-	auto p = std::make_pair(addr, addr);
-	auto it = std::lower_bound(
-		staticRanges_.begin(), staticRanges_.end(), p,
+	auto addrRange = std::make_pair(addr, addr);
+	auto it = std::ranges::lower_bound(
+		staticRanges_, addrRange,
 		[](const auto &itV, const auto &v) { return itV.second < v.first; });
 	return it != staticRanges_.end() && addr >= it->first && addr <= it->second;
 }
@@ -126,19 +145,21 @@ auto ExecutionState::isAtomicAccessConsistent(const AAccess &access) const -> bo
 {
 	auto iv = makeInterval(access);
 
-	/* Check Writes */
-	if (auto it = lastAWriteView_.find(iv); it != lastAWriteView_.end()) {
-		if (first(it->first) != access.addr || length(it->first) != access.size)
-			return false;
-	}
+	/* Overlapping atomic accesses have to have the same size. Inspect
+	 * *all* overlapping segments: a wide access can span several narrower
+	 * ones (e.g. a 16-bit access over two 8-bit ones), which find() misses
+	 * because no single segment fully contains it. */
+	auto allSegmentsMatch = [&](const auto &accessMap) {
+		auto it = accessMap.lower_bound(iv);
+		auto ie = accessMap.upper_bound(iv);
+		for (; it != ie; ++it) {
+			if (first(it->first) != access.addr || length(it->first) != access.size)
+				return false;
+		}
+		return true;
+	};
 
-	/* Check Reads */
-	if (auto it = lastAReadView_.find(iv); it != lastAReadView_.end()) {
-		if (first(it->first) != access.addr || length(it->first) != access.size)
-			return false;
-	}
-
-	return true;
+	return allSegmentsMatch(lastAWriteView_) && allSegmentsMatch(lastAReadView_);
 }
 
 auto ExecutionState::isFreed(SAddr addr) const -> bool
@@ -150,8 +171,7 @@ auto ExecutionState::isFreed(SAddr addr) const -> bool
 auto ExecutionState::isRetired(SAddr addr) const -> bool
 {
 	auto it = allocInfoMap_.find(addr);
-	return it != allocInfoMap_.end() && it->second.freePos.has_value() &&
-	       it->second.isRetire;
+	return it != allocInfoMap_.end() && it->second.freePos.has_value() && it->second.isRetire;
 }
 
 auto ExecutionState::getAllocPos(SAddr addr) const -> Event
@@ -233,17 +253,18 @@ auto ExecutionState::getNAWriteValue(const AAccess &access) const -> SVal
 {
 	uint64_t res = 0;
 	std::vector<uint64_t> provenances;
-	for (auto i = 0u; i < access.size; ++i) {
+	for (auto i = 0U; i < access.size; ++i) {
 		auto it = lastNAWriteVal_.find(access.addr + i);
 		VERIFY(it != lastNAWriteVal_.end());
-		res |= (it->second.value().get() & 0xFF) << (i * 8);
+		res |= (it->second.value().get() & BYTE_MASK) << (i * CHAR_BIT);
 		provenances.push_back(it->second.value().getProvenance());
 	}
-	uint64_t provenance =
-		std::ranges::adjacent_find(provenances, std::not_equal_to{}) == provenances.end()
-			? (provenances.empty() ? 0 : provenances.front())
-			: 0;
-	return SVal(res, provenance);
+	const bool allSameProvenance =
+		std::ranges::adjacent_find(provenances, std::not_equal_to{}) == provenances.end();
+	uint64_t provenance = 0;
+	if (allSameProvenance && !provenances.empty())
+		provenance = provenances.front();
+	return {res, provenance};
 }
 
 auto ExecutionState::getAtomicWriteInfo(SAddr addr) const -> std::optional<std::pair<SAddr, SAddr>>
@@ -264,14 +285,14 @@ auto ExecutionState::reconstructMemValue(const AAccess &access, const View &atom
 	/* Slowpath: reconstruct byte-by-byte */
 	auto res = atomicVal;
 	std::vector<uint64_t> provenances;
-	for (auto i = 0u; i < access.size; ++i) {
+	for (auto i = 0U; i < access.size; ++i) {
 		/* If the atomic view knows about the last NA write to this byte, skip */
 		if (atomicView.contains(getMaxNAWriteEvent({access.addr + i, 1})))
 			continue;
 
 		/* Otherwise, overwrite this byte */
-		res &= SVal(~(0xFFULL << (i * 8))); /* mask */
-		SVal byteVal = getNAWriteValue({access.addr + i, 1}) << SVal(i * 8);
+		res &= SVal(~(BYTE_MASK << (i * CHAR_BIT))); /* mask */
+		const SVal byteVal = getNAWriteValue({access.addr + i, 1}) << SVal(i * CHAR_BIT);
 		res |= byteVal; /* byte val */
 		provenances.push_back(byteVal.getProvenance());
 	}
@@ -315,12 +336,12 @@ auto ExecutionState::isProtected(const AAccess &access) const -> bool
 	return lastUncovered >= access.addr + access.size;
 }
 
-void ExecutionState::recordMemAccess(AdaptiveViewMap &m, const AAccess &access, Event pos,
+void ExecutionState::recordMemAccess(AdaptiveViewMap &accessMap, const AAccess &access, Event pos,
 				     const View &view)
 {
 	auto interval = makeInterval(access);
 
-	m.add(std::make_pair(interval, AdaptiveView(pos, view)));
+	accessMap.add(std::make_pair(interval, AdaptiveView(pos, view)));
 	lastMemAccess_.updateIdx(pos);
 	if (!isProtected(access))
 		lastUnprotectedAccess_.add(std::make_pair(interval, AdaptiveView(pos, view)));
@@ -386,9 +407,9 @@ auto ExecutionState::onAlloc(Event pos, ASize size, uint64_t alignment, StorageD
 			     StorageType styp, AddressSpace spc) -> SAddr
 {
 	auto addr = getFreshAddr(pos.thread, size, alignment, sdur, styp, spc, getAllocator());
-	AAccess access(addr, size);
+	const AAccess access(addr, size);
 
-	VERIFY(allocInfoMap_.find(access.addr) == allocInfoMap_.end());
+	VERIFY(!allocInfoMap_.contains(access.addr));
 	allocInfoMap_.add({{access.addr, access.addr + access.size},
 			   {pos, access, static_cast<unsigned int>(alignment)}});
 	return addr;
@@ -509,7 +530,7 @@ void ExecutionState::markInitialized(const AAccess &access, Event pos, const Vie
 	}
 
 	if (!is_empty(uninitParts)) {
-		AdaptiveView initView(pos, view);
+		const AdaptiveView initView(pos, view);
 		for (const auto &iv : uninitParts)
 			initialized_.add(iv, initView);
 	}
@@ -553,9 +574,9 @@ void ExecutionState::onFence(Event pos, bool isRelease)
 /* Use of this assumes NA labels are not in the graph */
 void ExecutionState::onDeferredValueUpdate(const AAccess &access, SVal val)
 {
-	for (auto i = 0u; i < access.size; ++i) {
+	for (auto i = 0U; i < access.size; ++i) {
 		/* Extract the i-th byte from the val */
-		SVal byteVal = (val >> SVal(i * 8)) & SVal(0xFF);
+		const SVal byteVal = (val >> SVal(i * 8)) & SVal(0xFF);
 		/* NOTE: This can be slow (per-byte) */
 		auto it = lastIsNA_.find(access.addr + i);
 		VERIFY(it != lastIsNA_.end());

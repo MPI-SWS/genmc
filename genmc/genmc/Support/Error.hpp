@@ -64,7 +64,7 @@ namespace genmc::detail {
 #define ERROR(fmt, ...)                                                                            \
 	({                                                                                         \
 		LOG(VerbosityLevel::Error, fmt, ##__VA_ARGS__);                                    \
-		exit(EUSER);                                                                       \
+		exit(EUSER); /* NOLINT(concurrency-mt-unsafe) */                                   \
 	})
 
 #define ERROR_ON(condition, fmt, ...)                                                              \
@@ -79,7 +79,7 @@ namespace genmc::detail {
 	do {                                                                                       \
 		if (!(condition)) [[unlikely]]                                                     \
 			genmc::detail::report_internal_error(                                      \
-				"Internal check failed: " #condition __VA_OPT__(": " __VA_ARGS__),          \
+				"Internal check failed: " #condition __VA_OPT__(": " __VA_ARGS__), \
 				std::source_location::current());                                  \
 	} while (0)
 
@@ -137,9 +137,9 @@ inline void handleFSError(std::error_code const &err, std::string const &details
 template <typename T1, typename T2> struct std::formatter<std::pair<T1, T2>> {
 	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
 
-	auto format(const std::pair<T1, T2> &p, std::format_context &ctx) const
+	auto format(const std::pair<T1, T2> &val, std::format_context &ctx) const
 	{
-		return std::format_to(ctx.out(), "({}, {})", p.first, p.second);
+		return std::format_to(ctx.out(), "({}, {})", val.first, val.second);
 	}
 };
 
@@ -156,10 +156,10 @@ requires std::ranges::range<Container> && (!std::is_array_v<Container>) &&
 struct std::formatter<Container> {
 	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
 
-	auto format(const Container &c, std::format_context &ctx) const
+	auto format(const Container &container, std::format_context &ctx) const
 	{
 		auto out = std::format_to(ctx.out(), "[ ");
-		for (const auto &elem : c) {
+		for (const auto &elem : container) {
 			out = std::format_to(out, "{} ", elem);
 		}
 		return std::format_to(out, "]");
@@ -173,10 +173,10 @@ requires std::ranges::range<Container> && (!std::is_array_v<Container>) &&
 struct std::formatter<Container> {
 	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
 
-	auto format(const Container &c, std::format_context &ctx) const
+	auto format(const Container &container, std::format_context &ctx) const
 	{
 		auto out = std::format_to(ctx.out(), "[ ");
-		for (const auto *lab : c) {
+		for (const auto *lab : container) {
 			if (lab)
 				out = std::format_to(out, "{} ", *lab);
 			else

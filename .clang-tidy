@@ -1,9 +1,13 @@
 Checks: |
   -*,
   clang-analyzer-*,
-  clang-diagnostic-*,
+  # We only use gcc's warnings (e.g., with GENMC_WERROR); clang produces a different set
+  -clang-diagnostic-*,
   concurrency-*,
   cppcoreguidelines-*,
+  -cppcoreguidelines-avoid-do-while,
+  # FPs due to X-macros and many others cannot be constexpr
+  -cppcoreguidelines-macro-usage,
   llvm-*,
   -llvmlibc-restrict-system-libc-headers,
   -llvm-header-guard,
@@ -13,6 +17,9 @@ Checks: |
   -misc-use-anonymous-namespace,
   readability-*,
   -readability-braces-around-statements,
+  # FPs for formatters and siblings of non-statics
+  -readability-convert-member-functions-to-static,
+  -readability-implicit-bool-conversion,
   modernize-*,
   performance-*,
 CheckOptions:
@@ -20,11 +27,14 @@ CheckOptions:
   value: true
 - key: readability-function-cognitive-complexity.IgnoreMacros
   value: true
-- key: cppcoreguidelines-avoid-do-while.IgnoreMacros
+  # due to VERIFY/ASSERT/ERROR_ON wrapping their argument in `if`
+- key: readability-simplify-boolean-expr.IgnoreMacros
   value: true
 - key: readability-identifier-length.IgnoredVariableNames
-  value: 'i|g|e|EE|l|r|s|w|f|b|br|v|hb'
+  value: 'i|j|g|e|l|r|s|w|f|br|v|rf|co|hb|op'
 - key: readability-identifier-length.IgnoredLoopCounterNames
-  value: 'i|j|k|g|e|EE|l|r|s|w|f|b|br|v|hb'
+  value: 'i|j|k|g|e|l|r|s|w|f|br|v|hb|op'
 - key: readability-identifier-length.IgnoredParameterNames
-  value: 'i|g|e|EE|l|r|s|w|f|b|br|v|hb'
+  value: 'i|j|K|g|e|l|r|s|w|f|br|v|hb|op'
+- key: modernize-use-trailing-return-type.TransformLambdas
+  value: 'none'

@@ -37,6 +37,7 @@
 #include <format>
 #include <optional>
 #include <ranges>
+#include <utility>
 
 class ReadLabel;
 class MallocLabel;
@@ -51,11 +52,15 @@ template <typename T, typename Tag = void> class CopyableIList : public genmc::i
 
 public:
 	CopyableIList() = default;
-	CopyableIList(const CopyableIList &other) : BaseT(BaseT()) {}
+	CopyableIList(const CopyableIList & /*other*/) : BaseT(BaseT()) {}
 	CopyableIList(CopyableIList &&other) = default;
 
-	CopyableIList &operator=(const CopyableIList &other) { *this = std::move(BaseT()); }
-	CopyableIList &operator=(CopyableIList &&other) = default;
+	auto operator=(const CopyableIList & /*other*/) -> CopyableIList &
+	{
+		*this = std::move(BaseT());
+	}
+	auto operator=(CopyableIList &&other) -> CopyableIList & = default;
+	~CopyableIList() = default;
 };
 
 /*******************************************************************************
@@ -72,13 +77,15 @@ struct io_tag {};
  * getter methods are private. One can obtain information about such relations
  * by querying the execution graph.
  */
+// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class EventLabel : public genmc::ilist_node<EventLabel, io_tag>,
 		   public genmc::ilist_node<EventLabel, po_tag> {
 
 public:
 	/* Discriminator for LLVM-style RTTI (dyn_cast<> et al).
 	 * It is public to allow clients perform a switch() on it */
-	enum EventLabelKind {
+	// NOLINTNEXTLINE(cppcoreguidelines-use-enum-class,readability-enum-initial-value)
+	enum EventLabelKind : std::uint8_t {
 #define HANDLE_LABEL(NAME) NAME,
 #include "genmc/Execution/EventLabel.def"
 #define FIRST_LABEL(NAME, ARG) FIRST_##NAME = ARG,
@@ -87,8 +94,8 @@ public:
 	};
 
 protected:
-	EventLabel(EventLabelKind k, Event p, MemOrdering o, const EventDeps &deps = EventDeps())
-		: kind(k), position(p), ordering(o), deps(deps)
+	EventLabel(EventLabelKind kind, Event pos, MemOrdering ord, EventDeps deps = EventDeps())
+		: kind(kind), position(pos), ordering(ord), deps(std::move(deps))
 	{}
 
 public:
@@ -100,35 +107,35 @@ public:
 	auto ctrl() const { return std::views::all(deps.ctrl); }
 
 	/** Returns the discriminator of this object */
-	EventLabelKind getKind() const { return kind; }
+	auto getKind() const -> EventLabelKind { return kind; }
 
 	/** Returns the parent graph of this label */
-	const ExecutionGraph *getParent() const { return parent; }
-	ExecutionGraph *getParent() { return parent; }
+	auto getParent() const -> const ExecutionGraph * { return parent; }
+	auto getParent() -> ExecutionGraph * { return parent; }
 
 	/** Sets the parent graph for this label */
 	void setParent(ExecutionGraph *graph) { parent = graph; }
 
 	/** Returns the position in the execution graph (thread, index) */
-	Event getPos() const { return position; }
+	auto getPos() const -> Event { return position; }
 
 	/** Sets the position of the event */
 	void setPos(Event pos) { position = pos; }
 
 	/** Returns the index of this label within a thread */
-	int getIndex() const { return position.index; }
+	auto getIndex() const -> int { return position.index; }
 
 	/** Returns the thread of this label in the execution graph */
-	int getThread() const { return position.thread; }
+	auto getThread() const -> int { return position.thread; }
 
 	/** Getter for the label ordering */
-	MemOrdering getOrdering() const { return ordering; }
+	auto getOrdering() const -> MemOrdering { return ordering; }
 
 	/** Setter for the label ordering */
 	void setOrdering(MemOrdering ord) { ordering = ord; }
 
 	/** Returns this label's dependencies */
-	const EventDeps &getDeps() const { return deps; }
+	auto getDeps() const -> const EventDeps & { return deps; }
 
 	/** Sets this label's dependencies */
 	void setDeps(const EventDeps &ds) { deps = ds; }
@@ -136,10 +143,10 @@ public:
 	void setDeps(EventDeps &&ds) { deps = std::move(ds); }
 
 	/** Returns whether a stamp has been assigned for this label */
-	bool hasStamp() const { return stamp.has_value(); }
+	auto hasStamp() const -> bool { return stamp.has_value(); }
 
 	/** Returns the stamp of the label in a graph */
-	Stamp getStamp() const
+	auto getStamp() const -> Stamp
 	{
 #ifdef ENABLE_GENMC_DEBUG
 		return stamp.value();
@@ -148,15 +155,15 @@ public:
 #endif
 	}
 
-	bool hasPrefixView() const { return prefixView.get() != nullptr; }
-	const VectorClock &getPrefixView() const { return *prefixView; }
-	VectorClock &getPrefixView() { return *prefixView; }
+	auto hasPrefixView() const -> bool { return prefixView.get() != nullptr; }
+	auto getPrefixView() const -> const VectorClock & { return *prefixView; }
+	auto getPrefixView() -> VectorClock & { return *prefixView; }
 	void setPrefixView(std::unique_ptr<VectorClock> v) const { prefixView = std::move(v); }
 
 	void setCalculated(std::vector<VSet<Event>> &&calc) { calculatedRels = std::move(calc); }
 
 	void setViews(std::vector<View> &&views) { calculatedViews = std::move(views); }
-	void addView(View &&view) { calculatedViews.emplace_back(view); }
+	void addView(View &&view) { calculatedViews.emplace_back(std::move(view)); }
 
 	/** Iterators for calculated relations */
 	auto calculated(size_t i) const
@@ -167,7 +174,7 @@ public:
 	}
 
 	/** Getters for calculated views */
-	const View &view(size_t i) const
+	auto view(size_t i) const -> const View &
 	{
 		return (getPos().isInitializer() || getKind() == Empty) ? calculatedViews[0]
 									: calculatedViews[i];
@@ -177,57 +184,57 @@ public:
 	auto views() const { return std::views::all(calculatedViews); }
 
 	/** Returns true if this label corresponds to a non-atomic access */
-	bool isNotAtomic() const { return ordering == MemOrdering::NotAtomic; }
+	auto isNotAtomic() const -> bool { return ordering == MemOrdering::NotAtomic; }
 
 	/** Returns true if the ordering of this access is acquire or stronger */
-	bool isAtLeastAcquire() const
+	auto isAtLeastAcquire() const -> bool
 	{
 		return isAtLeastOrStrongerThan(ordering, MemOrdering::Acquire);
 	}
 
 	/** Returns true if the ordering of this access is release or stronger */
-	bool isAtLeastRelease() const
+	auto isAtLeastRelease() const -> bool
 	{
 		return isAtLeastOrStrongerThan(ordering, MemOrdering::Release);
 	}
 
 	/** Returns true if this is a sequentially consistent access */
-	bool isSC() const { return ordering == MemOrdering::SequentiallyConsistent; }
+	auto isSC() const -> bool { return ordering == MemOrdering::SequentiallyConsistent; }
 
 	/** Whether this label can have outgoing dep edges */
-	bool isDependable() const { return isDependable(getKind()); }
+	auto isDependable() const -> bool { return isDependable(getKind()); }
 
 	/** Whether this label returns a value */
-	bool returnsValue() const { return returnsValue(getKind()); }
+	auto returnsValue() const -> bool { return returnsValue(getKind()); }
 
 	/** Returns the value returned by the label */
-	SVal getReturnValue() const;
+	auto getReturnValue() const -> SVal;
 
 	/** Returns whether this label accesses some value */
-	bool accessesValue() const { return accessesValue(getKind()); }
+	auto accessesValue() const -> bool { return accessesValue(getKind()); }
 
 	/** Returns the value from memory the label accesses.
 	 * (The label needs to be a memory access.) */
-	SVal getAccessValue(const AAccess &access) const;
+	auto getAccessValue(const AAccess &access) const -> SVal;
 
 	/** Whether this label has a location */
-	bool hasLocation() const { return hasLocation(getKind()); }
+	auto hasLocation() const -> bool { return hasLocation(getKind()); }
 
 	/** Returns true if this event can be revisited */
-	bool isRevisitable() const { return revisitable; }
+	auto isRevisitable() const -> bool { return revisitable; }
 
 	/** Makes the relevant event revisitable/non-revisitable. The
 	 * execution graph is responsible for making such changes */
 	void setRevisitStatus(bool status) { revisitable = status; }
 
 	/** Returns true if this event cannot be revisited or deleted */
-	bool isStable() const;
+	auto isStable() const -> bool;
 
 	/** Necessary for multiple inheritance + LLVM-style RTTI to work */
-	static bool classofKind(EventLabelKind K) { return true; }
+	static auto classofKind(EventLabelKind /*K*/) -> bool { return true; }
 
 	/** Returns a clone object (virtual to allow deep copying from base) */
-	virtual std::unique_ptr<EventLabel> clone() const = 0;
+	virtual auto clone() const -> std::unique_ptr<EventLabel> = 0;
 
 	/** Resets all graph-related info on a label to their default values */
 	virtual void reset()
@@ -244,15 +251,15 @@ private:
 	friend class ExecutionGraph;
 	friend class DepExecutionGraph;
 
-	static inline bool isDependable(EventLabelKind k);
-	static inline bool returnsValue(EventLabelKind k);
-	static inline bool accessesValue(EventLabelKind k);
-	static inline bool hasLocation(EventLabelKind k);
+	static inline auto isDependable(EventLabelKind kind) -> bool;
+	static inline auto returnsValue(EventLabelKind kind) -> bool;
+	static inline auto accessesValue(EventLabelKind kind) -> bool;
+	static inline auto hasLocation(EventLabelKind kind) -> bool;
 
-	void setStamp(Stamp s) { stamp = s; }
+	void setStamp(std::optional<Stamp> s) { stamp = s; }
 
 	/** Discriminator enum for LLVM-style RTTI */
-	const EventLabelKind kind;
+	const EventLabelKind kind; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 
 	ExecutionGraph *parent{};
 
@@ -281,12 +288,13 @@ private:
 };
 
 #define DEFINE_CREATE_CLONE(name)                                                                  \
-	template <typename... Ts> static std::unique_ptr<name##Label> create(Ts &&...params)       \
+	template <typename... Ts>                                                                  \
+	static auto create(Ts &&...params) -> std::unique_ptr<name##Label>                         \
 	{                                                                                          \
 		return std::make_unique<name##Label>(std::forward<Ts>(params)...);                 \
 	}                                                                                          \
                                                                                                    \
-	std::unique_ptr<EventLabel> clone() const override                                         \
+	auto clone() const -> std::unique_ptr<EventLabel> override                                 \
 	{                                                                                          \
 		return std::make_unique<name##Label>(*this);                                       \
 	}
@@ -294,12 +302,15 @@ private:
 #define DEFINE_STANDARD_MEMBERS(name)                                                              \
 	DEFINE_CREATE_CLONE(name)                                                                  \
                                                                                                    \
-	static bool classof(const EventLabel *lab) { return classofKind(lab->getKind()); }         \
-	static bool classofKind(EventLabelKind k) { return k == name; }
+	static auto classof(const EventLabel *lab) -> bool { return classofKind(lab->getKind()); } \
+	static auto classofKind(EventLabelKind kind) -> bool { return kind == name; }
 
 #define DEFINE_CLASSOF_RANGE(name)                                                                 \
-	static bool classof(const EventLabel *lab) { return classofKind(lab->getKind()); }         \
-	static bool classofKind(EventLabelKind k) { return k >= FIRST_##name && k <= LAST_##name; }
+	static auto classof(const EventLabel *lab) -> bool { return classofKind(lab->getKind()); } \
+	static auto classofKind(EventLabelKind kind) -> bool                                       \
+	{                                                                                          \
+		return kind >= FIRST_##name && kind <= LAST_##name;                                \
+	}
 
 #define DEFINE_STANDARD_MEMBERS_RANGE(name)                                                        \
 	DEFINE_CREATE_CLONE(name)                                                                  \
@@ -324,11 +335,12 @@ public:
 	ThreadStartLabel(Event pos, MemOrdering ord, Event createId, ThreadCreateLabel *createLab,
 			 ThreadInfo tinfo, int symmPred = -1)
 		: EventLabel(ThreadStart, pos, ord, EventDeps()), createId_(createId),
-		  createLab_(createLab), threadInfo(tinfo), symmPredTid(symmPred)
+		  createLab_(createLab), threadInfo(std::move(tinfo)), symmPredTid(symmPred)
 	{}
 	ThreadStartLabel(Event pos, Event createId, ThreadCreateLabel *createLab, ThreadInfo tinfo,
 			 int symmPred = -1)
-		: ThreadStartLabel(pos, MemOrdering::Acquire, createId, createLab, tinfo, symmPred)
+		: ThreadStartLabel(pos, MemOrdering::Acquire, createId, createLab, std::move(tinfo),
+				   symmPred)
 	{}
 
 	/** Returns the position of the corresponding create operation */
@@ -349,7 +361,7 @@ public:
 	auto getSymmSuccTid() const -> int { return symmSuccTid; }
 	void setSymmSuccTid(int tid) { symmSuccTid = tid; }
 
-	virtual void reset() override
+	void reset() override
 	{
 		EventLabel::reset();
 		createLab_ = nullptr;
@@ -392,10 +404,10 @@ public:
 	using rf_iterator = ReaderList::iterator;
 	using const_rf_iterator = ReaderList::const_iterator;
 
-	rf_iterator rf_begin(SAddr addr) { return initRfs[addr].begin(); }
-	const_rf_iterator rf_begin(SAddr addr) const { return initRfs.at(addr).begin(); };
-	rf_iterator rf_end(SAddr addr) { return initRfs[addr].end(); }
-	const_rf_iterator rf_end(SAddr addr) const { return initRfs.at(addr).end(); }
+	auto rf_begin(SAddr addr) -> rf_iterator { return initRfs[addr].begin(); }
+	auto rf_begin(SAddr addr) const -> const_rf_iterator { return initRfs.at(addr).begin(); };
+	auto rf_end(SAddr addr) -> rf_iterator { return initRfs[addr].end(); }
+	auto rf_end(SAddr addr) const -> const_rf_iterator { return initRfs.at(addr).end(); }
 	auto rfs(SAddr addr) const { return std::views::all(initRfs.at(addr)); }
 	auto rfs(SAddr addr) { return std::views::all(initRfs.at(addr)); }
 
@@ -428,8 +440,8 @@ private:
 class TerminatorLabel : public EventLabel {
 
 protected:
-	TerminatorLabel(EventLabelKind k, MemOrdering ord, Event pos)
-		: EventLabel(k, pos, ord, EventDeps())
+	TerminatorLabel(EventLabelKind kind, MemOrdering ord, Event pos)
+		: EventLabel(kind, pos, ord, EventDeps())
 	{}
 
 public:
@@ -444,7 +456,9 @@ public:
 class BlockLabel : public TerminatorLabel {
 
 protected:
-	BlockLabel(EventLabelKind k, Event pos) : TerminatorLabel(k, MemOrdering::NotAtomic, pos) {}
+	BlockLabel(EventLabelKind kind, Event pos)
+		: TerminatorLabel(kind, MemOrdering::NotAtomic, pos)
+	{}
 
 public:
 	static auto createAssumeBlock(Event pos, AssumeType type) -> std::unique_ptr<BlockLabel>;
@@ -478,16 +492,16 @@ BLOCK_PURE_SUBCLASS(UserBlock);
 class JoinBlockLabel : public BlockLabel {
 
 public:
-	JoinBlockLabel(Event pos, unsigned childId) : BlockLabel(JoinBlock, pos), childId(childId)
-	{}
+	JoinBlockLabel(Event pos, int childId) : BlockLabel(JoinBlock, pos), childId(childId) {}
 
 	/** Returns the ID of the child waited on */
-	const unsigned &getChildId() const { return childId; }
+	auto getChildId() const -> int { return childId; }
 
 	DEFINE_STANDARD_MEMBERS(JoinBlock)
 
 private:
-	const unsigned int childId{}; // the child waiting on
+	// NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
+	const int childId{}; // the child waiting on
 };
 
 /**
@@ -502,7 +516,7 @@ public:
 	ReadOptBlockLabel(Event pos, SAddr addr) : BlockLabel(ReadOptBlock, pos), addr(addr) {}
 
 	/** Returns the address waited on */
-	const SAddr &getAddr() const { return addr; }
+	auto getAddr() const -> const SAddr & { return addr; }
 
 	DEFINE_STANDARD_MEMBERS(ReadOptBlock)
 
@@ -545,15 +559,15 @@ public:
 
 	/** Returns the join() operation waiting on this thread or
 	   NULL if no such operation exists (yet) */
-	ThreadJoinLabel *getParentJoin() const { return parentJoin; }
+	auto getParentJoin() const -> ThreadJoinLabel * { return parentJoin; }
 
 	/** Sets the corresponding join() event */
 	void setParentJoin(ThreadJoinLabel *jLab) { parentJoin = jLab; }
 
 	/** Returns the return value of this thread */
-	SVal getRetVal() const { return retVal; }
+	auto getRetVal() const -> SVal { return retVal; }
 
-	virtual void reset() override
+	void reset() override
 	{
 		EventLabel::reset();
 		parentJoin = nullptr;
@@ -578,38 +592,38 @@ private:
  * and free have (e.g., a base address and a size) */
 class MemLabel : public EventLabel {
 protected:
-	MemLabel(EventLabelKind k, Event pos, MemOrdering ord, SAddr loc, ASize size,
+	MemLabel(EventLabelKind kind, Event pos, MemOrdering ord, SAddr loc, ASize size,
 		 const EventDeps &deps = EventDeps())
-		: EventLabel(k, pos, ord, deps), access(loc, size)
+		: EventLabel(kind, pos, ord, deps), access(loc, size)
 	{}
-	MemLabel(EventLabelKind k, Event pos, MemOrdering ord, AAccess a,
+	MemLabel(EventLabelKind kind, Event pos, MemOrdering ord, AAccess acc,
 		 const EventDeps &deps = EventDeps())
-		: EventLabel(k, pos, ord, deps), access(a)
+		: EventLabel(kind, pos, ord, deps), access(acc)
 	{}
 
 public:
 	/** Returns the address of this access */
-	SAddr getAddr() const { return access.addr; }
+	auto getAddr() const -> SAddr { return access.addr; }
 
 	/** Sets the address of this access */
 	void setAddr(SAddr addr) { access.addr = addr; }
 
 	/** Returns the size (in bytes) of the access */
-	ASize getSize() const { return access.size; }
+	auto getSize() const -> ASize { return access.size; }
 
 	/** Sets the size of this access */
 	void setSize(ASize size) { access.size = size; }
 
 	/** Returns the packed access */
-	const AAccess &getAccess() const { return access; }
+	auto getAccess() const -> const AAccess & { return access; }
 
 	/** Returns true if ADDR is contained within the address range */
-	bool contains(SAddr addr) const
+	auto contains(SAddr addr) const -> bool
 	{
 		return getAddr() <= addr && addr < getAddr() + getSize();
 	}
 
-	virtual void reset() override { EventLabel::reset(); }
+	void reset() override { EventLabel::reset(); }
 
 	DEFINE_CLASSOF_RANGE(Mem)
 
@@ -627,24 +641,24 @@ private:
 class MemAccessLabel : public MemLabel, public genmc::ilist_node<MemAccessLabel> {
 
 protected:
-	MemAccessLabel(EventLabelKind k, Event pos, MemOrdering ord, SAddr loc, ASize size,
+	MemAccessLabel(EventLabelKind kind, Event pos, MemOrdering ord, SAddr loc, ASize size,
 		       const EventDeps &deps = EventDeps())
-		: MemLabel(k, pos, ord, loc, size, deps)
+		: MemLabel(kind, pos, ord, loc, size, deps)
 	{}
-	MemAccessLabel(EventLabelKind k, Event pos, MemOrdering ord, AAccess a,
+	MemAccessLabel(EventLabelKind kind, Event pos, MemOrdering ord, AAccess acc,
 		       const EventDeps &deps = EventDeps())
-		: MemLabel(k, pos, ord, a, deps)
+		: MemLabel(kind, pos, ord, acc, deps)
 	{}
 
 public:
 	/** Returns whether the access is maximal in the graph it was added (default),
 	 * unless the status has been changed via setAddedMax() */
-	bool wasAddedMax() const { return maximal; }
+	auto wasAddedMax() const -> bool { return maximal; }
 
 	/** Explicitly sets the maximality status */
 	void setAddedMax(bool status) { maximal = status; }
 
-	virtual void reset() override
+	void reset() override
 	{
 		MemLabel::reset();
 		maximal = true;
@@ -667,10 +681,10 @@ private:
 class ReadLabel : public MemAccessLabel, public genmc::ilist_node<ReadLabel> {
 
 protected:
-	ReadLabel(EventLabelKind k, Event pos, MemOrdering ord, SAddr loc, ASize size,
+	ReadLabel(EventLabelKind kind, Event pos, MemOrdering ord, SAddr loc, ASize size,
 		  EventLabel *rfLab = nullptr, std::optional<Annotation> annot = {},
 		  const EventDeps &deps = EventDeps())
-		: MemAccessLabel(k, pos, ord, loc, size, deps), readsFrom(rfLab),
+		: MemAccessLabel(kind, pos, ord, loc, size, deps), readsFrom(rfLab),
 		  annot_(std::move(annot))
 	{}
 
@@ -689,44 +703,44 @@ public:
 	{}
 
 	/** Returns the position of the write this read is reading-from */
-	EventLabel *getRf() const { return readsFrom; }
-	EventLabel *getRf() { return readsFrom; }
+	auto getRf() const -> EventLabel * { return readsFrom; }
+	auto getRf() -> EventLabel * { return readsFrom; }
 
 	/** Changes the reads-from edge for this label.
 	 * Also updates reader information in the writer */
 	void setRf(EventLabel *rfLab);
 
 	/** Whether this read has a set RF and reads externally */
-	bool readsExt() const
+	auto readsExt() const -> bool
 	{
 		return getRf() && !getRf()->getPos().isInitializer() &&
 		       getRf()->getThread() != getThread();
 	}
 
 	/** Whether this read has a set RF and reads internally */
-	bool readsInt() const
+	auto readsInt() const -> bool
 	{
 		return getRf() &&
 		       (getRf()->getPos().isInitializer() || getRf()->getThread() == getThread());
 	}
 
 	/** Whether the read is part of an RMW operation (needs to be part of a graph) */
-	bool isRMW() const;
+	auto isRMW() const -> bool;
 
 	/** Convenience function that returns whether reading a value will create an RMW */
-	bool valueMakesRMWSucceed(const SVal &val) const;
+	auto valueMakesRMWSucceed(const SVal &val) const -> bool;
 
 	/** Convenience function that returns whether reading a value makes the assume
 	 * succeed */
-	bool valueMakesAssumeSucceed(const SVal &val) const;
+	auto valueMakesAssumeSucceed(const SVal &val) const -> bool;
 
 	/** Helper: Whether this is a confirmation read */
-	bool isConfirming() const { return isConfirming(getKind()); }
+	auto isConfirming() const -> bool { return isConfirming(getKind()); }
 
 	/** SAVer: Getter for the annotation expression */
-	const std::optional<Annotation> &getAnnot() const { return annot_; }
+	auto getAnnot() const -> const std::optional<Annotation> & { return annot_; }
 
-	virtual void reset() override
+	void reset() override
 	{
 		MemAccessLabel::reset();
 		setRfNoCascade(nullptr);
@@ -735,7 +749,7 @@ public:
 	DEFINE_STANDARD_MEMBERS_RANGE(Read)
 
 private:
-	static inline bool isConfirming(EventLabelKind k);
+	static inline auto isConfirming(EventLabelKind kind) -> bool;
 
 	friend class ExecutionGraph;
 	friend class DepExecutionGraph;
@@ -784,10 +798,10 @@ READ_PURE_SUBCLASS(CondVarWaitRead);
 class FaiReadLabel : public ReadLabel {
 
 protected:
-	FaiReadLabel(EventLabelKind k, Event pos, MemOrdering ord, SAddr addr, ASize size,
+	FaiReadLabel(EventLabelKind kind, Event pos, MemOrdering ord, SAddr addr, ASize size,
 		     RMWBinOp op, SVal val, WriteAttr wattr, EventLabel *rfLab,
 		     std::optional<Annotation> annot, const EventDeps &deps = EventDeps())
-		: ReadLabel(k, pos, ord, addr, size, rfLab, std::move(annot), deps), binOp(op),
+		: ReadLabel(kind, pos, ord, addr, size, rfLab, std::move(annot), deps), binOp(op),
 		  opValue(val), wattr(wattr)
 	{}
 
@@ -812,25 +826,25 @@ public:
 	{}
 
 	/** Returns the type of this RMW operation (e.g., add, sub) */
-	RMWBinOp getOp() const { return binOp; }
+	auto getOp() const -> RMWBinOp { return binOp; }
 
 	/** Returns the other operand's value */
-	SVal getOpVal() const { return opValue; }
+	auto getOpVal() const -> SVal { return opValue; }
 
 	/** Returns/sets the attributes of the write part */
-	WriteAttr getAttr() const { return wattr; }
-	void setAttr(WriteAttr a) { wattr |= a; }
+	auto getAttr() const -> WriteAttr { return wattr; }
+	void setAttr(WriteAttr attr) { wattr |= attr; }
 
 	/** Checks whether the write part has the specified attributes */
-	bool hasAttr(WriteAttr a) const { return !!(wattr & a); }
+	auto hasAttr(WriteAttr attr) const -> bool { return !!(wattr & attr); }
 
-	virtual void reset() override { ReadLabel::reset(); }
+	void reset() override { ReadLabel::reset(); }
 
 	DEFINE_STANDARD_MEMBERS_RANGE(FaiRead)
 
 private:
 	/** The binary operator for this RMW operation */
-	const RMWBinOp binOp;
+	const RMWBinOp binOp; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 
 	/** The other operand's value for the operation */
 	SVal opValue;
@@ -878,84 +892,86 @@ FAIREAD_PURE_SUBCLASS(BIncFaiRead);
 class CasReadLabel : public ReadLabel {
 
 protected:
-	CasReadLabel(EventLabelKind k, Event pos, MemOrdering ord, SAddr addr, ASize size, SVal exp,
-		     SVal swap, WriteAttr wattr, EventLabel *rfLab, std::optional<Annotation> annot,
+	CasReadLabel(EventLabelKind kind, Event pos, MemOrdering ord, MemOrdering failOrd,
+		     SAddr addr, ASize size, SVal exp, SVal swap, WriteAttr wattr,
+		     EventLabel *rfLab, std::optional<Annotation> annot,
 		     const EventDeps &deps = EventDeps())
-		: ReadLabel(k, pos, ord, addr, size, rfLab, std::move(annot), deps), expected(exp),
-		  swapValue(swap), wattr(wattr)
+		: ReadLabel(kind, pos, ord, addr, size, rfLab, std::move(annot), deps),
+		  expected(exp), swapValue(swap), successOrdering_(ord), failOrdering_(failOrd),
+		  wattr(wattr)
 	{}
 
 public:
-	CasReadLabel(Event pos, MemOrdering ord, SAddr addr, ASize size, SVal exp, SVal swap,
-		     WriteAttr wattr, EventLabel *rfLab, std::optional<Annotation> annot,
-		     const EventDeps &deps = EventDeps())
-		: CasReadLabel(CasRead, pos, ord, addr, size, exp, swap, wattr, rfLab,
+	CasReadLabel(Event pos, MemOrdering ord, MemOrdering failOrd, SAddr addr, ASize size,
+		     SVal exp, SVal swap, WriteAttr wattr, EventLabel *rfLab,
+		     std::optional<Annotation> annot, const EventDeps &deps = EventDeps())
+		: CasReadLabel(CasRead, pos, ord, failOrd, addr, size, exp, swap, wattr, rfLab,
 			       std::move(annot), deps)
-	{}
-	CasReadLabel(Event pos, MemOrdering ord, SAddr addr, ASize size, SVal exp, SVal swap,
-		     WriteAttr wattr, EventLabel *rfLab, const EventDeps &deps = EventDeps())
-		: CasReadLabel(pos, ord, addr, size, exp, swap, wattr, rfLab, std::nullopt, deps)
-	{}
-	CasReadLabel(Event pos, MemOrdering ord, SAddr addr, ASize size, SVal exp, SVal swap,
-		     WriteAttr wattr, const EventDeps &deps = EventDeps())
-		: CasReadLabel(pos, ord, addr, size, exp, swap, wattr, nullptr, deps)
-	{}
-	CasReadLabel(Event pos, MemOrdering ord, SAddr addr, ASize size, SVal exp, SVal swap,
-		     const EventDeps &deps = EventDeps())
-		: CasReadLabel(pos, ord, addr, size, exp, swap, WriteAttr::None, deps)
 	{}
 
 	/** Returns the value that will make this CAS succeed */
-	SVal getExpected() const { return expected; }
+	auto getExpected() const -> SVal { return expected; }
 
 	/** Returns the value that will be written is the CAS succeeds */
-	SVal getSwapVal() const { return swapValue; }
+	auto getSwapVal() const -> SVal { return swapValue; }
+
+	/** Returns the orderings of the successful/failed CAS, respectively */
+	auto getSuccessOrdering() const -> MemOrdering { return successOrdering_; }
+	auto getFailOrdering() const -> MemOrdering { return failOrdering_; }
 
 	/** Returns/sets the attributes of the write part */
-	WriteAttr getAttr() const { return wattr; }
-	void setAttr(WriteAttr a) { wattr |= a; }
+	auto getAttr() const -> WriteAttr { return wattr; }
+	void setAttr(WriteAttr attr) { wattr |= attr; }
 
 	/** Checks whether the write part has the specified attributes */
-	bool hasAttr(WriteAttr a) const { return !!(wattr & a); }
+	auto hasAttr(WriteAttr attr) const -> bool { return !!(wattr & attr); }
 
-	virtual void reset() override { ReadLabel::reset(); }
+	/** Whether this is a weak CAS (i.e., *may* fail spuriously) */
+	auto isWeak() const -> bool { return weak; }
+	void setWeak(bool w) { weak = w; }
+
+	/** Whether this CAS *does* fail spuriously.
+	 * Pre: `this` is a weak CAS. */
+	auto failsSpuriously() const -> bool { return spuriousFail; }
+	void setSpuriousFailure(bool f) { spuriousFail = f; }
+
+	void reset() override { ReadLabel::reset(); }
 
 	DEFINE_STANDARD_MEMBERS_RANGE(CasRead)
 
 private:
 	/** The value that will make this CAS succeed */
-	const SVal expected;
+	const SVal expected; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 
 	/** The value that will be written if the CAS succeeds */
-	const SVal swapValue;
+	const SVal swapValue; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+
+	/** Orderings of the CAS instruction. The inherited `ordering`
+	 * caches whichever is in effect */
+	const MemOrdering
+		successOrdering_; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+	const MemOrdering
+		failOrdering_; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 
 	/** The attributes of the write part of the RMW */
 	WriteAttr wattr = WriteAttr::None;
+
+	/** Whether this is a weak CAS */
+	bool weak = false;
+
+	/** Whether this weak CAS fails spuriously */
+	bool spuriousFail = false;
 };
 
 #define CASREAD_PURE_SUBCLASS(name)                                                                \
 	class name##Label : public CasReadLabel {                                                  \
                                                                                                    \
 	public:                                                                                    \
-		name##Label(Event pos, MemOrdering ord, SAddr addr, ASize size, SVal exp,          \
-			    SVal swap, WriteAttr wattr, EventLabel *rfLab,                         \
+		name##Label(Event pos, MemOrdering ord, MemOrdering failOrd, SAddr addr,           \
+			    ASize size, SVal exp, SVal swap, WriteAttr wattr, EventLabel *rfLab,   \
 			    std::optional<Annotation> annot, const EventDeps &deps = EventDeps())  \
-			: CasReadLabel(name, pos, ord, addr, size, exp, swap, wattr, rfLab,        \
-				       std::move(annot), deps)                                     \
-		{}                                                                                 \
-		name##Label(Event pos, MemOrdering ord, SAddr addr, ASize size, SVal exp,          \
-			    SVal swap, WriteAttr wattr, EventLabel *rfLab,                         \
-			    const EventDeps &deps = EventDeps())                                   \
-			: name##Label(pos, ord, addr, size, exp, swap, wattr, rfLab, std::nullopt, \
-				      deps)                                                        \
-		{}                                                                                 \
-		name##Label(Event pos, MemOrdering ord, SAddr addr, ASize size, SVal exp,          \
-			    SVal swap, WriteAttr wattr, const EventDeps &deps = EventDeps())       \
-			: name##Label(pos, ord, addr, size, exp, swap, wattr, nullptr, deps)       \
-		{}                                                                                 \
-		name##Label(Event pos, MemOrdering ord, SAddr addr, ASize size, SVal exp,          \
-			    SVal swap, const EventDeps &deps = EventDeps())                        \
-			: name##Label(pos, ord, addr, size, exp, swap, WriteAttr::None, deps)      \
+			: CasReadLabel(name, pos, ord, failOrd, addr, size, exp, swap, wattr,      \
+				       rfLab, std::move(annot), deps)                              \
 		{}                                                                                 \
                                                                                                    \
 		DEFINE_STANDARD_MEMBERS(name)                                                      \
@@ -968,22 +984,23 @@ CASREAD_PURE_SUBCLASS(ConfirmingCasRead);
  **                         LockCasReadLabel Class
  ******************************************************************************/
 
-/** Specialization of CasReadLabel for lock CASes */
+/** Specialization of CasReadLabel for lock CASes. A lock CAS has a single
+ * ordering, used for both the success and the failure path. */
 class LockCasReadLabel : public CasReadLabel {
 
 protected:
-	LockCasReadLabel(EventLabelKind k, Event pos, MemOrdering ord, SAddr addr, ASize size,
+	LockCasReadLabel(EventLabelKind kind, Event pos, MemOrdering ord, SAddr addr, ASize size,
 			 SVal exp, SVal swap, WriteAttr wattr, EventLabel *rfLab,
 			 std::optional<Annotation> annot = {}, const EventDeps &deps = EventDeps())
-		: CasReadLabel(k, pos, ord, addr, size, exp, swap, wattr, rfLab, std::move(annot),
-			       deps)
+		: CasReadLabel(kind, pos, ord, ord, addr, size, exp, swap, wattr, rfLab,
+			       std::move(annot), deps)
 	{}
 
 public:
 	LockCasReadLabel(Event pos, MemOrdering ord, SAddr addr, ASize size, SVal exp, SVal swap,
 			 WriteAttr wattr, EventLabel *rfLab, std::optional<Annotation> annot = {},
 			 const EventDeps &deps = EventDeps())
-		: CasReadLabel(LockCasRead, pos, ord, addr, size, exp, swap, wattr, rfLab,
+		: CasReadLabel(LockCasRead, pos, ord, ord, addr, size, exp, swap, wattr, rfLab,
 			       std::move(annot), deps)
 	{}
 	LockCasReadLabel(Event pos, SAddr addr, ASize size, WriteAttr wattr, EventLabel *rfLab,
@@ -1007,7 +1024,8 @@ public:
  **                         TrylockCasReadLabel Class
  ******************************************************************************/
 
-/** Specialization of CasReadLabel for trylock CASes */
+/** Specialization of CasReadLabel for trylock CASes. A trylock CAS has a single
+ * ordering, used for both the success and the failure path. */
 class TrylockCasReadLabel : public CasReadLabel {
 
 public:
@@ -1015,7 +1033,7 @@ public:
 			    WriteAttr wattr, EventLabel *rfLab,
 			    std::optional<Annotation> annot = {},
 			    const EventDeps &deps = EventDeps())
-		: CasReadLabel(TrylockCasRead, pos, ord, addr, size, exp, swap, wattr, rfLab,
+		: CasReadLabel(TrylockCasRead, pos, ord, ord, addr, size, exp, swap, wattr, rfLab,
 			       std::move(annot), deps)
 	{}
 	TrylockCasReadLabel(Event pos, SAddr addr, ASize size, WriteAttr wattr, EventLabel *rfLab,
@@ -1048,7 +1066,7 @@ public:
 				 std::optional<Annotation> annot = {},
 				 const EventDeps &deps = EventDeps(), EventLabel *rfLab = nullptr)
 		: LockCasReadLabel(AbstractLockCasRead, pos, MemOrdering::Acquire, addr, size,
-				   SVal(0), SVal(1), WriteAttr::None, rfLab, annot, deps)
+				   SVal(0), SVal(1), WriteAttr::None, rfLab, std::move(annot), deps)
 	{}
 
 	DEFINE_STANDARD_MEMBERS(AbstractLockCasRead)
@@ -1063,13 +1081,13 @@ public:
 class WriteLabel : public MemAccessLabel, public genmc::ilist_node<WriteLabel> {
 
 protected:
-	WriteLabel(EventLabelKind k, Event pos, MemOrdering ord, SAddr addr, ASize size, SVal val,
-		   WriteAttr wattr, const EventDeps &deps = EventDeps())
-		: MemAccessLabel(k, pos, ord, addr, size, deps), value(val), wattr(wattr)
+	WriteLabel(EventLabelKind kind, Event pos, MemOrdering ord, SAddr addr, ASize size,
+		   SVal val, WriteAttr wattr, const EventDeps &deps = EventDeps())
+		: MemAccessLabel(kind, pos, ord, addr, size, deps), value(val), wattr(wattr)
 	{}
-	WriteLabel(EventLabelKind k, Event pos, MemOrdering ord, SAddr addr, ASize size, SVal val,
-		   const EventDeps &deps = EventDeps())
-		: WriteLabel(k, pos, ord, addr, size, val, WriteAttr::None, deps)
+	WriteLabel(EventLabelKind kind, Event pos, MemOrdering ord, SAddr addr, ASize size,
+		   SVal val, const EventDeps &deps = EventDeps())
+		: WriteLabel(kind, pos, ord, addr, size, val, WriteAttr::None, deps)
 	{}
 
 public:
@@ -1083,31 +1101,31 @@ public:
 	{}
 
 	/** Getter for the write value */
-	SVal getVal() const { return value; }
+	auto getVal() const -> SVal { return value; }
 
 	/** Setter for the write value */
 	void setVal(SVal v) { value = v; }
 
 	/** Returns the attributes of the write */
-	WriteAttr getAttr() const { return wattr; }
-	void setAttr(WriteAttr a) { wattr |= a; }
+	auto getAttr() const -> WriteAttr { return wattr; }
+	void setAttr(WriteAttr attr) { wattr |= attr; }
 
 	/** Checks whether the write has the specified attributes */
-	bool hasAttr(WriteAttr a) const { return !!(wattr & a); }
+	auto hasAttr(WriteAttr attr) const -> bool { return !!(wattr & attr); }
 
 	/** Helpers for various write attributes */
-	bool isFinal() const { return hasAttr(WriteAttr::Final); }
-	bool isLocal() const { return hasAttr(WriteAttr::Local); }
-	bool isComplete() const { return hasAttr(WriteAttr::Complete); }
+	auto isFinal() const -> bool { return hasAttr(WriteAttr::Final); }
+	auto isLocal() const -> bool { return hasAttr(WriteAttr::Local); }
+	auto isComplete() const -> bool { return hasAttr(WriteAttr::Complete); }
 
 	/** Whether this is part of an RMW operation */
-	bool isRMW() const;
+	auto isRMW() const -> bool;
 
 	/** Whether this write modifies global memory (SAVer) */
-	bool isEffectful() const;
+	auto isEffectful() const -> bool;
 
 	/** Whether this write has been inserted into co */
-	bool isInCo() const { return ilist_node<WriteLabel>::is_linked(); }
+	auto isInCo() const -> bool { return ilist_node<WriteLabel>::is_linked(); }
 
 	/** Adds the store co-after LAB */
 	void addCo(EventLabel *lab);
@@ -1123,7 +1141,7 @@ public:
 	auto readers() { return std::views::all(readerList); }
 	auto readers() const { return std::views::all(readerList); }
 
-	virtual void reset() override
+	void reset() override
 	{
 		MemAccessLabel::reset();
 		readerList.clear();
@@ -1139,7 +1157,7 @@ private:
 	/** Adds a read to the list of reads reading from the write */
 	void addReader(ReadLabel *rLab)
 	{
-		ASSERT(std::find_if(readerList.begin(), readerList.end(), [rLab](ReadLabel &oLab) {
+		ASSERT(std::ranges::find_if(readerList, [rLab](ReadLabel &oLab) {
 			       return oLab.getPos() == rLab->getPos();
 		       }) == readerList.end());
 		readerList.push_back(*rLab);
@@ -1190,10 +1208,10 @@ WRITE_PURE_SUBCLASS(CondVarDestroyWrite);
 /** Represents releasing a lock (e.g., pthread_mutex_unlock) */
 class UnlockWriteLabel : public WriteLabel {
 protected:
-	UnlockWriteLabel(EventLabelKind k, Event pos, MemOrdering ord, SAddr addr, ASize size,
+	UnlockWriteLabel(EventLabelKind kind, Event pos, MemOrdering ord, SAddr addr, ASize size,
 			 SVal val, WriteAttr wattr = WriteAttr::None,
 			 const EventDeps &deps = EventDeps())
-		: WriteLabel(k, pos, ord, addr, size, val, wattr, deps)
+		: WriteLabel(kind, pos, ord, addr, size, val, wattr, deps)
 	{}
 
 public:
@@ -1235,9 +1253,9 @@ fetch-and-add, fetch-and-sub, etc) */
 class FaiWriteLabel : public WriteLabel {
 
 protected:
-	FaiWriteLabel(EventLabelKind k, Event pos, MemOrdering ord, SAddr addr, ASize size,
+	FaiWriteLabel(EventLabelKind kind, Event pos, MemOrdering ord, SAddr addr, ASize size,
 		      SVal val, WriteAttr wattr, const EventDeps &deps = EventDeps())
-		: WriteLabel(k, pos, ord, addr, size, val, wattr, deps)
+		: WriteLabel(kind, pos, ord, addr, size, val, wattr, deps)
 	{}
 
 public:
@@ -1297,10 +1315,10 @@ public:
 class CasWriteLabel : public WriteLabel {
 
 protected:
-	CasWriteLabel(EventLabelKind k, Event pos, MemOrdering ord, SAddr addr, ASize size,
+	CasWriteLabel(EventLabelKind kind, Event pos, MemOrdering ord, SAddr addr, ASize size,
 		      SVal val, WriteAttr wattr = WriteAttr::None,
 		      const EventDeps &deps = EventDeps())
-		: WriteLabel(k, pos, ord, addr, size, val, wattr, deps)
+		: WriteLabel(kind, pos, ord, addr, size, val, wattr, deps)
 	{}
 
 public:
@@ -1336,10 +1354,10 @@ CASWRITE_PURE_SUBCLASS(ConfirmingCasWrite);
 class LockCasWriteLabel : public CasWriteLabel {
 
 protected:
-	LockCasWriteLabel(EventLabelKind k, Event pos, MemOrdering ord, SAddr addr, ASize size,
+	LockCasWriteLabel(EventLabelKind kind, Event pos, MemOrdering ord, SAddr addr, ASize size,
 			  SVal val, WriteAttr wattr = WriteAttr::None,
 			  const EventDeps &deps = EventDeps())
-		: CasWriteLabel(k, pos, ord, addr, size, val, wattr, deps)
+		: CasWriteLabel(kind, pos, ord, addr, size, val, wattr, deps)
 	{}
 
 public:
@@ -1367,7 +1385,7 @@ class TrylockCasWriteLabel : public CasWriteLabel {
 
 public:
 	TrylockCasWriteLabel(Event pos, MemOrdering ord, SAddr addr, ASize size, SVal val,
-			     WriteAttr wattr, const EventDeps &deps = EventDeps())
+			     WriteAttr /*wattr*/, const EventDeps &deps = EventDeps())
 		: CasWriteLabel(TrylockCasWrite, pos, ord, addr, size, val, WriteAttr::None, deps)
 	{}
 	TrylockCasWriteLabel(Event pos, MemOrdering ord, SAddr addr, ASize size, SVal val,
@@ -1409,17 +1427,17 @@ public:
 /** This label abstracts the common functionality that allocs and frees have */
 class MemLifecycleLabel : public MemLabel {
 protected:
-	MemLifecycleLabel(EventLabelKind k, Event pos, SAddr loc, ASize size,
+	MemLifecycleLabel(EventLabelKind kind, Event pos, SAddr loc, ASize size,
 			  const EventDeps &deps = EventDeps())
-		: MemLabel(k, pos, MemOrdering::NotAtomic, loc, size, deps)
+		: MemLabel(kind, pos, MemOrdering::NotAtomic, loc, size, deps)
 	{}
-	MemLifecycleLabel(EventLabelKind k, Event pos, AAccess a,
+	MemLifecycleLabel(EventLabelKind kind, Event pos, AAccess acc,
 			  const EventDeps &deps = EventDeps())
-		: MemLabel(k, pos, MemOrdering::NotAtomic, a, deps)
+		: MemLabel(kind, pos, MemOrdering::NotAtomic, acc, deps)
 	{}
 
 public:
-	virtual void reset() override { MemLabel::reset(); }
+	void reset() override { MemLabel::reset(); }
 
 	DEFINE_CLASSOF_RANGE(MemLifecycle)
 };
@@ -1434,9 +1452,9 @@ class MallocLabel : public MemLifecycleLabel {
 public:
 	MallocLabel(Event pos, SAddr addr, uint64_t size, uint64_t alignment, StorageDuration sd,
 		    StorageType stype, AddressSpace spc, const NameInfo *info = nullptr,
-		    const std::string &name = {}, const EventDeps &deps = EventDeps())
+		    std::string name = {}, const EventDeps &deps = EventDeps())
 		: MemLifecycleLabel(Malloc, pos, addr, size, deps), alignment(alignment), sdur(sd),
-		  stype(stype), spc(spc), name(name), nameInfo(info)
+		  stype(stype), spc(spc), name(std::move(name)), nameInfo(info)
 	{}
 	MallocLabel(Event pos, uint64_t size, uint64_t alignment, StorageDuration sd,
 		    StorageType stype, AddressSpace spc, const NameInfo *info = nullptr,
@@ -1449,25 +1467,25 @@ public:
 	{}
 
 	/** Returns the alignment of this allocation */
-	uint64_t getAlignment() const { return alignment; }
+	auto getAlignment() const -> uint64_t { return alignment; }
 
 	/** Returns the storage duration of this allocation */
-	StorageDuration getStorageDuration() const { return sdur; }
+	auto getStorageDuration() const -> StorageDuration { return sdur; }
 
 	/** Returns the storage type of this allocation */
-	StorageType getStorageType() const { return stype; }
+	auto getStorageType() const -> StorageType { return stype; }
 
 	/** Returns the address space of this allocation */
-	AddressSpace getAddressSpace() const { return spc; }
+	auto getAddressSpace() const -> AddressSpace { return spc; }
 
 	/** Returns the name of the variable allocated */
-	const std::string &getName() const { return name; }
+	auto getName() const -> const std::string & { return name; }
 
 	/** Returns the naming info associated with this allocation.
 	 * Returns null if no such info is found. */
-	const NameInfo *getNameInfo() const { return nameInfo; }
+	auto getNameInfo() const -> const NameInfo * { return nameInfo; }
 
-	virtual void reset() override { MemLifecycleLabel::reset(); }
+	void reset() override { MemLifecycleLabel::reset(); }
 
 	DEFINE_STANDARD_MEMBERS_RANGE(Malloc)
 
@@ -1502,9 +1520,9 @@ private:
 class FreeLabel : public MemLifecycleLabel {
 
 protected:
-	FreeLabel(EventLabelKind k, Event pos, SAddr addr, ASize size,
+	FreeLabel(EventLabelKind kind, Event pos, SAddr addr, ASize size,
 		  const EventDeps &deps = EventDeps())
-		: MemLifecycleLabel(k, pos, addr, size, deps)
+		: MemLifecycleLabel(kind, pos, addr, size, deps)
 	{}
 
 public:
@@ -1512,7 +1530,7 @@ public:
 		: FreeLabel(Free, pos, addr, size, deps)
 	{}
 
-	virtual void reset() override { MemLifecycleLabel::reset(); }
+	void reset() override { MemLifecycleLabel::reset(); }
 
 	DEFINE_STANDARD_MEMBERS_RANGE(Free)
 };
@@ -1543,9 +1561,9 @@ public:
 class FenceLabel : public EventLabel {
 
 protected:
-	FenceLabel(EventLabelKind k, Event pos, MemOrdering ord,
+	FenceLabel(EventLabelKind kind, Event pos, MemOrdering ord,
 		   const EventDeps &deps = EventDeps())
-		: EventLabel(k, pos, ord, deps)
+		: EventLabel(kind, pos, ord, deps)
 	{}
 
 public:
@@ -1566,21 +1584,21 @@ class ThreadCreateLabel : public EventLabel {
 public:
 	ThreadCreateLabel(Event pos, MemOrdering ord, ThreadInfo childInfo,
 			  const EventDeps &deps = EventDeps())
-		: EventLabel(ThreadCreate, pos, ord, deps), childInfo(childInfo)
+		: EventLabel(ThreadCreate, pos, ord, deps), childInfo(std::move(childInfo))
 	{}
 	ThreadCreateLabel(Event pos, ThreadInfo childInfo, const EventDeps &deps = EventDeps())
-		: ThreadCreateLabel(pos, MemOrdering::Release, childInfo, deps)
+		: ThreadCreateLabel(pos, MemOrdering::Release, std::move(childInfo), deps)
 	{}
 
 	/** Getters for the created thread's info */
-	const ThreadInfo &getChildInfo() const { return childInfo; }
-	ThreadInfo &getChildInfo() { return childInfo; }
+	auto getChildInfo() const -> const ThreadInfo & { return childInfo; }
+	auto getChildInfo() -> ThreadInfo & { return childInfo; }
 
 	/** Getter for the identifier of the created thread */
-	unsigned int getChildId() const { return getChildInfo().id; }
+	auto getChildId() const -> int { return getChildInfo().id; }
 
 	/** Setter for the identifier of the created thread */
-	void setChildId(unsigned int tid) { getChildInfo().id = tid; }
+	void setChildId(int tid) { getChildInfo().id = tid; }
 
 	DEFINE_STANDARD_MEMBERS(ThreadCreate)
 
@@ -1597,22 +1615,22 @@ private:
 class ThreadJoinLabel : public EventLabel {
 
 public:
-	ThreadJoinLabel(Event pos, MemOrdering ord, unsigned int childId,
+	ThreadJoinLabel(Event pos, MemOrdering ord, int childId,
 			const EventDeps &deps = EventDeps())
 		: EventLabel(ThreadJoin, pos, ord, deps), childId(childId)
 	{}
-	ThreadJoinLabel(Event pos, unsigned int childId, const EventDeps &deps = EventDeps())
+	ThreadJoinLabel(Event pos, int childId, const EventDeps &deps = EventDeps())
 		: ThreadJoinLabel(pos, MemOrdering::Acquire, childId, deps)
 	{}
 
 	/** Returns the identifier of the thread this join() is waiting on */
-	unsigned int getChildId() const { return childId; }
+	auto getChildId() const -> int { return childId; }
 
 	DEFINE_STANDARD_MEMBERS(ThreadJoin)
 
 private:
 	/** The identifier of the child */
-	const unsigned int childId{};
+	const int childId{}; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 };
 
 /*******************************************************************************
@@ -1632,8 +1650,8 @@ public:
 	{}
 
 	/** Getters for HP/protected address */
-	SAddr getHpAddr() const { return hpAddr; }
-	SAddr getProtectedAddr() const { return protAddr; }
+	auto getHpAddr() const -> SAddr { return hpAddr; }
+	auto getProtectedAddr() const -> SAddr { return protAddr; }
 
 	DEFINE_STANDARD_MEMBERS(HpProtect)
 
@@ -1678,7 +1696,7 @@ public:
 	auto getName() const -> std::string { return name_; }
 	auto getArgument() const -> int32_t { return arg_; }
 
-	virtual void reset() override
+	void reset() override
 	{
 		EventLabel::reset();
 		linPreds_.clear();
@@ -1756,7 +1774,7 @@ public:
 	auto getName() const -> std::string { return name_; }
 	auto getResult() const -> int32_t { return result_; }
 
-	virtual void reset() override
+	void reset() override
 	{
 		EventLabel::reset();
 		linSuccs_.clear();
@@ -1843,19 +1861,19 @@ public:
 	{}
 
 	/** Returns the address of this access */
-	SAddr getAddr() const { return access.addr; }
+	auto getAddr() const -> SAddr { return access.addr; }
 
 	/** Returns the size (in bytes) of the access */
-	ASize getSize() const { return access.size; }
+	auto getSize() const -> ASize { return access.size; }
 
 	/** Returns the packed access */
-	AAccess getAccess() const { return access; }
+	auto getAccess() const -> AAccess { return access; }
 
 	/** Returns the value that makes the supposed CAS succeed */
-	SVal getExpected() const { return expected; }
+	auto getExpected() const -> SVal { return expected; }
 
 	/** Returns the value that the supposed CAS writes */
-	SVal getSwapVal() const { return swapValue; }
+	auto getSwapVal() const -> SVal { return swapValue; }
 
 	DEFINE_STANDARD_MEMBERS(HelpingCas)
 
@@ -1864,10 +1882,10 @@ private:
 	AAccess access;
 
 	/** CAS expected value */
-	const SVal expected;
+	const SVal expected; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 
 	/** CAS swap value */
-	const SVal swapValue;
+	const SVal swapValue; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 };
 
 /*******************************************************************************
@@ -1883,11 +1901,11 @@ public:
 	{}
 
 	/** Whether this block is expandable */
-	bool isExpandable() const { return expandable; }
+	auto isExpandable() const -> bool { return expandable; }
 	void setExpandable(bool exp) { expandable = exp; }
 
 	/** Whether this block has been expanded */
-	bool isExpanded() const { return expanded; }
+	auto isExpanded() const -> bool { return expanded; }
 	void setExpanded(bool exp) { expanded = exp; }
 
 	DEFINE_STANDARD_MEMBERS(Optional)
@@ -1938,33 +1956,36 @@ template <typename F> void MethodBeginLabel::removePred(F cond)
  **                             Static methods
  *******************************************************************************/
 
-inline bool EventLabel::isStable() const
+inline auto EventLabel::isStable() const -> bool
 {
-	auto *mLab = genmc::dyn_cast<MemAccessLabel>(this);
+	const auto *mLab = genmc::dyn_cast<MemAccessLabel>(this);
 	return !isRevisitable() || (mLab && !mLab->wasAddedMax());
 }
 
-inline bool EventLabel::isDependable(EventLabelKind k)
+inline auto EventLabel::isDependable(EventLabelKind kind) -> bool
 {
-	return ReadLabel::classofKind(k) || k == Malloc || k == Optional;
+	return ReadLabel::classofKind(kind) || kind == Malloc || kind == Optional;
 }
 
-inline bool EventLabel::returnsValue(EventLabelKind k)
+inline auto EventLabel::returnsValue(EventLabelKind kind) -> bool
 {
-	return ThreadStartLabel::classofKind(k) || ReadLabel::classofKind(k) || k == ThreadJoin ||
-	       k == Optional;
+	return ThreadStartLabel::classofKind(kind) || ReadLabel::classofKind(kind) ||
+	       kind == ThreadJoin || kind == Optional;
 }
 
-inline bool EventLabel::accessesValue(EventLabelKind k)
+inline auto EventLabel::accessesValue(EventLabelKind kind) -> bool
 {
-	return InitLabel::classofKind(k) || MemAccessLabel::classofKind(k);
+	return InitLabel::classofKind(kind) || MemAccessLabel::classofKind(kind);
 }
 
-inline bool EventLabel::hasLocation(EventLabelKind k) { return MemAccessLabel::classofKind(k); }
-
-inline bool ReadLabel::isConfirming(EventLabelKind k)
+inline auto EventLabel::hasLocation(EventLabelKind kind) -> bool
 {
-	return ConfirmingReadLabel::classofKind(k) || ConfirmingCasReadLabel::classofKind(k);
+	return MemAccessLabel::classofKind(kind);
+}
+
+inline auto ReadLabel::isConfirming(EventLabelKind kind) -> bool
+{
+	return ConfirmingReadLabel::classofKind(kind) || ConfirmingCasReadLabel::classofKind(kind);
 }
 
 /**** Formatting ****/
@@ -1973,10 +1994,10 @@ inline bool ReadLabel::isConfirming(EventLabelKind k)
 template <> struct std::formatter<EventLabel::EventLabelKind> {
 	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
 
-	auto format(const EventLabel::EventLabelKind &k, std::format_context &ctx) const
+	auto format(const EventLabel::EventLabelKind &kind, std::format_context &ctx) const
 	{
 		std::string_view str;
-		switch (k) {
+		switch (kind) {
 		case EventLabel::ThreadStart:
 			str = "THREAD_START";
 			break;

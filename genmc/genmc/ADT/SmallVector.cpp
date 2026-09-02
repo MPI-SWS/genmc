@@ -26,6 +26,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+// NOLINTBEGIN (vendored from LLVM)
 #include "genmc/ADT/SmallVector.hpp"
 #include "genmc/Support/Error.hpp"
 // #include "llvm/ADT/Twine.h"
@@ -132,7 +133,7 @@ static void report_at_maximum_capacity(size_t MaxSize)
 
 // Note: Moving this function into the header may cause performance regression.
 template <class Size_T>
-static size_t getNewCapacity(size_t MinSize, size_t TSize, size_t OldCapacity)
+static size_t getNewCapacity(size_t MinSize, size_t /*TSize*/, size_t OldCapacity)
 {
 	constexpr size_t MaxSize = std::numeric_limits<Size_T>::max();
 
@@ -226,3 +227,4 @@ static_assert(sizeof(SmallVectorSizeType<char>) == sizeof(uint64_t),
 static_assert(sizeof(SmallVectorSizeType<char>) == sizeof(uint32_t),
 	      "Expected SmallVectorBase<uint32_t> variant to be in use.");
 #endif
+// NOLINTEND

@@ -14,6 +14,8 @@
 #include "genmc/Support/SAddrAllocator.hpp"
 #include "genmc/ADT/VectorClock.hpp"
 
+#include <algorithm>
+
 void SAddrAllocator::restrict(const VectorClock &view)
 {
 	for (auto &[tid, index] : dynamicPool_) {

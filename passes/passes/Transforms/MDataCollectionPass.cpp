@@ -12,24 +12,37 @@
  */
 
 #include "MDataCollectionPass.hpp"
-#include "passes/LLVMUtils.hpp"
 #include "genmc/Support/Error.hpp"
+#include "genmc/Support/NameInfo.hpp"
+#include "passes/LLVMUtils.hpp"
+
 #include <llvm/BinaryFormat/Dwarf.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/DebugInfo.h>
+#include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/GlobalVariable.h>
 #include <llvm/IR/InstIterator.h>
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/IntrinsicInst.h>
+#include <llvm/IR/Metadata.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/PassManager.h>
 #include <llvm/IR/Type.h>
+#include <llvm/Support/Casting.h>
+
+#include <algorithm>
+#include <memory>
+#include <string>
 
 using namespace llvm;
 
-void collectVarName(Module &M, unsigned int ptr, Type *typ, DIType *dit, std::string nameBuilder,
-		    NameInfo &info)
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+static void collectVarName(Module &M, unsigned int ptr, Type *typ, DIType *dit,
+			   const std::string &nameBuilder, NameInfo &info)
 {
 	if (!isa<StructType>(typ) && !isa<ArrayType>(typ) && !isa<VectorType>(typ)) {
 		info.addOffsetInfo(ptr, nameBuilder);
@@ -37,20 +50,20 @@ void collectVarName(Module &M, unsigned int ptr, Type *typ, DIType *dit, std::st
 	}
 
 	unsigned int offset = 0;
-	if (auto *AT = dyn_cast<ArrayType>(typ)) {
+	if (auto *arrayType = dyn_cast<ArrayType>(typ)) {
 		auto *newDit = dit;
 		if (auto *dict = dyn_cast<DICompositeType>(dit)) {
 			newDit = (!dict->getBaseType())
 					 ? dict
 					 : llvm::dyn_cast<DIType>(dict->getBaseType());
 		}
-		auto elemSize = M.getDataLayout().getTypeAllocSize(AT->getElementType());
-		for (auto i = 0u; i < AT->getNumElements(); i++) {
-			collectVarName(M, ptr + offset, AT->getElementType(), newDit,
+		auto elemSize = M.getDataLayout().getTypeAllocSize(arrayType->getElementType());
+		for (auto i = 0U; i < arrayType->getNumElements(); i++) {
+			collectVarName(M, ptr + offset, arrayType->getElementType(), newDit,
 				       nameBuilder + "[" + std::to_string(i) + "]", info);
 			offset += elemSize;
 		}
-	} else if (auto *ST = dyn_cast<StructType>(typ)) {
+	} else if (auto *structType = dyn_cast<StructType>(typ)) {
 		DINodeArray dictElems;
 
 		/* Since this is a struct type, the metadata should yield a
@@ -75,12 +88,13 @@ void collectVarName(Module &M, unsigned int ptr, Type *typ, DIType *dit, std::st
 			}
 		}
 
-		/* It can be dictElems.size() < ST->getNumElements(), e.g., for va_arg */
-		auto i = 0u;
-		auto minSize = std::min(dictElems.size(), ST->getNumElements());
-		for (auto it = ST->element_begin(); i < minSize; ++it, ++i) {
+		/* It can be dictElems.size() < structType->getNumElements(), e.g., for va_arg */
+		auto i = 0U;
+		auto minSize = std::min(dictElems.size(), structType->getNumElements());
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		for (const auto *it = structType->element_begin(); i < minSize; ++it, ++i) {
 			auto elemSize = M.getDataLayout().getTypeAllocSize(*it);
-			auto didt = dictElems[i];
+			auto *didt = dictElems[i];
 
 			/* Skip any C-level const class members: these don't make it in the LLVM
 			 * type but do appear in the debug data */
@@ -99,7 +113,7 @@ void collectVarName(Module &M, unsigned int ptr, Type *typ, DIType *dit, std::st
 			}
 
 			if (auto *dit = dyn_cast<DIDerivedType>(didt)) {
-				if (auto ditb = dyn_cast<DIType>(dit->getBaseType()))
+				if (auto *ditb = dyn_cast<DIType>(dit->getBaseType()))
 					collectVarName(M, ptr + offset, *it, ditb,
 						       nameBuilder + "." + dit->getName().str(),
 						       info);
@@ -111,7 +125,7 @@ void collectVarName(Module &M, unsigned int ptr, Type *typ, DIType *dit, std::st
 	}
 }
 
-auto collectVarName(Module &M, Type *typ, DIType *dit) -> NameInfo
+static auto collectVarName(Module &M, Type *typ, DIType *dit) -> NameInfo
 {
 	NameInfo info;
 	collectVarName(M, 0, typ, dit, "", info);
@@ -131,18 +145,18 @@ void MDataInfo::collectGlobalInfo(GlobalVariable &v, Module &M)
 		return;
 
 	VERIFY(isa<DIGlobalVariableExpression>(v.getMetadata("dbg")));
-	auto *dive = static_cast<DIGlobalVariableExpression *>(v.getMetadata("dbg"));
-	auto dit = dive->getVariable()->getType();
+	auto *dive = cast<DIGlobalVariableExpression>(v.getMetadata("dbg"));
+	auto *dit = dive->getVariable()->getType();
 
 	/* Check whether it is a global pointer */
 	if (auto *ditc = dyn_cast<DIType>(dit))
 		*info = collectVarName(M, v.getValueType(), ditc);
 }
 
-void MDataInfo::collectLocalInfo(DbgDeclareInst *DD, Module &M)
+void MDataInfo::collectLocalInfo(DbgDeclareInst *dbgDecl, Module &M)
 {
 	/* Skip if it's not an alloca or we don't have data */
-	auto *v = dyn_cast<AllocaInst>(DD->getAddress());
+	auto *v = dyn_cast<AllocaInst>(dbgDecl->getAddress());
 	if (!v)
 		return;
 
@@ -153,9 +167,9 @@ void MDataInfo::collectLocalInfo(DbgDeclareInst *DD, Module &M)
 	info = std::make_shared<NameInfo>();
 
 	/* Store alloca's metadata, in case it's used in memcpy */
-	allocaMData[v] = DD->getVariable();
+	allocaMData[v] = dbgDecl->getVariable();
 
-	auto dit = DD->getVariable()->getType();
+	auto *dit = dbgDecl->getVariable()->getType();
 	if (auto *ditc = dyn_cast<DIType>(dit))
 		*info = collectVarName(M, v->getAllocatedType(), ditc);
 }
@@ -185,14 +199,14 @@ void MDataInfo::collectMemCpyInfo(MemCpyInst *mi, Module &M)
 	auto *dst = dyn_cast<AllocaInst>(mi->getDest());
 	VERIFY(dst);
 
-	if (allocaMData.count(dst) == 0)
+	if (!allocaMData.contains(dst))
 		return; /* We did our best, but couldn't get a name for it... */
-	auto dit = allocaMData[dst]->getType();
+	auto *dit = allocaMData[dst]->getType();
 	if (auto *ditc = dyn_cast<DIType>(dit))
 		*info = collectVarName(M, dst->getAllocatedType(), ditc);
 }
 
-auto MDataInfo::run(Module &M, ModuleAnalysisManager &AM) -> Result
+auto MDataInfo::run(Module &M, ModuleAnalysisManager & /*AM*/) -> Result
 {
 	/* First, get type information for user's global variables */
 	for (auto &v : GLOBALS(M))
@@ -201,8 +215,8 @@ auto MDataInfo::run(Module &M, ModuleAnalysisManager &AM) -> Result
 	/* Then for all local variables and some other special cases */
 	for (auto &F : M) {
 		for (auto &I : instructions(F)) {
-			if (auto *dd = dyn_cast<DbgDeclareInst>(&I))
-				collectLocalInfo(dd, M);
+			if (auto *dbgDecl = dyn_cast<DbgDeclareInst>(&I))
+				collectLocalInfo(dbgDecl, M);
 			if (auto *mi = dyn_cast<MemCpyInst>(&I))
 				collectMemCpyInfo(mi, M);
 		}

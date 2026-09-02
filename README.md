@@ -31,7 +31,7 @@ please issue the following command:
 
 You will need a C++20-compliant compiler (recommended: g++ >= 14) and an LLVM installation.
 The LLVM versions currently supported are:
-15.0.0, 16.0.0, 17.0.0, 18.0.0, 19.0.0, 20.0.0.
+19.0.0, 20.0.0, 21.0.0, 22.0.0.
 
 ##### GNU/Linux
 
@@ -71,11 +71,11 @@ To run a subset of all the tests that come with the system to see if the system 
 To build GenMC with support for verifying Rust programs, you must set the `ENABLE_RUST` flag.
 Ensure that you compile GenMC against the same LLVM major version as the one used by your Rust installation (check with `rustc -vV`).
 
-Example configuration for Rust 1.69.0 (which uses LLVM 15):
+Example configuration for Rust 1.82.0 (which uses LLVM 19):
 
 ```bash
 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-      -DCMAKE_PREFIX_PATH="/usr/lib/llvm-15/cmake;/root/.rustup/toolchains/1.69.0-x86_64-unknown-linux-gnu/bin" \
+      -DCMAKE_PREFIX_PATH="/usr/lib/llvm-19/cmake;/root/.rustup/toolchains/1.82.0-x86_64-unknown-linux-gnu/bin" \
       -DENABLE_RUST=ON \
       -B RelWithDebInfo -S .
 ```

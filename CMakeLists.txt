@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12...4.0)
-project(genmc VERSION 0.17.0 LANGUAGES CXX C)
+project(genmc VERSION 0.18.0 LANGUAGES CXX C)
 
 enable_testing()
 include(CTest)
@@ -112,13 +112,28 @@ if(ENABLE_COVERAGE)
   add_link_options(--coverage)
 endif()
 
-option(ENABLE_LINT "Enable clang-tidy reporting" OFF)
-if(ENABLE_LINT)
-  set(CMAKE_CXX_CLANG_TIDY
-    clang-tidy
-    "-header-filter='^(?!llvm/).+'"
-    "-config-file=${CMAKE_SOURCE_DIR}/.clang-tidy"
-  )
+### Enable treating warnings as errors (genmc/ and passes/ only)
+option(GENMC_WERROR "Treat compiler warnings as errors for GenMC's own code" OFF)
+if(GENMC_WERROR)
+  # Need -Wno-error=cpp due to #warnings from LLVM headers that cannot
+  # be omitted (even with of -isystem)
+  set(GENMC_WARNING_FLAGS -Wall -Wextra -Werror -Wno-error=cpp)
+endif()
+
+### Sanitizers
+set(SANITIZE "" CACHE STRING
+    "Comma-separated sanitizers to enable (e.g. address,undefined or thread)")
+if(SANITIZE)
+  if(SANITIZE MATCHES "address" AND SANITIZE MATCHES "thread")
+    message(FATAL_ERROR "SANITIZE: 'address' and 'thread' are mutually exclusive")
+  endif()
+  add_compile_options(-fsanitize=${SANITIZE} -fno-omit-frame-pointer -g)
+  add_link_options(-fsanitize=${SANITIZE})
+  # vptr checks produce false positives on LLVM virtual types if only genmc is instrumented
+  if(SANITIZE MATCHES "undefined")
+    add_compile_options(-fno-sanitize=vptr)
+  endif()
+  message(STATUS "Sanitizers: ${SANITIZE}")
 endif()
 
 ### Generate config headers (after all variables are set)

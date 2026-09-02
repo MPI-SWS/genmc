@@ -12,12 +12,21 @@
  */
 
 #include "genmc/ADT/DepView.hpp"
+#include "genmc/ADT/VectorClock.hpp"
+#include "genmc/ADT/View.hpp"
+#include "genmc/Execution/Event.hpp"
+#include "genmc/Support/Cast.hpp"
 #include "genmc/Support/Error.hpp"
+
+#include <algorithm>
+#include <format>
+#include <utility>
 
 auto DepView::contains(const Event e) const -> bool
 {
 	return e.index <= getMax(e.thread) &&
-	       (e.index == 0 || (e.thread < holes_.size() && !holes_[e.thread].count(e.index)));
+	       (e.index == 0 ||
+		(std::cmp_less(e.thread, holes_.size()) && !holes_[e.thread].contains(e.index)));
 }
 
 void DepView::addHole(const Event e)
@@ -42,14 +51,14 @@ void DepView::removeHolesInRange(Event start, int endIdx)
 		removeHole(Event(start.thread, i));
 }
 
-auto DepView::update(const View &v) -> View & { UNREACHABLE(); }
+auto DepView::update(const View & /*v*/) -> View & { UNREACHABLE(); }
 
 auto DepView::update(const DepView &v) -> DepView &
 {
 	if (v.empty())
 		return *this;
 
-	for (auto i = 0U; i < v.size(); i++) {
+	for (auto i = 0; i < v.size(); i++) {
 		auto isec = holes_[i].intersectWith(v.holes_[i]);
 		if (getMax(i) < v.getMax(i)) {
 			isec.insert(std::lower_bound(v.holes_[i].begin(), v.holes_[i].end(),
@@ -76,10 +85,10 @@ auto DepView::update(const VectorClock &vc) -> VectorClock &
 auto DepView::formatData(std::format_context &ctx) const -> std::format_context::iterator
 {
 	auto out = std::format_to(ctx.out(), "[\n");
-	for (auto i = 0U; i < size(); i++) {
+	for (auto i = 0; i < size(); i++) {
 		out = std::format_to(out, "\t{}: {} ( ", i, getMax(i));
-		for (const auto &h : this->holes_[i]) {
-			out = std::format_to(out, "{} ", h);
+		for (const auto &hole : this->holes_[i]) {
+			out = std::format_to(out, "{} ", hole);
 		}
 		out = std::format_to(out, ")\n");
 	}

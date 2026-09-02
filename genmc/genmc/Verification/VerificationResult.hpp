@@ -12,17 +12,17 @@
 #include <utility>
 
 struct VerificationResult {
-	std::optional<VerificationError> status{}; /**< Whether the verification
+	std::optional<VerificationError> status; /**< Whether the verification
 				    completed successfully */
-	unsigned explored{};		  /**< Number of complete executions explored */
-	unsigned exploredBlocked{};	  /**< Number of blocked executions explored */
+	unsigned explored{};			 /**< Number of complete executions explored */
+	unsigned exploredBlocked{};		 /**< Number of blocked executions explored */
 	unsigned boundExceeding{};	  /**< Number of bound-exceeding executions explored */
 	long double estimationMean{};	  /**< The mean of estimations */
 	long double estimationVariance{}; /**< The (biased) variance of the estimations */
 #ifdef ENABLE_GENMC_DEBUG
-	unsigned exploredMoot{};		/**< Number of moot executions _encountered_ */
-	unsigned duplicates{};			/**< Number of duplicate executions explored */
-	genmc::IndexedMap<int> exploredBounds{}; /**< Number of complete executions not
+	unsigned exploredMoot{};	       /**< Number of moot executions _encountered_ */
+	unsigned duplicates{};		       /**< Number of duplicate executions explored */
+	genmc::IndexedMap<int> exploredBounds; /**< Number of complete executions not
 			       exceeding each bound */
 #endif
 	std::string message;				 /**< A message to be printed */
@@ -32,6 +32,7 @@ struct VerificationResult {
 
 	VerificationResult() = default;
 
+	// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
 	auto operator+=(VerificationResult &&other) -> VerificationResult &
 	{
 		/* Propagate latest error */

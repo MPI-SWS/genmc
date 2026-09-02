@@ -52,7 +52,7 @@ public:
 	auto run(Module &M, ModuleAnalysisManager &MAM) -> PreservedAnalyses;
 
 private:
-	CallAnalysisResult &AR_;
+	CallAnalysisResult &AR_; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 };
 
 #endif /* GENMC_CALL_INFO_COLLECTION_PASS_HPP */

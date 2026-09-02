@@ -21,7 +21,7 @@
 class ExecutionGraph;
 enum class BoundType : std::uint8_t;
 
-enum class BoundCalculationStrategy { Slacked, NonSlacked };
+enum class BoundCalculationStrategy : std::uint8_t { Slacked, NonSlacked };
 
 /** Abstract class for bounding the model checker's search space */
 class BoundDecider {

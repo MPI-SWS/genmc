@@ -13,30 +13,35 @@
 
 #include "MMDetectorPass.hpp"
 #include "passes/ModuleInfo.hpp"
+
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/InstIterator.h>
-#include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
-#include <llvm/IR/Type.h>
+#include <llvm/IR/PassManager.h>
+#include <llvm/Support/AtomicOrdering.h>
+#include <llvm/Support/Casting.h>
+
+#include <optional>
 
 using namespace llvm;
 
-auto isSCNAOrdering(AtomicOrdering o) -> bool
+static auto isSCNAOrdering(AtomicOrdering ord) -> bool
 {
-	return o == AtomicOrdering::SequentiallyConsistent || o == AtomicOrdering::NotAtomic;
+	return ord == AtomicOrdering::SequentiallyConsistent || ord == AtomicOrdering::NotAtomic;
 }
 
-auto isRANAOrdering(AtomicOrdering o) -> bool
+static auto isRANAOrdering(AtomicOrdering ord) -> bool
 {
 	using AO = AtomicOrdering;
-	return o == AO::Acquire || o == AO::Release || o == AO::AcquireRelease ||
-	       o == AtomicOrdering::NotAtomic;
+	return ord == AO::Acquire || ord == AO::Release || ord == AO::AcquireRelease ||
+	       ord == AtomicOrdering::NotAtomic;
 }
 
-auto MMAnalysis::run(Module &M, ModuleAnalysisManager &MAM) -> MMAnalysis::Result
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+auto MMAnalysis::run(Module &M, ModuleAnalysisManager & /*MAM*/) -> MMAnalysis::Result
 {
 	auto isSC = true;
 	auto isRA = true;

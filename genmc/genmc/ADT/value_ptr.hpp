@@ -1,3 +1,4 @@
+// NOLINTBEGIN
 // Originally adapted from: https://github.com/LoopPerfect/valuable
 //
 // MIT License
@@ -59,15 +60,16 @@ struct DECLSPEC_EMPTY_BASES compressed_ptr : std::unique_ptr<T, Deleter>, T2 {
 	{}
 
 	template <typename A1>
-	compressed_ptr(A1 &&a1, class_tag<typename std::decay<A1>::type>, spacer, spacer)
+	compressed_ptr(A1 &&a1, class_tag<std::decay_t<A1>> /*unused*/, spacer /*unused*/,
+		       spacer /*unused*/)
 		: T1(std::forward<A1>(a1))
 	{}
 	template <typename A1, typename A2>
-	compressed_ptr(A1 &&a1, A2 &&a2, class_tag<Deleter>, spacer)
+	compressed_ptr(A1 &&a1, A2 &&a2, class_tag<Deleter> /*unused*/, spacer /*unused*/)
 		: T1(std::forward<A1>(a1), std::forward<A2>(a2))
 	{}
 	template <typename A1, typename A2>
-	compressed_ptr(A1 &&a1, A2 &&a2, class_tag<T2>, spacer)
+	compressed_ptr(A1 &&a1, A2 &&a2, class_tag<T2> /*unused*/, spacer /*unused*/)
 		: T1(std::forward<A1>(a1)), T2(std::forward<A2>(a2))
 	{}
 };
@@ -75,7 +77,7 @@ struct DECLSPEC_EMPTY_BASES compressed_ptr : std::unique_ptr<T, Deleter>, T2 {
 
 template <typename T> struct default_clone {
 	default_clone() = default;
-	auto operator()(T const &x) const -> T * { return new T(x); }
+	auto operator()(const T &x) const -> T * { return new T(x); }
 	auto operator()(T &&x) const -> T * { return new T(std::move(x)); }
 };
 
@@ -84,9 +86,9 @@ class value_ptr {
 	::detail::compressed_ptr<T, Deleter, Cloner> ptr_;
 
 	auto ptr() -> std::unique_ptr<T, Deleter> & { return ptr_; }
-	auto ptr() const -> std::unique_ptr<T, Deleter> const & { return ptr_; }
+	[[nodiscard]] auto ptr() const -> const std::unique_ptr<T, Deleter> & { return ptr_; }
 
-	auto clone(T const &x) const -> T * { return get_cloner()(x); }
+	[[nodiscard]] auto clone(const T &x) const -> T * { return get_cloner()(x); }
 
 public:
 	using pointer = T *;
@@ -112,7 +114,7 @@ public:
 		: ptr_(std::forward<V>(value), std::forward<D>(deleter), std::forward<C>(cloner))
 	{}
 
-	value_ptr(value_ptr const &v) : ptr_{nullptr, v.get_cloner()}
+	value_ptr(const value_ptr &v) : ptr_{nullptr, v.get_cloner()}
 	{
 		if (v) {
 			ptr().reset(clone(*v));
@@ -126,18 +128,18 @@ public:
 	value_ptr(std::nullptr_t) noexcept : ptr_() {}
 
 	auto get() noexcept -> T * { return ptr().get(); }
-	auto get() const noexcept -> T const * { return ptr().get(); }
+	[[nodiscard]] auto get() const noexcept -> const T * { return ptr().get(); }
 
 	auto get_cloner() noexcept -> Cloner & { return ptr_; }
-	auto get_cloner() const noexcept -> Cloner const & { return ptr_; };
+	[[nodiscard]] auto get_cloner() const noexcept -> const Cloner & { return ptr_; };
 
 	auto get_deleter() noexcept -> Deleter & { return ptr_; }
-	auto get_deleter() const noexcept -> Deleter const & { return ptr_; }
+	[[nodiscard]] auto get_deleter() const noexcept -> const Deleter & { return ptr_; }
 
 	auto operator*() -> T & { return *get(); }
-	auto operator*() const -> T const & { return *get(); }
+	auto operator*() const -> const T & { return *get(); }
 
-	auto operator->() const noexcept -> T const * { return get(); }
+	auto operator->() const noexcept -> const T * { return get(); }
 	auto operator->() noexcept -> T * { return get(); }
 
 	auto operator=(value_ptr &&v) -> value_ptr<T, Cloner, Deleter> &
@@ -147,7 +149,7 @@ public:
 		return *this;
 	}
 
-	auto operator=(value_ptr const &v) -> value_ptr<T, Cloner, Deleter> &
+	auto operator=(const value_ptr &v) -> value_ptr<T, Cloner, Deleter> &
 	{
 		ptr().reset(v.get_cloner()(*v));
 		get_cloner() = v.get_cloner();
@@ -173,3 +175,4 @@ public:
 #undef DECLSPEC_EMPTY_BASES
 
 #endif /* GENMC_VALUE_PTR_HPP */
+// NOLINTEND
