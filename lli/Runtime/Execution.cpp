@@ -2846,6 +2846,7 @@ void Interpreter::callLoopBegin(Function *F, const std::vector<GenericValue> &Ar
 {
 	auto ret = CALL_DRIVER(handleLoopBegin, currDbgInfo(), currPos());
 	VERIFY(std::holds_alternative<std::monostate>(ret));
+	updateCtrlDeps(getCurThr().id, currPos()); /* add a ctrl dep on spin markers */
 }
 
 void Interpreter::callSpinStart(Function *F, const std::vector<GenericValue> &ArgVals,
@@ -2853,6 +2854,7 @@ void Interpreter::callSpinStart(Function *F, const std::vector<GenericValue> &Ar
 {
 	auto ret = CALL_DRIVER(handleSpinStart, currDbgInfo(), currPos());
 	VERIFY(std::holds_alternative<std::monostate>(ret));
+	updateCtrlDeps(getCurThr().id, currPos());
 }
 
 void Interpreter::callFaiZNESpinEnd(Function *F, const std::vector<GenericValue> &ArgVals,
@@ -2860,6 +2862,7 @@ void Interpreter::callFaiZNESpinEnd(Function *F, const std::vector<GenericValue>
 {
 	auto ret = CALL_DRIVER(handleFaiZNESpinEnd, currDbgInfo(), currPos());
 	VERIFY(std::holds_alternative<std::monostate>(ret));
+	updateCtrlDeps(getCurThr().id, currPos());
 }
 
 void Interpreter::callLockZNESpinEnd(Function *F, const std::vector<GenericValue> &ArgVals,
@@ -2867,6 +2870,7 @@ void Interpreter::callLockZNESpinEnd(Function *F, const std::vector<GenericValue
 {
 	auto ret = CALL_DRIVER(handleLockZNESpinEnd, currDbgInfo(), currPos());
 	VERIFY(std::holds_alternative<std::monostate>(ret));
+	updateCtrlDeps(getCurThr().id, currPos());
 }
 
 void Interpreter::callKillThread(Function *F, const std::vector<GenericValue> &ArgVals,
@@ -3005,8 +3009,8 @@ void Interpreter::callThreadCreate(Function *F, const std::vector<GenericValue> 
 				  getAddrPoDeps(getCurThr().id), nullptr);
 	int symm = ArgVals.size() > 3 ? ArgVals[3].IntVal.getLimitedValue() : -1;
 	auto info = ThreadInfo(-1, currPos().thread, MI->idInfo.VID.at(calledFun),
-			       SVal((uintptr_t)ArgVals[2].PointerVal),
-			       getCurThr().threadFun->getName().str(), symm);
+			       SVal((uintptr_t)ArgVals[2].PointerVal), calledFun->getName().str(),
+			       symm);
 	auto ret = CALL_DRIVER(handleThreadCreate, currDbgInfo(), currPos(), info, GET_DEPS(deps));
 	auto tid = std::get_if<int>(&ret);
 	if (!tid)

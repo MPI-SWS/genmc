@@ -77,4 +77,13 @@ void unblockThread(ExecutionGraph &g, Event pos);
 auto createRMWWriteLabel(const ExecutionGraph &g, const ReadLabel *rLab)
 	-> std::unique_ptr<WriteLabel>;
 
+/** Heuristically picks po-minimal events to prune from the graph */
+auto pickPoMinimalEvents(ExecutionGraph &g) -> std::vector<EventLabel *>;
+
+/** Returns a view containing the SC-closure of ES.
+ * The view encodes its boundary via successor positions.
+ *
+ * Pre: ES does not contain the read part of an RMW. */
+auto calcSCPrefixClosure(const ExecutionGraph &g, const std::vector<EventLabel *> &es) -> View;
+
 #endif /* GENMC_GRAPH_UTILS_HPP */

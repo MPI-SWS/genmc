@@ -34,6 +34,7 @@ struct Config {
 	/*** Exploration options ***/
 	ExplorationMode mode{};
 	ModelType model{};
+	std::optional<unsigned int> maxGraphSize;
 	bool estimate{};
 	bool isDepTrackingModel{};
 	std::optional<unsigned int> bound;

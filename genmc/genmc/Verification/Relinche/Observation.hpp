@@ -19,6 +19,7 @@
 #include "genmc/Support/Error.hpp"
 #include "genmc/Support/Hash.hpp"
 
+#include <compare>
 #include <format>
 #include <ranges>
 #include <string>
@@ -71,7 +72,10 @@ struct MethodCall {
 		       std::tie(other.name, other.argVal, other.retVal);
 	}
 
-	auto operator==(const MethodCall &other) const -> bool { return operator<=>(other) == 0; }
+	auto operator==(const MethodCall &other) const -> bool
+	{
+		return std::is_eq(operator<=>(other));
+	}
 };
 
 /** This class represents the projection of execution graph into client.

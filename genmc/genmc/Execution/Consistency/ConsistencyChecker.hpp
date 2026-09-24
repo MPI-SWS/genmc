@@ -17,6 +17,7 @@
 #include "genmc/ADT/VSet.hpp"
 #include "genmc/Verification/VerificationError.hpp"
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -84,7 +85,9 @@ public:
 	virtual auto calculatePrefixView(const EventLabel *lab) const
 		-> std::unique_ptr<VectorClock> = 0;
 
-	virtual auto getHbView(const EventLabel *lab) const -> const View & = 0;
+	/* The hb view lives at getHbViewIndex() in every label's view array */
+	[[nodiscard]] auto getHbView(const EventLabel *lab) const -> const View &;
+	[[nodiscard]] virtual auto getHbViewIndex() const -> unsigned = 0;
 	virtual auto getHbRelincheView(const EventLabel * /*lab*/) const -> const View &
 	{
 		ERROR("Unimplemented"); /* should be caught at config */

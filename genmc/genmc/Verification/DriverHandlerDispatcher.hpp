@@ -50,7 +50,8 @@ public:
 	void visitReadLabel(const ReadLabel &lab)
 	{
 		if (lab.isNotAtomic()) {
-			driver->handleNALoad(lab.getPos(), lab.getAddr(), lab.getSize());
+			driver->handleNALoad(lab.getPos(), lab.getAddr(), lab.getSize(),
+					     lab.getDeps());
 		} else {
 			driver->handleLoad(std::unique_ptr<ReadLabel>(
 						   genmc::cast<ReadLabel>(lab.clone().release())),
@@ -62,7 +63,7 @@ public:
 	{
 		if (lab.isNotAtomic()) {
 			driver->handleNAStore(lab.getPos(), lab.getAddr(), lab.getSize(),
-					      lab.getVal());
+					      lab.getVal(), lab.getDeps());
 		} else {
 			driver->handleStore(std::unique_ptr<WriteLabel>(
 						    genmc::cast<WriteLabel>(lab.clone().release())),

@@ -137,14 +137,14 @@ void DepExecutionGraph::cutToStamp(Stamp stamp)
 			poLists[i].insert(it, *getEventLabel(Event(i, j)));
 		}
 	}
-
-	getState().clear();
 }
 
 auto DepExecutionGraph::getCopyUpTo(const VectorClock &v) const -> std::unique_ptr<ExecutionGraph>
 {
-	auto og = std::make_unique<DepExecutionGraph>(ExecutionGraph::Config{
-		.consChecker = this->consChecker_, .emitNALabels = this->haveNAs_});
+	auto og = std::make_unique<DepExecutionGraph>(
+		ExecutionGraph::Config{.execState = this->state_,
+				       .consChecker = this->consChecker_,
+				       .emitNALabels = this->haveNAs_});
 	copyGraphUpTo(*og, v);
 	return og;
 }

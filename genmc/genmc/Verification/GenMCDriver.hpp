@@ -447,9 +447,9 @@ private:
 		-> HandleResult<std::monostate>;
 	auto handleDummy(std::unique_ptr<EventLabel> lab) -> HandleResult<std::monostate>;
 
-	auto handleNALoad(Event pos, SAddr loc, ASize size) -> NALoadResult;
-	auto handleNAStore(Event pos, SAddr loc, ASize size, std::optional<SVal> val)
-		-> NAStoreResult;
+	auto handleNALoad(Event pos, SAddr loc, ASize size, const EventDeps &deps) -> NALoadResult;
+	auto handleNAStore(Event pos, SAddr loc, ASize size, std::optional<SVal> val,
+			   const EventDeps &deps) -> NAStoreResult;
 	auto handleMalloc(Event pos, ASize size, uint64_t alignment, StorageDuration sdur,
 			  StorageType styp, AddressSpace spc, const NameInfo *info,
 			  const std::string &name, const EventDeps &deps) -> HandleResult<SVal>;
@@ -529,6 +529,13 @@ private:
 	/** Adds each one of LABS to graph (maintains well-formedness) */
 	void addLabelsToGraph(const std::vector<std::unique_ptr<EventLabel>> &labs);
 
+	/** Random: Replaces the current execution with a fresh one */
+	void restartExecution();
+
+	/** When LAB is the label about to be added, prunes the execution
+	 * graph if it exceeds a predefined size */
+	void maybeCutGraph(const EventLabel *lab);
+
 	/** Est: Picks (and sets) a random RF among some possible options */
 	auto pickRandomRf(ReadLabel *rLab, std::vector<EventLabel *> &stores) -> EventLabel *;
 
@@ -575,8 +582,6 @@ private:
 	/** Returns true if all events to be removed by the revisit
 	 * RLAB <- SLAB form a maximal extension */
 	auto isMaximalExtension(const BackwardRevisit &r) -> bool;
-
-	auto prefixContainsSameLoc(const BackwardRevisit &r, const EventLabel *lab) const -> bool;
 
 	/** Calculates all possible coherence placings for SLAB and
 	 * pushes them to the worklist. */
@@ -723,7 +728,8 @@ private:
 
 	auto checkForRaces(const EventLabel *lab) -> std::optional<VerificationError>;
 
-	void configureProbe(MemLabel *rLab, Event pos, SAddr addr, ASize size);
+	void configureProbe(MemLabel *rLab, Event pos, SAddr addr, ASize size,
+			    const EventDeps &deps);
 
 	/** Returns an approximation of consistent rfs for RLAB.
 	 * The rfs are ordered according to CO */

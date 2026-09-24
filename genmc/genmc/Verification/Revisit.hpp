@@ -17,6 +17,7 @@
 #include "genmc/Execution/EventLabel.hpp"
 #include "genmc/Verification/VerificationError.hpp"
 
+#include <cstdint>
 #include <format>
 #include <utility>
 

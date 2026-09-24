@@ -211,7 +211,10 @@ auto View::formatData(std::format_context &ctx) const -> std::format_context::it
 {
 	std::format_context::iterator out = ctx.out();
 #ifdef ENABLE_GENMC_DEBUG
-	out = std::format_to(out, "<base={}", static_cast<void *>(base_.get()));
+	if (static_cast<void *>(base_.get()) == nullptr)
+		out = std::format_to(out, "<base={}", static_cast<void *>(base_.get()));
+	else
+		out = std::format_to(out, "<base={}@{}", *base_, static_cast<void *>(base_.get()));
 	if (!diff_.isInitializer())
 		out = std::format_to(out, ", diff={}", diff_);
 	if (base_.use_count() == 1)

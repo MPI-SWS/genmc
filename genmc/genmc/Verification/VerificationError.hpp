@@ -17,6 +17,7 @@
 #include "genmc/Execution/Event.hpp"
 #include "genmc/Support/Error.hpp"
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <unordered_map>

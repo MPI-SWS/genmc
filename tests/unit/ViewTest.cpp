@@ -84,6 +84,17 @@ TEST(ViewUnitTest, SingleUpdateAndContains)
 	EXPECT_TRUE(v.contains(Event(4, 0))); /* 0-idx special case */
 }
 
+TEST(ViewUnitTest, ContainsStrictExcludesMaximum)
+{
+	View v;
+	v.updateIdx({1, 10});
+
+	EXPECT_TRUE(v.containsStrict(Event(1, 9)));
+	EXPECT_FALSE(v.containsStrict(Event(1, 10)));
+	EXPECT_FALSE(v.containsStrict(Event(1, 11)));
+	EXPECT_FALSE(v.containsStrict(Event(4, 0))); /* no 0-idx special case */
+}
+
 TEST(ViewUnitTest, CoWIsolation)
 {
 	View v1;

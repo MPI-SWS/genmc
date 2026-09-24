@@ -8,6 +8,8 @@ A full list of the available command-line options can by viewed by issuing `genm
 - **`-rc11`**: Perform the exploration under the RC11 memory model (default)
 - **`-imm`**: Perform the exploration under the IMM memory model
 - **`-nthreads=<N>`**: Perform verification concurrently (using `N` threads)
+- **`-mode=<verify|random|estimate>`**: Choose between exhaustive exploration (default), randomized exploration, and state-space size estimation
+- **`-random-budget=<N>`**: Number of executions to sample in `-mode=random`
 - **`-cache-instructions`**: Caches instructions to help execution time (sacrifices memory)
 - **`-disable-bam`**: Disables Barrier-Aware Model-checking (BAM)
 - **`-check-liveness`**: Check for liveness violations in spinloops

@@ -16,6 +16,8 @@
 
 #include "genmc/ADT/Bitmask.hpp"
 
+#include <cstdint>
+
 /**
  * Attributes for write events
  */
@@ -24,7 +26,6 @@ enum class WriteAttr : std::uint8_t {
 	Local = 0x1,
 	Final = 0x2,
 	WWRacy = 0x4,
-	Complete = 0x8,
 };
 
 ENABLE_BITMASK_OPERATORS(WriteAttr);

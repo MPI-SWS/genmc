@@ -10,6 +10,18 @@ released.
 - Merge of MIXER [POPL'25] into mainline GenMC
 
 
+## [0.19.0] - 2026.09.24
+
+### Changes
+
+- IMM is enabled again
+- Small performance improvements for RC11
+
+### Fixes
+
+- Minor bug and printing fixes
+
+
 ## [0.18.0] - 2026.09.02
 
 ### Added

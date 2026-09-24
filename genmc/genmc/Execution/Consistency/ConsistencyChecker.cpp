@@ -17,11 +17,17 @@
 #include "genmc/Execution/Consistency/RC11Checker.hpp" // NOLINT(misc-include-cleaner)
 #include "genmc/Execution/Consistency/SCChecker.hpp"   // NOLINT(misc-include-cleaner)
 #include "genmc/Execution/Consistency/TSOChecker.hpp"  // NOLINT(misc-include-cleaner)
+#include "genmc/Execution/EventLabel.hpp"
 #include "genmc/Support/Error.hpp"
 #include "genmc/Verification/Config.hpp"
 #include "genmc/Verification/MemoryModel.hpp"
 
 #include <memory>
+
+auto ConsistencyChecker::getHbView(const EventLabel *lab) const -> const View &
+{
+	return lab->view(getHbViewIndex());
+}
 
 auto ConsistencyChecker::create(const Config *conf) -> std::unique_ptr<ConsistencyChecker>
 {

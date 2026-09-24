@@ -17,6 +17,7 @@
 #include "genmc/Support/Error.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <vector>
 

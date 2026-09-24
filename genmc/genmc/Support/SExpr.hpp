@@ -18,6 +18,7 @@
 #include "genmc/Support/SVal.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <memory>
 
 /*

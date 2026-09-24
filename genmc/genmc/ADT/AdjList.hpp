@@ -17,6 +17,7 @@
 #include "genmc/ADT/BitVector.hpp"
 #include "genmc/Support/Error.hpp"
 
+#include <cstdint>
 #include <functional>
 #include <ostream>
 #include <unordered_map>

@@ -17,7 +17,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GenMC="${GenMC:-$DIR/../RelWithDebInfo/bin/genmc}"
 GENMCFLAGS="${GENMCFLAGS:-}"
-MODELS=(rc11)
+MODELS=(rc11 imm)
 
 CONFIG_FILE="$(dirname "$(dirname "${GenMC}")")/include/genmc/config.h"
 
@@ -116,7 +116,8 @@ do
 	fi
 
 	check_blocked="" && [[ "${cat}" == "saver" || "${cat}" == "helper" ]] &&
-	    [[ (! "${GENMCFLAGS}" =~ "policy=arbitrary") ]] && check_blocked="yes"
+	    [[ (! "${GENMCFLAGS}" =~ "policy=arbitrary") ]] && [[ "${model}" != "imm" ]] &&
+	    check_blocked="yes"
 	if [[ "${cat}" == "ipr" && "${model}" != "imm" ]]
 	then
 	    check_blocked="yes"

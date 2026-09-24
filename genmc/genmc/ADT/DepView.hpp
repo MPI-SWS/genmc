@@ -104,8 +104,7 @@ public:
 	/** Returns true if there's a hole in E's position */
 	[[nodiscard]] auto hasHole(const Event e) const -> bool
 	{
-		return std::cmp_less(e.thread, holes_.size()) &&
-		       !holes_[e.thread].contains(e.index);
+		return std::cmp_less(e.thread, holes_.size()) && holes_[e.thread].contains(e.index);
 	}
 
 	/** Records that the event in the index of e has not been

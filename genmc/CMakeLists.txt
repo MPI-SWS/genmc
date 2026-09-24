@@ -29,6 +29,7 @@ set(LIB_SOURCES
   genmc/Verification/ChoiceMap.cpp
   genmc/Verification/Config.cpp
   genmc/Verification/GenMCDriver.cpp
+  genmc/Verification/GraphPrinting.cpp
   genmc/Verification/Relinche/LinearizabilityChecker.cpp
   genmc/Verification/Relinche/Linearization.cpp
   genmc/Verification/Relinche/Observation.cpp

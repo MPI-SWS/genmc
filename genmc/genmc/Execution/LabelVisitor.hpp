@@ -289,10 +289,7 @@ public:
 	{
 		DELEGATE_LABEL(MemAccessLabel);
 		out << " (" << fmtFun(lab) << ", ";
-		if (lab.isNotAtomic() && !lab.isComplete())
-			out << "?";
-		else
-			printVal(lab.getVal());
+		printVal(lab.getVal());
 		out << ")";
 	}
 

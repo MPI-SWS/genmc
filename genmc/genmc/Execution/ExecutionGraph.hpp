@@ -148,8 +148,7 @@ public:
 		events.emplace_back();
 		poLists.emplace_back();
 		auto *iLab = addLabelToGraph(InitLabel::create());
-		iLab->setCalculated({{}});
-		iLab->setViews({{View(), View(), View()}}); // FIXME
+		consChecker_->updateMMViews(iLab);
 		iLab->setPrefixView(std::make_unique<View>());
 	}
 
@@ -196,6 +195,9 @@ public:
 
 	auto po(int tid) const { return std::views::all(poLists[tid]); }
 	auto po(int tid) { return std::views::all(poLists[tid]); }
+
+	auto rpo(int tid) const { return po(tid) | std::views::reverse; }
+	auto rpo(int tid) { return po(tid) | std::views::reverse; }
 
 	auto po_succs(const EventLabel *lab) const
 	{
@@ -688,69 +690,50 @@ public:
 	 * Allocation / Free
 	 **************************************************************************/
 
-	auto alloc(const EventLabel *lab) const -> const EventLabel *
+	auto alloc_pos(const EventLabel *lab) const -> std::optional<Event>
 	{
 		const auto *mLab = genmc::dyn_cast<MemLabel>(lab);
 		if (!mLab || mLab->getAddr().isStatic())
-			return nullptr;
-
-		auto pos = getState().getAllocPos(mLab->getAddr());
-		return getEventLabel(pos);
+			return std::nullopt;
+		return getState().getAllocPos(mLab->getAddr());
 	}
 
-	auto free(const EventLabel *lab) const -> const EventLabel *
+	auto free_pos(const EventLabel *lab) const -> std::optional<Event>
 	{
 		const auto *mLab = genmc::dyn_cast<MemLabel>(lab);
 		if (!mLab || mLab->getAddr().isStatic())
-			return nullptr;
+			return std::nullopt;
 
 		auto freePos = getState().getFreePos(mLab->getAddr());
-		auto isRetired = getState().isRetired(mLab->getAddr());
-		return (!freePos || isRetired) ? nullptr : getEventLabel(*freePos);
+		return getState().isRetired(mLab->getAddr()) ? std::nullopt : freePos;
 	}
 
-	auto retire(const EventLabel *lab) const -> const EventLabel *
+	auto retire_pos(const EventLabel *lab) const -> std::optional<Event>
 	{
 		const auto *mLab = genmc::dyn_cast<MemLabel>(lab);
 		if (!mLab || mLab->getAddr().isStatic())
-			return nullptr;
+			return std::nullopt;
 
 		auto freePos = getState().getFreePos(mLab->getAddr());
-		auto isRetired = getState().isRetired(mLab->getAddr());
-		return (!freePos || !isRetired) ? nullptr : getEventLabel(*freePos);
+		return getState().isRetired(mLab->getAddr()) ? freePos : std::nullopt;
 	}
 
-	auto unprotected(const EventLabel *lab) const
+	auto unprotected_pos(const EventLabel *lab) const -> AdaptiveView
 	{
-		auto getIndirect = [this](const auto &e) -> const EventLabel & {
-			return *getEventLabel(e);
-		};
-
 		const auto *dLab = genmc::dyn_cast<MemLifecycleLabel>(lab);
-		if (!dLab)
-			return AdaptiveView() | std::views::transform(getIndirect);
-		return getState().getMaxUnprotectedView(dLab->getAddr()) |
-		       std::views::transform(getIndirect);
+		return dLab ? getState().getMaxUnprotectedView(dLab->getAddr()) : AdaptiveView();
 	}
 
-	/* Piping below is safe (despite getMaxNAReadView returning a tmp) due
-	 * to the tmp being wrapped into an owning_view */
-#define DEFINE_POMAX_ITER(NAME, GETTER)                                                            \
-	auto NAME(const EventLabel *lab) const                                                     \
+#define DEFINE_POMAX_ITER_POS(NAME, GETTER)                                                        \
+	auto NAME##_pos(const EventLabel *lab) const -> AdaptiveView                               \
 	{                                                                                          \
-		auto getIndirect = [this](const auto &e) -> const EventLabel & {                   \
-			return *getEventLabel(e);                                                  \
-		};                                                                                 \
 		const auto *mLab = genmc::dyn_cast<MemLabel>(lab);                                 \
-		if (!mLab)                                                                         \
-			return AdaptiveView() | std::views::transform(getIndirect);                \
-                                                                                                   \
-		return getState().GETTER(mLab->getAccess()) | std::views::transform(getIndirect);  \
+		return mLab ? getState().GETTER(mLab->getAccess()) : AdaptiveView();               \
 	}
-	DEFINE_POMAX_ITER(pomax_na_reads, getMaxNAReadView)
-	DEFINE_POMAX_ITER(pomax_na_writes, getMaxNAWriteEvent)
-	DEFINE_POMAX_ITER(pomax_at_reads, getMaxAReadView)
-	DEFINE_POMAX_ITER(pomax_at_writes, getMaxAWriteView)
+	DEFINE_POMAX_ITER_POS(pomax_na_reads, getMaxNAReadView)
+	DEFINE_POMAX_ITER_POS(pomax_na_writes, getMaxNAWriteEvent)
+	DEFINE_POMAX_ITER_POS(pomax_at_reads, getMaxAReadView)
+	DEFINE_POMAX_ITER_POS(pomax_at_writes, getMaxAWriteView)
 
 	/***************************************************************************
 	 * Linearization / Methods (lin)
@@ -887,14 +870,31 @@ public:
 
 	/* Event getter methods */
 
-	/* Returns the label in the position denoted by event e */
+	/* Returns the label in the position denoted by event e.
+	 * Pre: e is in the graph (see getEventLabelIfPresent()) */
 	auto getEventLabel(Event e) const -> const EventLabel *
 	{
-		return events[e.thread][e.index].get();
+		if (!pruned_)
+			return events[e.thread][e.index].get();
+
+		auto idx = getIndexOf(e);
+		ASSERT(idx != -1);
+		return events[e.thread][idx].get();
 	}
 	auto getEventLabel(Event e) -> EventLabel *
 	{
 		return const_cast<EventLabel *>(std::as_const(*this).getEventLabel(e));
+	}
+
+	/* Returns the label in e's position or nullptr if e is not in the graph */
+	auto getEventLabelIfPresent(Event e) const -> const EventLabel *
+	{
+		auto idx = getIndexOf(e);
+		return idx == -1 ? nullptr : events[e.thread][idx].get();
+	}
+	auto getEventLabelIfPresent(Event e) -> EventLabel *
+	{
+		return const_cast<EventLabel *>(std::as_const(*this).getEventLabelIfPresent(e));
 	}
 
 	/* Returns a label as a ReadLabel.
@@ -951,6 +951,9 @@ public:
 	auto getInitVal(const AAccess &access) const -> SVal
 	{
 #if EMIT_NA_LABELS
+		/* When pruning, we should not read the static initializer */
+		if (initVals_.contains(access.addr))
+			return initVals_.at(access.addr);
 		return getState().readStaticInitValue(access);
 #else
 		if (initVals_.contains(access.addr))
@@ -967,11 +970,11 @@ public:
 
 	void setInitVal(const SAddr &addr, SVal val)
 	{
-		auto result = initVals_.insert({addr, val});
-		VERIFY(!(result.second &&
-			 (((*result.first).second.get() != val.get() &&
-			   (*result.first).second.getProvenance() !=
-				   val.getProvenance())))); /* Attempt to replace initial value */
+		/* Only pruning may replace an initial value */
+		VERIFY(pruned_ || !initVals_.contains(addr) ||
+		       (initVals_.at(addr).get() == val.get() &&
+			initVals_.at(addr).getProvenance() == val.getProvenance()));
+		initVals_[addr] = val;
 	}
 	void updateDeferredValue(const AAccess &access, SVal val)
 	{
@@ -1007,11 +1010,7 @@ public:
 	}
 
 	/* Returns true if the graph contains e */
-	auto containsPos(const Event &e) const -> bool
-	{
-		return e.thread >= 0 && e.thread < getNumThreads() && e.index >= 0 &&
-		       e.index < getThreadSize(e.thread);
-	}
+	auto containsPos(const Event &e) const -> bool { return getIndexOf(e) != -1; }
 
 	auto containsLab(const EventLabel *lab) const -> bool
 	{
@@ -1044,11 +1043,24 @@ public:
 
 	/* Graph cutting */
 
+	/* Returns whether the graph has been pruned */
+	[[nodiscard]] auto wasPruned() const -> bool { return pruned_; }
+
 	/* Returns a view of the graph representing events with stamp <= st */
 	virtual auto getViewFromStamp(Stamp st) const -> std::unique_ptr<VectorClock>;
 
 	/* Cuts a graph so that it only contains events with stamp <= st */
 	virtual void cutToStamp(Stamp st);
+
+	/* Prunes the events denoted by V from the graph.
+	 * Returns the number of removed labels.
+	 *
+	 * Thread starts survive the cut. Surviving labels keep their positions,
+	 * so getEventLabelIfPresent() has to be used for Events.
+	 *
+	 * Pre: V must be SC-closed.
+	 * Pre: V encodes its boundary via successor positions. */
+	auto cutToView(const View &v) -> unsigned;
 
 	/* FIXME: Use value ptrs? (less error-prone than using explicit copy fun) */
 	/* Or maybe simply consolidate the copying procedure:
@@ -1130,6 +1142,35 @@ protected:
 
 	void removeAfter(const VectorClock &preds);
 
+	void cutLocToView(SAddr addr, const View &v);
+	void cutLocsToView(const View &v);
+
+	/* Returns the index of e in its thread's event list,
+	 * or -1 if e is not in the graph */
+	auto getIndexOf(Event e) const -> int
+	{
+		if (e.thread < 0 || e.thread >= getNumThreads() || e.index < 0)
+			return -1;
+
+		const auto &thr = events[e.thread];
+		if (thr.empty())
+			return -1;
+		/* Starts always occupy slot 0, whatever the thread size */
+		if (e.index == 0)
+			return 0;
+		if (thr.size() == 1)
+			return -1;
+
+		/* Non-start labels have consecutive positions (also after cuts) */
+		const auto base = thr[1]->getIndex() - 1;
+		const auto idx = e.index - base;
+		if (idx < 1 || std::cmp_greater_equal(idx, thr.size()))
+			return -1;
+
+		ASSERT(thr[idx]->getPos() == e);
+		return idx;
+	}
+
 	auto addLabelToGraph(std::unique_ptr<EventLabel> lab) -> EventLabel *;
 
 	static auto createHoleLabel(Event pos) -> std::unique_ptr<EmptyLabel>
@@ -1152,6 +1193,11 @@ protected:
 	ConsistencyChecker *consChecker_{};
 	// NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
 	bool haveNAs_{};
+	// NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
+	ExecutionState *state_{};
+
+	// NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
+	bool pruned_{};
 
 private:
 	/* The next available timestamp */
@@ -1164,8 +1210,6 @@ private:
 
 	/* XXX: Temporary map; eventually remove */
 	std::unordered_map<SAddr, SVal> initVals_;
-
-	ExecutionState *state_{};
 };
 
 /** Make `ExecutionGraph` formattable with `std::format`. */

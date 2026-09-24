@@ -19,6 +19,7 @@ compile_commands.json
 
 doc/doxygen
 doc/Doxyfile
+/site/
 
 .vscode/
 

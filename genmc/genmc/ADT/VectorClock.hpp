@@ -16,6 +16,7 @@
 
 #include "genmc/Execution/Event.hpp"
 
+#include <cstdint>
 #include <format>
 #include <memory>
 

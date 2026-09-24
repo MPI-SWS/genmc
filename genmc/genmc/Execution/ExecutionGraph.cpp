@@ -35,6 +35,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 /* Mask selecting the least-significant byte of an integer value */
 static constexpr uint64_t BYTE_MASK = 0xFF;
@@ -50,10 +51,14 @@ static constexpr uint64_t BYTE_MASK = 0xFF;
 
 	/* Special case for initializer */
 	if (lab->getPos().isInitializer()) {
-		VERIFY(!(haveNAs_ && access.addr.isDynamic()));
-		auto val = access.addr.isDynamic() ? SVal(0) : getInitVal(access);
-		/* TODO (WRD): View{} assumes the graph is complete here */
-		return haveNAs_ ? val : state.reconstructMemValue(access, View{}, val);
+		/* Dynamic-loc accesses can read init only if the graph has been cut */
+		VERIFY(!(haveNAs_ && access.addr.isDynamic() && !pruned_));
+		auto val = (access.addr.isDynamic() && !initVals_.contains(access.addr))
+				   ? SVal(0)
+				   : getInitVal(access);
+		const auto &hbView =
+			getInitLabel()->locView(access.addr, getConsChecker()->getHbViewIndex());
+		return haveNAs_ ? val : state.reconstructMemValue(access, hbView, val);
 	}
 
 	const auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
@@ -74,10 +79,9 @@ auto ExecutionGraph::getViewFromStamp(Stamp stamp) const -> std::unique_ptr<Vect
 	auto preds = std::make_unique<View>();
 
 	for (auto i = 0; i < getNumThreads(); i++) {
-		for (auto j = getThreadSize(i) - 1; j >= 0; j--) {
-			const auto *lab = getEventLabel(Event(i, j));
-			if (lab->getStamp() <= stamp) {
-				preds->setMax(Event(i, j));
+		for (const auto &lab : rpo(i)) {
+			if (lab.getStamp() <= stamp) {
+				preds->setMax(lab.getPos());
 				break;
 			}
 		}
@@ -95,24 +99,39 @@ auto ExecutionGraph::getCurrentMemValue(SAddr addr, ASize size) -> SVal
 	for (auto i = 0U; i < size; i++) {
 		auto info = state.getAtomicWriteInfo(addr + i);
 
-		/* Only has initial value */
+		/* No atomic write ever covered this byte (atomic-write info is never
+		 * pruned): the base is the raw initial value, which nothing has seen,
+		 * so every recorded NA write overwrites it (empty view) */
 		if (!info) {
 			/* TODO: missing check for invalid access */
 			const SVal initVal = addr.isDynamic() ? SVal(0)
 							      : getInitVal(AAccess(addr + i, 1));
-			/* TODO (WRD): View{} assumes the graph is complete here */
 			res |= state.reconstructMemValue({addr + i, 1}, View{}, initVal)
 			       << SVal(i * CHAR_BIT);
 			continue;
 		}
 
-		/* At least one atomic write on this location */
+		/* The base is the co-max atomic write covering this byte */
 		auto atomicAddr = info->first;
-		auto *wLab = genmc::cast<WriteLabel>(co_max(atomicAddr));
 		auto offset = addr + i - atomicAddr;
-		res |= state.reconstructMemValue({addr + i, 1}, getConsChecker()->getHbView(wLab),
-						 (wLab->getVal() >> SVal(offset * CHAR_BIT)) &
-							 SVal(BYTE_MASK))
+		if (auto *wLab = genmc::dyn_cast<WriteLabel>(co_max(atomicAddr))) {
+			res |= state.reconstructMemValue(
+				       {addr + i, 1}, getConsChecker()->getHbView(wLab),
+				       (wLab->getVal() >> SVal(offset * CHAR_BIT)) &
+					       SVal(BYTE_MASK))
+			       << SVal(i * CHAR_BIT);
+			continue;
+		}
+
+		/* ...which was pruned: value and hb view come from the
+		 * initializer's cache */
+		auto atomicAccess = AAccess(atomicAddr, ASize(info->second - atomicAddr));
+		const auto &hbView =
+			getInitLabel()->locView(atomicAddr, getConsChecker()->getHbViewIndex());
+		res |= state.reconstructMemValue(
+			       {addr + i, 1}, hbView,
+			       (getInitVal(atomicAccess) >> SVal(offset * CHAR_BIT)) &
+				       SVal(BYTE_MASK))
 		       << SVal(i * CHAR_BIT);
 	}
 	return res;
@@ -349,6 +368,127 @@ void ExecutionGraph::cutToStamp(Stamp stamp)
 	resetStamp(0U);
 	for (auto &lab : labels())
 		lab.setStamp(nextStamp());
+}
+
+void ExecutionGraph::cutLocToView(SAddr addr, const View &v)
+{
+	auto *iLab = getInitLabel();
+
+	/* find(): operator[] would materialize read-only locations */
+	if (auto cIt = coherence.find(addr); cIt != coherence.end()) {
+		const WriteLabel *coMaxRemoved = nullptr;
+		for (auto sIt = cIt->second.begin(); sIt != cIt->second.end();) {
+			if (v.containsStrict(sIt->getPos())) {
+				coMaxRemoved = &*sIt;
+				sIt = cIt->second.erase(sIt);
+			} else
+				++sIt;
+		}
+		/* Update the initializer's cache for ADDR */
+		if (coMaxRemoved != nullptr) {
+			setInitVal(addr, coMaxRemoved->getVal());
+			for (auto i = 0U; i < coMaxRemoved->views().size(); i++)
+				iLab->setLocView(addr, i, coMaxRemoved->view(i));
+		}
+	}
+	iLab->removeReader(addr, [&](auto &rLab) { return v.containsStrict(rLab.getPos()); });
+	if (auto aIt = accessMap_.find(addr); aIt != accessMap_.end())
+		std::erase_if(aIt->second,
+			      [&](auto *lab) { return v.containsStrict(lab->getPos()); });
+}
+
+void ExecutionGraph::cutLocsToView(const View &v)
+{
+	/* Scan V to find affected locations */
+	std::vector<SAddr> affected;
+	for (auto i : thr_ids()) {
+		for (auto &lab : po(i)) {
+			/* po is in index order and V a per-thread threshold */
+			if (!v.containsStrict(lab.getPos()))
+				break;
+			if (const auto *mLab = genmc::dyn_cast<MemAccessLabel>(&lab))
+				affected.push_back(mLab->getAddr());
+		}
+	}
+	std::ranges::sort(affected);
+	const auto dups = std::ranges::unique(affected);
+	affected.erase(dups.begin(), dups.end());
+
+	for (auto addr : affected)
+		cutLocToView(addr, v);
+}
+
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+auto ExecutionGraph::cutToView(const View &v) -> unsigned
+{
+	pruned_ = true;
+	cutLocsToView(v);
+
+	auto shouldRemove = [&](const EventLabel *lab) {
+		if (!v.containsStrict(lab->getPos()))
+			return false;
+		/* Thread starts (and the initializer) always survive */
+		if (genmc::isa<ThreadStartLabel>(lab))
+			return false;
+		return true;
+	};
+
+	std::unordered_map<int, const EventLabel *> lastRemovedPerThread;
+	auto removed = 0U;
+
+	/* Adjust event relations before pruning; restamp on the fly */
+	auto stamp = 0U;
+	for (auto labIt = insertionOrder.begin(), labE = insertionOrder.end(); labIt != labE;) {
+		if (shouldRemove(&*labIt)) {
+			++removed;
+			lastRemovedPerThread[labIt->getThread()] = &*labIt;
+			poLists[labIt->getThread()].remove(*labIt);
+			labIt = insertionOrder.erase(labIt);
+			continue;
+		}
+		auto &lab = *labIt;
+		/* A surviving read with a removed rf-source now reads "init" */
+		if (auto *rLab = genmc::dyn_cast<ReadLabel>(&lab)) {
+			if (rLab->getRf() && v.containsStrict(rLab->getRf()->getPos())) {
+				if (!rLab->getRf()->getPos().isInitializer())
+					addInitRfToLoc(rLab);
+				rLab->setRfNoCascade(getInitLabel());
+			}
+		}
+
+		if (auto *tsLab = genmc::dyn_cast<ThreadStartLabel>(&lab)) {
+			auto *tcLab = tsLab->getCreate();
+			if (tcLab && v.containsStrict(tcLab->getPos()))
+				tsLab->setCreate(nullptr);
+		}
+		lab.setStamp(Stamp(stamp++));
+		++labIt;
+	}
+	resetStamp(Stamp(stamp));
+
+	/* Update start-label views */
+	for (auto &[tid, lab] : lastRemovedPerThread) {
+		auto *tsLab = getFirstThreadLabel(tid);
+		VERIFY(tsLab->views().size() == lab->views().size());
+		for (auto i = 0U; i < lab->views().size(); i++)
+			tsLab->setView(View(lab->view(i)), i);
+		/* A terminator is po-last, so cutting one takes the whole
+		 * thread; record that or the thread reads as runnable again */
+		if (genmc::isa<TerminatorLabel>(lab))
+			tsLab->setTerminated();
+	}
+
+	/* Finally, prune the events */
+	for (auto i = 0; i < getNumThreads(); i++) {
+		auto &thr = events[i];
+		auto cutEnd = thr.begin() + std::min<long>(v.getMax(i), std::ssize(thr));
+		thr.erase(std::remove_if(thr.begin(), cutEnd,
+					 [&](auto &lab) { return shouldRemove(lab.get()); }),
+			  cutEnd);
+	}
+
+	getConsChecker()->recomputeCacheCounters(*this);
+	return removed;
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)

@@ -12,6 +12,7 @@
  */
 
 #include "genmc/Execution/GraphUtils.hpp"
+#include "genmc/ADT/View.hpp"
 #include "genmc/Execution/EventAttr.hpp"
 #include "genmc/Execution/EventLabel.hpp"
 #include "genmc/Execution/ExecutionGraph.hpp"
@@ -263,4 +264,60 @@ auto createRMWWriteLabel(const ExecutionGraph & /*g*/, const ReadLabel *rLab)
 	}
 	VERIFY(wLab);
 	return wLab;
+}
+
+auto pickPoMinimalEvents(ExecutionGraph &g) -> std::vector<EventLabel *>
+{
+	std::vector<EventLabel *> picked;
+	for (auto tid : g.thr_ids()) {
+		/* Pick the first eligible label past the thread's quarter */
+		auto skip = g.getThreadSize(tid) / 4;
+		for (auto &lab : g.po(tid)) {
+			if (skip > 0) {
+				skip--;
+				continue;
+			}
+			if (genmc::isa<ThreadStartLabel>(&lab))
+				continue;
+			if (auto *rLab = genmc::dyn_cast<ReadLabel>(&lab); rLab && rLab->isRMW())
+				continue;
+			/* Terminators can be cut later via a join */
+			if (genmc::isa<TerminatorLabel>(&lab))
+				continue;
+			picked.push_back(&lab);
+			break;
+		}
+	}
+	return picked;
+}
+
+auto calcSCPrefixClosure(const ExecutionGraph &g, const std::vector<EventLabel *> &es) -> View
+{
+	View result;
+	std::vector<const EventLabel *> worklist(es.begin(), es.end());
+
+	while (!worklist.empty()) {
+		const auto *lab = worklist.back();
+		worklist.pop_back();
+		if (result.contains(lab->getPos().next()))
+			continue;
+
+		auto lastIdx = result.getMax(lab->getThread());
+		result.updateIdx(lab->getPos().next());
+
+		for (const auto *cLab = lab; cLab && cLab->getIndex() >= lastIdx;
+		     cLab = g.po_imm_pred(cLab)) {
+			if (const auto *pLab = g.rf_pred(cLab))
+				worklist.push_back(pLab);
+			if (const auto *pLab = g.co_imm_pred(cLab))
+				worklist.push_back(pLab);
+			for (const auto &rLab : g.fr_imm_preds(cLab))
+				worklist.push_back(&rLab);
+			if (const auto *pLab = g.tc_pred(cLab))
+				worklist.push_back(pLab);
+			if (const auto *pLab = g.tj_pred(cLab))
+				worklist.push_back(pLab);
+		}
+	}
+	return result;
 }

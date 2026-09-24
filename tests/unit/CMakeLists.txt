@@ -8,16 +8,15 @@ FetchContent_Declare(
 # set(CMAKE_CXX_STANDARD 20)
 FetchContent_MakeAvailable(googletest)
 
-# Fetch rapidcheck
+# Fetch rapidcheck (as an archive: CI runners choke on git-over-HTTPS)
 FetchContent_Declare(
   rapidcheck
-  GIT_REPOSITORY https://github.com/emil-e/rapidcheck.git
-  GIT_TAG        master
+  URL https://github.com/emil-e/rapidcheck/archive/6e8dadfdafa3a74eabb52ead87f8787f72eccd0b.zip
 )
 set(RC_ENABLE_GTEST ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(rapidcheck)
 
-add_executable(unit_tests IntervalMapTest.cpp IntervalSetTest.cpp ViewTest.cpp ErrorTest.cpp CastTest.cpp CacheCounterTest.cpp)
+add_executable(unit_tests IntervalMapTest.cpp IntervalSetTest.cpp ViewTest.cpp ErrorTest.cpp CastTest.cpp CacheCounterTest.cpp ExecutionGraphTest.cpp)
 target_link_libraries(unit_tests PRIVATE GTest::gtest_main rapidcheck_gtest genmc_config_includes genmc_lib)
 target_include_directories(unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/genmc)
 target_compile_definitions(unit_tests PRIVATE ENABLE_GENMC_DEBUG) # to access validate()

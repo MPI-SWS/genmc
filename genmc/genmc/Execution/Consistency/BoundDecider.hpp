@@ -16,6 +16,7 @@
 
 #include "genmc/config.h"
 
+#include <cstdint>
 #include <memory>
 
 class ExecutionGraph;

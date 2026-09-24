@@ -50,11 +50,16 @@ ThreadPool::ThreadPool(const LLIConfig &lliConfig, const std::shared_ptr<const C
 	shouldHalt_.store(false);
 	remainingTasks_.store(0);
 
-	/* Have a non-empty queue before spawning workers */
-	ExecutionGraph::Config dummyCfg{};
-	dummyCfg.emitNALabels = Config::emitNALabels;
-	auto execGraph = conf->isDepTrackingModel ? std::make_unique<DepExecutionGraph>(dummyCfg)
-						  : std::make_unique<ExecutionGraph>(dummyCfg);
+	/* Seed the queue before spawning workers: a worker that finds it
+	 * empty exits. The seed graph needs a checker/state, so build
+	 * worker 0 up front and lend it its own. */
+	auto firstDriver = GenMCDriver::create(conf, this);
+	ExecutionGraph::Config seedCfg{};
+	seedCfg.emitNALabels = Config::emitNALabels;
+	seedCfg.consChecker = &firstDriver->getConsChecker();
+	seedCfg.execState = &firstDriver->getExecState();
+	auto execGraph = conf->isDepTrackingModel ? std::make_unique<DepExecutionGraph>(seedCfg)
+						  : std::make_unique<ExecutionGraph>(seedCfg);
 	auto exec = std::make_unique<GenMCDriver::Execution>(std::move(execGraph), WorkList(),
 							     ChoiceMap());
 	submit(std::move(exec));
@@ -65,7 +70,7 @@ ThreadPool::ThreadPool(const LLIConfig &lliConfig, const std::shared_ptr<const C
 		auto newmod = LLVMModule::cloneModule(mod, contexts_.back());
 		auto newMI = modInfo->clone(*newmod);
 
-		auto dw = GenMCDriver::create(conf, this);
+		auto dw = (i == 0) ? std::move(firstDriver) : GenMCDriver::create(conf, this);
 		std::string buf;
 		auto interp = llvm::Interpreter::create(std::move(newmod), std::move(newMI), &*dw,
 							&lliConfig, &buf);

@@ -16,6 +16,8 @@
 
 #include <llvm/Passes/PassBuilder.h>
 
+#include <cstdint>
+
 using namespace llvm;
 
 struct PassModuleInfo;

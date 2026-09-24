@@ -202,6 +202,13 @@ public:
 		return e.index <= getMax(e.thread);
 	}
 
+	/** Returns true if e is strictly below the clock's maximum for its thread.
+	 * Useful when the clock encodes a boundary via successor positions. */
+	[[nodiscard]] auto containsStrict(Event e) const -> bool
+	{
+		return e.index < getMax(e.thread);
+	}
+
 	/** Returns true if v is contained in the clock */
 	[[nodiscard]] auto contains(const View &v) const -> bool;
 
@@ -276,6 +283,14 @@ template <> struct std::formatter<View> {
 	auto format(const View &view, std::format_context &ctx) const
 	{
 		return view.formatData(ctx);
+	}
+};
+
+template <> struct std::formatter<detail::ViewBase> {
+	constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+	auto format(const detail::ViewBase &v, std::format_context &ctx) const
+	{
+		return v.formatData(ctx);
 	}
 };
 

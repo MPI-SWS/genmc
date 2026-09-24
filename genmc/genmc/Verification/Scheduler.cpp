@@ -71,7 +71,11 @@ static void calcPorfReplay(const EventLabel *lab, View &view, std::vector<Event>
 static auto isSchedulable(const ExecutionGraph &g, int thread) -> bool
 {
 	const auto *lab = g.getLastThreadLabel(thread);
-	return !genmc::isa_and_present<TerminatorLabel>(lab);
+	if (genmc::isa_and_present<TerminatorLabel>(lab))
+		return false;
+	/* Pruning might remove terminators; also check start */
+	const auto *tsLab = genmc::dyn_cast_if_present<ThreadStartLabel>(lab);
+	return tsLab == nullptr || !tsLab->isTerminated();
 }
 
 static auto calculateReplaySchedule(const ExecutionGraph &g, const Config *conf,

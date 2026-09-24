@@ -20,6 +20,7 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/Pass.h>
 
+#include <cstdint>
 #include <unordered_map>
 
 using namespace llvm;

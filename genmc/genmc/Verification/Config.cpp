@@ -58,6 +58,30 @@ auto Config::validate(std::vector<std::string> &warnings) -> ValidationStatus
 	/* Check sampling options */
 	if (mode == ExplorationMode::random && randomMax == 0)
 		errors.emplace_back("Random exploration budget must be greater than 0.");
+	if (mode == ExplorationMode::random && helper) {
+		warnings.emplace_back("Helper mode is not supported in --mode=random.");
+		helper = false;
+	}
+	if (maxGraphSize.has_value()) {
+		if (mode != ExplorationMode::random)
+			errors.emplace_back("--max-graph-size requires --mode=random.");
+		if (model == ModelType::IMM)
+			errors.emplace_back("--max-graph-size does not support IMM (yet).");
+		if (*maxGraphSize == 0)
+			errors.emplace_back("--max-graph-size must be greater than 0.");
+		if (collectLinSpec || checkLinSpec)
+			errors.emplace_back("--max-graph-size cannot be used with Relinche.");
+		if (checkLiveness)
+			errors.emplace_back(
+				"--max-graph-size cannot be used with liveness checks.");
+		if (bound.has_value())
+			errors.emplace_back("--max-graph-size cannot be used with bounding.");
+		if (symmetryReduction) {
+			warnings.emplace_back(
+				"Symmetry reduction has no effect with --max-graph-size.");
+			symmetryReduction = false;
+		}
+	}
 
 	/* Check debugging options */
 	if (!doesPolicySupportSeed(schedulePolicy) && printRandomScheduleSeed)

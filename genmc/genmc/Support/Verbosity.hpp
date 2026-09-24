@@ -14,6 +14,7 @@
 #ifndef GENMC_VERBOSITY_HPP
 #define GENMC_VERBOSITY_HPP
 
+#include <cstdint>
 #include <format>
 
 enum class VerbosityLevel : std::uint8_t {

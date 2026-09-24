@@ -58,9 +58,9 @@ to specify the paths of the libraries required.
 		cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -B RelWithDebInfo -S .
 		cmake --build RelWithDebInfo
 
-This will leave the `genmc` executable in the `RelWithDebInfo` directory.
+This will leave the `genmc` executable in the `RelWithDebInfo/bin` directory.
 You can either run it from there (as in the examples below), or issue
-`cmake --install .`.
+`cmake --install RelWithDebInfo`.
 
 To run a subset of all the tests that come with the system to see if the system was built correctly or not:
 
@@ -85,11 +85,11 @@ cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
 
 * To see a list of available options run:
 
-		./RelWithDebInfo/genmc --help
+		./RelWithDebInfo/bin/genmc --help
 
 * To run a particular testcase run:
 
-		./RelWithDebInfo/genmc [options] <file>
+		./RelWithDebInfo/bin/genmc [options] <file>
 
 * For more detailed usage examples please refer to the [manual](doc/manual/index.md).
 

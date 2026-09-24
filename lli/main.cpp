@@ -68,8 +68,8 @@ static llvm::cl::opt<ModelType> clModelType(
 	llvm::cl::values(clEnumValN(ModelType::SC, "sc", "SC memory model"),
 			 clEnumValN(ModelType::TSO, "tso", "TSO memory model"),
 			 clEnumValN(ModelType::RA, "ra", "RA+RLX memory model"),
-			 clEnumValN(ModelType::RC11, "rc11", "RC11 memory model (default)")),
-	// clEnumValN(ModelType::IMM, "imm", "IMM memory model")),
+			 clEnumValN(ModelType::RC11, "rc11", "RC11 memory model (default)"),
+			 clEnumValN(ModelType::IMM, "imm", "IMM memory model")),
 	llvm::cl::cat(clGeneral), llvm::cl::init(ModelType::RC11),
 	llvm::cl::desc("Choose model type:"));
 
@@ -90,6 +90,11 @@ static llvm::cl::opt<unsigned int>
 	clRandomBudget("random-budget", llvm::cl::init(1000), llvm::cl::value_desc("N"),
 		       llvm::cl::cat(clGeneral),
 		       llvm::cl::desc("Number of executions to sample in --mode=random"));
+
+static llvm::cl::opt<unsigned int>
+	clMaxGraphSize("max-graph-size", llvm::cl::value_desc("N"), llvm::cl::cat(clGeneral),
+		       llvm::cl::desc("Prune the graph past this many events in --mode=random "
+				      "(default: never prune)"));
 
 static llvm::cl::opt<unsigned int>
 	clThreads("nthreads", llvm::cl::cat(clGeneral), llvm::cl::init(1),
@@ -412,6 +417,9 @@ static void saveConfigOptions(Config &conf, LLIConfig &lliConfig)
 	conf.estimationMax = clEstimationMax;
 	conf.estimationMin = clEstimationMin;
 	conf.randomMax = clRandomBudget;
+	conf.maxGraphSize = clMaxGraphSize.getNumOccurrences() > 0
+				    ? std::optional(clMaxGraphSize.getValue())
+				    : std::nullopt;
 	conf.sdThreshold = clEstimationSdThreshold;
 	conf.isDepTrackingModel = lliConfig.isDepTrackingModel;
 
@@ -440,6 +448,10 @@ static void saveConfigOptions(Config &conf, LLIConfig &lliConfig)
 	/* Save debugging options */
 	conf.warnOnGraphSize = clWarnOnGraphSize;
 	conf.schedulePolicy = clSchedulePolicy;
+	/* Random mode defaults to WFR scheduling */
+	if (clSchedulePolicy.getNumOccurrences() == 0 &&
+	    clExplorationMode == ExplorationMode::random)
+		conf.schedulePolicy = SchedulePolicy::WFR;
 	conf.printRandomScheduleSeed = clPrintArbitraryScheduleSeed;
 	if (clArbitraryScheduleSeed.getNumOccurrences() > 0)
 		conf.randomScheduleSeed = clArbitraryScheduleSeed;
@@ -502,6 +514,9 @@ static void parseConfig(int argc, char **argv, Config &conf, LLIConfig &lliConfi
 			LOG(VerbosityLevel::Error, "{}", e);
 		exit(EUSER);
 	}
+
+	/* Transformations follow the validated configuration */
+	lliConfig.helper = conf.helper;
 
 	/* Set (global) log state */
 	logLevel = clVLevel;

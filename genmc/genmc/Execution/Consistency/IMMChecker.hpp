@@ -190,7 +190,7 @@ private:
 	bool visitCalc75Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const;
 
 	View visitCalc75(const EventLabel *lab) const;
-	auto getHbView(const EventLabel *lab) const -> const View & { return lab->view(0); }
+	auto getHbViewIndex() const -> unsigned { return 0; }
 
 	auto checkCalc75(const EventLabel *lab) const;
 	mutable NodeStatusVector<uint32_t> visitedCalc76_0;
@@ -205,18 +205,20 @@ private:
 
 	View visitCalc76(const EventLabel *lab) const;
 	auto getHbRelincheView(const EventLabel *lab) const -> const View & { return lab->view(1); }
+	auto getHbRelincheViewIndex() const -> unsigned { return 1; }
 
 	auto checkCalc76(const EventLabel *lab) const;
-	mutable NodeStatusVector<uint32_t> visitedCalc87_0;
-	mutable NodeStatusVector<uint32_t> visitedCalc87_1;
-	mutable NodeStatusVector<uint32_t> visitedCalc87_2;
+	mutable NodeStatusVector<uint32_t> visitedCalc89_0;
+	mutable NodeStatusVector<uint32_t> visitedCalc89_1;
+	mutable NodeStatusVector<uint32_t> visitedCalc89_2;
 
-	bool visitCalc87Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const;
+	bool visitCalc89Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const;
 
-	View visitCalc87(const EventLabel *lab) const;
+	View visitCalc89(const EventLabel *lab) const;
 	auto getPorfView(const EventLabel *lab) const -> const View & { return lab->view(2); }
+	auto getPorfViewIndex() const -> unsigned { return 2; }
 
-	auto checkCalc87(const EventLabel *lab) const;
+	auto checkCalc89(const EventLabel *lab) const;
 	mutable NodeStatusVector<uint32_t> visitedCoherence_0;
 	mutable NodeStatusVector<uint32_t> visitedCoherence_1;
 	mutable NodeStatusVector<uint32_t> visitedCoherence_2;
@@ -229,7 +231,6 @@ private:
 	mutable NodeStatusVector<uint32_t> visitedCoherence_9;
 	mutable NodeStatusVector<uint32_t> visitedCoherence_10;
 	mutable NodeStatusVector<uint32_t> visitedCoherence_11;
-	mutable NodeStatusVector<uint32_t> visitedCoherence_12;
 
 	bool visitCoherenceIterative(std::vector<DFSWorklistEntry> &worklist,
 				     const EventLabel *initLab) const;
@@ -255,7 +256,6 @@ private:
 	mutable NodeVisitStatusVector visitedConsAcyclic1_16;
 	mutable NodeVisitStatusVector visitedConsAcyclic1_17;
 	mutable NodeVisitStatusVector visitedConsAcyclic1_18;
-	mutable NodeVisitStatusVector visitedConsAcyclic1_19;
 	mutable uint32_t visitedConsAcyclic1Accepting;
 
 	bool visitConsAcyclic1Iterative(std::vector<DFSWorklistEntry> &worklist) const;
@@ -298,16 +298,92 @@ private:
 	bool checkUnlessConsAcyclic2([[maybe_unused]] const EventLabel *lab) { return false; }
 	bool checkConsAcyclic2(const EventLabel *lab) const;
 	bool checkConsAcyclic2(const ExecutionGraph &g) const;
-	bool visitWarning3(const EventLabel *lab) const;
-	mutable NodeStatusVector<uint32_t> visitedLHSUnlessWarning3_0;
-	mutable NodeStatusVector<uint32_t> visitedLHSUnlessWarning3_1;
+	bool visitError3(const EventLabel *lab) const;
+	mutable NodeStatusVector<uint32_t> visitedLHSUnlessError3_0;
+	mutable NodeStatusVector<uint32_t> visitedLHSUnlessError3_1;
 
-	bool visitLHSUnlessWarning3Iterative(std::vector<DFSWorklistEntry> &worklist,
-					     const View &v) const;
+	bool visitLHSUnlessError3Iterative(std::vector<DFSWorklistEntry> &worklist,
+					   const View &v) const;
 
-	mutable std::vector<bool> visitedLHSUnlessWarning3Accepting;
-	bool visitUnlessWarning3(const EventLabel *lab) const;
-	bool checkWarning3(const EventLabel *lab) const;
+	mutable std::vector<bool> visitedLHSUnlessError3Accepting;
+	bool visitUnlessError3(const EventLabel *lab) const;
+	bool checkError3(const EventLabel *lab) const;
+	bool visitError4(const EventLabel *lab) const;
+	mutable NodeStatusVector<uint32_t> visitedLHSUnlessError4_0;
+	mutable NodeStatusVector<uint32_t> visitedLHSUnlessError4_1;
+
+	bool visitLHSUnlessError4Iterative(std::vector<DFSWorklistEntry> &worklist) const;
+
+	bool visitRHSUnlessError4Iterative(std::vector<DFSWorklistEntry> &worklist) const;
+
+	mutable std::vector<bool> visitedLHSUnlessError4Accepting;
+	mutable std::vector<bool> visitedRHSUnlessError4Accepting;
+	bool visitUnlessError4(const EventLabel *lab) const;
+	bool checkError4(const EventLabel *lab) const;
+	bool visitError5(const EventLabel *lab) const;
+	mutable NodeStatusVector<uint32_t> visitedLHSUnlessError5_0;
+	mutable NodeStatusVector<uint32_t> visitedLHSUnlessError5_1;
+
+	bool visitLHSUnlessError5Iterative(std::vector<DFSWorklistEntry> &worklist,
+					   const View &v) const;
+
+	mutable std::vector<bool> visitedLHSUnlessError5Accepting;
+	bool visitUnlessError5(const EventLabel *lab) const;
+	bool checkError5(const EventLabel *lab) const;
+	bool visitError6(const EventLabel *lab) const;
+	mutable NodeStatusVector<uint32_t> visitedLHSUnlessError6_0;
+	mutable NodeStatusVector<uint32_t> visitedLHSUnlessError6_1;
+
+	bool visitLHSUnlessError6Iterative(std::vector<DFSWorklistEntry> &worklist) const;
+
+	bool visitRHSUnlessError6Iterative(std::vector<DFSWorklistEntry> &worklist) const;
+
+	mutable std::vector<bool> visitedLHSUnlessError6Accepting;
+	mutable std::vector<bool> visitedRHSUnlessError6Accepting;
+	bool visitUnlessError6(const EventLabel *lab) const;
+	bool checkError6(const EventLabel *lab) const;
+	bool visitError7(const EventLabel *lab) const;
+	mutable NodeStatusVector<uint32_t> visitedLHSUnlessError7_0;
+	mutable NodeStatusVector<uint32_t> visitedLHSUnlessError7_1;
+
+	bool visitLHSUnlessError7Iterative(std::vector<DFSWorklistEntry> &worklist,
+					   const View &v) const;
+
+	mutable std::vector<bool> visitedLHSUnlessError7Accepting;
+	bool visitUnlessError7(const EventLabel *lab) const;
+	bool checkError7(const EventLabel *lab) const;
+	bool visitError8(const EventLabel *lab) const;
+	mutable NodeStatusVector<uint32_t> visitedLHSUnlessError8_0;
+	mutable NodeStatusVector<uint32_t> visitedLHSUnlessError8_1;
+
+	bool visitLHSUnlessError8Iterative(std::vector<DFSWorklistEntry> &worklist) const;
+
+	bool visitRHSUnlessError8Iterative(std::vector<DFSWorklistEntry> &worklist) const;
+
+	mutable std::vector<bool> visitedLHSUnlessError8Accepting;
+	mutable std::vector<bool> visitedRHSUnlessError8Accepting;
+	bool visitUnlessError8(const EventLabel *lab) const;
+	bool checkError8(const EventLabel *lab) const;
+	bool visitError9(const EventLabel *lab) const;
+	mutable NodeStatusVector<uint32_t> visitedLHSUnlessError9_0;
+	mutable NodeStatusVector<uint32_t> visitedLHSUnlessError9_1;
+
+	bool visitLHSUnlessError9Iterative(std::vector<DFSWorklistEntry> &worklist,
+					   const View &v) const;
+
+	mutable std::vector<bool> visitedLHSUnlessError9Accepting;
+	bool visitUnlessError9(const EventLabel *lab) const;
+	bool checkError9(const EventLabel *lab) const;
+	bool visitWarning10(const EventLabel *lab) const;
+	mutable NodeStatusVector<uint32_t> visitedLHSUnlessWarning10_0;
+	mutable NodeStatusVector<uint32_t> visitedLHSUnlessWarning10_1;
+
+	bool visitLHSUnlessWarning10Iterative(std::vector<DFSWorklistEntry> &worklist,
+					      const View &v) const;
+
+	mutable std::vector<bool> visitedLHSUnlessWarning10Accepting;
+	bool visitUnlessWarning10(const EventLabel *lab) const;
+	bool checkWarning10(const EventLabel *lab) const;
 
 	void visitPPoRf0(const EventLabel *lab, DepView &pporf) const;
 	void visitPPoRf1(const EventLabel *lab, DepView &pporf) const;

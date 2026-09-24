@@ -163,21 +163,20 @@ public:
 	void setCalculated(std::vector<VSet<Event>> &&calc) { calculatedRels = std::move(calc); }
 
 	void setViews(std::vector<View> &&views) { calculatedViews = std::move(views); }
+	void setView(View &&view, size_t i) { calculatedViews[i] = std::move(view); }
 	void addView(View &&view) { calculatedViews.emplace_back(std::move(view)); }
 
 	/** Iterators for calculated relations */
 	auto calculated(size_t i) const
 	{
-		return (getPos().isInitializer() || getKind() == Empty)
-			       ? std::views::all(calculatedRels[0])
-			       : std::views::all(calculatedRels[i]);
+		return (getKind() == Empty) ? std::views::all(calculatedRels[0])
+					    : std::views::all(calculatedRels[i]);
 	}
 
 	/** Getters for calculated views */
 	auto view(size_t i) const -> const View &
 	{
-		return (getPos().isInitializer() || getKind() == Empty) ? calculatedViews[0]
-									: calculatedViews[i];
+		return (getKind() == Empty) ? calculatedViews[0] : calculatedViews[i];
 	}
 
 	/** Iterator over the calculated views */
@@ -361,6 +360,10 @@ public:
 	auto getSymmSuccTid() const -> int { return symmSuccTid; }
 	void setSymmSuccTid(int tid) { symmSuccTid = tid; }
 
+	/** Whether the thread will never add another event (useful for cutting) */
+	[[nodiscard]] auto isTerminated() const -> bool { return terminated_; }
+	void setTerminated() { terminated_ = true; }
+
 	void reset() override
 	{
 		EventLabel::reset();
@@ -382,6 +385,8 @@ private:
 
 	/** SR: The tid of the symmetric successor */
 	int symmSuccTid = -1;
+
+	bool terminated_ = false;
 };
 
 /*******************************************************************************
@@ -411,6 +416,26 @@ public:
 	auto rfs(SAddr addr) const { return std::views::all(initRfs.at(addr)); }
 	auto rfs(SAddr addr) { return std::views::all(initRfs.at(addr)); }
 
+	/* Returns the I-th view recorded for location ADDR, or an empty view if
+	 * nothing has been recorded for ADDR. */
+	auto locView(SAddr addr, size_t i) const -> const View &
+	{
+		static const View emptyView;
+		auto it = initLocViews_.find(addr);
+		if (it == initLocViews_.end() || i >= it->second.size())
+			return emptyView;
+		return it->second[i];
+	}
+
+	/* Records V as the I-th view for location ADDR, replacing any previous one */
+	void setLocView(SAddr addr, size_t i, const View &v)
+	{
+		auto &views = initLocViews_[addr];
+		if (views.size() <= i)
+			views.resize(i + 1);
+		views[i] = v;
+	}
+
 	DEFINE_STANDARD_MEMBERS(Init)
 
 private:
@@ -430,6 +455,8 @@ private:
 	}
 
 	std::unordered_map<SAddr, ReaderList> initRfs;
+
+	std::unordered_map<SAddr, std::vector<View>> initLocViews_;
 };
 
 /*******************************************************************************
@@ -1116,7 +1143,6 @@ public:
 	/** Helpers for various write attributes */
 	auto isFinal() const -> bool { return hasAttr(WriteAttr::Final); }
 	auto isLocal() const -> bool { return hasAttr(WriteAttr::Local); }
-	auto isComplete() const -> bool { return hasAttr(WriteAttr::Complete); }
 
 	/** Whether this is part of an RMW operation */
 	auto isRMW() const -> bool;
@@ -1964,7 +1990,9 @@ inline auto EventLabel::isStable() const -> bool
 
 inline auto EventLabel::isDependable(EventLabelKind kind) -> bool
 {
-	return ReadLabel::classofKind(kind) || kind == Malloc || kind == Optional;
+	return ReadLabel::classofKind(kind) || kind == Malloc || kind == Optional ||
+	       kind == LoopBegin || kind == SpinStart || kind == FaiZNESpinEnd ||
+	       kind == LockZNESpinEnd;
 }
 
 inline auto EventLabel::returnsValue(EventLabelKind kind) -> bool

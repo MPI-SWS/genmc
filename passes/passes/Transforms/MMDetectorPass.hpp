@@ -16,6 +16,7 @@
 
 #include <llvm/Passes/PassBuilder.h>
 
+#include <cstdint>
 #include <optional>
 
 using namespace llvm;

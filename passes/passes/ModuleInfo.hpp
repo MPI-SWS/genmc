@@ -27,6 +27,7 @@
 
 #include "genmc/ADT/value_ptr.hpp"
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
