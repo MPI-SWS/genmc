@@ -1,0 +1,26 @@
+Error: Non-atomic race!
+Event (2, 2) conflicts with event (1, 1) in graph:
+<-1, 0> :
+	(0, 1): THREAD_CREATE [thread 1] pthread.h:146
+	(0, 2): THREAD_CREATE [thread 2] pthread.h:146
+	(0, 3): THREAD_END
+<0, 1> main:
+	(1, 1): Wna (data, ?) cpp-atomic-ref-mp-rlx0.cpp:14
+	(1, 2): Wrlx (flag, 1) atomic:1367
+	(1, 3): THREAD_END
+<0, 2> main:
+	(2, 1): Rrlx (flag, 1) [(1, 2)] atomic:1372
+	(2, 2): Rna (data, 1) [(1, 1)] cpp-atomic-ref-mp-rlx0.cpp:25
+
+Trace to (2, 2):
+[main] pthread.h: 146: (*__newthread) = __VERIFIER_thread_create(__attr, __start_routine, __arg);
+[_Z8thread_1Pv] cpp-atomic-ref-mp-rlx0.cpp: 14: data = 1;
+[_Z8thread_1Pv] atomic: 1367: {__atomic_store(__ptr_, __atomic_ref_clear_padding(__d),
+[_Z8thread_2Pv] atomic: 1372: {_Tp __r; __atomic_load(__ptr_, &__r, __gcc_atomic::__to_gcc_order(__m)); return __r;}
+[_Z8thread_2Pv] cpp-atomic-ref-mp-rlx0.cpp: 25: r_data = data;
+Trace to (1, 1):
+[main] pthread.h: 146: (*__newthread) = __VERIFIER_thread_create(__attr, __start_routine, __arg);
+[_Z8thread_1Pv] cpp-atomic-ref-mp-rlx0.cpp: 14: data = 1;
+
+*** Verification unsuccesful.
+Number of complete executions explored: 1

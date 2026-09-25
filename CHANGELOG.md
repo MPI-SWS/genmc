@@ -9,6 +9,21 @@ released.
 
 - Merge of MIXER [POPL'25] into mainline GenMC
 
+### Added
+
+- Support for `std::atomic_ref`
+- Support for `std::atomic_flag::test`
+- Support for `wait`/`notify_one`/`notify_all` on `std::atomic`,
+  `std::atomic_flag` and `std::atomic_ref`
+
+### Fixes
+
+- The bundled `<atomic>` no longer exposes only its C++11 subset when compiling
+  with `-std=c++17` or later, which also restores
+  `std::atomic<T>::is_always_lock_free`
+- The bundled C++ headers (`atomic`, `thread`, ...) are now installed; only the
+  `.h` ones were
+
 
 ## [0.19.0] - 2026.09.24
 

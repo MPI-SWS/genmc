@@ -27,7 +27,9 @@ add_library(genmc_config_includes INTERFACE)
 target_compile_features(genmc_config_includes INTERFACE cxx_std_23)
 target_include_directories(genmc_config_includes INTERFACE ${CMAKE_BINARY_DIR}/include)
 
-install(DIRECTORY lli/runtime-include/c/ DESTINATION "${PKG_INCLUDE_DIR}" FILES_MATCHING PATTERN "*.h")
+# Every file here is a header, and the C++ ones (atomic, thread, cassert, ...)
+# carry no extension, so matching on one would leave them behind.
+install(DIRECTORY lli/runtime-include/c/ DESTINATION "${PKG_INCLUDE_DIR}")
 
 ### Whether to build lli-based binary
 option(BUILD_LLI "Build lli-based executable (requires LLVM)" ON)
