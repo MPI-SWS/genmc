@@ -17,6 +17,7 @@
 #include "genmc/ADT/AdaptiveView.hpp"
 #include "genmc/ADT/IntervalMap.hpp"
 #include "genmc/ADT/IntervalSet.hpp"
+#include "genmc/ADT/SmallVector.hpp"
 #include "genmc/ADT/VSet.hpp"
 #include "genmc/ADT/View.hpp"
 #include "genmc/Execution/Event.hpp"
@@ -87,10 +88,12 @@ public:
 	/* Checker methods */
 	[[nodiscard]] auto isAllocated(SAddr addr) const -> bool;
 	[[nodiscard]] auto isStatic(SAddr addr) const -> bool;
-	[[nodiscard]] auto isInitialized(const AAccess &access) const -> bool;
 	[[nodiscard]] auto isAtomicAccessConsistent(const AAccess &access) const -> bool;
 	[[nodiscard]] auto isFreed(SAddr addr) const -> bool;
 	[[nodiscard]] auto isRetired(SAddr addr) const -> bool;
+
+	/** Returns whether ACCESS, performed with hb-view HB, cannot read INIT */
+	[[nodiscard]] auto isInitializedFor(const AAccess &access, const View &hb) const -> bool;
 
 	[[nodiscard]] auto getAllocPos(SAddr addr) const -> Event;
 	[[nodiscard]] auto getAllocAccess(SAddr addr) const -> AAccess;
@@ -101,9 +104,6 @@ public:
 	[[nodiscard]] auto getMaxAReadView(const AAccess &access) const -> AdaptiveView;
 	[[nodiscard]] auto getMaxAWriteView(const AAccess &access) const -> AdaptiveView;
 	[[nodiscard]] auto getMaxUnprotectedView(SAddr addr) const -> AdaptiveView;
-
-	/** Returns the aggregated view of the writes initializing ACCESS */
-	[[nodiscard]] auto getInitView(const AAccess &access) const -> AdaptiveView;
 
 	/** Returns the interval {StartAddr,EndAddr} of the atomic write covering ADDR.
 	 * If no such write exists, returns nullopt */
@@ -189,6 +189,40 @@ private:
 		}
 	};
 
+	/** Tracks the po-minimal write of each thread to a location */
+	class InitWriters {
+	public:
+		InitWriters() = default;
+		explicit InitWriters(Event pos) { writes_.push_back(pos); }
+
+		[[nodiscard]] auto hasWriteBy(int thread) const -> bool
+		{
+			return std::ranges::any_of(
+				writes_, [&](const auto &e) { return e.thread == thread; });
+		}
+
+		[[nodiscard]] auto hasWriteIn(const View &view) const -> bool
+		{
+			return std::ranges::any_of(writes_,
+						   [&](const auto &e) { return view.contains(e); });
+		}
+
+		/* Updates info for every write tracked by RHS but not THIS */
+		auto operator+=(const InitWriters &rhs) -> InitWriters &
+		{
+			for (const auto &e : rhs.writes_) {
+				if (!hasWriteBy(e.thread))
+					writes_.push_back(e);
+			}
+			return *this;
+		}
+
+		auto operator==(const InitWriters &) const -> bool = default;
+
+	private:
+		genmc::SmallVector<Event, 4> writes_;
+	};
+
 	using NASValMap = genmc::IntervalMap<SAddr, NonRevertibleOptional<SVal>>;
 	using NAEventMap = genmc::IntervalMap<SAddr, NonRevertibleOptional<Event>>;
 	using LoopId = Event;
@@ -211,11 +245,11 @@ private:
 			     const View &view);
 	void recordNAWrite(const AAccess &access, Event pos, const View &view);
 	void updateLastWriteType(const AAccess &access, bool isAtomic);
-	void markInitialized(const AAccess &access, Event pos, const View &view);
+	void markInitialized(const AAccess &access, Event pos);
 
 	/* allocation information */
 	genmc::IntervalMap<SAddr, AllocInfo> allocInfoMap_;
-	AdaptiveViewMap initialized_;
+	genmc::IntervalMap<SAddr, InitWriters> initialized_;
 	SAddrAllocator alloctor_;
 	VSet<std::pair<SAddr, SAddr>> staticRanges_;
 

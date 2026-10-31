@@ -32,6 +32,7 @@
 #include <format>
 #include <map>
 #include <memory>
+#include <optional>
 #include <ranges>
 #include <unordered_map>
 #include <utility>
@@ -167,6 +168,7 @@ public:
 	auto begin() const -> const_iterator { return events.begin(); };
 	auto end() const -> const_iterator { return events.end(); };
 
+	/* Iterators for the *concrete labels* of the graph, in insertion order */
 	auto label_begin() const { return insertionOrder.begin(); }
 	auto label_end() const { return insertionOrder.end(); }
 	auto labels() const { return std::views::all(insertionOrder); }
@@ -249,6 +251,23 @@ public:
 	auto po_imm_succ(EventLabel *lab) -> EventLabel *
 	{
 		return const_cast<EventLabel *>(std::as_const(*this).po_imm_succ(lab));
+	}
+
+	/* Returns the write of an RMW read (resp. the read of an RMW write) or nullptr for
+	 * non-RMWs or if its counterpart doesn't exist */
+	auto rmw_succ(const EventLabel *lab) const -> const EventLabel *
+	{
+		const auto *rLab = genmc::dyn_cast<ReadLabel>(lab);
+		const auto *wLab = rLab ? genmc::dyn_cast_if_present<WriteLabel>(po_imm_succ(lab))
+					: nullptr;
+		return wLab && rLab->isRMW() && wLab->isRMW() ? wLab : nullptr;
+	}
+	auto rmw_pred(const EventLabel *lab) const -> const EventLabel *
+	{
+		const auto *wLab = genmc::dyn_cast<WriteLabel>(lab);
+		const auto *rLab = wLab ? genmc::dyn_cast_if_present<ReadLabel>(po_imm_pred(lab))
+					: nullptr;
+		return rLab && wLab->isRMW() && rLab->isRMW() ? rLab : nullptr;
 	}
 
 	/***************************************************************************
@@ -339,11 +358,11 @@ public:
 
 	auto detour_succs(const WriteLabel *lab) const
 	{
-		return po_succs(lab) | std::views::filter(DetourSuccFilter(lab, lab->getPos()));
+		return po_succs(lab) | std::views::filter(DetourSuccFilter(lab));
 	}
 	auto detour_succs(WriteLabel *lab)
 	{
-		return po_succs(lab) | std::views::filter(DetourSuccFilter(lab, lab->getPos()));
+		return po_succs(lab) | std::views::filter(DetourSuccFilter(lab));
 	}
 
 	auto detour_succs(const EventLabel *lab) const
@@ -362,13 +381,11 @@ public:
 
 	auto detour_preds(const ReadLabel *lab) const
 	{
-		const Event wPos = lab->getRf() ? lab->getRf()->getPos() : Event::getInit();
-		return po_preds(lab) | std::views::filter(DetourPredFilter(lab, wPos));
+		return po_preds(lab) | std::views::filter(DetourPredFilter(lab, lab->readsExt()));
 	}
 	auto detour_preds(ReadLabel *lab)
 	{
-		const Event wPos = lab->getRf() ? lab->getRf()->getPos() : Event::getInit();
-		return po_preds(lab) | std::views::filter(DetourPredFilter(lab, wPos));
+		return po_preds(lab) | std::views::filter(DetourPredFilter(lab, lab->readsExt()));
 	}
 
 	auto detour_preds(const EventLabel *lab) const
@@ -406,6 +423,15 @@ public:
 	DEFINE_PPO_ACC(data);
 	DEFINE_PPO_ACC(addr);
 	DEFINE_PPO_ACC(ctrl);
+	DEFINE_PPO_ACC(cas);
+
+	/* LAB's predecessors in data \ rmw */
+	auto data_nrmw_preds(const EventLabel *lab) const
+	{
+		return data_preds(lab) | std::views::filter([this, lab](const EventLabel &pLab) {
+			       return &pLab != rmw_pred(lab);
+		       });
+	}
 #undef DEFINE_PPO_ACC
 
 	/***************************************************************************
@@ -865,8 +891,41 @@ public:
 
 	/* Removes the last label from THREAD, and returns it.
 	 * If it is a read, updates the rf-lists.
-	 * If it is a write, makes all readers read BOT. */
+	 * If it is a write, makes all readers read BOT and unlinks it from co. */
 	auto removeLast(int thread) -> std::unique_ptr<EventLabel>;
+
+	/* Unlinks WLAB from the coherence order */
+	void removeFromCo(WriteLabel *wLab);
+
+	/* Takes LAB (a memory access or a free) out of the per-location access map */
+	void untrackAccess(EventLabel *lab);
+
+	/* Drops the trailing threads that hold only a begin whose create is gone */
+	void eraseOrphanBeginTails();
+
+	/* Turns LAB into a skeleton: it keeps its po slot but loses its value/rf/co */
+	void skeletonize(EventLabel *lab);
+
+	/* Reverses skeletonize(); LAB gets a fresh stamp */
+	void deskeletonize(EventLabel *lab);
+
+	/* Skeletonizes the deleted LAB. If LAB is a write, it also removes all its external
+	 * readers. Only CHANGED and labels that LAB IPR'd may survive; these get a new rf */
+	void skeletonizeDeleted(EventLabel *lab, const VectorClock &keep, const ReadLabel *changed);
+
+	/* Deletes the concrete events outside KEEP, either by removing them or by turning
+	 * them into skeletons. Each thread is truncated at its first event whose existence
+	 * depends on a deleted event or on CHANGED, which is re-pointed. The deleted events
+	 * before that point become skeletons. For D the deleted events and CHANGED,
+	 *   truncated = range([D] ; skdep ; po?)
+	 *   skdep0    = ctrl | addr | casdep? ; [CAS] ; po
+	 *   skdep     = (data ; rfi)* ; skdep0
+	 *   gdep      = skdep | (data ; rfi)* ; data ; [W & concrete]
+	 * validate() checks gdep. */
+	void deleteEvents(const VectorClock &keep, const ReadLabel *changed);
+
+	/* Compacts the stamps (places concrete labels before skeletons in the insertion order) */
+	void renumberStamps();
 
 	/* Event getter methods */
 
@@ -1017,14 +1076,9 @@ public:
 		return containsPos(lab->getPos()) && getEventLabel(lab->getPos()) == lab;
 	}
 
-	/* Returns true if the graph contains e, and the label is not EMPTY */
-	auto containsPosNonEmpty(const Event &e) const -> bool
-	{
-		return containsPos(e) && !genmc::isa<EmptyLabel>(getEventLabel(e));
-	}
-
 	/* Debugging methods */
 
+	/* Checks graph well-formedness */
 	void validate();
 
 	/* Graph modification methods */
@@ -1071,7 +1125,10 @@ public:
 
 	auto clone() const -> std::unique_ptr<ExecutionGraph>
 	{
-		return getCopyUpTo(*getViewFromStamp(getMaxStamp()));
+		View all;
+		for (auto i : thr_ids())
+			all.setMax(Event(i, getThreadSize(i) - 1));
+		return getCopyUpTo(all);
 	}
 
 	/* For formatting: */
@@ -1087,35 +1144,32 @@ protected:
 		return mLabA && mLabB && mLabA->getAddr() == mLabB->getAddr();
 	}
 
-	/* Functor for Detour Successors (Default Constructible for filter_view) */
+	/* Functor for Detour Successors (Default Constructible for filter_view).
+	 * detour=[W];po-loc;[rng(rfe)] so as not to consult co. */
 	struct DetourSuccFilter {
 		const EventLabel *lab = nullptr;
-		Event pos;
 		DetourSuccFilter() = default;
-		DetourSuccFilter(const EventLabel *l, Event pos) : lab(l), pos(pos) {}
+		explicit DetourSuccFilter(const EventLabel *l) : lab(l) {}
 
 		auto operator()(const EventLabel &oLab) const -> bool
 		{
 			if (!isSameLoc(lab, &oLab))
 				return false;
 			const auto *rLab = genmc::dyn_cast<ReadLabel>(&oLab);
-			return rLab && rLab->getRf() && rLab->getRf()->getPos() != pos;
+			return rLab && rLab->readsExt();
 		}
 	};
 
 	/* Functor for Detour Predecessors */
 	struct DetourPredFilter {
 		const EventLabel *lab = nullptr;
-		Event wPos;
+		bool readsExt = false;
 		DetourPredFilter() = default;
-		DetourPredFilter(const EventLabel *l, Event wPos) : lab(l), wPos(wPos) {}
+		DetourPredFilter(const EventLabel *l, bool readsExt) : lab(l), readsExt(readsExt) {}
 
 		auto operator()(const EventLabel &sLab) const -> bool
 		{
-			if (!isSameLoc(lab, &sLab))
-				return false;
-			const auto *wLab = genmc::dyn_cast<WriteLabel>(&sLab);
-			return wLab && wLab->getPos() != wPos;
+			return readsExt && isSameLoc(lab, &sLab) && genmc::isa<WriteLabel>(&sLab);
 		}
 	};
 
@@ -1172,14 +1226,6 @@ protected:
 	}
 
 	auto addLabelToGraph(std::unique_ptr<EventLabel> lab) -> EventLabel *;
-
-	static auto createHoleLabel(Event pos) -> std::unique_ptr<EmptyLabel>
-	{
-		auto lab = EmptyLabel::create(pos);
-		lab->setViews({{}});
-		lab->setCalculated({{}});
-		return lab;
-	}
 
 	/* A collection of threads and the events for each threads */
 	// NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)

@@ -1,4 +1,7 @@
-# GenMC: A Generic Model Checker for Concurrent Programs
+<img src="assets/logo/genmc-lockup.svg#only-light" alt="GenMC" height="64">
+<img src="assets/logo/genmc-lockup-dark.svg#only-dark" alt="GenMC" height="64">
+
+# A Generic Model Checker for Concurrent Programs
 
 GenMC is a stateless model checker for concurrent programs written under the
 SC [\[Lamport 1979\]](references.md#lamport1979sc),

@@ -1,4 +1,9 @@
-GenMC: Generic Model Checker for Concurrent Programs
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="doc/logo/genmc-lockup-dark.svg">
+  <img src="doc/logo/genmc-lockup.svg" alt="GenMC" height="64">
+</picture>
+
+A Generic Model Checker for Concurrent Programs
 =====
 
 GenMC is a stateless model checker for C/C++ and Rust programs that works on the
@@ -49,6 +54,42 @@ To run the default tests, `bc` is also required.
 Using `brew`, the following packages are necessary:
 
 		cmake llvm libffi
+
+##### Windows/MSYS2
+
+You can compile GenMC under Windows using [MSYS2](https://www.msys2.org/docs/what-is-msys2/).
+Install the packages below with `pacman`, depending on the
+[MSYS2 environment](https://www.msys2.org/docs/environments/) you use.
+
+###### `UCRT64` environment
+
+The following packages are necessary.
+
+		pacman -S --needed \
+			mingw-w64-ucrt-x86_64-cmake \
+			mingw-w64-ucrt-x86_64-clang \
+			mingw-w64-ucrt-x86_64-llvm \
+			mingw-w64-ucrt-x86_64-libffi \
+			mingw-w64-ucrt-x86_64-zlib
+
+###### `CLANG64` environment
+
+The following packages are necessary.
+
+		pacman -S --needed \
+			mingw-w64-clang-x86_64-cmake \
+			mingw-w64-clang-x86_64-clang \
+			mingw-w64-clang-x86_64-llvm \
+			mingw-w64-clang-x86_64-libffi \
+			mingw-w64-clang-x86_64-zlib
+
+To run the default tests, `bc` is also required. Once your environment is set up you can also run the
+project directly from CLion via:
+
+		-DCMAKE_PREFIX_PATH=C:/msys64/ucrt64
+		-DCMAKE_LIBRARY_PATH=C:/msys64/ucrt64/lib
+
+Windows support is best-effort; MSVC is not supported.
 
 #### Installing
 

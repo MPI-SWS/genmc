@@ -17,7 +17,10 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GenMC="${GenMC:-$DIR/../RelWithDebInfo/bin/genmc}"
 GENMCFLAGS="${GENMCFLAGS:-}"
-MODELS=(rc11 imm)
+MODELS=(${MODELS:-rc11 imm arm8})
+
+# Dependency-tracking models: no in-place revisiting / symmetry reduction, no racy tests
+isdep() { [[ "$1" == "imm" || "$1" == "arm8" ]]; }
 
 CONFIG_FILE="$(dirname "$(dirname "${GenMC}")")/include/genmc/config.h"
 
@@ -110,15 +113,15 @@ do
 	then
 	    continue
 	fi
-	if [[ "${model}" == "imm" && "${cat}" == "sr" ]]
+	if isdep "${model}" && [[ "${cat}" == "sr" ]]
 	then
 	    continue
 	fi
 
 	check_blocked="" && [[ "${cat}" == "saver" || "${cat}" == "helper" ]] &&
-	    [[ (! "${GENMCFLAGS}" =~ "policy=arbitrary") ]] && [[ "${model}" != "imm" ]] &&
+	    [[ (! "${GENMCFLAGS}" =~ "policy=arbitrary") ]] && ! isdep "${model}" &&
 	    check_blocked="yes"
-	if [[ "${cat}" == "ipr" && "${model}" != "imm" ]]
+	if [[ "${cat}" == "ipr" ]] && ! isdep "${model}"
 	then
 	    check_blocked="yes"
 	fi
@@ -135,8 +138,8 @@ do
     for testdir in "${WRONG_DIRS[@]}"
     do
 	cat="${testdir##*/}"
-	# under IMM, only run safety and liveness tests
-	if test "${model}" = "imm" -a "${cat}" != "safety" -a "${cat}" != "liveness"
+	# under dependency-tracking models, only run safety and liveness tests
+	if isdep "${model}" && [[ "${cat}" != "safety" && "${cat}" != "liveness" ]]
 	then
 	    continue
 	fi

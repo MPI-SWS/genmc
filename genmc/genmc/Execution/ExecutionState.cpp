@@ -30,6 +30,7 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <utility>
 #include <vector>
@@ -136,9 +137,18 @@ auto ExecutionState::isStatic(SAddr addr) const -> bool
 }
 
 /* TODO: adjust this when we have cutting */
-auto ExecutionState::isInitialized(const AAccess &access) const -> bool
+auto ExecutionState::isInitializedFor(const AAccess &access, const View &hb) const -> bool
 {
-	return !getInitView(access).empty();
+	auto interval = makeInterval(access);
+	auto it = initialized_.lower_bound(interval);
+	auto ie = initialized_.upper_bound(interval);
+
+	for (auto i = 0U; i < access.size.get(); ++i) {
+		if (!initialized_.contains(access.addr + i))
+			return false;
+	}
+	return std::ranges::all_of(std::ranges::subrange(it, ie),
+				   [&hb](const auto &kv) { return kv.second.hasWriteIn(hb); });
 }
 
 auto ExecutionState::isAtomicAccessConsistent(const AAccess &access) const -> bool
@@ -232,11 +242,6 @@ auto ExecutionState::getMaxUnprotectedView(SAddr addr) const -> AdaptiveView
 	VERIFY(allocAccess.addr == addr);
 
 	return getMaxView(lastUnprotectedAccess_, allocAccess);
-}
-
-auto ExecutionState::getInitView(const AAccess &access) const -> AdaptiveView
-{
-	return getMaxView(initialized_, access);
 }
 
 auto ExecutionState::getLastMemAccess(int thread) const -> int
@@ -513,27 +518,14 @@ void ExecutionState::recordNAWrite(const AAccess &access, Event pos, const View 
 	}
 }
 
-void ExecutionState::markInitialized(const AAccess &access, Event pos, const View &view)
+void ExecutionState::markInitialized(const AAccess &access, Event pos)
 {
 	auto interval = makeInterval(access);
-	if (initialized_.contains(interval))
+	auto it = initialized_.find(interval);
+	if (it != initialized_.end() && it->second.hasWriteBy(pos.thread))
 		return;
 
-	IntervalSet<SAddr> uninitParts;
-	uninitParts.add(interval);
-
-	auto it = initialized_.lower_bound(interval);
-	auto ie = initialized_.upper_bound(interval);
-	while (it != ie) {
-		uninitParts.subtract(it->first & interval);
-		++it;
-	}
-
-	if (!is_empty(uninitParts)) {
-		const AdaptiveView initView(pos, view);
-		for (const auto &iv : uninitParts)
-			initialized_.add(iv, initView);
-	}
+	initialized_.add(interval, InitWriters(pos));
 }
 
 void ExecutionState::onNAStore(Event pos, const AAccess &access, const View &view,
@@ -545,7 +537,7 @@ void ExecutionState::onNAStore(Event pos, const AAccess &access, const View &vie
 	if (val)
 		onDeferredValueUpdate(access, *val);
 
-	markInitialized(access, pos, view);
+	markInitialized(access, pos);
 	recordNAWrite(access, pos, view);
 	checkLoopSideEffects(pos, access, false);
 }
@@ -554,7 +546,7 @@ void ExecutionState::onATStore(Event pos, const AAccess &access, const View &vie
 			       bool isRelease)
 {
 	recordMemAccess(lastAWriteView_, access, pos, view);
-	markInitialized(access, pos, view);
+	markInitialized(access, pos);
 	updateLastWriteType(access, true);
 
 	if (hpProtectMap_.contains(access.addr) && hpProtectMap_.at(access.addr) != nullptr) {

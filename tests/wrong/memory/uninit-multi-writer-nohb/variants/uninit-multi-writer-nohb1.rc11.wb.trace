@@ -1,0 +1,80 @@
+GenMC v0.19.0 (LLVM 21.1.8)
+Copyright (C) 2024 MPI-SWS. All rights reserved.
+
+*** Compilation complete.
+*** Transformation complete.
+Warning: Unordered writes!
+Event (2, 2) conflicts with event (0, 0) in graph:
+<-1, 0>:
+	(0, 1): THREAD_CREATE [thread 1] pthread.h:146
+	(0, 2): THREAD_CREATE [thread 2] pthread.h:146
+	(0, 3): THREAD_CREATE [thread 3] pthread.h:146
+	(0, 4): THREAD_JOIN [thread 3] pthread.h:163
+<0, 1> thread_3:
+	(1, 1): Rrlx (done1, 0) [INIT] uninit-multi-writer-nohb.c:26
+	(1, 2): THREAD_END
+<0, 2> thread_2:
+	(2, 1): Racq (p, 12884901904) [(3, 2)] uninit-multi-writer-nohb.c:16
+	(2, 2): Wrlx (, 2) uninit-multi-writer-nohb.c:18
+<0, 3> thread_1:
+	(3, 1): MALLOC  stdlib.h:36
+	(3, 2): Wrel (p, 12884901904) uninit-multi-writer-nohb.c:8
+	(3, 3): Wrlx (, 1) uninit-multi-writer-nohb.c:9
+	(3, 4): Wrlx (done1, 1) uninit-multi-writer-nohb.c:10
+	(3, 5): THREAD_END
+Coherence:
+: [ (2, 2): Wrlx (H#(3, 16), 2) (3, 3): Wrlx (H#(3, 16), 1) ]
+
+Trace to (2, 2):
+[main] pthread.h: 146: (*__newthread) = __VERIFIER_thread_create(__attr, __start_routine, __arg);
+[thread_1] stdlib.h: 36: return __VERIFIER_malloc(size);
+[thread_1] uninit-multi-writer-nohb.c: 8: atomic_store_explicit(&p, x, memory_order_release);
+[thread_2] uninit-multi-writer-nohb.c: 16: atomic_uint *x = atomic_load_explicit(&p, memory_order_acquire);
+[thread_2] uninit-multi-writer-nohb.c: 18: atomic_store_explicit(x, 2, memory_order_relaxed);
+Trace to (0, 0):
+Unordered writes do not constitute a bug per se, though they often indicate faulty design.
+Error: Attempt to read from uninitialized memory!
+Event (1, 4) in graph:
+<-1, 0>:
+	(0, 1): THREAD_CREATE [thread 1] pthread.h:146
+	(0, 2): THREAD_CREATE [thread 2] pthread.h:146
+	(0, 3): THREAD_CREATE [thread 3] pthread.h:146
+	(0, 4): THREAD_JOIN [thread 3] pthread.h:163
+	(0, 5): THREAD_JOIN [thread 2] pthread.h:163
+	(0, 6): BLOCK[join]
+<0, 1> thread_3:
+	(1, 1): Rrlx (done1, 1) [(3, 4)] uninit-multi-writer-nohb.c:26
+	(1, 2): Rrlx (done2, 1) [(2, 3)] uninit-multi-writer-nohb.c:27
+	(1, 3): Racq (p, 12884901904) [(3, 2)] uninit-multi-writer-nohb.c:28
+	(1, 4): Rrlx (, 0) [BOTTOM] uninit-multi-writer-nohb.c:30
+<0, 2> thread_2:
+	(2, 1): Racq (p, 12884901904) [(3, 2)] uninit-multi-writer-nohb.c:16
+	(2, 2): Wrlx (, 2) uninit-multi-writer-nohb.c:18
+	(2, 3): Wrlx (done2, 1) uninit-multi-writer-nohb.c:19
+	(2, 4): THREAD_END
+<0, 3> thread_1:
+	(3, 1): MALLOC  stdlib.h:36
+	(3, 2): Wrel (p, 12884901904) uninit-multi-writer-nohb.c:8
+	(3, 3): Wrlx (, 1) uninit-multi-writer-nohb.c:9
+	(3, 4): Wrlx (done1, 1) uninit-multi-writer-nohb.c:10
+	(3, 5): THREAD_END
+Coherence:
+: [ (3, 3): Wrlx (H#(3, 16), 1) (2, 2): Wrlx (H#(3, 16), 2) ]
+
+Trace to (1, 4):
+[main] pthread.h: 146: (*__newthread) = __VERIFIER_thread_create(__attr, __start_routine, __arg);
+[main] pthread.h: 146: (*__newthread) = __VERIFIER_thread_create(__attr, __start_routine, __arg);
+[thread_1] stdlib.h: 36: return __VERIFIER_malloc(size);
+[thread_1] uninit-multi-writer-nohb.c: 8: atomic_store_explicit(&p, x, memory_order_release);
+[thread_1] uninit-multi-writer-nohb.c: 9: atomic_store_explicit(x, 1, memory_order_relaxed);
+[thread_1] uninit-multi-writer-nohb.c: 10: atomic_store_explicit(&done1, 1, memory_order_relaxed);
+[thread_3] uninit-multi-writer-nohb.c: 26: if (atomic_load_explicit(&done1, memory_order_relaxed) &&
+[thread_2] uninit-multi-writer-nohb.c: 16: atomic_uint *x = atomic_load_explicit(&p, memory_order_acquire);
+[thread_2] uninit-multi-writer-nohb.c: 18: atomic_store_explicit(x, 2, memory_order_relaxed);
+[thread_2] uninit-multi-writer-nohb.c: 19: atomic_store_explicit(&done2, 1, memory_order_relaxed);
+[thread_3] uninit-multi-writer-nohb.c: 27: atomic_load_explicit(&done2, memory_order_relaxed)) {
+[thread_3] uninit-multi-writer-nohb.c: 28: atomic_uint *x = atomic_load_explicit(&p, memory_order_acquire);
+[thread_3] uninit-multi-writer-nohb.c: 30: unsigned r = atomic_load_explicit(x, memory_order_relaxed);
+
+*** Verification unsuccesful.
+Number of complete executions explored: 6

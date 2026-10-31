@@ -179,38 +179,47 @@ private:
 	void maybeDecreaseCacheCounters(const EventLabel *lab) const override;
 	void maybeIncreaseCacheCounters(const EventLabel *lab) const override;
 
-	mutable NodeStatusVector<uint32_t> visitedCalc71_0;
-	mutable NodeStatusVector<uint32_t> visitedCalc71_1;
-	mutable NodeStatusVector<uint32_t> visitedCalc71_2;
+	mutable NodeStatusVector<uint32_t> visitedCalc76_0;
+	mutable NodeStatusVector<uint32_t> visitedCalc76_1;
+	mutable NodeStatusVector<uint32_t> visitedCalc76_2;
 
-	bool visitCalc71Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const;
+	bool visitCalc76Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const;
 
-	View visitCalc71(const EventLabel *lab) const;
+	View visitCalc76(const EventLabel *lab) const;
 	auto getPorfView(const EventLabel *lab) const -> const View & { return lab->view(0); }
 	auto getPorfViewIndex() const -> unsigned { return 0; }
 
-	auto checkCalc71(const EventLabel *lab) const;
-	mutable NodeStatusVector<uint32_t> visitedCalc72_0;
-	mutable NodeStatusVector<uint32_t> visitedCalc72_1;
-	mutable NodeStatusVector<uint32_t> visitedCalc72_2;
+	auto checkCalc76(const EventLabel *lab) const;
+	mutable NodeStatusVector<uint32_t> visitedCalc77_0;
+	mutable NodeStatusVector<uint32_t> visitedCalc77_1;
+	mutable NodeStatusVector<uint32_t> visitedCalc77_2;
 
-	bool visitCalc72Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const;
+	bool visitCalc77Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const;
 
-	View visitCalc72(const EventLabel *lab) const;
+	View visitCalc77(const EventLabel *lab) const;
 	auto getHbViewIndex() const -> unsigned { return 1; }
 
-	auto checkCalc72(const EventLabel *lab) const;
-	mutable NodeStatusVector<uint32_t> visitedCalc73_0;
-	mutable NodeStatusVector<uint32_t> visitedCalc73_1;
-	mutable NodeStatusVector<uint32_t> visitedCalc73_2;
+	auto checkCalc77(const EventLabel *lab) const;
+	mutable NodeStatusVector<uint32_t> visitedCalc78_0;
+	mutable NodeStatusVector<uint32_t> visitedCalc78_1;
+	mutable NodeStatusVector<uint32_t> visitedCalc78_2;
 
-	bool visitCalc73Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const;
+	bool visitCalc78Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const;
 
-	View visitCalc73(const EventLabel *lab) const;
+	View visitCalc78(const EventLabel *lab) const;
 	auto getHbRelincheView(const EventLabel *lab) const -> const View & { return lab->view(2); }
 	auto getHbRelincheViewIndex() const -> unsigned { return 2; }
 
-	auto checkCalc73(const EventLabel *lab) const;
+	auto checkCalc78(const EventLabel *lab) const;
+	mutable NodeStatusVector<uint32_t> visitedCalc82_0;
+	mutable NodeStatusVector<uint32_t> visitedCalc82_1;
+	mutable NodeStatusVector<uint32_t> visitedCalc82_2;
+
+	bool visitCalc82Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const;
+
+	View visitCalc82(const EventLabel *lab) const;
+
+	auto checkCalc82(const EventLabel *lab) const;
 	mutable NodeStatusVector<uint32_t> visitedCoherence_0;
 	mutable NodeStatusVector<uint32_t> visitedCoherence_1;
 	mutable NodeStatusVector<uint32_t> visitedCoherence_2;
@@ -321,14 +330,6 @@ private:
 	mutable std::vector<bool> visitedLHSUnlessWarning9Accepting;
 	bool visitUnlessWarning9(const EventLabel *lab) const;
 	bool checkWarning9(const EventLabel *lab) const;
-
-	void visitPPoRf0(const EventLabel *lab, View &pporf) const;
-	void visitPPoRf1(const EventLabel *lab, View &pporf) const;
-
-	View calcPPoRfBefore(const EventLabel *lab) const;
-
-	mutable std::vector<NodeStatus> visitedPPoRf0;
-	mutable std::vector<NodeStatus> visitedPPoRf1;
 };
 
 // NOLINTEND

@@ -168,7 +168,7 @@ public:
 #ifdef BUILD_LLI
 	void submit(TaskT task);
 #else
-	void submit(TaskT task) { UNREACHABLE(); }
+	void submit(TaskT /* task */) { UNREACHABLE(); }
 #endif
 
 	/** Notify the pool about the addition/completion of a task */

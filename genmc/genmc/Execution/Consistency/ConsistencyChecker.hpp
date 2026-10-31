@@ -15,6 +15,7 @@
 #define GENMC_CONSISTENCY_CHECKER_HPP
 
 #include "genmc/ADT/VSet.hpp"
+#include "genmc/Execution/Stamp.hpp"
 #include "genmc/Verification/VerificationError.hpp"
 
 #include <cstdint>
@@ -22,6 +23,7 @@
 #include <vector>
 
 class EventLabel;
+class MemAccessLabel;
 class ReadLabel;
 class WriteLabel;
 class ExecutionGraph;
@@ -78,6 +80,24 @@ public:
 
 	virtual auto getCoherentPlacings(WriteLabel *wLab) -> std::vector<EventLabel *> = 0;
 
+	/* Extensibility oracles. The default policy is co-maximality; models may override */
+
+	/** Returns the maximal rf for RLAB in the current graph */
+	[[nodiscard]] virtual auto getMaximalRf(const ReadLabel *rLab) const -> const EventLabel *;
+
+	/** Returns the maximal co-predecessor for WLAB in the current graph */
+	[[nodiscard]] virtual auto getMaximalCo(const WriteLabel *wLab) const -> const EventLabel *;
+
+	/** Whether RLAB reads maximally in the graph restricted to LAB < RLAB \/ LAB in
+	 * KEEP, minus EXCEPT (the revisiter) */
+	[[nodiscard]] virtual auto isMaximalRf(const ReadLabel *rLab, const VectorClock &keep,
+					       const EventLabel *except) const -> bool;
+
+	/** Whether WLAB is co-maximal in the graph restricted to LAB < WLAB \/ LAB in
+	 * KEEP, minus EXCEPT (the revisiter) */
+	[[nodiscard]] virtual auto isMaximalCo(const WriteLabel *wLab, const VectorClock &keep,
+					       const EventLabel *except) const -> bool;
+
 	/** Updates LAB with model-specific information.
 	 * Needs to be called every time a new label is added to the graph */
 	virtual void updateMMViews(EventLabel *lab) = 0;
@@ -101,6 +121,17 @@ public:
 	virtual void recomputeCacheCounters(const ExecutionGraph &g) const = 0;
 	virtual void maybeDecreaseCacheCounters(const EventLabel *lab) const = 0;
 	virtual void maybeIncreaseCacheCounters(const EventLabel *lab) const = 0;
+
+protected:
+	/** Returns whether LAB is concrete (but not EXCEPT) and LAB < REF \/ LAB in KEEP
+	 * (< is addition order) */
+	static auto survives(const EventLabel &lab, Stamp ref, const VectorClock &keep,
+			     const EventLabel *except) -> bool;
+
+	/** Returns whether LAB (a store or the initializer) has a surviving co-successor
+	 * (see survives()) */
+	static auto hasSurvivingCoSucc(const EventLabel *lab, const MemAccessLabel *aLab,
+				       const VectorClock &keep, const EventLabel *except) -> bool;
 
 private:
 	/* Keep the config around for convenience (e.g., for optimizing

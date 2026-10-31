@@ -10,7 +10,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAK
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(${PROJECT_NAME} PRIVATE genmc_config_includes genmc_lib genmc_passes ffi dl LLVM)
+target_link_libraries(${PROJECT_NAME} PRIVATE genmc_config_includes genmc_lib genmc_passes ffi ${CMAKE_DL_LIBS} LLVM)
 
 ### Faster allocator for the allocation-heavy exploration; off under SANITIZE (own malloc)
 set(GENMC_TCMALLOC "AUTO" CACHE STRING "Link tcmalloc: AUTO (use if found), ON (required), OFF")

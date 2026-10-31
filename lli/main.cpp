@@ -69,7 +69,8 @@ static llvm::cl::opt<ModelType> clModelType(
 			 clEnumValN(ModelType::TSO, "tso", "TSO memory model"),
 			 clEnumValN(ModelType::RA, "ra", "RA+RLX memory model"),
 			 clEnumValN(ModelType::RC11, "rc11", "RC11 memory model (default)"),
-			 clEnumValN(ModelType::IMM, "imm", "IMM memory model")),
+			 clEnumValN(ModelType::IMM, "imm", "IMM memory model"),
+			 clEnumValN(ModelType::ARM8, "arm8", "ARMv8 memory model")),
 	llvm::cl::cat(clGeneral), llvm::cl::init(ModelType::RC11),
 	llvm::cl::desc("Choose model type:"));
 
@@ -407,7 +408,7 @@ static void saveConfigOptions(Config &conf, LLIConfig &lliConfig)
 				  extraLang == InputLanguage::cargo;
 	}
 	lliConfig.programEntryFun = std::move(clProgramEntryFunction);
-	lliConfig.isDepTrackingModel = (clModelType == ModelType::IMM);
+	lliConfig.isDepTrackingModel = isDepTracking(clModelType);
 
 	/* Exploration */
 	conf.mode = clExplorationMode;
@@ -480,7 +481,7 @@ static void adjustConfig(const ModuleInfo &modInfo, Config &conf)
 	/* Perhaps override the MM under which verification will take place */
 	if (modInfo.determinedMM.has_value() && isStrongerThan(*modInfo.determinedMM, conf.model)) {
 		conf.model = *modInfo.determinedMM;
-		conf.isDepTrackingModel = (conf.model == ModelType::IMM);
+		conf.isDepTrackingModel = isDepTracking(conf.model);
 		LOG(VerbosityLevel::Tip,
 		    "Automatically adjusting memory model to {}. You can disable this behavior "
 		    "with -disable-mm-detector.",
@@ -537,17 +538,39 @@ static auto getOutFilename(const LLIConfig & /* lliConfig */) -> std::string
 	if (createdFilename)
 		return filename;
 
-	/* Honor the system temp directory (e.g., $TMPDIR), falling back to /tmp */
+	/* Honor the system temp directory (e.g., $TMPDIR); fall back to /tmp on POSIX */
 	std::error_code ec;
 	auto dir = std::filesystem::temp_directory_path(ec);
+#ifdef _WIN32
+	ERROR_ON(ec, "Could not determine a temporary directory: {}", ec.message());
+#else
 	if (ec)
 		dir = "/tmp";
+#endif
 
 	auto tmpl = (dir / "__genmc.ll.XXXXXX").string();
 	close(mkstemp(tmpl.data()));
 	filename = std::move(tmpl);
 	createdFilename = true;
 	return filename;
+}
+
+/* Quote a path for std::system(): sh takes single quotes (embedded ones escaped), cmd.exe
+ * double ones (a Windows path cannot contain a double quote) */
+static auto quoteArg(const std::string &arg) -> std::string
+{
+#ifdef _WIN32
+	return "\"" + arg + "\"";
+#else
+	std::string quoted = "'";
+	for (const auto c : arg) {
+		if (c == '\'')
+			quoted += "'\\''";
+		else
+			quoted += c;
+	}
+	return quoted + "'";
+#endif
 }
 
 static auto buildCompilationArgs(const LLIConfig &lliConfig) -> std::string
@@ -561,11 +584,11 @@ static auto buildCompilationArgs(const LLIConfig &lliConfig) -> std::string
 	args += lliConfig.rust ? " -gdwarf-4" : " -g";
 	for (const auto &f : lliConfig.cflags)
 		args += " " + f;
-	args += " -I'" SRC_INCLUDE_DIR "'";
-	args += " -I'" INCLUDE_DIR "'";
+	args += " -I" + quoteArg(SRC_INCLUDE_DIR);
+	args += " -I" + quoteArg(INCLUDE_DIR);
 	args += " -S -emit-llvm";
-	args += " -o " + getOutFilename(lliConfig);
-	args += " '" + lliConfig.inputFile + "'";
+	args += " -o " + quoteArg(getOutFilename(lliConfig));
+	args += " " + quoteArg(lliConfig.inputFile);
 
 	return args;
 }
@@ -573,8 +596,11 @@ static auto buildCompilationArgs(const LLIConfig &lliConfig) -> std::string
 static auto compileInput(const LLIConfig &lliConfig, const std::unique_ptr<llvm::LLVMContext> &ctx,
 			 std::unique_ptr<llvm::Module> &module) -> bool
 {
-	const auto *path = CLANGPATH;
-	auto command = path + buildCompilationArgs(lliConfig);
+	auto command = quoteArg(CLANGPATH) + buildCompilationArgs(lliConfig);
+#ifdef _WIN32
+	/* cmd.exe /c strips the outer quotes, which lets the executable path be quoted too */
+	command = "\"" + command + "\"";
+#endif
 	if (std::system(command.c_str()) != 0)
 		return false;
 
@@ -759,9 +785,13 @@ static void printEstimationResults(const std::shared_ptr<const Config> &conf,
 	      (!res.status.has_value() ? "*** Estimation complete"
 				       : "\n*** Estimation unsuccessful"));
 
+	if (res.status.has_value())
+		return;
+
 	long long mean = std::llround(res.estimationMean);
 	long long sd = std::llround(std::sqrt(res.estimationVariance));
-	auto meanTimeSecs = getElapsedSecs(begin) / (res.explored + res.exploredBlocked);
+	auto executions = res.explored + res.exploredBlocked;
+	auto meanTimeSecs = executions != 0 ? getElapsedSecs(begin) / executions : 0.0L;
 	PRINT(VerbosityLevel::Error, "Total executions estimate: {} (+- {})\n", mean, sd);
 	PRINT(VerbosityLevel::Error, "Time to completion estimate: {:.2f}s\n", meanTimeSecs * mean);
 	GENMC_DEBUG(if (conf->printEstimationStats) {

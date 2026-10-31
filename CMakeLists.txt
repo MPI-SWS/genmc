@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12...4.0)
-project(genmc VERSION 0.19.0 LANGUAGES CXX C)
+project(genmc VERSION 0.20.0 LANGUAGES CXX C)
 
 enable_testing()
 include(CTest)
@@ -27,12 +27,29 @@ add_library(genmc_config_includes INTERFACE)
 target_compile_features(genmc_config_includes INTERFACE cxx_std_23)
 target_include_directories(genmc_config_includes INTERFACE ${CMAKE_BINARY_DIR}/include)
 
+### Windows: we cannot use MSVC (no POSIX headers); use MinGW instead
+if(MSVC)
+  message(FATAL_ERROR "MSVC is not supported; use MinGW/MSYS2 (GCC or Clang) instead.")
+endif()
+### MinGW with libstdc++ keeps std::print in libstdc++exp
+if(MINGW)
+  include(CheckCXXSourceCompiles)
+  check_cxx_source_compiles("
+    #include <version>
+    #ifndef _LIBCPP_VERSION
+    #error not libc++
+    #endif
+    int main() { return 0; }" GENMC_MINGW_USING_LIBCXX)
+  if(NOT GENMC_MINGW_USING_LIBCXX)
+    target_link_libraries(genmc_config_includes INTERFACE stdc++exp)
+  endif()
+endif()
+
 install(DIRECTORY lli/runtime-include/c/ DESTINATION "${PKG_INCLUDE_DIR}" FILES_MATCHING PATTERN "*.h")
 
 ### Whether to build lli-based binary
 option(BUILD_LLI "Build lli-based executable (requires LLVM)" ON)
 if(BUILD_LLI)
-  find_library(HAVE_LIBDL dl REQUIRED)
   find_library(HAVE_LIBFFI ffi REQUIRED)
 
   # For linking to LLVM, see: https://llvm.org/docs/CMake.html#embedding-llvm-in-your-project

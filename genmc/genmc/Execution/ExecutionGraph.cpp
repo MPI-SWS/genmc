@@ -162,12 +162,22 @@ auto ExecutionGraph::addLabelToGraph(std::unique_ptr<EventLabel> lab) -> EventLa
 
 	auto pos = lab->getPos();
 	auto *lastLab = getLastThreadLabel(pos.thread);
-	if (lastLab && pos.index < lastLab->getIndex()) {
-		auto *eLab = getEventLabel(pos);
-		ASSERT(!eLab || genmc::isa<EmptyLabel>(eLab));
+	/* Overwrite the skeleton at POS */
+	if (lastLab && pos.index <= lastLab->getIndex()) {
 		auto &oldLab = *events[pos.thread][pos.index];
+		ASSERT(oldLab.isSkeleton() && oldLab.getKind() == lab->getKind());
+		/* Hand a skeleton write's dangling-rfi readers to the fresh write */
+		if (auto *oldW = genmc::dyn_cast<WriteLabel>(&oldLab)) {
+			auto *newW = genmc::cast<WriteLabel>(&*lab);
+			std::vector<ReadLabel *> readers;
+			for (auto &rd : oldW->readers())
+				readers.push_back(&rd);
+			for (auto *rd : readers) {
+				rd->setRfNoCascade(newW);
+				newW->addReader(rd);
+			}
+		}
 		auto it = poLists[pos.thread].erase(po_iterator(oldLab));
-		insertionOrder.remove(oldLab);
 		events[pos.thread][pos.index] = std::move(lab);
 		auto &newLab = *events[pos.thread][pos.index];
 		insertionOrder.push_back(newLab);
@@ -197,8 +207,8 @@ auto ExecutionGraph::removeLast(int thread) -> std::unique_ptr<EventLabel>
 {
 	auto *lab = getLastThreadLabel(thread);
 	ASSERT(getConsChecker());
-	getConsChecker()->maybeDecreaseCacheCounters(lab);
 
+	/* Drop the references other labels hold to LAB */
 	if (auto *rLab = genmc::dyn_cast_if_present<ReadLabel>(lab)) {
 		if (auto *wLab = genmc::dyn_cast_if_present<WriteLabel>(rLab->getRf())) {
 			wLab->removeReader([&](ReadLabel &oLab) { return &oLab == rLab; });
@@ -212,18 +222,13 @@ auto ExecutionGraph::removeLast(int thread) -> std::unique_ptr<EventLabel>
 		for (auto &rLab : wLab->readers()) {
 			rLab.setRfNoCascade(nullptr);
 		}
+		if (wLab->isInCo())
+			removeFromCo(wLab);
 	}
-	if (auto *mLab = genmc::dyn_cast<MemAccessLabel>(lab)) {
-		auto &accesses = accessMap_[mLab->getAddr()];
-		std::erase(accesses, mLab);
-	}
-	if (auto *dLab = genmc::dyn_cast<FreeLabel>(lab)) {
-		auto &accesses = accessMap_[dLab->getAddr()];
-		std::erase(accesses, dLab);
-	}
-	if (genmc::isa<ThreadCreateLabel>(lab)) {
+	untrackAccess(lab);
+	if (auto *tcLab = genmc::dyn_cast<ThreadCreateLabel>(lab)) {
 		if (auto *tsLab = genmc::dyn_cast_if_present<ThreadStartLabel>(
-			    getFirstThreadLabel(lab->getThread())))
+			    getFirstThreadLabel(tcLab->getChildId())))
 			tsLab->setCreate(nullptr);
 	}
 	if (auto *tjLab = genmc::dyn_cast<ThreadJoinLabel>(lab)) {
@@ -233,8 +238,11 @@ auto ExecutionGraph::removeLast(int thread) -> std::unique_ptr<EventLabel>
 	}
 	/* Nothing to do for start/finish: childId remains the same */
 
-	/* Remove from lists */
-	insertionOrder.remove(*lab);
+	/* Remove from insertion order (and the checkers' counters) if concrete */
+	if (!lab->isSkeleton()) {
+		getConsChecker()->maybeDecreaseCacheCounters(lab);
+		insertionOrder.remove(*lab);
+	}
 	poLists[lab->getThread()].remove(*lab);
 	lab->setParent(nullptr);
 
@@ -248,6 +256,194 @@ auto ExecutionGraph::removeLast(int thread) -> std::unique_ptr<EventLabel>
 	auto popped = std::move(threadEvents.back());
 	threadEvents.pop_back();
 	return popped;
+}
+
+void ExecutionGraph::skeletonize(EventLabel *lab)
+{
+	ASSERT(!lab->isSkeleton());
+
+	/* Remove any rf/co edges of LAB (readers of a skeleton write keep pointing to it) */
+	if (auto *rLab = genmc::dyn_cast<ReadLabel>(lab)) {
+		if (auto *wLab = genmc::dyn_cast_if_present<WriteLabel>(rLab->getRf()))
+			wLab->removeReader([&](ReadLabel &oLab) { return &oLab == rLab; });
+		if (auto *iLab = genmc::dyn_cast_if_present<InitLabel>(rLab->getRf()))
+			iLab->removeReader(rLab->getAddr(),
+					   [&](ReadLabel &oLab) { return &oLab == rLab; });
+		rLab->setRfNoCascade(nullptr);
+	}
+	if (auto *wLab = genmc::dyn_cast<WriteLabel>(lab); wLab && wLab->isInCo())
+		coherence[wLab->getAddr()].remove(*wLab);
+	untrackAccess(lab);
+
+	/* Also remove from insertion order (labels() is the concrete graph), but keep it
+	 * in po; the stamp remains an index for the checkers' visited sets */
+	insertionOrder.remove(*lab);
+	lab->setStamp(nextStamp());
+	lab->setSkeleton(true);
+}
+
+void ExecutionGraph::deskeletonize(EventLabel *lab)
+{
+	ASSERT(lab->isSkeleton());
+
+	lab->setSkeleton(false);
+	lab->setStamp(nextStamp());
+	insertionOrder.push_back(*lab);
+	if (auto *mLab = genmc::dyn_cast<MemAccessLabel>(lab))
+		accessMap_[mLab->getAddr()].push_back(mLab);
+}
+
+/* A set of event positions */
+struct PosSet {
+	std::vector<std::vector<bool>> bits;
+
+	[[nodiscard]] auto contains(Event e) const -> bool
+	{
+		return std::cmp_less(e.index, bits[e.thread].size()) && bits[e.thread][e.index];
+	}
+	[[nodiscard]] auto containsAny(const auto &events) const -> bool
+	{
+		return std::ranges::any_of(events, [this](Event e) { return contains(e); });
+	}
+};
+
+/* Calculates the reads in rng([FROM];(data;rfi)*) */
+template <typename F> static auto dataRfiClosure(const ExecutionGraph &g, F from) -> PosSet
+{
+	PosSet result;
+
+	result.bits.resize(g.getNumThreads());
+	for (auto tid : g.thr_ids()) {
+		result.bits[tid].assign(g.getThreadSize(tid), false);
+		for (const auto &lab : g.po(tid)) {
+			const auto *rLab = genmc::dyn_cast<ReadLabel>(&lab);
+			if (!rLab)
+				continue;
+			const auto *wLab = genmc::dyn_cast_if_present<WriteLabel>(rLab->getRf());
+			result.bits[tid][rLab->getIndex()] = from(rLab) ||
+							     (wLab && wLab->getThread() == tid &&
+							      result.containsAny(wLab->data()));
+		}
+	}
+	return result;
+}
+
+/* Returns the first event of TID in range([UNDETERMINED];skdep0) */
+static auto firstRemoved(const ExecutionGraph &g, int tid, const PosSet &undetermined) -> int
+{
+	/* The thread of a removed create goes back to its begin */
+	if (tid != 0 && !g.getFirstThreadLabel(tid)->getCreate())
+		return 1;
+
+	for (auto j = 1; j < g.getThreadSize(tid); j++) {
+		const auto *lab = g.getEventLabel(Event(tid, j));
+		if (undetermined.containsAny(lab->ctrl()) || undetermined.containsAny(lab->addr()))
+			return j;
+		if (genmc::isa<CasReadLabel>(lab) &&
+		    (undetermined.contains(lab->getPos()) || undetermined.containsAny(lab->cas())))
+			return j + 1;
+	}
+	return g.getThreadSize(tid);
+}
+
+static void truncateThread(ExecutionGraph &g, int tid, int from, const VectorClock &keep)
+{
+	while (g.getThreadSize(tid) > from) {
+		VERIFY(g.getLastThreadLabel(tid)->isSkeleton() ||
+		       !keep.contains(g.getLastThreadLabel(tid)->getPos()));
+		g.removeLast(tid);
+	}
+}
+
+void ExecutionGraph::skeletonizeDeleted(EventLabel *lab, const VectorClock &keep,
+					const ReadLabel *changed)
+{
+	/* A skeleton store keeps its rfi readers only; a kept external reader is CHANGED
+	 * or implies an IPR */
+	if (auto *wLab = genmc::dyn_cast<WriteLabel>(lab)) {
+		wLab->removeReader([&](ReadLabel &rLab) {
+			if (rLab.getThread() == wLab->getThread())
+				return false;
+			VERIFY(!keep.contains(rLab.getPos()) || &rLab == changed ||
+			       genmc::isa<BWaitReadLabel>(&rLab) /* IPR */ ||
+			       genmc::isa<LockCasReadLabel>(&rLab));
+			rLab.setRfNoCascade(nullptr);
+			return true;
+		});
+	}
+	skeletonize(lab);
+}
+
+static void popTrailingSkeletons(ExecutionGraph &g, int tid)
+{
+	while (g.getThreadSize(tid) > 1 && g.getLastThreadLabel(tid)->isSkeleton())
+		g.removeLast(tid);
+}
+
+void ExecutionGraph::deleteEvents(const VectorClock &keep, const ReadLabel *changed)
+{
+	/* Whether LAB is going to be deleted (a begin is always in the view: check its
+	 * create) */
+	auto deleted = [&](const EventLabel *lab) {
+		const auto *bLab = genmc::dyn_cast<ThreadStartLabel>(lab);
+		auto pos = bLab && bLab->getCreate() ? bLab->getCreate()->getPos() : lab->getPos();
+		return !lab->isSkeleton() && !keep.contains(pos);
+	};
+	auto undetermined = dataRfiClosure(
+		*this, [&](const ReadLabel *rLab) { return deleted(rLab) || rLab == changed; });
+
+	/* A removed create empties its thread */
+	for (auto tid : thr_ids()) {
+		truncateThread(*this, tid, firstRemoved(*this, tid, undetermined), keep);
+		for (auto &lab : po(tid)) {
+			if (deleted(&lab))
+				skeletonizeDeleted(&lab, keep, changed);
+		}
+		/* Keep the last thread label concrete because it is read as the thread's state */
+		popTrailingSkeletons(*this, tid);
+	}
+	eraseOrphanBeginTails();
+	renumberStamps();
+}
+
+void ExecutionGraph::renumberStamps()
+{
+	resetStamp(0U);
+	for (auto &lab : labels())
+		lab.setStamp(nextStamp());
+
+	/* Also provide stamps for skeletons so that the consistency-checker arrays have
+	 * enough space */
+	for (auto tid : thr_ids())
+		for (auto &lab : po(tid))
+			if (lab.isSkeleton())
+				lab.setStamp(nextStamp());
+}
+
+void ExecutionGraph::eraseOrphanBeginTails()
+{
+	for (auto tid = getNumThreads() - 1; tid > 0; tid--) {
+		auto *bLab = getFirstThreadLabel(tid);
+		if (getThreadSize(tid) != 1 ||
+		    (bLab->getCreate() != nullptr && containsPos(bLab->getCreate()->getPos())))
+			break;
+		if (bLab->getSymmPredTid() != -1)
+			getFirstThreadLabel(bLab->getSymmPredTid())->setSymmSuccTid(-1);
+		insertionOrder.remove(*bLab);
+		poLists[tid].remove(*bLab);
+		events.erase(events.begin() + tid);
+		poLists.erase(poLists.begin() + tid);
+	}
+}
+
+void ExecutionGraph::removeFromCo(WriteLabel *wLab) { coherence[wLab->getAddr()].remove(*wLab); }
+
+void ExecutionGraph::untrackAccess(EventLabel *lab)
+{
+	if (auto *mLab = genmc::dyn_cast<MemAccessLabel>(lab))
+		std::erase(accessMap_[mLab->getAddr()], mLab);
+	if (auto *dLab = genmc::dyn_cast<FreeLabel>(lab))
+		std::erase(accessMap_[dLab->getAddr()], dLab);
 }
 
 void ExecutionGraph::removeAfter(const VectorClock &preds)
@@ -504,11 +700,11 @@ void ExecutionGraph::copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) 
 		if (i != 0)
 			other.addLabelToGraph(getEventLabel(Event(i, 0))->clone());
 		for (auto j = 1; j <= v.getMax(i); j++) {
-			if (!v.contains(Event(i, j))) {
-				other.addLabelToGraph(createHoleLabel(Event(i, j)));
-				continue;
-			}
+			ASSERT(v.contains(Event(i, j)));
 			auto *nLab = other.addLabelToGraph(getEventLabel(Event(i, j))->clone());
+			/* A skeleton is in po only (its rfi readers are re-attached below) */
+			if (nLab->isSkeleton())
+				other.untrackAccess(nLab);
 			if (auto *wLab = genmc::dyn_cast<WriteLabel>(nLab)) {
 				const_cast<WriteLabel *>(wLab)->removeReader([&v](ReadLabel &rLab) {
 					return !v.contains(rLab.getPos());
@@ -519,27 +715,7 @@ void ExecutionGraph::copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) 
 		}
 	}
 
-	/* Clean up begins */
-	for (auto i :
-	     std::views::reverse(other.thr_ids()) | std::views::take_while([&other](auto i) {
-		     return other.getThreadSize(i) == 1 &&
-			    !genmc::isa<InitLabel>(other.getFirstThreadLabel(i));
-	     })) {
-		auto *bLab = other.getFirstThreadLabel(i);
-		VERIFY(bLab);
-		/* Have to use containsPos() below due to trailing begins */
-		if (!bLab->getCreate() || !other.containsPos(bLab->getCreate()->getPos())) {
-			if (bLab->getSymmPredTid() != -1) {
-				auto *symmLab = other.getFirstThreadLabel(bLab->getSymmPredTid());
-				symmLab->setSymmSuccTid(-1);
-			}
-			other.insertionOrder.remove(*bLab);
-			other.poLists[i].remove(*bLab);
-			other.events.erase(other.events.begin() + i);
-			other.poLists.erase(other.poLists.begin() + i);
-			VERIFY(i >= other.getNumThreads() - 1 || other.getThreadSize(i + 1) <= 0);
-		}
-	}
+	other.eraseOrphanBeginTails();
 
 	/* Fix insertion order */
 	other.insertionOrder.clear();
@@ -551,6 +727,11 @@ void ExecutionGraph::copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) 
 			other.getEventLabel(lab.getPos())->setStamp(other.nextStamp());
 		}
 	}
+	/* Skeletons need unique stamps too: the checkers' visited sets are stamp-indexed */
+	for (auto i : other.thr_ids())
+		for (auto &lab : other.po(i))
+			if (lab.isSkeleton())
+				lab.setStamp(other.nextStamp());
 
 	/* Helper map to repair views in the copied graph */
 	std::unordered_map<const detail::ViewBase *, genmc::intrusive_ptr<detail::ViewBase>>
@@ -572,8 +753,10 @@ void ExecutionGraph::copyGraphUpTo(ExecutionGraph &other, const VectorClock &v) 
 		view.base_ = std::move(newBase);
 	};
 
-	/* Fix pointers and views */
-	for (auto &lab : other.labels()) {
+	/* Fix pointers and views, by po (skeletons are not in insertion order) */
+	auto allLabs = other.thr_ids() | std::views::transform([&](int i) { return other.po(i); }) |
+		       std::views::join;
+	for (auto &lab : allLabs) {
 		for (auto &view : lab.calculatedViews)
 			fixView(view);
 		if (lab.prefixView)
@@ -704,16 +887,25 @@ void ExecutionGraph::validate()
 			}
 		}
 		if (auto *wLab = genmc::dyn_cast<WriteLabel>(&lab)) {
-			if (wLab->isRMW() &&
-			    std::ranges::count_if(wLab->readers(),
-						  [&](auto &rLab) { return rLab.isRMW(); }) > 1) {
-				std::cerr << std::format("Atomicity violation: {}\n{}\n",
-							 wLab->getPos(), *this);
-				UNREACHABLE();
+			/* RMW writes do not addr/ctrl/casdep-depend on their read (data is OK);
+			 * deleteEvents() relies on this */
+			if (wLab->isRMW()) {
+				auto rPos = wLab->getPos().prev();
+				auto dependsOn = [rPos](auto &&deps) {
+					return std::ranges::find(deps, rPos) !=
+					       std::ranges::end(deps);
+				};
+				if (dependsOn(wLab->addr()) || dependsOn(wLab->ctrl()) ||
+				    dependsOn(wLab->cas())) {
+					std::cerr << std::format(
+						"RMW write depends on its read: {}\n{}\n",
+						wLab->getPos(), *this);
+					UNREACHABLE();
+				}
 			}
 
 			if (std::ranges::any_of(wLab->readers(), [&](auto &rLab) {
-				    return !containsPosNonEmpty(rLab.getPos());
+				    return !containsPos(rLab.getPos());
 			    })) {
 				std::string readers;
 				for (auto &rLab : wLab->readers())
@@ -731,12 +923,62 @@ void ExecutionGraph::validate()
 				UNREACHABLE();
 			}
 			for (auto &rLab : wLab->readers()) {
-				if (!containsPosNonEmpty(rLab.getPos())) {
+				if (!containsPos(rLab.getPos())) {
 					std::cerr << std::format(
 						"Readers list has garbage: {}\n{}\n", rLab, *this);
 					UNREACHABLE();
 				}
 			}
+		}
+	}
+
+	/* Reports a violation at LAB */
+	auto report = [&](const auto &what, const EventLabel &lab) {
+		std::cerr << std::format("{}: {}\n{}\n", what, lab, *this);
+		UNREACHABLE();
+	};
+
+	/* Write values fit in their access size */
+	for (auto &lab : labels()) {
+		const auto *wLab = genmc::dyn_cast<WriteLabel>(&lab);
+		if (wLab && wLab->getSize().getBits() < SVal::width &&
+		    (wLab->getVal().get() >> wLab->getSize().getBits()) != 0)
+			report("Value exceeds the access size", lab);
+	}
+
+	/* Skeleton well-formedness: rf ; [SK] = 0, [SK] ; rfe = 0, [SK & W] ; co = 0,
+	 * [SK] ; tc = tc ; [SK], and the last label of a thread is concrete */
+	for (auto i : thr_ids()) {
+		if (getThreadSize(i) > 1 && getLastThreadLabel(i)->isSkeleton())
+			report("Skeleton as last label", *getLastThreadLabel(i));
+		const auto *bLab = getFirstThreadLabel(i);
+		if (i != 0 && bLab->getCreate() &&
+		    bLab->getCreate()->isSkeleton() != bLab->isSkeleton())
+			report("Begin/create skeleton mismatch", *bLab);
+		for (auto &lab : po(i)) {
+			const auto *rLab = genmc::dyn_cast<ReadLabel>(&lab);
+			if (rLab && lab.isSkeleton() && rLab->getRf())
+				report("Skeleton read with a store", lab);
+			if (rLab && rLab->readsExt() && rLab->getRf()->isSkeleton())
+				report("External rf from a skeleton", lab);
+			const auto *wLab = genmc::dyn_cast<WriteLabel>(&lab);
+			if (wLab && lab.isSkeleton() && wLab->isInCo())
+				report("Skeleton store in co", lab);
+		}
+	}
+
+	/* dom(gdep) is concrete (see deleteEvents()) */
+	auto undetermined =
+		dataRfiClosure(*this, [](const ReadLabel *rLab) { return rLab->isSkeleton(); });
+	for (auto i : thr_ids()) {
+		for (auto &lab : po(i)) {
+			if (undetermined.containsAny(lab.ctrl()) ||
+			    undetermined.containsAny(lab.addr()) ||
+			    undetermined.containsAny(lab.cas()))
+				report("Identity depends on an undetermined read", lab);
+			if (genmc::isa<WriteLabel>(&lab) && !lab.isSkeleton() &&
+			    undetermined.containsAny(lab.data()))
+				report("Concrete store depends on an undetermined read", lab);
 		}
 	}
 }

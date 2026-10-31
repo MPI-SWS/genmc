@@ -13,6 +13,7 @@
 
 #include "genmc/Execution/GraphUtils.hpp"
 #include "genmc/ADT/View.hpp"
+#include "genmc/Execution/DepInfo.hpp"
 #include "genmc/Execution/EventAttr.hpp"
 #include "genmc/Execution/EventLabel.hpp"
 #include "genmc/Execution/ExecutionGraph.hpp"
@@ -227,6 +228,7 @@ auto createRMWWriteLabel(const ExecutionGraph & /*g*/, const ReadLabel *rLab)
 
 	SVal result;
 	WriteAttr wattr = WriteAttr::None;
+	const EventDeps *deps = nullptr;
 	if (const auto *faiLab = genmc::dyn_cast<FaiReadLabel>(rLab)) {
 		/* Need to get the rf value within the if, as rLab might be a disk op,
 		 * and we cannot get the value in that case (but it will also not be an RMW)
@@ -235,9 +237,11 @@ auto createRMWWriteLabel(const ExecutionGraph & /*g*/, const ReadLabel *rLab)
 		result = executeRMWBinOp(rfVal, faiLab->getOpVal(), faiLab->getSize(),
 					 faiLab->getOp());
 		wattr = faiLab->getAttr();
+		deps = &faiLab->getWriteDeps();
 	} else if (const auto *casLab = genmc::dyn_cast<CasReadLabel>(rLab)) {
 		result = casLab->getSwapVal();
 		wattr = casLab->getAttr();
+		deps = &casLab->getWriteDeps();
 	} else
 		UNREACHABLE();
 
@@ -263,6 +267,7 @@ auto createRMWWriteLabel(const ExecutionGraph & /*g*/, const ReadLabel *rLab)
 		UNREACHABLE();
 	}
 	VERIFY(wLab);
+	wLab->setDeps(*deps);
 	return wLab;
 }
 

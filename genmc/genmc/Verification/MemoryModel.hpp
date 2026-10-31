@@ -20,7 +20,13 @@
 #include <format>
 #include <string>
 
-enum class ModelType : std::uint8_t { SC = 0, TSO = 1, RA = 2, RC11 = 3, IMM = 4 };
+enum class ModelType : std::uint8_t { SC = 0, TSO = 1, RA = 2, RC11 = 3, ARM8 = 4, IMM = 5 };
+
+/** Whether MODEL orders events by dependencies (ppo != po; graphs may hold skeletons) */
+inline auto isDepTracking(ModelType model) -> bool
+{
+	return model == ModelType::IMM || model == ModelType::ARM8;
+}
 
 /** Make `ModelType` formattable with `std::format`. */
 template <> struct std::formatter<ModelType> {
@@ -39,6 +45,8 @@ template <> struct std::formatter<ModelType> {
 			return std::format_to(ctx.out(), "RC11");
 		case ModelType::IMM:
 			return std::format_to(ctx.out(), "IMM");
+		case ModelType::ARM8:
+			return std::format_to(ctx.out(), "ARM8");
 		default:
 			PRINT_BUGREPORT_INFO_ONCE("missing-model-name",
 						  "Unknown memory model name");
@@ -50,13 +58,14 @@ template <> struct std::formatter<ModelType> {
 inline auto isStrongerThan(ModelType model, ModelType other) -> bool
 {
 	// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-	static const bool lookup[5][5] = {
-		//          SC     TSO    RA     RC11   IMM
-		/* SC   */ {false, true, true, true, true},
-		/* TSO  */ {false, false, true, true, true},
-		/* RA   */ {false, false, false, true, true},
-		/* RC11 */ {false, false, false, false, true},
-		/* IMM  */ {false, false, false, false, false},
+	static const bool lookup[6][6] = {
+		//          SC     TSO    RA     RC11   ARM8   IMM
+		/* SC   */ {false, true, true, true, true, true},
+		/* TSO  */ {false, false, true, true, false, true},
+		/* RA   */ {false, false, false, true, false, true},
+		/* RC11 */ {false, false, false, false, false, true},
+		/* ARM8 */ {false, false, false, false, false, true},
+		/* IMM  */ {false, false, false, false, false, false},
 	};
 	// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
 	return lookup[static_cast<size_t>(model)][static_cast<size_t>(other)];

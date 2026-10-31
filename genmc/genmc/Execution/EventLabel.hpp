@@ -105,6 +105,7 @@ public:
 	auto data() const { return std::views::all(deps.data); }
 	auto addr() const { return std::views::all(deps.addr); }
 	auto ctrl() const { return std::views::all(deps.ctrl); }
+	auto cas() const { return std::views::all(deps.cas); }
 
 	/** Returns the discriminator of this object */
 	auto getKind() const -> EventLabelKind { return kind; }
@@ -167,17 +168,10 @@ public:
 	void addView(View &&view) { calculatedViews.emplace_back(std::move(view)); }
 
 	/** Iterators for calculated relations */
-	auto calculated(size_t i) const
-	{
-		return (getKind() == Empty) ? std::views::all(calculatedRels[0])
-					    : std::views::all(calculatedRels[i]);
-	}
+	auto calculated(size_t i) const { return std::views::all(calculatedRels[i]); }
 
 	/** Getters for calculated views */
-	auto view(size_t i) const -> const View &
-	{
-		return (getKind() == Empty) ? calculatedViews[0] : calculatedViews[i];
-	}
+	auto view(size_t i) const -> const View & { return calculatedViews[i]; }
 
 	/** Iterator over the calculated views */
 	auto views() const { return std::views::all(calculatedViews); }
@@ -226,6 +220,12 @@ public:
 	 * execution graph is responsible for making such changes */
 	void setRevisitStatus(bool status) { revisitable = status; }
 
+	/** Whether this is a skeleton label */
+	auto isSkeleton() const -> bool { return skeleton; }
+
+	/** Marks this label as (non-)skeleton */
+	void setSkeleton(bool status) { skeleton = status; }
+
 	/** Returns true if this event cannot be revisited or deleted */
 	auto isStable() const -> bool;
 
@@ -244,6 +244,7 @@ public:
 		calculatedViews.clear();
 		prefixView = nullptr;
 		revisitable = true;
+		skeleton = false;
 	}
 
 private:
@@ -284,6 +285,8 @@ private:
 
 	/** Revisitability status */
 	bool revisitable = true;
+
+	bool skeleton = false;
 };
 
 #define DEFINE_CREATE_CLONE(name)                                                                  \
@@ -865,6 +868,10 @@ public:
 	/** Checks whether the write part has the specified attributes */
 	auto hasAttr(WriteAttr attr) const -> bool { return !!(wattr & attr); }
 
+	/** Returns/sets the dependencies of the write part */
+	auto getWriteDeps() const -> const EventDeps & { return writeDeps; }
+	void setWriteDeps(const EventDeps &deps) { writeDeps = deps; }
+
 	void reset() override { ReadLabel::reset(); }
 
 	DEFINE_STANDARD_MEMBERS_RANGE(FaiRead)
@@ -878,6 +885,9 @@ private:
 
 	/** Attributes for the write part of the RMW */
 	WriteAttr wattr = WriteAttr::None;
+
+	/** Dependencies of the write part (they may differ from the read's) */
+	EventDeps writeDeps;
 };
 
 #define FAIREAD_PURE_SUBCLASS(name)                                                                \
@@ -962,6 +972,10 @@ public:
 	auto failsSpuriously() const -> bool { return spuriousFail; }
 	void setSpuriousFailure(bool f) { spuriousFail = f; }
 
+	/** Returns/sets the dependencies of the write part */
+	auto getWriteDeps() const -> const EventDeps & { return writeDeps; }
+	void setWriteDeps(const EventDeps &deps) { writeDeps = deps; }
+
 	void reset() override { ReadLabel::reset(); }
 
 	DEFINE_STANDARD_MEMBERS_RANGE(CasRead)
@@ -972,6 +986,9 @@ private:
 
 	/** The value that will be written if the CAS succeeds */
 	const SVal swapValue; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+
+	/** Dependencies of the write part (they may differ from the read's) */
+	EventDeps writeDeps;
 
 	/** Orderings of the CAS instruction. The inherited `ordering`
 	 * caches whichever is in effect */
@@ -1959,7 +1976,6 @@ DEFINE_DUMMY_SUBCLASS(LoopBegin)
 DEFINE_DUMMY_SUBCLASS(SpinStart)
 DEFINE_DUMMY_SUBCLASS(FaiZNESpinEnd)
 DEFINE_DUMMY_SUBCLASS(LockZNESpinEnd)
-DEFINE_DUMMY_SUBCLASS(Empty)
 
 /*******************************************************************************
  **                             Out-of-class definitions
@@ -2157,9 +2173,6 @@ template <> struct std::formatter<EventLabel::EventLabelKind> {
 		case EventLabel::FaiZNESpinEnd:
 		case EventLabel::LockZNESpinEnd:
 			str = "ZNE_SPIN_END";
-			break;
-		case EventLabel::Empty:
-			str = "EMPTY";
 			break;
 		default:
 			PRINT_BUGREPORT_INFO_ONCE("print-label-type", "Cannot print label type");

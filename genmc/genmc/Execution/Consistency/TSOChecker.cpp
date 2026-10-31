@@ -28,7 +28,7 @@
 
 bool TSOChecker::isDepTracking() const { return 0; }
 
-bool TSOChecker::visitCalc71Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
+bool TSOChecker::visitCalc76Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
 {
 	while (!worklist.empty()) {
 		auto [stateId, lab, isFinishing] = worklist.back();
@@ -118,7 +118,7 @@ bool TSOChecker::visitCalc71Iterative(std::vector<DFSWorklistEntry> &worklist, V
 	return true;
 }
 
-View TSOChecker::visitCalc71(const EventLabel *lab) const
+View TSOChecker::visitCalc76(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 	View calcRes;
@@ -127,23 +127,22 @@ View TSOChecker::visitCalc71(const EventLabel *lab) const
 
 	/* Explore from all accepting states using DFS */
 	std::vector<DFSWorklistEntry> startStates = {
-		{2, lab},
-		{1, lab},
 		{0, lab},
+		{2, lab},
 	};
 
-	visitCalc71Iterative(startStates, calcRes);
+	visitCalc76Iterative(startStates, calcRes);
 	return calcRes;
 }
 
-auto TSOChecker::checkCalc71(const EventLabel *lab) const
+auto TSOChecker::checkCalc76(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 
-	return visitCalc71(lab);
+	return visitCalc76(lab);
 }
 
-bool TSOChecker::visitCalc72Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
+bool TSOChecker::visitCalc77Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
 {
 	while (!worklist.empty()) {
 		auto [stateId, lab, isFinishing] = worklist.back();
@@ -239,7 +238,7 @@ bool TSOChecker::visitCalc72Iterative(std::vector<DFSWorklistEntry> &worklist, V
 	return true;
 }
 
-View TSOChecker::visitCalc72(const EventLabel *lab) const
+View TSOChecker::visitCalc77(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 	View calcRes;
@@ -248,23 +247,22 @@ View TSOChecker::visitCalc72(const EventLabel *lab) const
 
 	/* Explore from all accepting states using DFS */
 	std::vector<DFSWorklistEntry> startStates = {
-		{2, lab},
-		{1, lab},
 		{0, lab},
+		{2, lab},
 	};
 
-	visitCalc72Iterative(startStates, calcRes);
+	visitCalc77Iterative(startStates, calcRes);
 	return calcRes;
 }
 
-auto TSOChecker::checkCalc72(const EventLabel *lab) const
+auto TSOChecker::checkCalc77(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 
-	return visitCalc72(lab);
+	return visitCalc77(lab);
 }
 
-bool TSOChecker::visitCalc73Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
+bool TSOChecker::visitCalc78Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
 {
 	while (!worklist.empty()) {
 		auto [stateId, lab, isFinishing] = worklist.back();
@@ -363,7 +361,7 @@ bool TSOChecker::visitCalc73Iterative(std::vector<DFSWorklistEntry> &worklist, V
 	return true;
 }
 
-View TSOChecker::visitCalc73(const EventLabel *lab) const
+View TSOChecker::visitCalc78(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 	View calcRes;
@@ -372,20 +370,124 @@ View TSOChecker::visitCalc73(const EventLabel *lab) const
 
 	/* Explore from all accepting states using DFS */
 	std::vector<DFSWorklistEntry> startStates = {
-		{2, lab},
-		{1, lab},
 		{0, lab},
+		{2, lab},
 	};
 
-	visitCalc73Iterative(startStates, calcRes);
+	visitCalc78Iterative(startStates, calcRes);
 	return calcRes;
 }
 
-auto TSOChecker::checkCalc73(const EventLabel *lab) const
+auto TSOChecker::checkCalc78(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 
-	return visitCalc73(lab);
+	return visitCalc78(lab);
+}
+
+bool TSOChecker::visitCalc82Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
+{
+	while (!worklist.empty()) {
+		auto [stateId, lab, isFinishing] = worklist.back();
+		worklist.pop_back();
+		switch (stateId) {
+		case 0: {
+			if (isFinishing) {
+				break;
+			}
+
+			[[maybe_unused]] auto &g = *lab->getParent();
+
+			break;
+		}
+		case 1: {
+			if (isFinishing) {
+				break;
+			}
+
+			[[maybe_unused]] auto &g = *lab->getParent();
+			if (auto pLab = lab; true)
+				if (calcRes.update(pLab->getPrefixView()); true) {
+					worklist.emplace_back(0, pLab);
+				}
+
+			break;
+		}
+		case 2: {
+			if (isFinishing) {
+				break;
+			}
+
+			[[maybe_unused]] auto &g = *lab->getParent();
+			for (auto &tmp : g.lin_preds(lab))
+				if (auto *pLab = &tmp; true)
+					if (calcRes.updateIdx(pLab->getPos()); true) {
+						worklist.emplace_back(0, pLab);
+					}
+			if (auto pLab = g.po_imm_pred(lab); pLab)
+				if (calcRes.updateIdx(pLab->getPos()); true) {
+					worklist.emplace_back(0, pLab);
+				}
+			if (auto pLab = g.rfe_pred(lab); pLab)
+				if (calcRes.updateIdx(pLab->getPos()); true) {
+					worklist.emplace_back(0, pLab);
+				}
+			if (auto pLab = g.tc_pred(lab); pLab)
+				if (calcRes.updateIdx(pLab->getPos()); true) {
+					worklist.emplace_back(0, pLab);
+				}
+			if (auto pLab = g.tj_pred(lab); pLab)
+				if (calcRes.updateIdx(pLab->getPos()); true) {
+					worklist.emplace_back(0, pLab);
+				}
+			for (auto &tmp : g.lin_preds(lab))
+				if (auto *pLab = &tmp; true) {
+					worklist.emplace_back(1, pLab);
+				}
+			if (auto pLab = g.po_imm_pred(lab); pLab) {
+				worklist.emplace_back(1, pLab);
+			}
+			if (auto pLab = g.rfe_pred(lab); pLab) {
+				worklist.emplace_back(1, pLab);
+			}
+			if (auto pLab = g.tc_pred(lab); pLab) {
+				worklist.emplace_back(1, pLab);
+			}
+			if (auto pLab = g.tj_pred(lab); pLab) {
+				worklist.emplace_back(1, pLab);
+			}
+
+			break;
+		}
+		default:
+			UNREACHABLE();
+		}
+	}
+	return true;
+}
+
+View TSOChecker::visitCalc82(const EventLabel *lab) const
+{
+	[[maybe_unused]] auto &g = *lab->getParent();
+	View calcRes;
+
+	calcRes.updateIdx(lab->getPos());
+
+	/* Explore from all accepting states using DFS */
+	std::vector<DFSWorklistEntry> startStates = {
+		{0, lab},
+		{2, lab},
+	};
+
+	visitCalc82Iterative(startStates, calcRes);
+	return calcRes;
+}
+
+auto TSOChecker::checkCalc82(const EventLabel *lab) const
+{
+	[[maybe_unused]] auto &g = *lab->getParent();
+
+	return visitCalc82(lab);
 }
 
 void TSOChecker::calculateSaved([[maybe_unused]] EventLabel *lab) {}
@@ -395,18 +497,18 @@ void TSOChecker::calculateViews(EventLabel *lab)
 	lab->setViews({});
 	{
 		lab->addView({});
-		lab->setView(std::move(checkCalc71(lab)), 0);
+		lab->setView(std::move(checkCalc76(lab)), 0);
 	}
 	{
 		lab->addView({});
-		lab->setView(std::move(checkCalc72(lab)), 1);
+		lab->setView(std::move(checkCalc77(lab)), 1);
 	}
 
 	if (!getConf()->collectLinSpec && !getConf()->checkLinSpec)
 		lab->addView({});
 	else {
 		lab->addView({});
-		lab->setView(std::move(checkCalc73(lab)), 2);
+		lab->setView(std::move(checkCalc78(lab)), 2);
 	}
 }
 
@@ -415,6 +517,11 @@ void TSOChecker::updateMMViews(EventLabel *lab)
 	calculateViews(lab);
 	calculateSaved(lab);
 	lab->setPrefixView(calculatePrefixView(lab));
+}
+
+std::unique_ptr<VectorClock> TSOChecker::calculatePrefixView(const EventLabel *lab) const
+{
+	return std::make_unique<View>(checkCalc82(lab));
 }
 
 static auto isWriteRfBefore(const WriteLabel *wLab, const EventLabel *lab) -> bool
@@ -2375,8 +2482,9 @@ TSOChecker::checkErrors([[maybe_unused]] const EventLabel *lab,
 }
 
 std::vector<VerificationError>
-TSOChecker::checkWarnings(const EventLabel *lab, const VSet<VerificationError> &seenWarnings,
-			  std::vector<const EventLabel *> &racyLabs) const
+TSOChecker::checkWarnings([[maybe_unused]] const EventLabel *lab,
+			  [[maybe_unused]] const VSet<VerificationError> &seenWarnings,
+			  [[maybe_unused]] std::vector<const EventLabel *> &racyLabs) const
 {
 	std::vector<VerificationError> result;
 
@@ -2404,29 +2512,6 @@ bool TSOChecker::isCoherentRelinche(const ExecutionGraph &g) const
 {
 
 	return true && visitCoherenceRelinche(g);
-}
-
-View TSOChecker::calcPPoRfBefore(const EventLabel *lab) const
-{
-	[[maybe_unused]] auto &g = *lab->getParent();
-	View pporf;
-	pporf.updateIdx(lab->getPos());
-
-	if (auto *pLab = g.po_imm_pred(lab); pLab)
-		pporf.update(pLab->getPrefixView());
-	if (auto *rLab = genmc::dyn_cast<ReadLabel>(lab); rLab && rLab->getRf())
-		pporf.update(rLab->getRf()->getPrefixView());
-	auto *tsLab = genmc::dyn_cast<ThreadStartLabel>(lab);
-	if (tsLab && tsLab->getCreate())
-		pporf.update(tsLab->getCreate()->getPrefixView());
-	if (auto *tjLab = genmc::dyn_cast<ThreadJoinLabel>(lab))
-		pporf.update(g.getLastThreadLabel(tjLab->getChildId())->getPrefixView());
-	return pporf;
-}
-
-std::unique_ptr<VectorClock> TSOChecker::calculatePrefixView(const EventLabel *lab) const
-{
-	return std::make_unique<View>(calcPPoRfBefore(lab));
 }
 
 void TSOChecker::recomputeCacheCounters([[maybe_unused]] const ExecutionGraph &g) const {}

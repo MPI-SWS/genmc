@@ -14,14 +14,13 @@
 #include "DepExecutionGraph.hpp"
 #include "genmc/ADT/DepView.hpp"
 #include "genmc/ADT/VectorClock.hpp"
+#include "genmc/Execution/Event.hpp"
 #include "genmc/Execution/EventLabel.hpp"
 #include "genmc/Execution/ExecutionGraph.hpp"
 #include "genmc/Execution/Stamp.hpp"
 #include "genmc/Support/Cast.hpp"
-#include "genmc/Support/Error.hpp"
 
 #include <memory>
-#include <ranges>
 
 auto DepExecutionGraph::getViewFromStamp(Stamp stamp) const -> std::unique_ptr<VectorClock>
 {
@@ -30,113 +29,25 @@ auto DepExecutionGraph::getViewFromStamp(Stamp stamp) const -> std::unique_ptr<V
 	for (auto i = 0; i < getNumThreads(); i++) {
 		for (auto j = 1; j < getThreadSize(i); j++) {
 			const EventLabel *lab = getEventLabel(Event(i, j));
-			if (lab->getStamp() <= stamp)
+			if (!lab->isSkeleton() && lab->getStamp() <= stamp)
 				preds->setMax(Event(i, j));
 		}
 	}
 	return preds;
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void DepExecutionGraph::cutToStamp(Stamp stamp)
 {
-	/* First remove events from the modification order */
-	auto preds = getViewFromStamp(stamp);
-
-	/* Inform all calculators about the events cutted */
-	removeAfter(*preds);
-	for (auto labIt = insertionOrder.begin(); labIt != insertionOrder.end();) {
-		if (labIt->getIndex() > preds->getMax(labIt->getThread()))
-			poLists[labIt->getThread()].remove(*labIt);
-		labIt = preds->contains(labIt->getPos()) ? ++labIt : insertionOrder.erase(labIt);
-	}
-
-	/* Then, restrict the graph */
-	for (auto i = 0; i < getNumThreads(); i++) {
-		for (auto j = 0; j <= preds->getMax(i); j++) { /* Keeps begins */
-			auto *lab = getEventLabel(Event(i, j));
-			if (!preds->contains(lab->getPos()))
-				continue;
-
-			/* Otherwise, remove 'pointers' to it, in an
-			 * analogous manner cutToView(). */
-			if (auto *wLab = genmc::dyn_cast<WriteLabel>(lab)) {
-				wLab->removeReader([&](ReadLabel &rLab) {
-					return !preds->contains(rLab.getPos());
-				});
-			}
-			if (auto *rLab = genmc::dyn_cast<ReadLabel>(lab)) {
-				if (rLab->getRf() && !preds->contains(rLab->getRf()->getPos()))
-					rLab->setRfNoCascade(nullptr);
-			}
-			if (auto *tsLab = genmc::dyn_cast<ThreadStartLabel>(lab)) {
-				if (tsLab->getCreate() &&
-				    !preds->contains(tsLab->getCreate()->getPos()))
-					tsLab->setCreate(nullptr);
-			}
-			if (auto *eLab = genmc::dyn_cast<ThreadFinishLabel>(lab)) {
-				if (eLab->getParentJoin() &&
-				    !preds->contains(eLab->getParentJoin()->getPos()))
-					eLab->setParentJoin(nullptr);
-			}
-			if (auto *begLab = genmc::dyn_cast<MethodBeginLabel>(lab)) {
-				begLab->removePredNoCascade([&](auto *endLab) {
-					return !preds->contains(endLab->getPos());
-				});
-			}
-			if (auto *endLab = genmc::dyn_cast<MethodEndLabel>(lab)) {
-				endLab->removeSuccNoCascade([&](auto *begLab) {
-					return !preds->contains(begLab->getPos());
-				});
-			}
+	/* The read at STAMP, if any, is re-pointed by the forward revisit, so its
+	 * dependents go too */
+	const ReadLabel *changed = nullptr;
+	for (const auto &lab : labels()) {
+		if (lab.getStamp() == stamp) {
+			changed = genmc::dyn_cast<ReadLabel>(&lab);
+			break;
 		}
 	}
-
-	/* Restrict the graph according to the view (keep begins around) */
-	for (auto i = 0; i < getNumThreads(); i++) {
-		auto &thr = events[i];
-		thr.erase(thr.begin() + preds->getMax(i) + 1, thr.end());
-	}
-
-	/* Remove begins as well */
-	for (auto i : std::views::reverse(thr_ids()) | std::views::take_while([this](auto i) {
-			      return getThreadSize(i) == 1 &&
-				     !genmc::isa<InitLabel>(getFirstThreadLabel(i));
-		      })) {
-		auto *bLab = getFirstThreadLabel(i);
-		VERIFY(bLab);
-		if (!bLab->getCreate()) {
-			if (bLab->getSymmPredTid() != -1) {
-				auto *symmLab = getFirstThreadLabel(bLab->getSymmPredTid());
-				symmLab->setSymmSuccTid(-1);
-			}
-			insertionOrder.remove(*bLab);
-			poLists[i].remove(*bLab);
-			events.erase(events.begin() + i);
-			poLists.erase(poLists.begin() + i);
-			VERIFY(i >= getNumThreads() - 1 || getThreadSize(i + 1) <= 0);
-		}
-	}
-
-	/* Fix stamps */
-	resetStamp(0U);
-	for (auto &lab : labels())
-		lab.setStamp(nextStamp());
-
-	/* Finally, do not keep any nullptrs in the graph */
-	for (auto i = 0; i < getNumThreads(); i++) {
-		for (auto j = 0; j < getThreadSize(i); j++) {
-			if (preds->contains(Event(i, j)))
-				continue;
-			auto it = po_iterator(getEventLabel(Event(i, j)));
-			it = poLists[i].erase(it);
-			events[i][j] = createHoleLabel(Event(i, j));
-			getEventLabel(Event(i, j))->setStamp(nextStamp());
-			getEventLabel(Event(i, j))->setParent(this);
-			insertionOrder.push_back(*getEventLabel(Event(i, j)));
-			poLists[i].insert(it, *getEventLabel(Event(i, j)));
-		}
-	}
+	deleteEvents(*getViewFromStamp(stamp), changed);
 }
 
 auto DepExecutionGraph::getCopyUpTo(const VectorClock &v) const -> std::unique_ptr<ExecutionGraph>

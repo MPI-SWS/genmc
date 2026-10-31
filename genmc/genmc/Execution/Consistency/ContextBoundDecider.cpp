@@ -187,7 +187,9 @@ auto ContextBoundDecider::getSlack() const -> unsigned
 					   [](const auto &lab) { return !lab->isStable(); });
 	});
 
-	return std::min(std::max(0L, unstableThreads - 1), std::max(0L, nonEmptyThreads - 2));
+	using CountType = decltype(unstableThreads);
+	return std::min(std::max(CountType{0}, unstableThreads - 1),
+			std::max(CountType{0}, nonEmptyThreads - 2));
 }
 
 #ifdef ENABLE_GENMC_DEBUG

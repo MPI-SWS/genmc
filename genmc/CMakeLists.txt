@@ -11,6 +11,7 @@ set(LIB_SOURCES
   genmc/Execution/GraphUtils.cpp
   genmc/Execution/ExecutionState.cpp
   genmc/Execution/Consistency/BoundDecider.cpp
+  genmc/Execution/Consistency/ARM8Checker.cpp
   genmc/Execution/Consistency/ConsistencyChecker.cpp
   genmc/Execution/Consistency/ContextBoundDecider.cpp
   genmc/Execution/Consistency/IMMChecker.cpp

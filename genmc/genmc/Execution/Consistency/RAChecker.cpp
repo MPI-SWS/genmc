@@ -28,7 +28,7 @@
 
 bool RAChecker::isDepTracking() const { return 0; }
 
-bool RAChecker::visitCalc70Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
+bool RAChecker::visitCalc75Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
 {
 	while (!worklist.empty()) {
 		auto [stateId, lab, isFinishing] = worklist.back();
@@ -118,7 +118,7 @@ bool RAChecker::visitCalc70Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 	return true;
 }
 
-View RAChecker::visitCalc70(const EventLabel *lab) const
+View RAChecker::visitCalc75(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 	View calcRes;
@@ -127,23 +127,22 @@ View RAChecker::visitCalc70(const EventLabel *lab) const
 
 	/* Explore from all accepting states using DFS */
 	std::vector<DFSWorklistEntry> startStates = {
-		{2, lab},
-		{1, lab},
 		{0, lab},
+		{2, lab},
 	};
 
-	visitCalc70Iterative(startStates, calcRes);
+	visitCalc75Iterative(startStates, calcRes);
 	return calcRes;
 }
 
-auto RAChecker::checkCalc70(const EventLabel *lab) const
+auto RAChecker::checkCalc75(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 
-	return visitCalc70(lab);
+	return visitCalc75(lab);
 }
 
-bool RAChecker::visitCalc80Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
+bool RAChecker::visitCalc85Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
 {
 	while (!worklist.empty()) {
 		auto [stateId, lab, isFinishing] = worklist.back();
@@ -213,7 +212,7 @@ bool RAChecker::visitCalc80Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 	return true;
 }
 
-View RAChecker::visitCalc80(const EventLabel *lab) const
+View RAChecker::visitCalc85(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 	View calcRes;
@@ -223,18 +222,18 @@ View RAChecker::visitCalc80(const EventLabel *lab) const
 		{3, lab},
 	};
 
-	visitCalc80Iterative(startStates, calcRes);
+	visitCalc85Iterative(startStates, calcRes);
 	return calcRes;
 }
 
-auto RAChecker::checkCalc80(const EventLabel *lab) const
+auto RAChecker::checkCalc85(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 
-	return visitCalc80(lab);
+	return visitCalc85(lab);
 }
 
-bool RAChecker::visitCalc79Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
+bool RAChecker::visitCalc84Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
 {
 	while (!worklist.empty()) {
 		auto [stateId, lab, isFinishing] = worklist.back();
@@ -349,7 +348,7 @@ bool RAChecker::visitCalc79Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 	return true;
 }
 
-View RAChecker::visitCalc79(const EventLabel *lab) const
+View RAChecker::visitCalc84(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 	View calcRes;
@@ -362,18 +361,18 @@ View RAChecker::visitCalc79(const EventLabel *lab) const
 		{2, lab},
 	};
 
-	visitCalc79Iterative(startStates, calcRes);
+	visitCalc84Iterative(startStates, calcRes);
 	return calcRes;
 }
 
-auto RAChecker::checkCalc79(const EventLabel *lab) const
+auto RAChecker::checkCalc84(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 
-	return visitCalc79(lab);
+	return visitCalc84(lab);
 }
 
-bool RAChecker::visitCalc81Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
+bool RAChecker::visitCalc86Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
 {
 	while (!worklist.empty()) {
 		auto [stateId, lab, isFinishing] = worklist.back();
@@ -403,16 +402,16 @@ bool RAChecker::visitCalc81Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 		}
 		case 2: {
 			if (isFinishing) {
-				visitedCalc81_2.setStatus(lab->getStamp().get(), NodeStatus::left);
+				visitedCalc86_2.setStatus(lab->getStamp().get(), NodeStatus::left);
 				break;
 			}
 
-			auto status = visitedCalc81_2.getStatus(lab->getStamp().get());
+			auto status = visitedCalc86_2.getStatus(lab->getStamp().get());
 			if (status != NodeStatus::unseen)
 				break; /* already explored */
 
 			worklist.emplace_back(2, lab, true);
-			visitedCalc81_2.setStatus(lab->getStamp().get(), NodeStatus::entered);
+			visitedCalc86_2.setStatus(lab->getStamp().get(), NodeStatus::entered);
 
 			[[maybe_unused]] auto &g = *lab->getParent();
 			if (auto pLab = g.po_imm_pred(lab); pLab)
@@ -449,7 +448,7 @@ bool RAChecker::visitCalc81Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 					worklist.emplace_back(1, pLab);
 				}
 			if (auto pLab = g.po_imm_pred(lab); pLab) {
-				auto status = visitedCalc81_2.getStatus(pLab->getStamp().get());
+				auto status = visitedCalc86_2.getStatus(pLab->getStamp().get());
 				if (status == NodeStatus::unseen) {
 					worklist.emplace_back(2, pLab);
 				}
@@ -515,7 +514,7 @@ bool RAChecker::visitCalc81Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 			if (true && genmc::isa<WriteLabel>(lab))
 				if (auto pLab = g.po_imm_pred(lab); pLab) {
 					auto status =
-						visitedCalc81_2.getStatus(pLab->getStamp().get());
+						visitedCalc86_2.getStatus(pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
 						worklist.emplace_back(2, pLab);
 					}
@@ -575,30 +574,30 @@ bool RAChecker::visitCalc81Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 	return true;
 }
 
-View RAChecker::visitCalc81(const EventLabel *lab) const
+View RAChecker::visitCalc86(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 	View calcRes;
 
-	visitedCalc81_2.maybeClearResize(g.getMaxStamp().get() + 1);
+	visitedCalc86_2.maybeClearResize(g.getMaxStamp().get() + 1);
 
 	/* Explore from all accepting states using DFS */
 	std::vector<DFSWorklistEntry> startStates = {
 		{3, lab},
 	};
 
-	visitCalc81Iterative(startStates, calcRes);
+	visitCalc86Iterative(startStates, calcRes);
 	return calcRes;
 }
 
-auto RAChecker::checkCalc81(const EventLabel *lab) const
+auto RAChecker::checkCalc86(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 
-	return visitCalc81(lab);
+	return visitCalc86(lab);
 }
 
-bool RAChecker::visitCalc82Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
+bool RAChecker::visitCalc87Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
 {
 	while (!worklist.empty()) {
 		auto [stateId, lab, isFinishing] = worklist.back();
@@ -691,7 +690,7 @@ bool RAChecker::visitCalc82Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 			    !(genmc::isa<AbstractLockCasReadLabel>(lab)))
 				if (auto pLab = g.rf_pred(lab); pLab) {
 					if (!genmc::isa<InitLabel>(pLab)) {
-						auto status = visitedCalc82_3.getStatus(
+						auto status = visitedCalc87_3.getStatus(
 							pLab->getStamp().get());
 						if (status == NodeStatus::unseen) {
 							worklist.emplace_back(3, pLab);
@@ -707,7 +706,7 @@ bool RAChecker::visitCalc82Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 					     (genmc::isa<WriteLabel>(pLab) &&
 					      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 						if (!genmc::isa<InitLabel>(pLab)) {
-							auto status = visitedCalc82_5.getStatus(
+							auto status = visitedCalc87_5.getStatus(
 								pLab->getStamp().get());
 							if (status == NodeStatus::unseen) {
 								worklist.emplace_back(5, pLab);
@@ -718,7 +717,7 @@ bool RAChecker::visitCalc82Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 			    !(genmc::isa<AbstractLockCasReadLabel>(lab)))
 				if (auto pLab = g.po_imm_pred(lab); pLab) {
 					auto status =
-						visitedCalc82_6.getStatus(pLab->getStamp().get());
+						visitedCalc87_6.getStatus(pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
 						worklist.emplace_back(6, pLab);
 					}
@@ -727,7 +726,7 @@ bool RAChecker::visitCalc82Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 			    !(genmc::isa<AbstractLockCasReadLabel>(lab)))
 				if (auto pLab = g.po_imm_pred(lab); pLab) {
 					auto status =
-						visitedCalc82_6.getStatus(pLab->getStamp().get());
+						visitedCalc87_6.getStatus(pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
 						worklist.emplace_back(6, pLab);
 					}
@@ -736,7 +735,7 @@ bool RAChecker::visitCalc82Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 			    !(genmc::isa<AbstractLockCasReadLabel>(lab)))
 				if (auto pLab = g.po_imm_pred(lab); pLab) {
 					auto status =
-						visitedCalc82_6.getStatus(pLab->getStamp().get());
+						visitedCalc87_6.getStatus(pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
 						worklist.emplace_back(6, pLab);
 					}
@@ -746,16 +745,16 @@ bool RAChecker::visitCalc82Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 		}
 		case 3: {
 			if (isFinishing) {
-				visitedCalc82_3.setStatus(lab->getStamp().get(), NodeStatus::left);
+				visitedCalc87_3.setStatus(lab->getStamp().get(), NodeStatus::left);
 				break;
 			}
 
-			auto status = visitedCalc82_3.getStatus(lab->getStamp().get());
+			auto status = visitedCalc87_3.getStatus(lab->getStamp().get());
 			if (status != NodeStatus::unseen)
 				break; /* already explored */
 
 			worklist.emplace_back(3, lab, true);
-			visitedCalc82_3.setStatus(lab->getStamp().get(), NodeStatus::entered);
+			visitedCalc87_3.setStatus(lab->getStamp().get(), NodeStatus::entered);
 
 			[[maybe_unused]] auto &g = *lab->getParent();
 			if (auto pLab = g.po_imm_pred(lab); pLab)
@@ -792,7 +791,7 @@ bool RAChecker::visitCalc82Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 					worklist.emplace_back(1, pLab);
 				}
 			if (auto pLab = g.po_imm_pred(lab); pLab) {
-				auto status = visitedCalc82_3.getStatus(pLab->getStamp().get());
+				auto status = visitedCalc87_3.getStatus(pLab->getStamp().get());
 				if (status == NodeStatus::unseen) {
 					worklist.emplace_back(3, pLab);
 				}
@@ -827,7 +826,7 @@ bool RAChecker::visitCalc82Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 			if (auto pLab = g.rf_pred(lab); pLab) {
 				if (!genmc::isa<InitLabel>(pLab)) {
 					auto status =
-						visitedCalc82_3.getStatus(pLab->getStamp().get());
+						visitedCalc87_3.getStatus(pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
 						worklist.emplace_back(3, pLab);
 					}
@@ -840,7 +839,7 @@ bool RAChecker::visitCalc82Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 				     (genmc::isa<WriteLabel>(pLab) &&
 				      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 					if (!genmc::isa<InitLabel>(pLab)) {
-						auto status = visitedCalc82_5.getStatus(
+						auto status = visitedCalc87_5.getStatus(
 							pLab->getStamp().get());
 						if (status == NodeStatus::unseen) {
 							worklist.emplace_back(5, pLab);
@@ -852,16 +851,16 @@ bool RAChecker::visitCalc82Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 		}
 		case 5: {
 			if (isFinishing) {
-				visitedCalc82_5.setStatus(lab->getStamp().get(), NodeStatus::left);
+				visitedCalc87_5.setStatus(lab->getStamp().get(), NodeStatus::left);
 				break;
 			}
 
-			auto status = visitedCalc82_5.getStatus(lab->getStamp().get());
+			auto status = visitedCalc87_5.getStatus(lab->getStamp().get());
 			if (status != NodeStatus::unseen)
 				break; /* already explored */
 
 			worklist.emplace_back(5, lab, true);
-			visitedCalc82_5.setStatus(lab->getStamp().get(), NodeStatus::entered);
+			visitedCalc87_5.setStatus(lab->getStamp().get(), NodeStatus::entered);
 
 			[[maybe_unused]] auto &g = *lab->getParent();
 			if (auto pLab = g.po_imm_pred(lab); pLab)
@@ -877,16 +876,16 @@ bool RAChecker::visitCalc82Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 		}
 		case 6: {
 			if (isFinishing) {
-				visitedCalc82_6.setStatus(lab->getStamp().get(), NodeStatus::left);
+				visitedCalc87_6.setStatus(lab->getStamp().get(), NodeStatus::left);
 				break;
 			}
 
-			auto status = visitedCalc82_6.getStatus(lab->getStamp().get());
+			auto status = visitedCalc87_6.getStatus(lab->getStamp().get());
 			if (status != NodeStatus::unseen)
 				break; /* already explored */
 
 			worklist.emplace_back(6, lab, true);
-			visitedCalc82_6.setStatus(lab->getStamp().get(), NodeStatus::entered);
+			visitedCalc87_6.setStatus(lab->getStamp().get(), NodeStatus::entered);
 
 			[[maybe_unused]] auto &g = *lab->getParent();
 			if (auto pLab = g.rf_pred(lab); pLab)
@@ -910,7 +909,7 @@ bool RAChecker::visitCalc82Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 			if (auto pLab = g.rf_pred(lab); pLab) {
 				if (!genmc::isa<InitLabel>(pLab)) {
 					auto status =
-						visitedCalc82_3.getStatus(pLab->getStamp().get());
+						visitedCalc87_3.getStatus(pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
 						worklist.emplace_back(3, pLab);
 					}
@@ -923,7 +922,7 @@ bool RAChecker::visitCalc82Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 				     (genmc::isa<WriteLabel>(pLab) &&
 				      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 					if (!genmc::isa<InitLabel>(pLab)) {
-						auto status = visitedCalc82_5.getStatus(
+						auto status = visitedCalc87_5.getStatus(
 							pLab->getStamp().get());
 						if (status == NodeStatus::unseen) {
 							worklist.emplace_back(5, pLab);
@@ -931,7 +930,7 @@ bool RAChecker::visitCalc82Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 					}
 				}
 			if (auto pLab = g.po_imm_pred(lab); pLab) {
-				auto status = visitedCalc82_6.getStatus(pLab->getStamp().get());
+				auto status = visitedCalc87_6.getStatus(pLab->getStamp().get());
 				if (status == NodeStatus::unseen) {
 					worklist.emplace_back(6, pLab);
 				}
@@ -946,32 +945,136 @@ bool RAChecker::visitCalc82Iterative(std::vector<DFSWorklistEntry> &worklist, Vi
 	return true;
 }
 
-View RAChecker::visitCalc82(const EventLabel *lab) const
+View RAChecker::visitCalc87(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 	View calcRes;
 
 	calcRes.updateIdx(lab->getPos());
-	visitedCalc82_3.maybeClearResize(g.getMaxStamp().get() + 1);
-	visitedCalc82_5.maybeClearResize(g.getMaxStamp().get() + 1);
-	visitedCalc82_6.maybeClearResize(g.getMaxStamp().get() + 1);
+	visitedCalc87_3.maybeClearResize(g.getMaxStamp().get() + 1);
+	visitedCalc87_5.maybeClearResize(g.getMaxStamp().get() + 1);
+	visitedCalc87_6.maybeClearResize(g.getMaxStamp().get() + 1);
 
 	/* Explore from all accepting states using DFS */
 	std::vector<DFSWorklistEntry> startStates = {
-		{2, lab},
-		{1, lab},
 		{0, lab},
+		{2, lab},
 	};
 
-	visitCalc82Iterative(startStates, calcRes);
+	visitCalc87Iterative(startStates, calcRes);
 	return calcRes;
 }
 
-auto RAChecker::checkCalc82(const EventLabel *lab) const
+auto RAChecker::checkCalc87(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 
-	return visitCalc82(lab);
+	return visitCalc87(lab);
+}
+
+bool RAChecker::visitCalc91Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
+{
+	while (!worklist.empty()) {
+		auto [stateId, lab, isFinishing] = worklist.back();
+		worklist.pop_back();
+		switch (stateId) {
+		case 0: {
+			if (isFinishing) {
+				break;
+			}
+
+			[[maybe_unused]] auto &g = *lab->getParent();
+
+			break;
+		}
+		case 1: {
+			if (isFinishing) {
+				break;
+			}
+
+			[[maybe_unused]] auto &g = *lab->getParent();
+			if (auto pLab = lab; true)
+				if (calcRes.update(pLab->getPrefixView()); true) {
+					worklist.emplace_back(0, pLab);
+				}
+
+			break;
+		}
+		case 2: {
+			if (isFinishing) {
+				break;
+			}
+
+			[[maybe_unused]] auto &g = *lab->getParent();
+			for (auto &tmp : g.lin_preds(lab))
+				if (auto *pLab = &tmp; true)
+					if (calcRes.updateIdx(pLab->getPos()); true) {
+						worklist.emplace_back(0, pLab);
+					}
+			if (auto pLab = g.po_imm_pred(lab); pLab)
+				if (calcRes.updateIdx(pLab->getPos()); true) {
+					worklist.emplace_back(0, pLab);
+				}
+			if (auto pLab = g.rfe_pred(lab); pLab)
+				if (calcRes.updateIdx(pLab->getPos()); true) {
+					worklist.emplace_back(0, pLab);
+				}
+			if (auto pLab = g.tc_pred(lab); pLab)
+				if (calcRes.updateIdx(pLab->getPos()); true) {
+					worklist.emplace_back(0, pLab);
+				}
+			if (auto pLab = g.tj_pred(lab); pLab)
+				if (calcRes.updateIdx(pLab->getPos()); true) {
+					worklist.emplace_back(0, pLab);
+				}
+			for (auto &tmp : g.lin_preds(lab))
+				if (auto *pLab = &tmp; true) {
+					worklist.emplace_back(1, pLab);
+				}
+			if (auto pLab = g.po_imm_pred(lab); pLab) {
+				worklist.emplace_back(1, pLab);
+			}
+			if (auto pLab = g.rfe_pred(lab); pLab) {
+				worklist.emplace_back(1, pLab);
+			}
+			if (auto pLab = g.tc_pred(lab); pLab) {
+				worklist.emplace_back(1, pLab);
+			}
+			if (auto pLab = g.tj_pred(lab); pLab) {
+				worklist.emplace_back(1, pLab);
+			}
+
+			break;
+		}
+		default:
+			UNREACHABLE();
+		}
+	}
+	return true;
+}
+
+View RAChecker::visitCalc91(const EventLabel *lab) const
+{
+	[[maybe_unused]] auto &g = *lab->getParent();
+	View calcRes;
+
+	calcRes.updateIdx(lab->getPos());
+
+	/* Explore from all accepting states using DFS */
+	std::vector<DFSWorklistEntry> startStates = {
+		{0, lab},
+		{2, lab},
+	};
+
+	visitCalc91Iterative(startStates, calcRes);
+	return calcRes;
+}
+
+auto RAChecker::checkCalc91(const EventLabel *lab) const
+{
+	[[maybe_unused]] auto &g = *lab->getParent();
+
+	return visitCalc91(lab);
 }
 
 void RAChecker::calculateSaved([[maybe_unused]] EventLabel *lab) {}
@@ -981,26 +1084,26 @@ void RAChecker::calculateViews(EventLabel *lab)
 	lab->setViews({});
 	{
 		lab->addView({});
-		lab->setView(std::move(checkCalc70(lab)), 0);
+		lab->setView(std::move(checkCalc75(lab)), 0);
 	}
 	{
 		lab->addView({});
-		lab->setView(std::move(checkCalc80(lab)), 1);
+		lab->setView(std::move(checkCalc85(lab)), 1);
 	}
 	{
 		lab->addView({});
-		lab->setView(std::move(checkCalc79(lab)), 2);
+		lab->setView(std::move(checkCalc84(lab)), 2);
 	}
 	{
 		lab->addView({});
-		lab->setView(std::move(checkCalc81(lab)), 3);
+		lab->setView(std::move(checkCalc86(lab)), 3);
 	}
 
 	if (!getConf()->collectLinSpec && !getConf()->checkLinSpec)
 		lab->addView({});
 	else {
 		lab->addView({});
-		lab->setView(std::move(checkCalc82(lab)), 4);
+		lab->setView(std::move(checkCalc87(lab)), 4);
 	}
 }
 
@@ -1009,6 +1112,11 @@ void RAChecker::updateMMViews(EventLabel *lab)
 	calculateViews(lab);
 	calculateSaved(lab);
 	lab->setPrefixView(calculatePrefixView(lab));
+}
+
+std::unique_ptr<VectorClock> RAChecker::calculatePrefixView(const EventLabel *lab) const
+{
+	return std::make_unique<View>(checkCalc91(lab));
 }
 
 static auto isWriteRfBefore(const WriteLabel *wLab, const EventLabel *lab) -> bool
@@ -2709,8 +2817,9 @@ RAChecker::checkErrors([[maybe_unused]] const EventLabel *lab,
 }
 
 std::vector<VerificationError>
-RAChecker::checkWarnings(const EventLabel *lab, const VSet<VerificationError> &seenWarnings,
-			 std::vector<const EventLabel *> &racyLabs) const
+RAChecker::checkWarnings([[maybe_unused]] const EventLabel *lab,
+			 [[maybe_unused]] const VSet<VerificationError> &seenWarnings,
+			 [[maybe_unused]] std::vector<const EventLabel *> &racyLabs) const
 {
 	std::vector<VerificationError> result;
 
@@ -2730,29 +2839,6 @@ bool RAChecker::isCoherentRelinche(const ExecutionGraph &g) const
 {
 
 	return true && visitCoherenceRelinche(g);
-}
-
-View RAChecker::calcPPoRfBefore(const EventLabel *lab) const
-{
-	[[maybe_unused]] auto &g = *lab->getParent();
-	View pporf;
-	pporf.updateIdx(lab->getPos());
-
-	if (auto *pLab = g.po_imm_pred(lab); pLab)
-		pporf.update(pLab->getPrefixView());
-	if (auto *rLab = genmc::dyn_cast<ReadLabel>(lab); rLab && rLab->getRf())
-		pporf.update(rLab->getRf()->getPrefixView());
-	auto *tsLab = genmc::dyn_cast<ThreadStartLabel>(lab);
-	if (tsLab && tsLab->getCreate())
-		pporf.update(tsLab->getCreate()->getPrefixView());
-	if (auto *tjLab = genmc::dyn_cast<ThreadJoinLabel>(lab))
-		pporf.update(g.getLastThreadLabel(tjLab->getChildId())->getPrefixView());
-	return pporf;
-}
-
-std::unique_ptr<VectorClock> RAChecker::calculatePrefixView(const EventLabel *lab) const
-{
-	return std::make_unique<View>(calcPPoRfBefore(lab));
 }
 
 void RAChecker::recomputeCacheCounters([[maybe_unused]] const ExecutionGraph &g) const {}

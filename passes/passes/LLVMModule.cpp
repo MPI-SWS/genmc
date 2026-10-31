@@ -142,9 +142,11 @@ auto parseLinkAllLLVMModules(const fs::path &dirname, const std::unique_ptr<llvm
 	/* Parse all modules */
 	std::vector<std::unique_ptr<Module>> modules;
 	for (const auto &bc_file : bc_files) {
-		std::unique_ptr<Module> module = parseIRFile(bc_file.string(), err, *ctx);
+		/* err.print() takes a char *; path::c_str() is wchar_t * on Windows */
+		const std::string bc_filename = bc_file.string();
+		std::unique_ptr<Module> module = parseIRFile(bc_filename, err, *ctx);
 		if (!module) {
-			err.print(bc_file.c_str(), llvm::dbgs());
+			err.print(bc_filename.c_str(), llvm::dbgs());
 			ERROR("Could not parse LLVM IR!");
 		}
 		modules.push_back(std::move(module));

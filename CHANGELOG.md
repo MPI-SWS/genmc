@@ -10,6 +10,25 @@ released.
 - Merge of MIXER [POPL'25] into mainline GenMC
 
 
+## [0.20.0] - 2026.10.31
+
+### Added
+
+ - Support for ARMv8
+ - Support for building under Windows w/ MSYS2 (thanks to Romualdo VIllalobos <romualdorojo97@gmail.com>)
+
+### Changes
+
+ - The GenMC API for RMW operations is different
+
+### Fixes
+
+ - Fixes for Apple toolchains (libc++ < 20)
+ - Github #74 and #76 are fixed
+ - Estimation doesn't report "-nan" when an error is found
+ - Various bug fixes
+
+
 ## [0.19.0] - 2026.09.24
 
 ### Changes

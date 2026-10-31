@@ -26,9 +26,101 @@
 
 #include <algorithm>
 
+#include <ranges>
+
+/* The surviving co-maximal predecessor of LAB (the initializer if none) */
+template <typename F>
+static auto survivingCoPred(const EventLabel *lab, F surviving) -> const EventLabel *
+{
+	const auto &g = *lab->getParent();
+	auto preds = g.co_preds(lab);
+	auto it = std::ranges::find_if(preds, surviving);
+	return it != std::ranges::end(preds) ? static_cast<const EventLabel *>(&*it)
+					     : g.getInitLabel();
+}
+
+/* The first surviving poloc-successor of RLAB not reading from a store po-after RLAB, or null */
+template <typename F>
+static auto poLocNext(const ReadLabel *rLab, F surviving) -> const EventLabel *
+{
+	auto readsPoLater = [rLab](const EventLabel &lab) {
+		const auto *oLab = genmc::dyn_cast<ReadLabel>(&lab);
+		return oLab && oLab->getRf() && oLab->getRf()->getThread() == rLab->getThread() &&
+		       oLab->getRf()->getIndex() > rLab->getIndex();
+	};
+	auto succs = rLab->getParent()->poloc_succs(rLab);
+	auto it = std::ranges::find_if(
+		succs, [&](const EventLabel &lab) { return surviving(lab) && !readsPoLater(lab); });
+	return it != std::ranges::end(succs) ? &*it : nullptr;
+}
+
+/* The po-first surviving same-location store after WLAB, or null */
+template <typename F>
+static auto poLocNextStore(const WriteLabel *wLab, F surviving) -> const EventLabel *
+{
+	auto succs = wLab->getParent()->poloc_succs(wLab);
+	auto it = std::ranges::find_if(succs, [&](const EventLabel &lab) {
+		return genmc::isa<WriteLabel>(&lab) && surviving(lab);
+	});
+	return it != std::ranges::end(succs) ? &*it : nullptr;
+}
+
+auto IMMChecker::getMaximalRf(const ReadLabel *rLab) const -> const EventLabel *
+{
+	auto surviving = [](const EventLabel &lab) { return !lab.isSkeleton(); };
+	const auto *nLab = poLocNext(rLab, surviving);
+	if (nLab == nullptr)
+		return ConsistencyChecker::getMaximalRf(rLab);
+
+	const auto *rnLab = genmc::dyn_cast<ReadLabel>(nLab);
+	return rnLab != nullptr ? rnLab->getRf() : survivingCoPred(nLab, surviving);
+}
+
+auto IMMChecker::getMaximalCo(const WriteLabel *wLab) const -> const EventLabel *
+{
+	auto surviving = [wLab](const EventLabel &lab) {
+		return !lab.isSkeleton() && &lab != wLab;
+	};
+	const auto *nLab = poLocNextStore(wLab, surviving);
+	return nLab != nullptr ? survivingCoPred(nLab, surviving)
+			       : ConsistencyChecker::getMaximalCo(wLab);
+}
+
+auto IMMChecker::isMaximalRf(const ReadLabel *rLab, const VectorClock &keep,
+			     const EventLabel *except) const -> bool
+{
+	auto surviving = [&](const EventLabel &lab) {
+		return survives(lab, rLab->getStamp(), keep, except);
+	};
+	const auto *nLab = poLocNext(rLab, surviving);
+	if (nLab == nullptr)
+		return ConsistencyChecker::isMaximalRf(rLab, keep, except);
+
+	const auto *rnLab = genmc::dyn_cast<ReadLabel>(nLab);
+	return rLab->getRf() ==
+	       (rnLab != nullptr ? rnLab->getRf() : survivingCoPred(nLab, surviving));
+}
+
+auto IMMChecker::isMaximalCo(const WriteLabel *wLab, const VectorClock &keep,
+			     const EventLabel *except) const -> bool
+{
+	auto surviving = [&](const EventLabel &lab) {
+		return survives(lab, wLab->getStamp(), keep, except);
+	};
+	const auto *nLab = poLocNextStore(wLab, surviving);
+	if (nLab == nullptr)
+		return ConsistencyChecker::isMaximalCo(wLab, keep, except);
+
+	/* WLAB must be the surviving co-predecessor of NLAB */
+	auto survivingOrSelf = [&](const EventLabel &lab) {
+		return &lab == wLab || surviving(lab);
+	};
+	return survivingCoPred(nLab, survivingOrSelf) == wLab;
+}
+
 bool IMMChecker::isDepTracking() const { return 1; }
 
-bool IMMChecker::visitCalc75Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
+bool IMMChecker::visitCalc80Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
 {
 	while (!worklist.empty()) {
 		auto [stateId, lab, isFinishing] = worklist.back();
@@ -117,7 +209,7 @@ bool IMMChecker::visitCalc75Iterative(std::vector<DFSWorklistEntry> &worklist, V
 			if (true && lab->isAtLeastAcquire())
 				if (auto pLab = g.rf_pred(lab); pLab) {
 					if (!genmc::isa<InitLabel>(pLab)) {
-						auto status = visitedCalc75_3.getStatus(
+						auto status = visitedCalc80_3.getStatus(
 							pLab->getStamp().get());
 						if (status == NodeStatus::unseen) {
 							worklist.emplace_back(3, pLab);
@@ -132,7 +224,7 @@ bool IMMChecker::visitCalc75Iterative(std::vector<DFSWorklistEntry> &worklist, V
 					     (genmc::isa<WriteLabel>(pLab) &&
 					      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 						if (!genmc::isa<InitLabel>(pLab)) {
-							auto status = visitedCalc75_5.getStatus(
+							auto status = visitedCalc80_5.getStatus(
 								pLab->getStamp().get());
 							if (status == NodeStatus::unseen) {
 								worklist.emplace_back(5, pLab);
@@ -142,7 +234,7 @@ bool IMMChecker::visitCalc75Iterative(std::vector<DFSWorklistEntry> &worklist, V
 			if (true && lab->isAtLeastAcquire() && genmc::isa<FenceLabel>(lab))
 				if (auto pLab = g.po_imm_pred(lab); pLab) {
 					auto status =
-						visitedCalc75_6.getStatus(pLab->getStamp().get());
+						visitedCalc80_6.getStatus(pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
 						worklist.emplace_back(6, pLab);
 					}
@@ -150,7 +242,7 @@ bool IMMChecker::visitCalc75Iterative(std::vector<DFSWorklistEntry> &worklist, V
 			if (true && lab->isAtLeastAcquire() && genmc::isa<ThreadJoinLabel>(lab))
 				if (auto pLab = g.po_imm_pred(lab); pLab) {
 					auto status =
-						visitedCalc75_6.getStatus(pLab->getStamp().get());
+						visitedCalc80_6.getStatus(pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
 						worklist.emplace_back(6, pLab);
 					}
@@ -160,16 +252,16 @@ bool IMMChecker::visitCalc75Iterative(std::vector<DFSWorklistEntry> &worklist, V
 		}
 		case 3: {
 			if (isFinishing) {
-				visitedCalc75_3.setStatus(lab->getStamp().get(), NodeStatus::left);
+				visitedCalc80_3.setStatus(lab->getStamp().get(), NodeStatus::left);
 				break;
 			}
 
-			auto status = visitedCalc75_3.getStatus(lab->getStamp().get());
+			auto status = visitedCalc80_3.getStatus(lab->getStamp().get());
 			if (status != NodeStatus::unseen)
 				break; /* already explored */
 
 			worklist.emplace_back(3, lab, true);
-			visitedCalc75_3.setStatus(lab->getStamp().get(), NodeStatus::entered);
+			visitedCalc80_3.setStatus(lab->getStamp().get(), NodeStatus::entered);
 
 			[[maybe_unused]] auto &g = *lab->getParent();
 			if (auto pLab = g.po_imm_pred(lab); pLab)
@@ -195,7 +287,7 @@ bool IMMChecker::visitCalc75Iterative(std::vector<DFSWorklistEntry> &worklist, V
 					worklist.emplace_back(1, pLab);
 				}
 			if (auto pLab = g.po_imm_pred(lab); pLab) {
-				auto status = visitedCalc75_3.getStatus(pLab->getStamp().get());
+				auto status = visitedCalc80_3.getStatus(pLab->getStamp().get());
 				if (status == NodeStatus::unseen) {
 					worklist.emplace_back(3, pLab);
 				}
@@ -230,7 +322,7 @@ bool IMMChecker::visitCalc75Iterative(std::vector<DFSWorklistEntry> &worklist, V
 			if (auto pLab = g.rf_pred(lab); pLab) {
 				if (!genmc::isa<InitLabel>(pLab)) {
 					auto status =
-						visitedCalc75_3.getStatus(pLab->getStamp().get());
+						visitedCalc80_3.getStatus(pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
 						worklist.emplace_back(3, pLab);
 					}
@@ -243,7 +335,7 @@ bool IMMChecker::visitCalc75Iterative(std::vector<DFSWorklistEntry> &worklist, V
 				     (genmc::isa<WriteLabel>(pLab) &&
 				      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 					if (!genmc::isa<InitLabel>(pLab)) {
-						auto status = visitedCalc75_5.getStatus(
+						auto status = visitedCalc80_5.getStatus(
 							pLab->getStamp().get());
 						if (status == NodeStatus::unseen) {
 							worklist.emplace_back(5, pLab);
@@ -255,16 +347,16 @@ bool IMMChecker::visitCalc75Iterative(std::vector<DFSWorklistEntry> &worklist, V
 		}
 		case 5: {
 			if (isFinishing) {
-				visitedCalc75_5.setStatus(lab->getStamp().get(), NodeStatus::left);
+				visitedCalc80_5.setStatus(lab->getStamp().get(), NodeStatus::left);
 				break;
 			}
 
-			auto status = visitedCalc75_5.getStatus(lab->getStamp().get());
+			auto status = visitedCalc80_5.getStatus(lab->getStamp().get());
 			if (status != NodeStatus::unseen)
 				break; /* already explored */
 
 			worklist.emplace_back(5, lab, true);
-			visitedCalc75_5.setStatus(lab->getStamp().get(), NodeStatus::entered);
+			visitedCalc80_5.setStatus(lab->getStamp().get(), NodeStatus::entered);
 
 			[[maybe_unused]] auto &g = *lab->getParent();
 			if (auto pLab = g.po_imm_pred(lab); pLab)
@@ -280,16 +372,16 @@ bool IMMChecker::visitCalc75Iterative(std::vector<DFSWorklistEntry> &worklist, V
 		}
 		case 6: {
 			if (isFinishing) {
-				visitedCalc75_6.setStatus(lab->getStamp().get(), NodeStatus::left);
+				visitedCalc80_6.setStatus(lab->getStamp().get(), NodeStatus::left);
 				break;
 			}
 
-			auto status = visitedCalc75_6.getStatus(lab->getStamp().get());
+			auto status = visitedCalc80_6.getStatus(lab->getStamp().get());
 			if (status != NodeStatus::unseen)
 				break; /* already explored */
 
 			worklist.emplace_back(6, lab, true);
-			visitedCalc75_6.setStatus(lab->getStamp().get(), NodeStatus::entered);
+			visitedCalc80_6.setStatus(lab->getStamp().get(), NodeStatus::entered);
 
 			[[maybe_unused]] auto &g = *lab->getParent();
 			if (auto pLab = g.rf_pred(lab); pLab)
@@ -313,7 +405,7 @@ bool IMMChecker::visitCalc75Iterative(std::vector<DFSWorklistEntry> &worklist, V
 			if (auto pLab = g.rf_pred(lab); pLab) {
 				if (!genmc::isa<InitLabel>(pLab)) {
 					auto status =
-						visitedCalc75_3.getStatus(pLab->getStamp().get());
+						visitedCalc80_3.getStatus(pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
 						worklist.emplace_back(3, pLab);
 					}
@@ -326,7 +418,7 @@ bool IMMChecker::visitCalc75Iterative(std::vector<DFSWorklistEntry> &worklist, V
 				     (genmc::isa<WriteLabel>(pLab) &&
 				      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 					if (!genmc::isa<InitLabel>(pLab)) {
-						auto status = visitedCalc75_5.getStatus(
+						auto status = visitedCalc80_5.getStatus(
 							pLab->getStamp().get());
 						if (status == NodeStatus::unseen) {
 							worklist.emplace_back(5, pLab);
@@ -334,7 +426,7 @@ bool IMMChecker::visitCalc75Iterative(std::vector<DFSWorklistEntry> &worklist, V
 					}
 				}
 			if (auto pLab = g.po_imm_pred(lab); pLab) {
-				auto status = visitedCalc75_6.getStatus(pLab->getStamp().get());
+				auto status = visitedCalc80_6.getStatus(pLab->getStamp().get());
 				if (status == NodeStatus::unseen) {
 					worklist.emplace_back(6, pLab);
 				}
@@ -349,35 +441,34 @@ bool IMMChecker::visitCalc75Iterative(std::vector<DFSWorklistEntry> &worklist, V
 	return true;
 }
 
-View IMMChecker::visitCalc75(const EventLabel *lab) const
+View IMMChecker::visitCalc80(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 	View calcRes;
 
 	calcRes.updateIdx(lab->getPos());
-	visitedCalc75_3.maybeClearResize(g.getMaxStamp().get() + 1);
-	visitedCalc75_5.maybeClearResize(g.getMaxStamp().get() + 1);
-	visitedCalc75_6.maybeClearResize(g.getMaxStamp().get() + 1);
+	visitedCalc80_3.maybeClearResize(g.getMaxStamp().get() + 1);
+	visitedCalc80_5.maybeClearResize(g.getMaxStamp().get() + 1);
+	visitedCalc80_6.maybeClearResize(g.getMaxStamp().get() + 1);
 
 	/* Explore from all accepting states using DFS */
 	std::vector<DFSWorklistEntry> startStates = {
-		{2, lab},
-		{1, lab},
 		{0, lab},
+		{2, lab},
 	};
 
-	visitCalc75Iterative(startStates, calcRes);
+	visitCalc80Iterative(startStates, calcRes);
 	return calcRes;
 }
 
-auto IMMChecker::checkCalc75(const EventLabel *lab) const
+auto IMMChecker::checkCalc80(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 
-	return visitCalc75(lab);
+	return visitCalc80(lab);
 }
 
-bool IMMChecker::visitCalc76Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
+bool IMMChecker::visitCalc81Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
 {
 	while (!worklist.empty()) {
 		auto [stateId, lab, isFinishing] = worklist.back();
@@ -470,7 +561,7 @@ bool IMMChecker::visitCalc76Iterative(std::vector<DFSWorklistEntry> &worklist, V
 			    !(genmc::isa<AbstractLockCasReadLabel>(lab)))
 				if (auto pLab = g.rf_pred(lab); pLab) {
 					if (!genmc::isa<InitLabel>(pLab)) {
-						auto status = visitedCalc76_3.getStatus(
+						auto status = visitedCalc81_3.getStatus(
 							pLab->getStamp().get());
 						if (status == NodeStatus::unseen) {
 							worklist.emplace_back(3, pLab);
@@ -486,7 +577,7 @@ bool IMMChecker::visitCalc76Iterative(std::vector<DFSWorklistEntry> &worklist, V
 					     (genmc::isa<WriteLabel>(pLab) &&
 					      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 						if (!genmc::isa<InitLabel>(pLab)) {
-							auto status = visitedCalc76_5.getStatus(
+							auto status = visitedCalc81_5.getStatus(
 								pLab->getStamp().get());
 							if (status == NodeStatus::unseen) {
 								worklist.emplace_back(5, pLab);
@@ -497,7 +588,7 @@ bool IMMChecker::visitCalc76Iterative(std::vector<DFSWorklistEntry> &worklist, V
 			    !(genmc::isa<AbstractLockCasReadLabel>(lab)))
 				if (auto pLab = g.po_imm_pred(lab); pLab) {
 					auto status =
-						visitedCalc76_6.getStatus(pLab->getStamp().get());
+						visitedCalc81_6.getStatus(pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
 						worklist.emplace_back(6, pLab);
 					}
@@ -506,7 +597,7 @@ bool IMMChecker::visitCalc76Iterative(std::vector<DFSWorklistEntry> &worklist, V
 			    !(genmc::isa<AbstractLockCasReadLabel>(lab)))
 				if (auto pLab = g.po_imm_pred(lab); pLab) {
 					auto status =
-						visitedCalc76_6.getStatus(pLab->getStamp().get());
+						visitedCalc81_6.getStatus(pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
 						worklist.emplace_back(6, pLab);
 					}
@@ -515,7 +606,7 @@ bool IMMChecker::visitCalc76Iterative(std::vector<DFSWorklistEntry> &worklist, V
 			    !(genmc::isa<AbstractLockCasReadLabel>(lab)))
 				if (auto pLab = g.po_imm_pred(lab); pLab) {
 					auto status =
-						visitedCalc76_6.getStatus(pLab->getStamp().get());
+						visitedCalc81_6.getStatus(pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
 						worklist.emplace_back(6, pLab);
 					}
@@ -525,16 +616,16 @@ bool IMMChecker::visitCalc76Iterative(std::vector<DFSWorklistEntry> &worklist, V
 		}
 		case 3: {
 			if (isFinishing) {
-				visitedCalc76_3.setStatus(lab->getStamp().get(), NodeStatus::left);
+				visitedCalc81_3.setStatus(lab->getStamp().get(), NodeStatus::left);
 				break;
 			}
 
-			auto status = visitedCalc76_3.getStatus(lab->getStamp().get());
+			auto status = visitedCalc81_3.getStatus(lab->getStamp().get());
 			if (status != NodeStatus::unseen)
 				break; /* already explored */
 
 			worklist.emplace_back(3, lab, true);
-			visitedCalc76_3.setStatus(lab->getStamp().get(), NodeStatus::entered);
+			visitedCalc81_3.setStatus(lab->getStamp().get(), NodeStatus::entered);
 
 			[[maybe_unused]] auto &g = *lab->getParent();
 			if (auto pLab = g.po_imm_pred(lab); pLab)
@@ -560,7 +651,7 @@ bool IMMChecker::visitCalc76Iterative(std::vector<DFSWorklistEntry> &worklist, V
 					worklist.emplace_back(1, pLab);
 				}
 			if (auto pLab = g.po_imm_pred(lab); pLab) {
-				auto status = visitedCalc76_3.getStatus(pLab->getStamp().get());
+				auto status = visitedCalc81_3.getStatus(pLab->getStamp().get());
 				if (status == NodeStatus::unseen) {
 					worklist.emplace_back(3, pLab);
 				}
@@ -595,7 +686,7 @@ bool IMMChecker::visitCalc76Iterative(std::vector<DFSWorklistEntry> &worklist, V
 			if (auto pLab = g.rf_pred(lab); pLab) {
 				if (!genmc::isa<InitLabel>(pLab)) {
 					auto status =
-						visitedCalc76_3.getStatus(pLab->getStamp().get());
+						visitedCalc81_3.getStatus(pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
 						worklist.emplace_back(3, pLab);
 					}
@@ -608,7 +699,7 @@ bool IMMChecker::visitCalc76Iterative(std::vector<DFSWorklistEntry> &worklist, V
 				     (genmc::isa<WriteLabel>(pLab) &&
 				      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 					if (!genmc::isa<InitLabel>(pLab)) {
-						auto status = visitedCalc76_5.getStatus(
+						auto status = visitedCalc81_5.getStatus(
 							pLab->getStamp().get());
 						if (status == NodeStatus::unseen) {
 							worklist.emplace_back(5, pLab);
@@ -620,16 +711,16 @@ bool IMMChecker::visitCalc76Iterative(std::vector<DFSWorklistEntry> &worklist, V
 		}
 		case 5: {
 			if (isFinishing) {
-				visitedCalc76_5.setStatus(lab->getStamp().get(), NodeStatus::left);
+				visitedCalc81_5.setStatus(lab->getStamp().get(), NodeStatus::left);
 				break;
 			}
 
-			auto status = visitedCalc76_5.getStatus(lab->getStamp().get());
+			auto status = visitedCalc81_5.getStatus(lab->getStamp().get());
 			if (status != NodeStatus::unseen)
 				break; /* already explored */
 
 			worklist.emplace_back(5, lab, true);
-			visitedCalc76_5.setStatus(lab->getStamp().get(), NodeStatus::entered);
+			visitedCalc81_5.setStatus(lab->getStamp().get(), NodeStatus::entered);
 
 			[[maybe_unused]] auto &g = *lab->getParent();
 			if (auto pLab = g.po_imm_pred(lab); pLab)
@@ -645,16 +736,16 @@ bool IMMChecker::visitCalc76Iterative(std::vector<DFSWorklistEntry> &worklist, V
 		}
 		case 6: {
 			if (isFinishing) {
-				visitedCalc76_6.setStatus(lab->getStamp().get(), NodeStatus::left);
+				visitedCalc81_6.setStatus(lab->getStamp().get(), NodeStatus::left);
 				break;
 			}
 
-			auto status = visitedCalc76_6.getStatus(lab->getStamp().get());
+			auto status = visitedCalc81_6.getStatus(lab->getStamp().get());
 			if (status != NodeStatus::unseen)
 				break; /* already explored */
 
 			worklist.emplace_back(6, lab, true);
-			visitedCalc76_6.setStatus(lab->getStamp().get(), NodeStatus::entered);
+			visitedCalc81_6.setStatus(lab->getStamp().get(), NodeStatus::entered);
 
 			[[maybe_unused]] auto &g = *lab->getParent();
 			if (auto pLab = g.rf_pred(lab); pLab)
@@ -678,7 +769,7 @@ bool IMMChecker::visitCalc76Iterative(std::vector<DFSWorklistEntry> &worklist, V
 			if (auto pLab = g.rf_pred(lab); pLab) {
 				if (!genmc::isa<InitLabel>(pLab)) {
 					auto status =
-						visitedCalc76_3.getStatus(pLab->getStamp().get());
+						visitedCalc81_3.getStatus(pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
 						worklist.emplace_back(3, pLab);
 					}
@@ -691,7 +782,7 @@ bool IMMChecker::visitCalc76Iterative(std::vector<DFSWorklistEntry> &worklist, V
 				     (genmc::isa<WriteLabel>(pLab) &&
 				      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
 					if (!genmc::isa<InitLabel>(pLab)) {
-						auto status = visitedCalc76_5.getStatus(
+						auto status = visitedCalc81_5.getStatus(
 							pLab->getStamp().get());
 						if (status == NodeStatus::unseen) {
 							worklist.emplace_back(5, pLab);
@@ -699,7 +790,7 @@ bool IMMChecker::visitCalc76Iterative(std::vector<DFSWorklistEntry> &worklist, V
 					}
 				}
 			if (auto pLab = g.po_imm_pred(lab); pLab) {
-				auto status = visitedCalc76_6.getStatus(pLab->getStamp().get());
+				auto status = visitedCalc81_6.getStatus(pLab->getStamp().get());
 				if (status == NodeStatus::unseen) {
 					worklist.emplace_back(6, pLab);
 				}
@@ -714,35 +805,34 @@ bool IMMChecker::visitCalc76Iterative(std::vector<DFSWorklistEntry> &worklist, V
 	return true;
 }
 
-View IMMChecker::visitCalc76(const EventLabel *lab) const
+View IMMChecker::visitCalc81(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 	View calcRes;
 
 	calcRes.updateIdx(lab->getPos());
-	visitedCalc76_3.maybeClearResize(g.getMaxStamp().get() + 1);
-	visitedCalc76_5.maybeClearResize(g.getMaxStamp().get() + 1);
-	visitedCalc76_6.maybeClearResize(g.getMaxStamp().get() + 1);
+	visitedCalc81_3.maybeClearResize(g.getMaxStamp().get() + 1);
+	visitedCalc81_5.maybeClearResize(g.getMaxStamp().get() + 1);
+	visitedCalc81_6.maybeClearResize(g.getMaxStamp().get() + 1);
 
 	/* Explore from all accepting states using DFS */
 	std::vector<DFSWorklistEntry> startStates = {
-		{2, lab},
-		{1, lab},
 		{0, lab},
+		{2, lab},
 	};
 
-	visitCalc76Iterative(startStates, calcRes);
+	visitCalc81Iterative(startStates, calcRes);
 	return calcRes;
 }
 
-auto IMMChecker::checkCalc76(const EventLabel *lab) const
+auto IMMChecker::checkCalc81(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 
-	return visitCalc76(lab);
+	return visitCalc81(lab);
 }
 
-bool IMMChecker::visitCalc89Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
+bool IMMChecker::visitCalc94Iterative(std::vector<DFSWorklistEntry> &worklist, View &calcRes) const
 {
 	while (!worklist.empty()) {
 		auto [stateId, lab, isFinishing] = worklist.back();
@@ -832,7 +922,7 @@ bool IMMChecker::visitCalc89Iterative(std::vector<DFSWorklistEntry> &worklist, V
 	return true;
 }
 
-View IMMChecker::visitCalc89(const EventLabel *lab) const
+View IMMChecker::visitCalc94(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 	View calcRes;
@@ -841,20 +931,735 @@ View IMMChecker::visitCalc89(const EventLabel *lab) const
 
 	/* Explore from all accepting states using DFS */
 	std::vector<DFSWorklistEntry> startStates = {
-		{2, lab},
-		{1, lab},
 		{0, lab},
+		{2, lab},
 	};
 
-	visitCalc89Iterative(startStates, calcRes);
+	visitCalc94Iterative(startStates, calcRes);
 	return calcRes;
 }
 
-auto IMMChecker::checkCalc89(const EventLabel *lab) const
+auto IMMChecker::checkCalc94(const EventLabel *lab) const
 {
 	[[maybe_unused]] auto &g = *lab->getParent();
 
-	return visitCalc89(lab);
+	return visitCalc94(lab);
+}
+
+bool IMMChecker::visitCalc95Iterative(std::vector<DFSWorklistEntry> &worklist,
+				      DepView &calcRes) const
+{
+	while (!worklist.empty()) {
+		auto [stateId, lab, isFinishing] = worklist.back();
+		worklist.pop_back();
+		switch (stateId) {
+		case 0: {
+			if (isFinishing) {
+				break;
+			}
+
+			[[maybe_unused]] auto &g = *lab->getParent();
+
+			break;
+		}
+		case 1: {
+			if (isFinishing) {
+				break;
+			}
+
+			[[maybe_unused]] auto &g = *lab->getParent();
+			if (auto pLab = lab; true)
+				if (calcRes.update(pLab->getPrefixView()); true) {
+					worklist.emplace_back(0, pLab);
+				}
+
+			break;
+		}
+		case 2: {
+			if (isFinishing) {
+				visitedCalc95_2.setStatus(lab->getStamp().get(), NodeStatus::left);
+				break;
+			}
+
+			auto status = visitedCalc95_2.getStatus(lab->getStamp().get());
+			if (status != NodeStatus::unseen)
+				break; /* already explored */
+
+			worklist.emplace_back(2, lab, true);
+			visitedCalc95_2.setStatus(lab->getStamp().get(), NodeStatus::entered);
+
+			[[maybe_unused]] auto &g = *lab->getParent();
+			for (auto &tmp : g.cas_preds(lab))
+				if (auto *pLab = &tmp; true)
+					if (true && pLab->isDependable())
+						if (calcRes.updateIdx(pLab->getPos()); true) {
+							worklist.emplace_back(0, pLab);
+						}
+			for (auto &tmp : g.ctrl_preds(lab))
+				if (auto *pLab = &tmp; true)
+					if (true && pLab->isDependable())
+						if (calcRes.updateIdx(pLab->getPos()); true) {
+							worklist.emplace_back(0, pLab);
+						}
+			for (auto &tmp : g.data_preds(lab))
+				if (auto *pLab = &tmp; true)
+					if (true && pLab->isDependable())
+						if (calcRes.updateIdx(pLab->getPos()); true) {
+							worklist.emplace_back(0, pLab);
+						}
+			for (auto &tmp : g.cas_preds(lab))
+				if (auto *pLab = &tmp; true)
+					if (true && pLab->isDependable()) {
+						worklist.emplace_back(1, pLab);
+					}
+			for (auto &tmp : g.ctrl_preds(lab))
+				if (auto *pLab = &tmp; true)
+					if (true && pLab->isDependable()) {
+						worklist.emplace_back(1, pLab);
+					}
+			for (auto &tmp : g.data_preds(lab))
+				if (auto *pLab = &tmp; true)
+					if (true && pLab->isDependable()) {
+						worklist.emplace_back(1, pLab);
+					}
+			for (auto &tmp : g.cas_preds(lab))
+				if (auto *pLab = &tmp; true) {
+					auto status =
+						visitedCalc95_2.getStatus(pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(2, pLab);
+					}
+				}
+			for (auto &tmp : g.ctrl_preds(lab))
+				if (auto *pLab = &tmp; true) {
+					auto status =
+						visitedCalc95_2.getStatus(pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(2, pLab);
+					}
+				}
+			for (auto &tmp : g.data_preds(lab))
+				if (auto *pLab = &tmp; true) {
+					auto status =
+						visitedCalc95_2.getStatus(pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(2, pLab);
+					}
+				}
+			if (auto pLab = g.rfi_pred(lab); pLab) {
+				auto status = visitedCalc95_2.getStatus(pLab->getStamp().get());
+				if (status == NodeStatus::unseen) {
+					worklist.emplace_back(2, pLab);
+				}
+			}
+			for (auto &tmp : g.cas_preds(lab))
+				if (auto *pLab = &tmp; true) {
+					auto status =
+						visitedCalc95_3.getStatus(pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(3, pLab);
+					}
+				}
+			for (auto &tmp : g.ctrl_preds(lab))
+				if (auto *pLab = &tmp; true) {
+					auto status =
+						visitedCalc95_3.getStatus(pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(3, pLab);
+					}
+				}
+			for (auto &tmp : g.data_preds(lab))
+				if (auto *pLab = &tmp; true) {
+					auto status =
+						visitedCalc95_3.getStatus(pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(3, pLab);
+					}
+				}
+			if (auto pLab = g.rfi_pred(lab); pLab) {
+				auto status = visitedCalc95_3.getStatus(pLab->getStamp().get());
+				if (status == NodeStatus::unseen) {
+					worklist.emplace_back(3, pLab);
+				}
+			}
+
+			break;
+		}
+		case 3: {
+			if (isFinishing) {
+				visitedCalc95_3.setStatus(lab->getStamp().get(), NodeStatus::left);
+				break;
+			}
+
+			auto status = visitedCalc95_3.getStatus(lab->getStamp().get());
+			if (status != NodeStatus::unseen)
+				break; /* already explored */
+
+			worklist.emplace_back(3, lab, true);
+			visitedCalc95_3.setStatus(lab->getStamp().get(), NodeStatus::entered);
+
+			[[maybe_unused]] auto &g = *lab->getParent();
+			for (auto &tmp : g.addr_preds(lab))
+				if (auto *pLab = &tmp; true)
+					if (true && pLab->isDependable())
+						if (calcRes.updateIdx(pLab->getPos()); true) {
+							worklist.emplace_back(0, pLab);
+						}
+			if (auto pLab = g.po_imm_pred(lab); pLab)
+				if (true && genmc::isa<ReadLabel>(pLab) &&
+				    (genmc::isa<CasReadLabel>(pLab) ||
+				     genmc::isa<FaiReadLabel>(pLab) ||
+				     genmc::isa<CasWriteLabel>(pLab) ||
+				     genmc::isa<FaiWriteLabel>(pLab)) &&
+				    pLab->isDependable())
+					if (calcRes.updateIdx(pLab->getPos()); true) {
+						worklist.emplace_back(0, pLab);
+					}
+			for (auto &tmp : g.addr_preds(lab))
+				if (auto *pLab = &tmp; true)
+					if (true && pLab->isDependable()) {
+						worklist.emplace_back(1, pLab);
+					}
+			if (auto pLab = g.po_imm_pred(lab); pLab)
+				if (true && genmc::isa<ReadLabel>(pLab) &&
+				    (genmc::isa<CasReadLabel>(pLab) ||
+				     genmc::isa<FaiReadLabel>(pLab) ||
+				     genmc::isa<CasWriteLabel>(pLab) ||
+				     genmc::isa<FaiWriteLabel>(pLab)) &&
+				    pLab->isDependable()) {
+					worklist.emplace_back(1, pLab);
+				}
+			for (auto &tmp : g.addr_preds(lab))
+				if (auto *pLab = &tmp; true) {
+					auto status =
+						visitedCalc95_2.getStatus(pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(2, pLab);
+					}
+				}
+			if (auto pLab = g.po_imm_pred(lab); pLab)
+				if (true && genmc::isa<ReadLabel>(pLab) &&
+				    (genmc::isa<CasReadLabel>(pLab) ||
+				     genmc::isa<FaiReadLabel>(pLab) ||
+				     genmc::isa<CasWriteLabel>(pLab) ||
+				     genmc::isa<FaiWriteLabel>(pLab))) {
+					auto status =
+						visitedCalc95_2.getStatus(pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(2, pLab);
+					}
+				}
+			for (auto &tmp : g.addr_preds(lab))
+				if (auto *pLab = &tmp; true) {
+					auto status =
+						visitedCalc95_3.getStatus(pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(3, pLab);
+					}
+				}
+			if (auto pLab = g.po_imm_pred(lab); pLab) {
+				auto status = visitedCalc95_3.getStatus(pLab->getStamp().get());
+				if (status == NodeStatus::unseen) {
+					worklist.emplace_back(3, pLab);
+				}
+			}
+			if (auto pLab = g.po_imm_pred(lab); pLab)
+				if (true && genmc::isa<ReadLabel>(pLab) &&
+				    (genmc::isa<CasReadLabel>(pLab) ||
+				     genmc::isa<FaiReadLabel>(pLab) ||
+				     genmc::isa<CasWriteLabel>(pLab) ||
+				     genmc::isa<FaiWriteLabel>(pLab))) {
+					auto status =
+						visitedCalc95_3.getStatus(pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(3, pLab);
+					}
+				}
+
+			break;
+		}
+		case 4: {
+			if (isFinishing) {
+				break;
+			}
+
+			[[maybe_unused]] auto &g = *lab->getParent();
+			for (auto &tmp : g.detour_preds(lab))
+				if (auto *pLab = &tmp; true)
+					if (calcRes.updateIdx(pLab->getPos()); true) {
+						worklist.emplace_back(0, pLab);
+					}
+			for (auto &tmp : g.lin_preds(lab))
+				if (auto *pLab = &tmp; true)
+					if (calcRes.updateIdx(pLab->getPos()); true) {
+						worklist.emplace_back(0, pLab);
+					}
+			if (auto pLab = g.rfe_pred(lab); pLab)
+				if (calcRes.updateIdx(pLab->getPos()); true) {
+					worklist.emplace_back(0, pLab);
+				}
+			if (auto pLab = g.tc_pred(lab); pLab)
+				if (calcRes.updateIdx(pLab->getPos()); true) {
+					worklist.emplace_back(0, pLab);
+				}
+			if (auto pLab = g.tj_pred(lab); pLab)
+				if (calcRes.updateIdx(pLab->getPos()); true) {
+					worklist.emplace_back(0, pLab);
+				}
+			if (true && genmc::isa<FenceLabel>(lab))
+				if (auto pLab = g.po_imm_pred(lab); pLab)
+					if (calcRes.updateIdx(pLab->getPos()); true) {
+						worklist.emplace_back(0, pLab);
+					}
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.addr_preds(lab))
+					if (auto *pLab = &tmp; true)
+						if (true && pLab->isDependable())
+							if (calcRes.updateIdx(pLab->getPos());
+							    true) {
+								worklist.emplace_back(0, pLab);
+							}
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.cas_preds(lab))
+					if (auto *pLab = &tmp; true)
+						if (true && pLab->isDependable())
+							if (calcRes.updateIdx(pLab->getPos());
+							    true) {
+								worklist.emplace_back(0, pLab);
+							}
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.ctrl_preds(lab))
+					if (auto *pLab = &tmp; true)
+						if (true && pLab->isDependable())
+							if (calcRes.updateIdx(pLab->getPos());
+							    true) {
+								worklist.emplace_back(0, pLab);
+							}
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.data_preds(lab))
+					if (auto *pLab = &tmp; true)
+						if (true && pLab->isDependable())
+							if (calcRes.updateIdx(pLab->getPos());
+							    true) {
+								worklist.emplace_back(0, pLab);
+							}
+			if (true && genmc::isa<WriteLabel>(lab))
+				if (auto pLab = g.po_imm_pred(lab); pLab)
+					if (true && genmc::isa<ReadLabel>(pLab) &&
+					    (genmc::isa<CasReadLabel>(pLab) ||
+					     genmc::isa<FaiReadLabel>(pLab) ||
+					     genmc::isa<CasWriteLabel>(pLab) ||
+					     genmc::isa<FaiWriteLabel>(pLab)) &&
+					    pLab->isDependable())
+						if (calcRes.updateIdx(pLab->getPos()); true) {
+							worklist.emplace_back(0, pLab);
+						}
+			if (true && genmc::isa<WriteLabel>(lab))
+				if (auto pLab = g.po_imm_pred(lab); pLab)
+					if (true && genmc::isa<WriteLabel>(pLab) &&
+					    (genmc::isa<CasReadLabel>(pLab) ||
+					     genmc::isa<FaiReadLabel>(pLab) ||
+					     genmc::isa<CasWriteLabel>(pLab) ||
+					     genmc::isa<FaiWriteLabel>(pLab)))
+						if (calcRes.updateIdx(pLab->getPos()); true) {
+							worklist.emplace_back(0, pLab);
+						}
+			if (true && genmc::isa<WriteLabel>(lab))
+				if (auto pLab = g.poloc_imm_pred(lab); pLab)
+					if (true && pLab->isAtLeastRelease() &&
+					    genmc::isa<WriteLabel>(pLab))
+						if (calcRes.updateIdx(pLab->getPos()); true) {
+							worklist.emplace_back(0, pLab);
+						}
+			if (true && lab->isAtLeastRelease())
+				if (auto pLab = g.po_imm_pred(lab); pLab)
+					if (calcRes.updateIdx(pLab->getPos()); true) {
+						worklist.emplace_back(0, pLab);
+					}
+			for (auto &tmp : g.detour_preds(lab))
+				if (auto *pLab = &tmp; true) {
+					worklist.emplace_back(1, pLab);
+				}
+			for (auto &tmp : g.lin_preds(lab))
+				if (auto *pLab = &tmp; true) {
+					worklist.emplace_back(1, pLab);
+				}
+			if (auto pLab = g.rfe_pred(lab); pLab) {
+				worklist.emplace_back(1, pLab);
+			}
+			if (auto pLab = g.tc_pred(lab); pLab) {
+				worklist.emplace_back(1, pLab);
+			}
+			if (auto pLab = g.tj_pred(lab); pLab) {
+				worklist.emplace_back(1, pLab);
+			}
+			if (true && genmc::isa<FenceLabel>(lab))
+				if (auto pLab = g.po_imm_pred(lab); pLab) {
+					worklist.emplace_back(1, pLab);
+				}
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.addr_preds(lab))
+					if (auto *pLab = &tmp; true)
+						if (true && pLab->isDependable()) {
+							worklist.emplace_back(1, pLab);
+						}
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.cas_preds(lab))
+					if (auto *pLab = &tmp; true)
+						if (true && pLab->isDependable()) {
+							worklist.emplace_back(1, pLab);
+						}
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.ctrl_preds(lab))
+					if (auto *pLab = &tmp; true)
+						if (true && pLab->isDependable()) {
+							worklist.emplace_back(1, pLab);
+						}
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.data_preds(lab))
+					if (auto *pLab = &tmp; true)
+						if (true && pLab->isDependable()) {
+							worklist.emplace_back(1, pLab);
+						}
+			if (true && genmc::isa<WriteLabel>(lab))
+				if (auto pLab = g.po_imm_pred(lab); pLab)
+					if (true && genmc::isa<ReadLabel>(pLab) &&
+					    (genmc::isa<CasReadLabel>(pLab) ||
+					     genmc::isa<FaiReadLabel>(pLab) ||
+					     genmc::isa<CasWriteLabel>(pLab) ||
+					     genmc::isa<FaiWriteLabel>(pLab)) &&
+					    pLab->isDependable()) {
+						worklist.emplace_back(1, pLab);
+					}
+			if (true && genmc::isa<WriteLabel>(lab))
+				if (auto pLab = g.po_imm_pred(lab); pLab)
+					if (true && genmc::isa<WriteLabel>(pLab) &&
+					    (genmc::isa<CasReadLabel>(pLab) ||
+					     genmc::isa<FaiReadLabel>(pLab) ||
+					     genmc::isa<CasWriteLabel>(pLab) ||
+					     genmc::isa<FaiWriteLabel>(pLab))) {
+						worklist.emplace_back(1, pLab);
+					}
+			if (true && genmc::isa<WriteLabel>(lab))
+				if (auto pLab = g.poloc_imm_pred(lab); pLab)
+					if (true && pLab->isAtLeastRelease() &&
+					    genmc::isa<WriteLabel>(pLab)) {
+						worklist.emplace_back(1, pLab);
+					}
+			if (true && lab->isAtLeastRelease())
+				if (auto pLab = g.po_imm_pred(lab); pLab) {
+					worklist.emplace_back(1, pLab);
+				}
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.addr_preds(lab))
+					if (auto *pLab = &tmp; true) {
+						auto status = visitedCalc95_2.getStatus(
+							pLab->getStamp().get());
+						if (status == NodeStatus::unseen) {
+							worklist.emplace_back(2, pLab);
+						}
+					}
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.cas_preds(lab))
+					if (auto *pLab = &tmp; true) {
+						auto status = visitedCalc95_2.getStatus(
+							pLab->getStamp().get());
+						if (status == NodeStatus::unseen) {
+							worklist.emplace_back(2, pLab);
+						}
+					}
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.ctrl_preds(lab))
+					if (auto *pLab = &tmp; true) {
+						auto status = visitedCalc95_2.getStatus(
+							pLab->getStamp().get());
+						if (status == NodeStatus::unseen) {
+							worklist.emplace_back(2, pLab);
+						}
+					}
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.data_preds(lab))
+					if (auto *pLab = &tmp; true) {
+						auto status = visitedCalc95_2.getStatus(
+							pLab->getStamp().get());
+						if (status == NodeStatus::unseen) {
+							worklist.emplace_back(2, pLab);
+						}
+					}
+			if (true && genmc::isa<WriteLabel>(lab))
+				if (auto pLab = g.po_imm_pred(lab); pLab)
+					if (true && genmc::isa<ReadLabel>(pLab) &&
+					    (genmc::isa<CasReadLabel>(pLab) ||
+					     genmc::isa<FaiReadLabel>(pLab) ||
+					     genmc::isa<CasWriteLabel>(pLab) ||
+					     genmc::isa<FaiWriteLabel>(pLab))) {
+						auto status = visitedCalc95_2.getStatus(
+							pLab->getStamp().get());
+						if (status == NodeStatus::unseen) {
+							worklist.emplace_back(2, pLab);
+						}
+					}
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.addr_preds(lab))
+					if (auto *pLab = &tmp; true) {
+						auto status = visitedCalc95_3.getStatus(
+							pLab->getStamp().get());
+						if (status == NodeStatus::unseen) {
+							worklist.emplace_back(3, pLab);
+						}
+					}
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.cas_preds(lab))
+					if (auto *pLab = &tmp; true) {
+						auto status = visitedCalc95_3.getStatus(
+							pLab->getStamp().get());
+						if (status == NodeStatus::unseen) {
+							worklist.emplace_back(3, pLab);
+						}
+					}
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.ctrl_preds(lab))
+					if (auto *pLab = &tmp; true) {
+						auto status = visitedCalc95_3.getStatus(
+							pLab->getStamp().get());
+						if (status == NodeStatus::unseen) {
+							worklist.emplace_back(3, pLab);
+						}
+					}
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.data_preds(lab))
+					if (auto *pLab = &tmp; true) {
+						auto status = visitedCalc95_3.getStatus(
+							pLab->getStamp().get());
+						if (status == NodeStatus::unseen) {
+							worklist.emplace_back(3, pLab);
+						}
+					}
+			if (true && genmc::isa<WriteLabel>(lab))
+				if (auto pLab = g.po_imm_pred(lab); pLab) {
+					auto status =
+						visitedCalc95_3.getStatus(pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(3, pLab);
+					}
+				}
+			if (true && genmc::isa<WriteLabel>(lab))
+				if (auto pLab = g.po_imm_pred(lab); pLab)
+					if (true && genmc::isa<ReadLabel>(pLab) &&
+					    (genmc::isa<CasReadLabel>(pLab) ||
+					     genmc::isa<FaiReadLabel>(pLab) ||
+					     genmc::isa<CasWriteLabel>(pLab) ||
+					     genmc::isa<FaiWriteLabel>(pLab))) {
+						auto status = visitedCalc95_3.getStatus(
+							pLab->getStamp().get());
+						if (status == NodeStatus::unseen) {
+							worklist.emplace_back(3, pLab);
+						}
+					}
+			if (true && genmc::isa<FenceLabel>(lab))
+				if (auto pLab = g.po_imm_pred(lab); pLab) {
+					auto status =
+						visitedCalc95_5.getStatus(pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(5, pLab);
+					}
+				}
+			if (true && lab->isAtLeastRelease())
+				if (auto pLab = g.po_imm_pred(lab); pLab) {
+					auto status =
+						visitedCalc95_5.getStatus(pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(5, pLab);
+					}
+				}
+			if (true && genmc::isa<WriteLabel>(lab))
+				if (auto pLab = g.poloc_imm_pred(lab); pLab) {
+					auto status =
+						visitedCalc95_7.getStatus(pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(7, pLab);
+					}
+				}
+			if (true && genmc::isa<WriteLabel>(lab))
+				if (auto pLab = g.po_imm_pred(lab); pLab) {
+					auto status =
+						visitedCalc95_8.getStatus(pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(8, pLab);
+					}
+				}
+
+			break;
+		}
+		case 5: {
+			if (isFinishing) {
+				visitedCalc95_5.setStatus(lab->getStamp().get(), NodeStatus::left);
+				break;
+			}
+
+			auto status = visitedCalc95_5.getStatus(lab->getStamp().get());
+			if (status != NodeStatus::unseen)
+				break; /* already explored */
+
+			worklist.emplace_back(5, lab, true);
+			visitedCalc95_5.setStatus(lab->getStamp().get(), NodeStatus::entered);
+
+			[[maybe_unused]] auto &g = *lab->getParent();
+			if (auto pLab = g.po_imm_pred(lab); pLab)
+				if (calcRes.updateIdx(pLab->getPos()); true) {
+					worklist.emplace_back(0, pLab);
+				}
+			if (auto pLab = g.po_imm_pred(lab); pLab) {
+				worklist.emplace_back(1, pLab);
+			}
+			if (auto pLab = g.po_imm_pred(lab); pLab) {
+				auto status = visitedCalc95_5.getStatus(pLab->getStamp().get());
+				if (status == NodeStatus::unseen) {
+					worklist.emplace_back(5, pLab);
+				}
+			}
+
+			break;
+		}
+		case 6: {
+			if (isFinishing) {
+				break;
+			}
+
+			[[maybe_unused]] auto &g = *lab->getParent();
+			if (auto pLab = g.po_imm_pred(lab); pLab)
+				if (true && genmc::isa<FenceLabel>(pLab))
+					if (calcRes.updateIdx(pLab->getPos()); true) {
+						worklist.emplace_back(0, pLab);
+					}
+			if (auto pLab = g.po_imm_pred(lab); pLab)
+				if (true && pLab->isAtLeastAcquire())
+					if (calcRes.updateIdx(pLab->getPos()); true) {
+						worklist.emplace_back(0, pLab);
+					}
+			if (auto pLab = g.po_imm_pred(lab); pLab)
+				if (true && genmc::isa<FenceLabel>(pLab)) {
+					worklist.emplace_back(1, pLab);
+				}
+			if (auto pLab = g.po_imm_pred(lab); pLab)
+				if (true && pLab->isAtLeastAcquire()) {
+					worklist.emplace_back(1, pLab);
+				}
+			if (auto pLab = g.po_imm_pred(lab); pLab) {
+				worklist.emplace_back(6, pLab);
+			}
+
+			break;
+		}
+		case 7: {
+			if (isFinishing) {
+				visitedCalc95_7.setStatus(lab->getStamp().get(), NodeStatus::left);
+				break;
+			}
+
+			auto status = visitedCalc95_7.getStatus(lab->getStamp().get());
+			if (status != NodeStatus::unseen)
+				break; /* already explored */
+
+			worklist.emplace_back(7, lab, true);
+			visitedCalc95_7.setStatus(lab->getStamp().get(), NodeStatus::entered);
+
+			[[maybe_unused]] auto &g = *lab->getParent();
+			if (auto pLab = g.poloc_imm_pred(lab); pLab)
+				if (true && pLab->isAtLeastRelease() &&
+				    genmc::isa<WriteLabel>(pLab))
+					if (calcRes.updateIdx(pLab->getPos()); true) {
+						worklist.emplace_back(0, pLab);
+					}
+			if (auto pLab = g.poloc_imm_pred(lab); pLab)
+				if (true && pLab->isAtLeastRelease() &&
+				    genmc::isa<WriteLabel>(pLab)) {
+					worklist.emplace_back(1, pLab);
+				}
+			if (auto pLab = g.poloc_imm_pred(lab); pLab) {
+				auto status = visitedCalc95_7.getStatus(pLab->getStamp().get());
+				if (status == NodeStatus::unseen) {
+					worklist.emplace_back(7, pLab);
+				}
+			}
+
+			break;
+		}
+		case 8: {
+			if (isFinishing) {
+				visitedCalc95_8.setStatus(lab->getStamp().get(), NodeStatus::left);
+				break;
+			}
+
+			auto status = visitedCalc95_8.getStatus(lab->getStamp().get());
+			if (status != NodeStatus::unseen)
+				break; /* already explored */
+
+			worklist.emplace_back(8, lab, true);
+			visitedCalc95_8.setStatus(lab->getStamp().get(), NodeStatus::entered);
+
+			[[maybe_unused]] auto &g = *lab->getParent();
+			if (auto pLab = g.po_imm_pred(lab); pLab)
+				if (true && genmc::isa<WriteLabel>(pLab) &&
+				    (genmc::isa<CasReadLabel>(pLab) ||
+				     genmc::isa<FaiReadLabel>(pLab) ||
+				     genmc::isa<CasWriteLabel>(pLab) ||
+				     genmc::isa<FaiWriteLabel>(pLab)))
+					if (calcRes.updateIdx(pLab->getPos()); true) {
+						worklist.emplace_back(0, pLab);
+					}
+			if (auto pLab = g.po_imm_pred(lab); pLab)
+				if (true && genmc::isa<WriteLabel>(pLab) &&
+				    (genmc::isa<CasReadLabel>(pLab) ||
+				     genmc::isa<FaiReadLabel>(pLab) ||
+				     genmc::isa<CasWriteLabel>(pLab) ||
+				     genmc::isa<FaiWriteLabel>(pLab))) {
+					worklist.emplace_back(1, pLab);
+				}
+			if (auto pLab = g.po_imm_pred(lab); pLab) {
+				auto status = visitedCalc95_8.getStatus(pLab->getStamp().get());
+				if (status == NodeStatus::unseen) {
+					worklist.emplace_back(8, pLab);
+				}
+			}
+
+			break;
+		}
+		default:
+			UNREACHABLE();
+		}
+	}
+	return true;
+}
+
+DepView IMMChecker::visitCalc95(const EventLabel *lab) const
+{
+	[[maybe_unused]] auto &g = *lab->getParent();
+	DepView calcRes;
+
+	calcRes.updateIdx(lab->getPos());
+	visitedCalc95_2.maybeClearResize(g.getMaxStamp().get() + 1);
+	visitedCalc95_3.maybeClearResize(g.getMaxStamp().get() + 1);
+	visitedCalc95_5.maybeClearResize(g.getMaxStamp().get() + 1);
+	visitedCalc95_7.maybeClearResize(g.getMaxStamp().get() + 1);
+	visitedCalc95_8.maybeClearResize(g.getMaxStamp().get() + 1);
+
+	/* Explore from all accepting states using DFS */
+	std::vector<DFSWorklistEntry> startStates = {
+		{0, lab},
+		{6, lab},
+		{4, lab},
+	};
+
+	visitCalc95Iterative(startStates, calcRes);
+	return calcRes;
+}
+
+auto IMMChecker::checkCalc95(const EventLabel *lab) const
+{
+	[[maybe_unused]] auto &g = *lab->getParent();
+
+	return visitCalc95(lab);
 }
 
 void IMMChecker::calculateSaved([[maybe_unused]] EventLabel *lab) {}
@@ -864,18 +1669,18 @@ void IMMChecker::calculateViews(EventLabel *lab)
 	lab->setViews({});
 	{
 		lab->addView({});
-		lab->setView(std::move(checkCalc75(lab)), 0);
+		lab->setView(std::move(checkCalc80(lab)), 0);
 	}
 
 	if (!getConf()->collectLinSpec && !getConf()->checkLinSpec)
 		lab->addView({});
 	else {
 		lab->addView({});
-		lab->setView(std::move(checkCalc76(lab)), 1);
+		lab->setView(std::move(checkCalc81(lab)), 1);
 	}
 	{
 		lab->addView({});
-		lab->setView(std::move(checkCalc89(lab)), 2);
+		lab->setView(std::move(checkCalc94(lab)), 2);
 	}
 }
 
@@ -883,6 +1688,12 @@ void IMMChecker::updateMMViews(EventLabel *lab)
 {
 	calculateViews(lab);
 	calculateSaved(lab);
+	lab->setPrefixView(calculatePrefixView(lab));
+}
+
+std::unique_ptr<VectorClock> IMMChecker::calculatePrefixView(const EventLabel *lab) const
+{
+	return std::make_unique<DepView>(checkCalc95(lab));
 }
 
 static auto isWriteRfBefore(const WriteLabel *wLab, const EventLabel *lab) -> bool
@@ -4470,6 +5281,20 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 			}
 
 			[[maybe_unused]] auto &g = *lab->getParent();
+			for (auto &tmp : g.cas_preds(lab))
+				if (auto *pLab = &tmp; true) {
+					auto status = visitedConsAcyclic2_0.getStatus(
+						pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(0, pLab);
+					} else if (status == NodeStatus::entered &&
+						   (visitedConsAcyclic2Accepting >
+							    visitedConsAcyclic2_0.getCount(
+								    pLab->getStamp().get()) ||
+						    0)) {
+						return false; /* cycle detected */
+					}
+				}
 			for (auto &tmp : g.ctrl_preds(lab))
 				if (auto *pLab = &tmp; true) {
 					auto status = visitedConsAcyclic2_0.getStatus(
@@ -4511,6 +5336,20 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 					return false; /* cycle detected */
 				}
 			}
+			for (auto &tmp : g.cas_preds(lab))
+				if (auto *pLab = &tmp; true) {
+					auto status = visitedConsAcyclic2_1.getStatus(
+						pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(1, pLab);
+					} else if (status == NodeStatus::entered &&
+						   (visitedConsAcyclic2Accepting >
+							    visitedConsAcyclic2_1.getCount(
+								    pLab->getStamp().get()) ||
+						    0)) {
+						return false; /* cycle detected */
+					}
+				}
 			for (auto &tmp : g.ctrl_preds(lab))
 				if (auto *pLab = &tmp; true) {
 					auto status = visitedConsAcyclic2_1.getStatus(
@@ -4552,14 +5391,22 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 					return false; /* cycle detected */
 				}
 			}
-			if (auto pLab = g.rfi_pred(lab); pLab)
-				if (true && genmc::isa<WriteLabel>(pLab) &&
-				    ((genmc::isa<ReadLabel>(pLab) &&
-				      genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-				     (genmc::isa<WriteLabel>(pLab) &&
-				      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
-					worklist.emplace_back(2, pLab);
-				}
+			for (auto &tmp : g.cas_preds(lab))
+				if (auto *pLab = &tmp; true)
+					if (true && pLab->isDependable()) {
+						auto status = visitedConsAcyclic2_17.getStatus(
+							pLab->getStamp().get());
+						if (status == NodeStatus::unseen) {
+							worklist.emplace_back(17, pLab);
+						} else if (status == NodeStatus::entered &&
+							   (visitedConsAcyclic2Accepting >
+								    visitedConsAcyclic2_17.getCount(
+									    pLab->getStamp()
+										    .get()) ||
+							    1)) {
+							return false; /* cycle detected */
+						}
+					}
 			for (auto &tmp : g.ctrl_preds(lab))
 				if (auto *pLab = &tmp; true)
 					if (true && pLab->isDependable()) {
@@ -4633,6 +5480,24 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 						return false; /* cycle detected */
 					}
 				}
+			if (auto pLab = g.po_imm_pred(lab); pLab)
+				if (true && genmc::isa<ReadLabel>(pLab) &&
+				    (genmc::isa<CasReadLabel>(pLab) ||
+				     genmc::isa<FaiReadLabel>(pLab) ||
+				     genmc::isa<CasWriteLabel>(pLab) ||
+				     genmc::isa<FaiWriteLabel>(pLab))) {
+					auto status = visitedConsAcyclic2_0.getStatus(
+						pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(0, pLab);
+					} else if (status == NodeStatus::entered &&
+						   (visitedConsAcyclic2Accepting >
+							    visitedConsAcyclic2_0.getCount(
+								    pLab->getStamp().get()) ||
+						    0)) {
+						return false; /* cycle detected */
+					}
+				}
 			for (auto &tmp : g.addr_preds(lab))
 				if (auto *pLab = &tmp; true) {
 					auto status = visitedConsAcyclic2_1.getStatus(
@@ -4660,6 +5525,24 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 					return false; /* cycle detected */
 				}
 			}
+			if (auto pLab = g.po_imm_pred(lab); pLab)
+				if (true && genmc::isa<ReadLabel>(pLab) &&
+				    (genmc::isa<CasReadLabel>(pLab) ||
+				     genmc::isa<FaiReadLabel>(pLab) ||
+				     genmc::isa<CasWriteLabel>(pLab) ||
+				     genmc::isa<FaiWriteLabel>(pLab))) {
+					auto status = visitedConsAcyclic2_1.getStatus(
+						pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(1, pLab);
+					} else if (status == NodeStatus::entered &&
+						   (visitedConsAcyclic2Accepting >
+							    visitedConsAcyclic2_1.getCount(
+								    pLab->getStamp().get()) ||
+						    0)) {
+						return false; /* cycle detected */
+					}
+				}
 			for (auto &tmp : g.addr_preds(lab))
 				if (auto *pLab = &tmp; true)
 					if (true && pLab->isDependable()) {
@@ -4676,57 +5559,12 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 							return false; /* cycle detected */
 						}
 					}
-
-			break;
-		}
-		case 2: {
-			if (isFinishing) {
-				break;
-			}
-
-			[[maybe_unused]] auto &g = *lab->getParent();
 			if (auto pLab = g.po_imm_pred(lab); pLab)
 				if (true && genmc::isa<ReadLabel>(pLab) &&
-				    ((genmc::isa<ReadLabel>(pLab) &&
-				      genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-				     (genmc::isa<WriteLabel>(pLab) &&
-				      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
-					auto status = visitedConsAcyclic2_0.getStatus(
-						pLab->getStamp().get());
-					if (status == NodeStatus::unseen) {
-						worklist.emplace_back(0, pLab);
-					} else if (status == NodeStatus::entered &&
-						   (visitedConsAcyclic2Accepting >
-							    visitedConsAcyclic2_0.getCount(
-								    pLab->getStamp().get()) ||
-						    0)) {
-						return false; /* cycle detected */
-					}
-				}
-			if (auto pLab = g.po_imm_pred(lab); pLab)
-				if (true && genmc::isa<ReadLabel>(pLab) &&
-				    ((genmc::isa<ReadLabel>(pLab) &&
-				      genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-				     (genmc::isa<WriteLabel>(pLab) &&
-				      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
-					auto status = visitedConsAcyclic2_1.getStatus(
-						pLab->getStamp().get());
-					if (status == NodeStatus::unseen) {
-						worklist.emplace_back(1, pLab);
-					} else if (status == NodeStatus::entered &&
-						   (visitedConsAcyclic2Accepting >
-							    visitedConsAcyclic2_1.getCount(
-								    pLab->getStamp().get()) ||
-						    0)) {
-						return false; /* cycle detected */
-					}
-				}
-			if (auto pLab = g.po_imm_pred(lab); pLab)
-				if (true && genmc::isa<ReadLabel>(pLab) &&
-				    ((genmc::isa<ReadLabel>(pLab) &&
-				      genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-				     (genmc::isa<WriteLabel>(pLab) &&
-				      genmc::dyn_cast<WriteLabel>(pLab)->isRMW())) &&
+				    (genmc::isa<CasReadLabel>(pLab) ||
+				     genmc::isa<FaiReadLabel>(pLab) ||
+				     genmc::isa<CasWriteLabel>(pLab) ||
+				     genmc::isa<FaiWriteLabel>(pLab)) &&
 				    pLab->isDependable()) {
 					auto status = visitedConsAcyclic2_17.getStatus(
 						pLab->getStamp().get());
@@ -4740,6 +5578,59 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 						return false; /* cycle detected */
 					}
 				}
+
+			break;
+		}
+		case 2: {
+			if (isFinishing) {
+				visitedConsAcyclic2_2.set(lab->getStamp().get(),
+							  visitedConsAcyclic2Accepting,
+							  NodeStatus::left);
+				break;
+			}
+
+			auto status = visitedConsAcyclic2_2.getStatus(lab->getStamp().get());
+			if (status == NodeStatus::unseen) {
+				visitedConsAcyclic2_2.set(lab->getStamp().get(),
+							  visitedConsAcyclic2Accepting,
+							  NodeStatus::entered);
+				worklist.emplace_back(2, lab, true /* isFinishing */);
+			} else if (status == NodeStatus::entered &&
+				   (visitedConsAcyclic2Accepting >
+					    visitedConsAcyclic2_2.getCount(lab->getStamp().get()) ||
+				    0)) {
+				return false; /* cycle detected */
+			} else if (status == NodeStatus::left) {
+				break; /* already explored*/
+			}
+
+			[[maybe_unused]] auto &g = *lab->getParent();
+			if (auto pLab = g.po_imm_pred(lab); pLab) {
+				auto status =
+					visitedConsAcyclic2_2.getStatus(pLab->getStamp().get());
+				if (status == NodeStatus::unseen) {
+					worklist.emplace_back(2, pLab);
+				} else if (status == NodeStatus::entered &&
+					   (visitedConsAcyclic2Accepting >
+						    visitedConsAcyclic2_2.getCount(
+							    pLab->getStamp().get()) ||
+					    0)) {
+					return false; /* cycle detected */
+				}
+			}
+			if (auto pLab = g.po_imm_pred(lab); pLab) {
+				auto status =
+					visitedConsAcyclic2_17.getStatus(pLab->getStamp().get());
+				if (status == NodeStatus::unseen) {
+					worklist.emplace_back(17, pLab);
+				} else if (status == NodeStatus::entered &&
+					   (visitedConsAcyclic2Accepting >
+						    visitedConsAcyclic2_17.getCount(
+							    pLab->getStamp().get()) ||
+					    1)) {
+					return false; /* cycle detected */
+				}
+			}
 
 			break;
 		}
@@ -4780,19 +5671,34 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 					return false; /* cycle detected */
 				}
 			}
-			if (auto pLab = g.po_imm_pred(lab); pLab) {
-				auto status =
-					visitedConsAcyclic2_17.getStatus(pLab->getStamp().get());
-				if (status == NodeStatus::unseen) {
-					worklist.emplace_back(17, pLab);
-				} else if (status == NodeStatus::entered &&
-					   (visitedConsAcyclic2Accepting >
-						    visitedConsAcyclic2_17.getCount(
-							    pLab->getStamp().get()) ||
-					    1)) {
-					return false; /* cycle detected */
+			if (auto pLab = g.po_imm_pred(lab); pLab)
+				if (true && genmc::isa<FenceLabel>(pLab)) {
+					auto status = visitedConsAcyclic2_17.getStatus(
+						pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(17, pLab);
+					} else if (status == NodeStatus::entered &&
+						   (visitedConsAcyclic2Accepting >
+							    visitedConsAcyclic2_17.getCount(
+								    pLab->getStamp().get()) ||
+						    1)) {
+						return false; /* cycle detected */
+					}
 				}
-			}
+			if (auto pLab = g.po_imm_pred(lab); pLab)
+				if (true && pLab->isAtLeastAcquire()) {
+					auto status = visitedConsAcyclic2_17.getStatus(
+						pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(17, pLab);
+					} else if (status == NodeStatus::entered &&
+						   (visitedConsAcyclic2Accepting >
+							    visitedConsAcyclic2_17.getCount(
+								    pLab->getStamp().get()) ||
+						    1)) {
+						return false; /* cycle detected */
+					}
+				}
 
 			break;
 		}
@@ -4820,7 +5726,7 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 			}
 
 			[[maybe_unused]] auto &g = *lab->getParent();
-			if (auto pLab = g.po_imm_pred(lab); pLab) {
+			if (auto pLab = g.poloc_imm_pred(lab); pLab) {
 				auto status =
 					visitedConsAcyclic2_4.getStatus(pLab->getStamp().get());
 				if (status == NodeStatus::unseen) {
@@ -4833,22 +5739,9 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 					return false; /* cycle detected */
 				}
 			}
-			if (auto pLab = g.po_imm_pred(lab); pLab)
-				if (true && genmc::isa<FenceLabel>(pLab)) {
-					auto status = visitedConsAcyclic2_17.getStatus(
-						pLab->getStamp().get());
-					if (status == NodeStatus::unseen) {
-						worklist.emplace_back(17, pLab);
-					} else if (status == NodeStatus::entered &&
-						   (visitedConsAcyclic2Accepting >
-							    visitedConsAcyclic2_17.getCount(
-								    pLab->getStamp().get()) ||
-						    1)) {
-						return false; /* cycle detected */
-					}
-				}
-			if (auto pLab = g.po_imm_pred(lab); pLab)
-				if (true && pLab->isAtLeastAcquire()) {
+			if (auto pLab = g.poloc_imm_pred(lab); pLab)
+				if (true && pLab->isAtLeastRelease() &&
+				    genmc::isa<WriteLabel>(pLab)) {
 					auto status = visitedConsAcyclic2_17.getStatus(
 						pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
@@ -4888,7 +5781,7 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 			}
 
 			[[maybe_unused]] auto &g = *lab->getParent();
-			if (auto pLab = g.poloc_imm_pred(lab); pLab) {
+			if (auto pLab = g.po_imm_pred(lab); pLab) {
 				auto status =
 					visitedConsAcyclic2_5.getStatus(pLab->getStamp().get());
 				if (status == NodeStatus::unseen) {
@@ -4901,9 +5794,12 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 					return false; /* cycle detected */
 				}
 			}
-			if (auto pLab = g.poloc_imm_pred(lab); pLab)
-				if (true && pLab->isAtLeastRelease() &&
-				    genmc::isa<WriteLabel>(pLab)) {
+			if (auto pLab = g.po_imm_pred(lab); pLab)
+				if (true && genmc::isa<WriteLabel>(pLab) &&
+				    (genmc::isa<CasReadLabel>(pLab) ||
+				     genmc::isa<FaiReadLabel>(pLab) ||
+				     genmc::isa<CasWriteLabel>(pLab) ||
+				     genmc::isa<FaiWriteLabel>(pLab))) {
 					auto status = visitedConsAcyclic2_17.getStatus(
 						pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
@@ -6014,17 +6910,9 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 			}
 
 			[[maybe_unused]] auto &g = *lab->getParent();
-			if (true && genmc::isa<WriteLabel>(lab) &&
-			    ((genmc::isa<ReadLabel>(lab) &&
-			      genmc::dyn_cast<ReadLabel>(lab)->isRMW()) ||
-			     (genmc::isa<WriteLabel>(lab) &&
-			      genmc::dyn_cast<WriteLabel>(lab)->isRMW())))
-				if (auto pLab = g.po_imm_pred(lab); pLab)
-					if (true && genmc::isa<ReadLabel>(pLab) &&
-					    ((genmc::isa<ReadLabel>(pLab) &&
-					      genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-					     (genmc::isa<WriteLabel>(pLab) &&
-					      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.addr_preds(lab))
+					if (auto *pLab = &tmp; true) {
 						auto status = visitedConsAcyclic2_0.getStatus(
 							pLab->getStamp().get());
 						if (status == NodeStatus::unseen) {
@@ -6039,7 +6927,7 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 						}
 					}
 			if (true && genmc::isa<WriteLabel>(lab))
-				for (auto &tmp : g.addr_preds(lab))
+				for (auto &tmp : g.cas_preds(lab))
 					if (auto *pLab = &tmp; true) {
 						auto status = visitedConsAcyclic2_0.getStatus(
 							pLab->getStamp().get());
@@ -6086,17 +6974,29 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 							return false; /* cycle detected */
 						}
 					}
-			if (true && genmc::isa<WriteLabel>(lab) &&
-			    ((genmc::isa<ReadLabel>(lab) &&
-			      genmc::dyn_cast<ReadLabel>(lab)->isRMW()) ||
-			     (genmc::isa<WriteLabel>(lab) &&
-			      genmc::dyn_cast<WriteLabel>(lab)->isRMW())))
+			if (true && genmc::isa<WriteLabel>(lab))
 				if (auto pLab = g.po_imm_pred(lab); pLab)
 					if (true && genmc::isa<ReadLabel>(pLab) &&
-					    ((genmc::isa<ReadLabel>(pLab) &&
-					      genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-					     (genmc::isa<WriteLabel>(pLab) &&
-					      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
+					    (genmc::isa<CasReadLabel>(pLab) ||
+					     genmc::isa<FaiReadLabel>(pLab) ||
+					     genmc::isa<CasWriteLabel>(pLab) ||
+					     genmc::isa<FaiWriteLabel>(pLab))) {
+						auto status = visitedConsAcyclic2_0.getStatus(
+							pLab->getStamp().get());
+						if (status == NodeStatus::unseen) {
+							worklist.emplace_back(0, pLab);
+						} else if (status == NodeStatus::entered &&
+							   (visitedConsAcyclic2Accepting >
+								    visitedConsAcyclic2_0.getCount(
+									    pLab->getStamp()
+										    .get()) ||
+							    0)) {
+							return false; /* cycle detected */
+						}
+					}
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.addr_preds(lab))
+					if (auto *pLab = &tmp; true) {
 						auto status = visitedConsAcyclic2_1.getStatus(
 							pLab->getStamp().get());
 						if (status == NodeStatus::unseen) {
@@ -6111,7 +7011,7 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 						}
 					}
 			if (true && genmc::isa<WriteLabel>(lab))
-				for (auto &tmp : g.addr_preds(lab))
+				for (auto &tmp : g.cas_preds(lab))
 					if (auto *pLab = &tmp; true) {
 						auto status = visitedConsAcyclic2_1.getStatus(
 							pLab->getStamp().get());
@@ -6172,15 +7072,35 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 						return false; /* cycle detected */
 					}
 				}
+			if (true && genmc::isa<WriteLabel>(lab))
+				if (auto pLab = g.po_imm_pred(lab); pLab)
+					if (true && genmc::isa<ReadLabel>(pLab) &&
+					    (genmc::isa<CasReadLabel>(pLab) ||
+					     genmc::isa<FaiReadLabel>(pLab) ||
+					     genmc::isa<CasWriteLabel>(pLab) ||
+					     genmc::isa<FaiWriteLabel>(pLab))) {
+						auto status = visitedConsAcyclic2_1.getStatus(
+							pLab->getStamp().get());
+						if (status == NodeStatus::unseen) {
+							worklist.emplace_back(1, pLab);
+						} else if (status == NodeStatus::entered &&
+							   (visitedConsAcyclic2Accepting >
+								    visitedConsAcyclic2_1.getCount(
+									    pLab->getStamp()
+										    .get()) ||
+							    0)) {
+							return false; /* cycle detected */
+						}
+					}
 			if (true && genmc::isa<FenceLabel>(lab))
 				if (auto pLab = g.po_imm_pred(lab); pLab) {
-					auto status = visitedConsAcyclic2_3.getStatus(
+					auto status = visitedConsAcyclic2_2.getStatus(
 						pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
-						worklist.emplace_back(3, pLab);
+						worklist.emplace_back(2, pLab);
 					} else if (status == NodeStatus::entered &&
 						   (visitedConsAcyclic2Accepting >
-							    visitedConsAcyclic2_3.getCount(
+							    visitedConsAcyclic2_2.getCount(
 								    pLab->getStamp().get()) ||
 						    0)) {
 						return false; /* cycle detected */
@@ -6188,13 +7108,13 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 				}
 			if (true && lab->isAtLeastRelease())
 				if (auto pLab = g.po_imm_pred(lab); pLab) {
-					auto status = visitedConsAcyclic2_3.getStatus(
+					auto status = visitedConsAcyclic2_2.getStatus(
 						pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
-						worklist.emplace_back(3, pLab);
+						worklist.emplace_back(2, pLab);
 					} else if (status == NodeStatus::entered &&
 						   (visitedConsAcyclic2Accepting >
-							    visitedConsAcyclic2_3.getCount(
+							    visitedConsAcyclic2_2.getCount(
 								    pLab->getStamp().get()) ||
 						    0)) {
 						return false; /* cycle detected */
@@ -6202,12 +7122,12 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 				}
 			if (auto pLab = g.po_imm_pred(lab); pLab) {
 				auto status =
-					visitedConsAcyclic2_4.getStatus(pLab->getStamp().get());
+					visitedConsAcyclic2_3.getStatus(pLab->getStamp().get());
 				if (status == NodeStatus::unseen) {
-					worklist.emplace_back(4, pLab);
+					worklist.emplace_back(3, pLab);
 				} else if (status == NodeStatus::entered &&
 					   (visitedConsAcyclic2Accepting >
-						    visitedConsAcyclic2_4.getCount(
+						    visitedConsAcyclic2_3.getCount(
 							    pLab->getStamp().get()) ||
 					    0)) {
 					return false; /* cycle detected */
@@ -6215,6 +7135,20 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 			}
 			if (true && genmc::isa<WriteLabel>(lab))
 				if (auto pLab = g.poloc_imm_pred(lab); pLab) {
+					auto status = visitedConsAcyclic2_4.getStatus(
+						pLab->getStamp().get());
+					if (status == NodeStatus::unseen) {
+						worklist.emplace_back(4, pLab);
+					} else if (status == NodeStatus::entered &&
+						   (visitedConsAcyclic2Accepting >
+							    visitedConsAcyclic2_4.getCount(
+								    pLab->getStamp().get()) ||
+						    0)) {
+						return false; /* cycle detected */
+					}
+				}
+			if (true && genmc::isa<WriteLabel>(lab))
+				if (auto pLab = g.po_imm_pred(lab); pLab) {
 					auto status = visitedConsAcyclic2_5.getStatus(
 						pLab->getStamp().get());
 					if (status == NodeStatus::unseen) {
@@ -6404,33 +7338,27 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 						return false; /* cycle detected */
 					}
 				}
-			if (true && genmc::isa<WriteLabel>(lab) &&
-			    ((genmc::isa<ReadLabel>(lab) &&
-			      genmc::dyn_cast<ReadLabel>(lab)->isRMW()) ||
-			     (genmc::isa<WriteLabel>(lab) &&
-			      genmc::dyn_cast<WriteLabel>(lab)->isRMW())))
-				if (auto pLab = g.po_imm_pred(lab); pLab)
-					if (true && genmc::isa<ReadLabel>(pLab) &&
-					    ((genmc::isa<ReadLabel>(pLab) &&
-					      genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-					     (genmc::isa<WriteLabel>(pLab) &&
-					      genmc::dyn_cast<WriteLabel>(pLab)->isRMW())) &&
-					    pLab->isDependable()) {
-						auto status = visitedConsAcyclic2_17.getStatus(
-							pLab->getStamp().get());
-						if (status == NodeStatus::unseen) {
-							worklist.emplace_back(17, pLab);
-						} else if (status == NodeStatus::entered &&
-							   (visitedConsAcyclic2Accepting >
-								    visitedConsAcyclic2_17.getCount(
-									    pLab->getStamp()
-										    .get()) ||
-							    1)) {
-							return false; /* cycle detected */
-						}
-					}
 			if (true && genmc::isa<WriteLabel>(lab))
 				for (auto &tmp : g.addr_preds(lab))
+					if (auto *pLab = &tmp; true)
+						if (true && pLab->isDependable()) {
+							auto status =
+								visitedConsAcyclic2_17.getStatus(
+									pLab->getStamp().get());
+							if (status == NodeStatus::unseen) {
+								worklist.emplace_back(17, pLab);
+							} else if (
+								status == NodeStatus::entered &&
+								(visitedConsAcyclic2Accepting >
+									 visitedConsAcyclic2_17.getCount(
+										 pLab->getStamp()
+											 .get()) ||
+								 1)) {
+								return false; /* cycle detected */
+							}
+						}
+			if (true && genmc::isa<WriteLabel>(lab))
+				for (auto &tmp : g.cas_preds(lab))
 					if (auto *pLab = &tmp; true)
 						if (true && pLab->isDependable()) {
 							auto status =
@@ -6487,6 +7415,47 @@ bool IMMChecker::visitConsAcyclic2Iterative(std::vector<DFSWorklistEntry> &workl
 							}
 						}
 			if (true && genmc::isa<WriteLabel>(lab))
+				if (auto pLab = g.po_imm_pred(lab); pLab)
+					if (true && genmc::isa<ReadLabel>(pLab) &&
+					    (genmc::isa<CasReadLabel>(pLab) ||
+					     genmc::isa<FaiReadLabel>(pLab) ||
+					     genmc::isa<CasWriteLabel>(pLab) ||
+					     genmc::isa<FaiWriteLabel>(pLab)) &&
+					    pLab->isDependable()) {
+						auto status = visitedConsAcyclic2_17.getStatus(
+							pLab->getStamp().get());
+						if (status == NodeStatus::unseen) {
+							worklist.emplace_back(17, pLab);
+						} else if (status == NodeStatus::entered &&
+							   (visitedConsAcyclic2Accepting >
+								    visitedConsAcyclic2_17.getCount(
+									    pLab->getStamp()
+										    .get()) ||
+							    1)) {
+							return false; /* cycle detected */
+						}
+					}
+			if (true && genmc::isa<WriteLabel>(lab))
+				if (auto pLab = g.po_imm_pred(lab); pLab)
+					if (true && genmc::isa<WriteLabel>(pLab) &&
+					    (genmc::isa<CasReadLabel>(pLab) ||
+					     genmc::isa<FaiReadLabel>(pLab) ||
+					     genmc::isa<CasWriteLabel>(pLab) ||
+					     genmc::isa<FaiWriteLabel>(pLab))) {
+						auto status = visitedConsAcyclic2_17.getStatus(
+							pLab->getStamp().get());
+						if (status == NodeStatus::unseen) {
+							worklist.emplace_back(17, pLab);
+						} else if (status == NodeStatus::entered &&
+							   (visitedConsAcyclic2Accepting >
+								    visitedConsAcyclic2_17.getCount(
+									    pLab->getStamp()
+										    .get()) ||
+							    1)) {
+							return false; /* cycle detected */
+						}
+					}
+			if (true && genmc::isa<WriteLabel>(lab))
 				if (auto pLab = g.poloc_imm_pred(lab); pLab)
 					if (true && pLab->isAtLeastRelease() &&
 					    genmc::isa<WriteLabel>(pLab)) {
@@ -6534,6 +7503,7 @@ bool IMMChecker::visitConsAcyclic2(const EventLabel *lab) const
 	visitedConsAcyclic2Accepting = 0;
 	visitedConsAcyclic2_0.maybeClearResize(g.getMaxStamp().get() + 1);
 	visitedConsAcyclic2_1.maybeClearResize(g.getMaxStamp().get() + 1);
+	visitedConsAcyclic2_2.maybeClearResize(g.getMaxStamp().get() + 1);
 	visitedConsAcyclic2_3.maybeClearResize(g.getMaxStamp().get() + 1);
 	visitedConsAcyclic2_4.maybeClearResize(g.getMaxStamp().get() + 1);
 	visitedConsAcyclic2_5.maybeClearResize(g.getMaxStamp().get() + 1);
@@ -6561,6 +7531,7 @@ bool IMMChecker::visitConsAcyclic2Full(const ExecutionGraph &g) const
 	visitedConsAcyclic2Accepting = 0;
 	visitedConsAcyclic2_0.maybeClearResize(g.getMaxStamp().get() + 1);
 	visitedConsAcyclic2_1.maybeClearResize(g.getMaxStamp().get() + 1);
+	visitedConsAcyclic2_2.maybeClearResize(g.getMaxStamp().get() + 1);
 	visitedConsAcyclic2_3.maybeClearResize(g.getMaxStamp().get() + 1);
 	visitedConsAcyclic2_4.maybeClearResize(g.getMaxStamp().get() + 1);
 	visitedConsAcyclic2_5.maybeClearResize(g.getMaxStamp().get() + 1);
@@ -7336,8 +8307,9 @@ IMMChecker::checkErrors([[maybe_unused]] const EventLabel *lab,
 }
 
 std::vector<VerificationError>
-IMMChecker::checkWarnings(const EventLabel *lab, const VSet<VerificationError> &seenWarnings,
-			  std::vector<const EventLabel *> &racyLabs) const
+IMMChecker::checkWarnings([[maybe_unused]] const EventLabel *lab,
+			  [[maybe_unused]] const VSet<VerificationError> &seenWarnings,
+			  [[maybe_unused]] std::vector<const EventLabel *> &racyLabs) const
 {
 	std::vector<VerificationError> result;
 
@@ -7365,701 +8337,6 @@ bool IMMChecker::isCoherentRelinche(const ExecutionGraph &g) const
 {
 
 	return true && visitCoherenceRelinche(g);
-}
-
-void IMMChecker::visitPPoRf0(const EventLabel *lab, DepView &pporf) const
-{
-	[[maybe_unused]] auto &g = *lab->getParent();
-
-	visitedPPoRf0[lab->getStamp().get()] = NodeStatus::entered;
-	pporf.updateIdx(lab->getPos());
-	visitedPPoRf0[lab->getStamp().get()] = NodeStatus::left;
-}
-
-void IMMChecker::visitPPoRf1(const EventLabel *lab, DepView &pporf) const
-{
-	[[maybe_unused]] auto &g = *lab->getParent();
-
-	visitedPPoRf1[lab->getStamp().get()] = NodeStatus::entered;
-	for (auto &tmp : g.ctrl_preds(lab))
-		if (auto *pLab = &tmp; true)
-			if (true && pLab->isDependable())
-				if (pporf.updateIdx(pLab->getPos()); true) {
-					auto status = visitedPPoRf0[pLab->getStamp().get()];
-					if (status == NodeStatus::unseen)
-						visitPPoRf0(pLab, pporf);
-				}
-	for (auto &tmp : g.data_preds(lab))
-		if (auto *pLab = &tmp; true)
-			if (true && pLab->isDependable())
-				if (pporf.updateIdx(pLab->getPos()); true) {
-					auto status = visitedPPoRf0[pLab->getStamp().get()];
-					if (status == NodeStatus::unseen)
-						visitPPoRf0(pLab, pporf);
-				}
-	for (auto &tmp : g.ctrl_preds(lab))
-		if (auto *pLab = &tmp; true) {
-			auto status = visitedPPoRf1[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf1(pLab, pporf);
-		}
-	for (auto &tmp : g.data_preds(lab))
-		if (auto *pLab = &tmp; true) {
-			auto status = visitedPPoRf1[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf1(pLab, pporf);
-		}
-	if (auto pLab = g.rfi_pred(lab); pLab) {
-		auto status = visitedPPoRf1[pLab->getStamp().get()];
-		if (status == NodeStatus::unseen)
-			visitPPoRf1(pLab, pporf);
-	}
-	for (auto &tmp : g.ctrl_preds(lab))
-		if (auto *pLab = &tmp; true) {
-			auto status = visitedPPoRf2[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf2(pLab, pporf);
-		}
-	for (auto &tmp : g.data_preds(lab))
-		if (auto *pLab = &tmp; true) {
-			auto status = visitedPPoRf2[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf2(pLab, pporf);
-		}
-	if (auto pLab = g.rfi_pred(lab); pLab) {
-		auto status = visitedPPoRf2[pLab->getStamp().get()];
-		if (status == NodeStatus::unseen)
-			visitPPoRf2(pLab, pporf);
-	}
-	if (auto pLab = g.rfi_pred(lab); pLab)
-		if (true && genmc::isa<WriteLabel>(pLab) &&
-		    ((genmc::isa<ReadLabel>(pLab) && genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-		     (genmc::isa<WriteLabel>(pLab) &&
-		      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
-			auto status = visitedPPoRf3[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf3(pLab, pporf);
-		}
-	for (auto &tmp : g.ctrl_preds(lab))
-		if (auto *pLab = &tmp; true)
-			if (true && pLab->isDependable()) {
-				auto status = visitedPPoRf4[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf4(pLab, pporf);
-			}
-	for (auto &tmp : g.data_preds(lab))
-		if (auto *pLab = &tmp; true)
-			if (true && pLab->isDependable()) {
-				auto status = visitedPPoRf4[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf4(pLab, pporf);
-			}
-	for (auto &tmp : g.ctrl_preds(lab))
-		if (auto *pLab = &tmp; true)
-			if (true && pLab->isDependable()) {
-				auto status = visitedPPoRf6[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf6(pLab, pporf);
-			}
-	for (auto &tmp : g.data_preds(lab))
-		if (auto *pLab = &tmp; true)
-			if (true && pLab->isDependable()) {
-				auto status = visitedPPoRf6[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf6(pLab, pporf);
-			}
-	visitedPPoRf1[lab->getStamp().get()] = NodeStatus::left;
-}
-
-void IMMChecker::visitPPoRf2(const EventLabel *lab, DepView &pporf) const
-{
-	[[maybe_unused]] auto &g = *lab->getParent();
-
-	visitedPPoRf2[lab->getStamp().get()] = NodeStatus::entered;
-	for (auto &tmp : g.addr_preds(lab))
-		if (auto *pLab = &tmp; true)
-			if (true && pLab->isDependable())
-				if (pporf.updateIdx(pLab->getPos()); true) {
-					auto status = visitedPPoRf0[pLab->getStamp().get()];
-					if (status == NodeStatus::unseen)
-						visitPPoRf0(pLab, pporf);
-				}
-	for (auto &tmp : g.addr_preds(lab))
-		if (auto *pLab = &tmp; true) {
-			auto status = visitedPPoRf1[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf1(pLab, pporf);
-		}
-	for (auto &tmp : g.addr_preds(lab))
-		if (auto *pLab = &tmp; true) {
-			auto status = visitedPPoRf2[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf2(pLab, pporf);
-		}
-	if (auto pLab = g.po_imm_pred(lab); pLab) {
-		auto status = visitedPPoRf2[pLab->getStamp().get()];
-		if (status == NodeStatus::unseen)
-			visitPPoRf2(pLab, pporf);
-	}
-	for (auto &tmp : g.addr_preds(lab))
-		if (auto *pLab = &tmp; true)
-			if (true && pLab->isDependable()) {
-				auto status = visitedPPoRf4[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf4(pLab, pporf);
-			}
-	for (auto &tmp : g.addr_preds(lab))
-		if (auto *pLab = &tmp; true)
-			if (true && pLab->isDependable()) {
-				auto status = visitedPPoRf6[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf6(pLab, pporf);
-			}
-	visitedPPoRf2[lab->getStamp().get()] = NodeStatus::left;
-}
-
-void IMMChecker::visitPPoRf3(const EventLabel *lab, DepView &pporf) const
-{
-	[[maybe_unused]] auto &g = *lab->getParent();
-
-	visitedPPoRf3[lab->getStamp().get()] = NodeStatus::entered;
-	if (auto pLab = g.po_imm_pred(lab); pLab)
-		if (true && genmc::isa<ReadLabel>(pLab) &&
-		    ((genmc::isa<ReadLabel>(pLab) && genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-		     (genmc::isa<WriteLabel>(pLab) &&
-		      genmc::dyn_cast<WriteLabel>(pLab)->isRMW())) &&
-		    pLab->isDependable())
-			if (pporf.updateIdx(pLab->getPos()); true) {
-				auto status = visitedPPoRf0[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf0(pLab, pporf);
-			}
-	if (auto pLab = g.po_imm_pred(lab); pLab)
-		if (true && genmc::isa<ReadLabel>(pLab) &&
-		    ((genmc::isa<ReadLabel>(pLab) && genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-		     (genmc::isa<WriteLabel>(pLab) &&
-		      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
-			auto status = visitedPPoRf1[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf1(pLab, pporf);
-		}
-	if (auto pLab = g.po_imm_pred(lab); pLab)
-		if (true && genmc::isa<ReadLabel>(pLab) &&
-		    ((genmc::isa<ReadLabel>(pLab) && genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-		     (genmc::isa<WriteLabel>(pLab) &&
-		      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
-			auto status = visitedPPoRf2[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf2(pLab, pporf);
-		}
-	if (auto pLab = g.po_imm_pred(lab); pLab)
-		if (true && genmc::isa<ReadLabel>(pLab) &&
-		    ((genmc::isa<ReadLabel>(pLab) && genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-		     (genmc::isa<WriteLabel>(pLab) &&
-		      genmc::dyn_cast<WriteLabel>(pLab)->isRMW())) &&
-		    pLab->isDependable()) {
-			auto status = visitedPPoRf4[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf4(pLab, pporf);
-		}
-	if (auto pLab = g.po_imm_pred(lab); pLab)
-		if (true && genmc::isa<ReadLabel>(pLab) &&
-		    ((genmc::isa<ReadLabel>(pLab) && genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-		     (genmc::isa<WriteLabel>(pLab) &&
-		      genmc::dyn_cast<WriteLabel>(pLab)->isRMW())) &&
-		    pLab->isDependable()) {
-			auto status = visitedPPoRf6[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf6(pLab, pporf);
-		}
-	visitedPPoRf3[lab->getStamp().get()] = NodeStatus::left;
-}
-
-void IMMChecker::visitPPoRf4(const EventLabel *lab, DepView &pporf) const
-{
-	[[maybe_unused]] auto &g = *lab->getParent();
-
-	visitedPPoRf4[lab->getStamp().get()] = NodeStatus::entered;
-	if (auto pLab = g.tc_pred(lab); pLab)
-		if (pporf.updateIdx(pLab->getPos()); true) {
-			auto status = visitedPPoRf0[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf0(pLab, pporf);
-		}
-	if (auto pLab = g.tj_pred(lab); pLab)
-		if (pporf.updateIdx(pLab->getPos()); true) {
-			auto status = visitedPPoRf0[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf0(pLab, pporf);
-		}
-	for (auto &tmp : g.lin_preds(lab))
-		if (auto *pLab = &tmp; true)
-			if (pporf.updateIdx(pLab->getPos()); true) {
-				auto status = visitedPPoRf0[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf0(pLab, pporf);
-			}
-	if (auto pLab = g.rfe_pred(lab); pLab)
-		if (pporf.updateIdx(pLab->getPos()); true) {
-			auto status = visitedPPoRf0[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf0(pLab, pporf);
-		}
-	if (true && genmc::isa<WriteLabel>(lab))
-		for (auto &tmp : g.ctrl_preds(lab))
-			if (auto *pLab = &tmp; true)
-				if (true && pLab->isDependable())
-					if (pporf.updateIdx(pLab->getPos()); true) {
-						auto status = visitedPPoRf0[pLab->getStamp().get()];
-						if (status == NodeStatus::unseen)
-							visitPPoRf0(pLab, pporf);
-					}
-	if (true && genmc::isa<WriteLabel>(lab))
-		for (auto &tmp : g.addr_preds(lab))
-			if (auto *pLab = &tmp; true)
-				if (true && pLab->isDependable())
-					if (pporf.updateIdx(pLab->getPos()); true) {
-						auto status = visitedPPoRf0[pLab->getStamp().get()];
-						if (status == NodeStatus::unseen)
-							visitPPoRf0(pLab, pporf);
-					}
-	if (true && genmc::isa<WriteLabel>(lab))
-		for (auto &tmp : g.data_preds(lab))
-			if (auto *pLab = &tmp; true)
-				if (true && pLab->isDependable())
-					if (pporf.updateIdx(pLab->getPos()); true) {
-						auto status = visitedPPoRf0[pLab->getStamp().get()];
-						if (status == NodeStatus::unseen)
-							visitPPoRf0(pLab, pporf);
-					}
-	for (auto &tmp : g.detour_preds(lab))
-		if (auto *pLab = &tmp; true)
-			if (pporf.updateIdx(pLab->getPos()); true) {
-				auto status = visitedPPoRf0[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf0(pLab, pporf);
-			}
-	if (true && genmc::isa<WriteLabel>(lab))
-		if (auto pLab = g.poloc_imm_pred(lab); pLab)
-			if (true && pLab->isAtLeastRelease() && genmc::isa<WriteLabel>(pLab))
-				if (pporf.updateIdx(pLab->getPos()); true) {
-					auto status = visitedPPoRf0[pLab->getStamp().get()];
-					if (status == NodeStatus::unseen)
-						visitPPoRf0(pLab, pporf);
-				}
-	if (true && genmc::isa<WriteLabel>(lab) &&
-	    ((genmc::isa<ReadLabel>(lab) && genmc::dyn_cast<ReadLabel>(lab)->isRMW()) ||
-	     (genmc::isa<WriteLabel>(lab) && genmc::dyn_cast<WriteLabel>(lab)->isRMW())))
-		if (auto pLab = g.po_imm_pred(lab); pLab)
-			if (true && genmc::isa<ReadLabel>(pLab) &&
-			    ((genmc::isa<ReadLabel>(pLab) &&
-			      genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-			     (genmc::isa<WriteLabel>(pLab) &&
-			      genmc::dyn_cast<WriteLabel>(pLab)->isRMW())) &&
-			    pLab->isDependable())
-				if (pporf.updateIdx(pLab->getPos()); true) {
-					auto status = visitedPPoRf0[pLab->getStamp().get()];
-					if (status == NodeStatus::unseen)
-						visitPPoRf0(pLab, pporf);
-				}
-	if (true && genmc::isa<WriteLabel>(lab))
-		for (auto &tmp : g.ctrl_preds(lab))
-			if (auto *pLab = &tmp; true) {
-				auto status = visitedPPoRf1[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf1(pLab, pporf);
-			}
-	if (true && genmc::isa<WriteLabel>(lab))
-		for (auto &tmp : g.addr_preds(lab))
-			if (auto *pLab = &tmp; true) {
-				auto status = visitedPPoRf1[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf1(pLab, pporf);
-			}
-	if (true && genmc::isa<WriteLabel>(lab))
-		for (auto &tmp : g.data_preds(lab))
-			if (auto *pLab = &tmp; true) {
-				auto status = visitedPPoRf1[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf1(pLab, pporf);
-			}
-	if (true && genmc::isa<WriteLabel>(lab) &&
-	    ((genmc::isa<ReadLabel>(lab) && genmc::dyn_cast<ReadLabel>(lab)->isRMW()) ||
-	     (genmc::isa<WriteLabel>(lab) && genmc::dyn_cast<WriteLabel>(lab)->isRMW())))
-		if (auto pLab = g.po_imm_pred(lab); pLab)
-			if (true && genmc::isa<ReadLabel>(pLab) &&
-			    ((genmc::isa<ReadLabel>(pLab) &&
-			      genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-			     (genmc::isa<WriteLabel>(pLab) &&
-			      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
-				auto status = visitedPPoRf1[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf1(pLab, pporf);
-			}
-	if (true && genmc::isa<WriteLabel>(lab))
-		for (auto &tmp : g.ctrl_preds(lab))
-			if (auto *pLab = &tmp; true) {
-				auto status = visitedPPoRf2[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf2(pLab, pporf);
-			}
-	if (true && genmc::isa<WriteLabel>(lab))
-		for (auto &tmp : g.addr_preds(lab))
-			if (auto *pLab = &tmp; true) {
-				auto status = visitedPPoRf2[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf2(pLab, pporf);
-			}
-	if (true && genmc::isa<WriteLabel>(lab))
-		for (auto &tmp : g.data_preds(lab))
-			if (auto *pLab = &tmp; true) {
-				auto status = visitedPPoRf2[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf2(pLab, pporf);
-			}
-	if (true && genmc::isa<WriteLabel>(lab))
-		if (auto pLab = g.po_imm_pred(lab); pLab) {
-			auto status = visitedPPoRf2[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf2(pLab, pporf);
-		}
-	if (true && genmc::isa<WriteLabel>(lab) &&
-	    ((genmc::isa<ReadLabel>(lab) && genmc::dyn_cast<ReadLabel>(lab)->isRMW()) ||
-	     (genmc::isa<WriteLabel>(lab) && genmc::dyn_cast<WriteLabel>(lab)->isRMW())))
-		if (auto pLab = g.po_imm_pred(lab); pLab)
-			if (true && genmc::isa<ReadLabel>(pLab) &&
-			    ((genmc::isa<ReadLabel>(pLab) &&
-			      genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-			     (genmc::isa<WriteLabel>(pLab) &&
-			      genmc::dyn_cast<WriteLabel>(pLab)->isRMW()))) {
-				auto status = visitedPPoRf2[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf2(pLab, pporf);
-			}
-	if (auto pLab = g.tc_pred(lab); pLab) {
-		auto status = visitedPPoRf4[pLab->getStamp().get()];
-		if (status == NodeStatus::unseen)
-			visitPPoRf4(pLab, pporf);
-	}
-	if (auto pLab = g.tj_pred(lab); pLab) {
-		auto status = visitedPPoRf4[pLab->getStamp().get()];
-		if (status == NodeStatus::unseen)
-			visitPPoRf4(pLab, pporf);
-	}
-	for (auto &tmp : g.lin_preds(lab))
-		if (auto *pLab = &tmp; true) {
-			auto status = visitedPPoRf4[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf4(pLab, pporf);
-		}
-	if (auto pLab = g.rfe_pred(lab); pLab) {
-		auto status = visitedPPoRf4[pLab->getStamp().get()];
-		if (status == NodeStatus::unseen)
-			visitPPoRf4(pLab, pporf);
-	}
-	if (true && genmc::isa<WriteLabel>(lab))
-		for (auto &tmp : g.ctrl_preds(lab))
-			if (auto *pLab = &tmp; true)
-				if (true && pLab->isDependable()) {
-					auto status = visitedPPoRf4[pLab->getStamp().get()];
-					if (status == NodeStatus::unseen)
-						visitPPoRf4(pLab, pporf);
-				}
-	if (true && genmc::isa<WriteLabel>(lab))
-		for (auto &tmp : g.addr_preds(lab))
-			if (auto *pLab = &tmp; true)
-				if (true && pLab->isDependable()) {
-					auto status = visitedPPoRf4[pLab->getStamp().get()];
-					if (status == NodeStatus::unseen)
-						visitPPoRf4(pLab, pporf);
-				}
-	if (true && genmc::isa<WriteLabel>(lab))
-		for (auto &tmp : g.data_preds(lab))
-			if (auto *pLab = &tmp; true)
-				if (true && pLab->isDependable()) {
-					auto status = visitedPPoRf4[pLab->getStamp().get()];
-					if (status == NodeStatus::unseen)
-						visitPPoRf4(pLab, pporf);
-				}
-	for (auto &tmp : g.detour_preds(lab))
-		if (auto *pLab = &tmp; true) {
-			auto status = visitedPPoRf4[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf4(pLab, pporf);
-		}
-	if (true && genmc::isa<WriteLabel>(lab))
-		if (auto pLab = g.poloc_imm_pred(lab); pLab)
-			if (true && pLab->isAtLeastRelease() && genmc::isa<WriteLabel>(pLab)) {
-				auto status = visitedPPoRf4[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf4(pLab, pporf);
-			}
-	if (true && lab->isAtLeastRelease())
-		if (auto pLab = g.po_imm_pred(lab); pLab) {
-			auto status = visitedPPoRf4[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf4(pLab, pporf);
-		}
-	if (true && genmc::isa<WriteLabel>(lab) &&
-	    ((genmc::isa<ReadLabel>(lab) && genmc::dyn_cast<ReadLabel>(lab)->isRMW()) ||
-	     (genmc::isa<WriteLabel>(lab) && genmc::dyn_cast<WriteLabel>(lab)->isRMW())))
-		if (auto pLab = g.po_imm_pred(lab); pLab)
-			if (true && genmc::isa<ReadLabel>(pLab) &&
-			    ((genmc::isa<ReadLabel>(pLab) &&
-			      genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-			     (genmc::isa<WriteLabel>(pLab) &&
-			      genmc::dyn_cast<WriteLabel>(pLab)->isRMW())) &&
-			    pLab->isDependable()) {
-				auto status = visitedPPoRf4[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf4(pLab, pporf);
-			}
-	if (true && genmc::isa<FenceLabel>(lab))
-		if (auto pLab = g.po_imm_pred(lab); pLab) {
-			auto status = visitedPPoRf4[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf4(pLab, pporf);
-		}
-	if (true && lab->isAtLeastRelease())
-		if (auto pLab = g.po_imm_pred(lab); pLab)
-			if (pporf.updateIdx(pLab->getPos()); true) {
-				auto status = visitedPPoRf5[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf5(pLab, pporf);
-			}
-	if (true && genmc::isa<FenceLabel>(lab))
-		if (auto pLab = g.po_imm_pred(lab); pLab)
-			if (pporf.updateIdx(pLab->getPos()); true) {
-				auto status = visitedPPoRf5[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf5(pLab, pporf);
-			}
-	if (auto pLab = g.tc_pred(lab); pLab) {
-		auto status = visitedPPoRf6[pLab->getStamp().get()];
-		if (status == NodeStatus::unseen)
-			visitPPoRf6(pLab, pporf);
-	}
-	if (auto pLab = g.tj_pred(lab); pLab) {
-		auto status = visitedPPoRf6[pLab->getStamp().get()];
-		if (status == NodeStatus::unseen)
-			visitPPoRf6(pLab, pporf);
-	}
-	for (auto &tmp : g.lin_preds(lab))
-		if (auto *pLab = &tmp; true) {
-			auto status = visitedPPoRf6[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf6(pLab, pporf);
-		}
-	if (auto pLab = g.rfe_pred(lab); pLab) {
-		auto status = visitedPPoRf6[pLab->getStamp().get()];
-		if (status == NodeStatus::unseen)
-			visitPPoRf6(pLab, pporf);
-	}
-	if (true && genmc::isa<WriteLabel>(lab))
-		for (auto &tmp : g.ctrl_preds(lab))
-			if (auto *pLab = &tmp; true)
-				if (true && pLab->isDependable()) {
-					auto status = visitedPPoRf6[pLab->getStamp().get()];
-					if (status == NodeStatus::unseen)
-						visitPPoRf6(pLab, pporf);
-				}
-	if (true && genmc::isa<WriteLabel>(lab))
-		for (auto &tmp : g.addr_preds(lab))
-			if (auto *pLab = &tmp; true)
-				if (true && pLab->isDependable()) {
-					auto status = visitedPPoRf6[pLab->getStamp().get()];
-					if (status == NodeStatus::unseen)
-						visitPPoRf6(pLab, pporf);
-				}
-	if (true && genmc::isa<WriteLabel>(lab))
-		for (auto &tmp : g.data_preds(lab))
-			if (auto *pLab = &tmp; true)
-				if (true && pLab->isDependable()) {
-					auto status = visitedPPoRf6[pLab->getStamp().get()];
-					if (status == NodeStatus::unseen)
-						visitPPoRf6(pLab, pporf);
-				}
-	for (auto &tmp : g.detour_preds(lab))
-		if (auto *pLab = &tmp; true) {
-			auto status = visitedPPoRf6[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf6(pLab, pporf);
-		}
-	if (true && genmc::isa<WriteLabel>(lab))
-		if (auto pLab = g.poloc_imm_pred(lab); pLab)
-			if (true && pLab->isAtLeastRelease() && genmc::isa<WriteLabel>(pLab)) {
-				auto status = visitedPPoRf6[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf6(pLab, pporf);
-			}
-	if (true && lab->isAtLeastRelease())
-		if (auto pLab = g.po_imm_pred(lab); pLab) {
-			auto status = visitedPPoRf6[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf6(pLab, pporf);
-		}
-	if (true && genmc::isa<WriteLabel>(lab) &&
-	    ((genmc::isa<ReadLabel>(lab) && genmc::dyn_cast<ReadLabel>(lab)->isRMW()) ||
-	     (genmc::isa<WriteLabel>(lab) && genmc::dyn_cast<WriteLabel>(lab)->isRMW())))
-		if (auto pLab = g.po_imm_pred(lab); pLab)
-			if (true && genmc::isa<ReadLabel>(pLab) &&
-			    ((genmc::isa<ReadLabel>(pLab) &&
-			      genmc::dyn_cast<ReadLabel>(pLab)->isRMW()) ||
-			     (genmc::isa<WriteLabel>(pLab) &&
-			      genmc::dyn_cast<WriteLabel>(pLab)->isRMW())) &&
-			    pLab->isDependable()) {
-				auto status = visitedPPoRf6[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf6(pLab, pporf);
-			}
-	if (true && genmc::isa<FenceLabel>(lab))
-		if (auto pLab = g.po_imm_pred(lab); pLab) {
-			auto status = visitedPPoRf6[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf6(pLab, pporf);
-		}
-	if (true && genmc::isa<WriteLabel>(lab))
-		if (auto pLab = g.poloc_imm_pred(lab); pLab) {
-			auto status = visitedPPoRf7[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf7(pLab, pporf);
-		}
-	visitedPPoRf4[lab->getStamp().get()] = NodeStatus::left;
-}
-
-void IMMChecker::visitPPoRf5(const EventLabel *lab, DepView &pporf) const
-{
-	[[maybe_unused]] auto &g = *lab->getParent();
-
-	visitedPPoRf5[lab->getStamp().get()] = NodeStatus::entered;
-	pporf.updateIdx(lab->getPos());
-	if (auto pLab = g.po_imm_pred(lab); pLab) {
-		auto status = visitedPPoRf4[pLab->getStamp().get()];
-		if (status == NodeStatus::unseen)
-			visitPPoRf4(pLab, pporf);
-	}
-	if (auto pLab = g.po_imm_pred(lab); pLab)
-		if (pporf.updateIdx(pLab->getPos()); true) {
-			auto status = visitedPPoRf5[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf5(pLab, pporf);
-		}
-	visitedPPoRf5[lab->getStamp().get()] = NodeStatus::left;
-}
-
-void IMMChecker::visitPPoRf6(const EventLabel *lab, DepView &pporf) const
-{
-	[[maybe_unused]] auto &g = *lab->getParent();
-
-	visitedPPoRf6[lab->getStamp().get()] = NodeStatus::entered;
-	if (auto pLab = g.po_imm_pred(lab); pLab)
-		if (true && pLab->isAtLeastAcquire())
-			if (pporf.updateIdx(pLab->getPos()); true) {
-				auto status = visitedPPoRf0[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf0(pLab, pporf);
-			}
-	if (auto pLab = g.po_imm_pred(lab); pLab)
-		if (true && genmc::isa<FenceLabel>(pLab))
-			if (pporf.updateIdx(pLab->getPos()); true) {
-				auto status = visitedPPoRf0[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf0(pLab, pporf);
-			}
-	if (auto pLab = g.po_imm_pred(lab); pLab)
-		if (true && pLab->isAtLeastAcquire()) {
-			auto status = visitedPPoRf4[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf4(pLab, pporf);
-		}
-	if (auto pLab = g.po_imm_pred(lab); pLab)
-		if (true && genmc::isa<FenceLabel>(pLab)) {
-			auto status = visitedPPoRf4[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf4(pLab, pporf);
-		}
-	if (auto pLab = g.po_imm_pred(lab); pLab) {
-		auto status = visitedPPoRf6[pLab->getStamp().get()];
-		if (status == NodeStatus::unseen)
-			visitPPoRf6(pLab, pporf);
-	}
-	if (auto pLab = g.po_imm_pred(lab); pLab)
-		if (true && pLab->isAtLeastAcquire()) {
-			auto status = visitedPPoRf6[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf6(pLab, pporf);
-		}
-	if (auto pLab = g.po_imm_pred(lab); pLab)
-		if (true && genmc::isa<FenceLabel>(pLab)) {
-			auto status = visitedPPoRf6[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf6(pLab, pporf);
-		}
-	visitedPPoRf6[lab->getStamp().get()] = NodeStatus::left;
-}
-
-void IMMChecker::visitPPoRf7(const EventLabel *lab, DepView &pporf) const
-{
-	[[maybe_unused]] auto &g = *lab->getParent();
-
-	visitedPPoRf7[lab->getStamp().get()] = NodeStatus::entered;
-	if (auto pLab = g.poloc_imm_pred(lab); pLab)
-		if (true && pLab->isAtLeastRelease() && genmc::isa<WriteLabel>(pLab))
-			if (pporf.updateIdx(pLab->getPos()); true) {
-				auto status = visitedPPoRf0[pLab->getStamp().get()];
-				if (status == NodeStatus::unseen)
-					visitPPoRf0(pLab, pporf);
-			}
-	if (auto pLab = g.poloc_imm_pred(lab); pLab)
-		if (true && pLab->isAtLeastRelease() && genmc::isa<WriteLabel>(pLab)) {
-			auto status = visitedPPoRf4[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf4(pLab, pporf);
-		}
-	if (auto pLab = g.poloc_imm_pred(lab); pLab)
-		if (true && pLab->isAtLeastRelease() && genmc::isa<WriteLabel>(pLab)) {
-			auto status = visitedPPoRf6[pLab->getStamp().get()];
-			if (status == NodeStatus::unseen)
-				visitPPoRf6(pLab, pporf);
-		}
-	if (auto pLab = g.poloc_imm_pred(lab); pLab) {
-		auto status = visitedPPoRf7[pLab->getStamp().get()];
-		if (status == NodeStatus::unseen)
-			visitPPoRf7(pLab, pporf);
-	}
-	visitedPPoRf7[lab->getStamp().get()] = NodeStatus::left;
-}
-
-DepView IMMChecker::calcPPoRfBefore(const EventLabel *lab) const
-{
-	[[maybe_unused]] auto &g = *lab->getParent();
-	DepView pporf;
-	pporf.updateIdx(lab->getPos());
-	visitedPPoRf0.clear();
-	visitedPPoRf0.resize(g.getMaxStamp().get() + 1, NodeStatus::unseen);
-	visitedPPoRf1.clear();
-	visitedPPoRf1.resize(g.getMaxStamp().get() + 1, NodeStatus::unseen);
-	visitedPPoRf2.clear();
-	visitedPPoRf2.resize(g.getMaxStamp().get() + 1, NodeStatus::unseen);
-	visitedPPoRf3.clear();
-	visitedPPoRf3.resize(g.getMaxStamp().get() + 1, NodeStatus::unseen);
-	visitedPPoRf4.clear();
-	visitedPPoRf4.resize(g.getMaxStamp().get() + 1, NodeStatus::unseen);
-	visitedPPoRf5.clear();
-	visitedPPoRf5.resize(g.getMaxStamp().get() + 1, NodeStatus::unseen);
-	visitedPPoRf6.clear();
-	visitedPPoRf6.resize(g.getMaxStamp().get() + 1, NodeStatus::unseen);
-	visitedPPoRf7.clear();
-	visitedPPoRf7.resize(g.getMaxStamp().get() + 1, NodeStatus::unseen);
-
-	visitPPoRf4(lab, pporf);
-	visitPPoRf6(lab, pporf);
-	return pporf;
-}
-
-std::unique_ptr<VectorClock> IMMChecker::calculatePrefixView(const EventLabel *lab) const
-{
-	return std::make_unique<DepView>(calcPPoRfBefore(lab));
 }
 
 void IMMChecker::recomputeCacheCounters([[maybe_unused]] const ExecutionGraph &g) const

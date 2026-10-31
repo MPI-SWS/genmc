@@ -166,7 +166,7 @@ void ReadLabel::setRf(EventLabel *rfLab)
 		UNREACHABLE();
 
 	/* and adjust the max flag... */
-	this->setAddedMax(getParent()->co_max(this->getAddr()) == rfLab);
+	this->setAddedMax(getParent()->getConsChecker()->getMaximalRf(this) == rfLab);
 
 	/* as well as orderings for CASes. Don't try to resolve values from
 	 * reads of uninitialized dynamic memory */
@@ -190,7 +190,9 @@ void WriteLabel::moveCo(EventLabel *predLab)
 	auto &g = *getParent();
 	g.coherence[getAddr()].remove(*this);
 	addCo(predLab);
-	this->setAddedMax(this == &g.coherence[getAddr()].back());
+	const EventLabel *coPred = g.co_imm_pred(this);
+	this->setAddedMax((coPred ? coPred : g.getInitLabel()) ==
+			  g.getConsChecker()->getMaximalCo(this));
 }
 
 auto BlockLabel::createAssumeBlock(Event pos, AssumeType type) -> std::unique_ptr<BlockLabel>

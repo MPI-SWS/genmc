@@ -203,8 +203,8 @@ public:
 	auto handle##name(const EventDbgInfo *dbg, Event pos, GENMC_OLD_VAL_ARG MemOrdering ord,   \
 			  MemOrdering failOrd, SAddr addr, ASize size, SVal exp, SVal swap,        \
 			  WriteAttr wattr, bool weak, EventLabel *rfLab,                           \
-			  const std::optional<Annotation> &annot, const EventDeps &deps)           \
-		-> HandleResult<CasReadResult>;
+			  const std::optional<Annotation> &annot, const EventDeps &deps,           \
+			  const EventDeps &wDeps) -> HandleResult<CasReadResult>;
 
 #define HANDLE_LOCK_LOAD_LABEL(name)                                                               \
 	auto handle##name(const EventDbgInfo *dbg, Event pos, GENMC_OLD_VAL_ARG SAddr addr,        \
@@ -215,7 +215,7 @@ public:
 	auto handle##name(const EventDbgInfo *dbg, Event pos, GENMC_OLD_VAL_ARG MemOrdering ord,   \
 			  SAddr addr, ASize size, RMWBinOp op, SVal val, WriteAttr wattr,          \
 			  EventLabel *rfLab, const std::optional<Annotation> &annot,               \
-			  const EventDeps &deps) -> HandleResult<SVal>;
+			  const EventDeps &deps, const EventDeps &wDeps) -> HandleResult<SVal>;
 
 #define HANDLE_STORE_LABEL(name)                                                                   \
 	auto handle##name(const EventDbgInfo *dbg, Event pos, GENMC_OLD_VAL_ARG MemOrdering ord,   \
@@ -575,8 +575,6 @@ private:
 	auto getRevisitView(const ReadLabel *rLab, const WriteLabel *sLab) const
 		-> std::unique_ptr<VectorClock>;
 
-	auto isCoBeforeSavedPrefix(const BackwardRevisit &r, const EventLabel *lab) -> bool;
-
 	auto coherenceSuccRemainInGraph(const BackwardRevisit &r) -> bool;
 
 	/** Returns true if all events to be removed by the revisit
@@ -738,12 +736,6 @@ private:
 	/** Returns an approximation of the reads that SLAB can revisit.
 	 * The reads are ordered in reverse-addition order */
 	virtual auto getRevisitableApproximation(WriteLabel *sLab) -> std::vector<ReadLabel *>;
-
-	/** Returns a vector clock representing the prefix of e,
-	 * including e but not e's external dependencies (rf, threadCreate, threadEnd).
-	 * Depending on whether dependencies are tracked, the prefix can be
-	 * either (po U rf) or (AR U rf) */
-	auto getPrefixView(const EventLabel *lab) const -> const VectorClock &;
 
 	/** Random generator facilities used */
 	using MyRNG = std::mt19937;

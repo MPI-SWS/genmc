@@ -2,6 +2,8 @@ site_name: GenMC Documentation
 
 theme:
   name: material
+  logo: assets/logo/genmc-mark-dark.svg
+  favicon: assets/logo/favicon.svg
   features:
     - navigation.sections
     - navigation.expand
@@ -11,12 +13,15 @@ theme:
     - scheme: default
       primary: teal
       accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
     - scheme: slate
       primary: teal
       accent: purple
       toggle:
         icon: material/brightness-4
-        name: Switch to dark mode
+        name: Switch to light mode
 
 docs_dir: doc/manual
 

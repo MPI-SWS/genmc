@@ -221,7 +221,6 @@ public:
 	{
 		return DELEGATE_LABEL(EventLabel);
 	}
-	void visitEmptyLabel(const EmptyLabel &lab) { return DELEGATE_LABEL(EventLabel); }
 	void visitMethodBeginLabel(const MethodBeginLabel &lab)
 	{
 		return DELEGATE_LABEL(EventLabel);

@@ -606,8 +606,8 @@ private: // Helper functions
 
 	/* Dependency tracking */
 
-	DepTracker *getDepTracker() { return &*dynState.depTracker; }
-	const DepTracker *getDepTracker() const { return &*dynState.depTracker; }
+	DepTracker *getDepTracker() { return dynState.depTracker.get(); }
+	const DepTracker *getDepTracker() const { return dynState.depTracker.get(); }
 
 	std::unique_ptr<EventDeps> makeEventDeps(const DepInfo *addr, const DepInfo *data,
 						 const DepInfo *ctrl, const DepInfo *addrPo,

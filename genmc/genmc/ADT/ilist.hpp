@@ -190,7 +190,21 @@ public:
 	/** Ctors/dtors */
 	ilist() { sentinel_.prev_ = sentinel_.next_ = &sentinel_; }
 	ilist(const ilist &other) = delete;
-	ilist(ilist &&other) noexcept : ilist() { splice(std::move(other)); }
+	ilist(ilist &&other) noexcept : ilist()
+	{
+		/* AppleClang/libc++ < 20 is broken and grows vectors with memcpy even when it
+		 * shouldn't, since its definition for trivially relocatable types was wrong.
+		 * The #ifdef exists because only libc++ < 20 consults the broken builtin, and
+		 * newer compilers consult a different one (__builtin_is_cpp_trivially_relocatable)
+		 */
+#if defined(_LIBCPP_VERSION) && _LIBCPP_VERSION < 200000 &&                                        \
+	__has_builtin(__is_trivially_relocatable) &&                                               \
+	!__has_builtin(__builtin_is_cpp_trivially_relocatable)
+		static_assert(!__is_trivially_relocatable(ilist),
+			      "ilist must not be relocated with memcpy (nodes point to sentinel_)");
+#endif
+		splice(std::move(other));
+	}
 	auto operator=(const ilist &) -> ilist & = delete;
 	auto operator=(ilist &&other) noexcept -> ilist &
 	{
@@ -198,7 +212,8 @@ public:
 		splice(std::move(other));
 		return *this;
 	}
-	~ilist() = default;
+	/* Not-default dtor so that ilist is not trivially relocatable */
+	~ilist() {} // NOLINT(modernize-use-equals-default)
 
 	/** Iterators */
 	auto begin() noexcept -> iterator { return ++iterator(sentinel_); }

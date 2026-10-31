@@ -117,7 +117,7 @@ print_variant_debug_results() {
     if test -n "${failure}" -o -n "${outcome_failure}"
     then
 	echo "${failure_output}"
-	printf "Test command: ${cmd}\n"
+	printf "Test command: ${failure_cmd}\n"
     fi
 }
 
@@ -160,6 +160,7 @@ runvariants() {
     failure=""
     outcome_failure=""
     failure_output=""
+    failure_cmd=""
     genmc_args=$(echo "$test_args" | cut -f1 -d'|')
     clang_args=$(echo "$test_args" | cut -f2 -d'|')
     for t in $dir/variants/*.c $dir/variants/*.cpp $dir/variants/*.ll
@@ -170,6 +171,7 @@ runvariants() {
 	if test "$?" -ne 0
 	then
 	    failure_output="${output}"
+	    failure_cmd="${cmd}"
 	    outcome_failure=1
 	fi
 	explored=`echo "${output}" | awk '/explored/ { print $6 }'`
@@ -192,6 +194,7 @@ runvariants() {
 	then
 	    explored_failed="${explored}"
 	    failure_output="${output}"
+	    failure_cmd="${cmd}"
 	    failure=1
 	fi
 	# Only run the first variants when testing round-robin bounding
@@ -206,6 +209,7 @@ runvariants() {
 	if [[ -z "${failure_output}" ]]
 	then
 	    failure_output="${output}"
+	    failure_cmd="${cmd}"
 	fi
 	failure=1
     fi

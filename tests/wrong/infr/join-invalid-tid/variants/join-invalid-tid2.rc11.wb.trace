@@ -1,0 +1,17 @@
+GenMC v0.19.0 (LLVM 21.1.8)
+Copyright (C) 2024 MPI-SWS. All rights reserved.
+
+*** Compilation complete.
+*** Transformation complete.
+Error: Invalid join() operation!
+Event (0, 2) in graph:
+<-1, 0>:
+	(0, 1): THREAD_CREATE [thread 1] pthread.h:146
+	(0, 2): ERROR pthread.h:163
+<0, 1> thread_1:
+
+Trace to (0, 2):
+[main] pthread.h: 146: (*__newthread) = __VERIFIER_thread_create(__attr, __start_routine, __arg);
+ERROR: Invalid TID in pthread_join(): 0 (TID cannot be the same as the calling thread)
+*** Verification unsuccesful.
+Number of complete executions explored: 0

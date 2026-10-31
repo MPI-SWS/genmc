@@ -89,10 +89,10 @@ public:
 	/* In case multiple `LoggerOnce` are created with the same id, the one that was created
 	 * first will be used. */
 	LoggerOnce(const std::string &id, VerbosityLevel l = VerbosityLevel::Warning)
-		: Logger<U>(l, true), shouldPrint_(!ids_.contains(id))
+		: Logger<U>(l, true), shouldPrint_(!getIds().contains(id))
 	{
 		if (shouldPrint_) {
-			ids_.insert(id);
+			getIds().insert(id);
 			Logger<U>::printLevel(l);
 		}
 	}
@@ -104,9 +104,15 @@ public:
 	}
 
 private:
-	const bool shouldPrint_{}; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+	/* We don't make ids a static thread_local member to avoid a GCC bug on MinGW
+	 * (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=81915) */
+	static auto getIds() -> std::set<std::string> &
+	{
+		thread_local std::set<std::string> ids;
+		return ids;
+	}
 
-	static thread_local inline std::set<std::string> ids_;
+	const bool shouldPrint_{}; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 };
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)

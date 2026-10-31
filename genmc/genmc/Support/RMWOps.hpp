@@ -45,39 +45,33 @@ inline auto isValidRMWBinOp(Int i) -> bool
 
 inline auto executeRMWBinOp(SVal oldVal, SVal val, ASize size, RMWBinOp op) -> SVal
 {
+	/* This is the only operation done in GenMC: ensure result has SIZE width */
+	const auto bits = size.getBits();
+	const auto signExtend = [bits](SVal sval) { return sval.signExtendBottom(bits); };
+
 	switch (op) {
 	case RMWBinOp::Xchg:
 		return val;
 	case RMWBinOp::Add:
-		return (oldVal + val);
+		return (oldVal + val).truncate(bits);
 	case RMWBinOp::Sub:
-		return (oldVal - val);
+		return (oldVal - val).truncate(bits);
 	case RMWBinOp::And:
 		return oldVal & val;
 	case RMWBinOp::Nand:
-		return ~(oldVal & val);
+		return (~(oldVal & val)).truncate(bits);
 	case RMWBinOp::Or:
 		return oldVal | val;
 	case RMWBinOp::Xor:
 		return oldVal ^ val;
 	case RMWBinOp::Max:
-		return SVal(oldVal).signExtendBottom(size.getBits())
-				       .sgt(SVal(val).signExtendBottom(size.getBits()))
-			       ? oldVal
-			       : val;
+		return signExtend(oldVal).sgt(signExtend(val)) ? oldVal : val;
 	case RMWBinOp::Min:
-		return SVal(oldVal).signExtendBottom(size.getBits())
-				       .slt(SVal(val).signExtendBottom(size.getBits()))
-			       ? oldVal
-			       : val;
+		return signExtend(oldVal).slt(signExtend(val)) ? oldVal : val;
 	case RMWBinOp::UMax:
-		return SVal(oldVal).truncate(size.getBits()).ugt(SVal(val).truncate(size.getBits()))
-			       ? oldVal
-			       : val;
+		return oldVal.ugt(val) ? oldVal : val;
 	case RMWBinOp::UMin:
-		return SVal(oldVal).truncate(size.getBits()).ult(SVal(val).truncate(size.getBits()))
-			       ? oldVal
-			       : val;
+		return oldVal.ult(val) ? oldVal : val;
 	default:
 		WARN_ONCE("invalid-rmw-op", "Unsupported operation in RMW instruction!\n");
 		return val;

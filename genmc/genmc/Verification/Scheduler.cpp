@@ -104,8 +104,13 @@ static auto calculateReplaySchedule(const ExecutionGraph &g, const Config *conf,
 		});
 	}
 
-	/* Erase NAs as they cannot affect the schedule (unless RD is disabled) */
-	if (!conf->disableRaceDetection) {
+	/* Erase NAs as they cannot affect the schedule (unless RD is disabled).
+	 * Keep them when error-replaying, though: if the schedule ended before the
+	 * (possibly NA) error event, the scheduler would fall back to its policy and
+	 * might run threads past the erroneous graph (and into other errors).
+	 * Also, every NA needs to be re-executed for its metadata to be collected
+	 * (e.g., the racy event's) */
+	if (!conf->disableRaceDetection && !errorEvent) {
 		std::erase_if(result, [&g](const auto &pos) {
 			return g.getEventLabel(pos)->isNotAtomic();
 		});
@@ -298,8 +303,7 @@ static auto findNextLabelToAdd(const ExecutionGraph &g, int thread) -> Event
 {
 	const auto *firstLab = g.getFirstThreadLabel(thread);
 	auto succs = g.po_succs(firstLab);
-	auto it = std::ranges::find_if(succs,
-				       [&](auto &lab) { return genmc::isa<EmptyLabel>(&lab); });
+	auto it = std::ranges::find_if(succs, [&](auto &lab) { return lab.isSkeleton(); });
 	return it == succs.end() ? g.getLastThreadLabel(thread)->getPos().next() : (*it).getPos();
 }
 

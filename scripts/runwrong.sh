@@ -109,7 +109,7 @@ print_variant_debug_results() {
     fi
     if test -n "${outcome_failure}" -a -n "${failure}"
     then
-	printf "Test command: %s\n" "${cmd[*]}"
+	printf "Test command: %s\n" "${failure_cmd[*]}"
     fi
 }
 
@@ -151,6 +151,7 @@ runvariants() {
     failure=""
     diff=""
     outcome_failure=""
+    failure_cmd=()
     unroll="" && [[ -f "${dir}/unroll.in" ]] && unroll="-unroll="`head -1 "${dir}/unroll.in"`
     checker_args=() && [[ -f "${dir}/genmc.${model}.${coherence}.in" ]] &&
 	checker_args=(`cat "${dir}/genmc.${model}.${coherence}.in"`)
@@ -187,6 +188,7 @@ runvariants() {
 	    fi
 	    echo "${diff}"
 	    failure=1
+	    failure_cmd=("${cmd[@]}")
 	else
 	    # if no diff was found (or the diff is suppressed), check non-zero status
 	    if test "$status" -ne 42
@@ -194,6 +196,7 @@ runvariants() {
 		failure_status="$status"
 		outcome_failure=1
 		failure=1
+		failure_cmd=("${cmd[@]}")
 	    fi
 	fi
 	explored=`echo "${output}" | awk '/explored/ { print $6 }'`
@@ -230,6 +233,9 @@ do
 	    "access-freed-hp") continue;;
 	    "destroyed-mutex") continue;;
 	esac
+	# A test may opt out of a model (e.g., its only bug is a data race, which a
+	# hardware model has no notion of); the marker says why
+	[[ -f "${dir}/skip.${model}" ]] && continue
     runtest "${dir}"
 done
 printfooter

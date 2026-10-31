@@ -1,0 +1,19 @@
+GenMC v0.19.0 (LLVM 21.1.8)
+Copyright (C) 2024 MPI-SWS. All rights reserved.
+
+*** Compilation complete.
+*** Transformation complete.
+Error: Attempt to read from uninitialized memory!
+Event (0, 3) in graph:
+<-1, 0>:
+	(0, 1): MALLOC  stdlib.h:36
+	(0, 2): Wna (, 1) uninit-partial-write0.c:8
+	(0, 3): Rna (, 0) [BOTTOM] uninit-partial-write0.c:9
+
+Trace to (0, 3):
+[main] stdlib.h: 36: return __VERIFIER_malloc(size);
+[main] uninit-partial-write0.c: 8: *(unsigned char *)x = 1;
+[main] uninit-partial-write0.c: 9: unsigned r = *x;
+
+*** Verification unsuccesful.
+Number of complete executions explored: 0
