@@ -17,6 +17,7 @@
 #include "passes/InternalFunctions.hpp"
 
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/Demangle/Demangle.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/DebugInfo.h>
 #include <llvm/IR/DerivedTypes.h>
@@ -39,6 +40,24 @@
 #include <vector>
 
 using namespace llvm;
+
+/**
+ * Since Rust 1.87, the compiler-internal allocator symbols (__rust_alloc & co.) are no longer
+ * emitted unmangled, but v0-mangled under the "__rustc" namespace instead
+ * (e.g., _RNvCs<hash>_7___rustc12___rust_alloc => __rustc::__rust_alloc).
+ * Returns the unqualified name for such symbols, and the name unchanged otherwise.
+ */
+static auto getRustcInternalName(StringRef name) -> std::string
+{
+	if (!name.starts_with("_R") || !name.contains("__rustc"))
+		return name.str();
+
+	const std::string demangled = llvm::demangle(name.str());
+	StringRef unqualified(demangled);
+	if (unqualified.consume_front("__rustc::"))
+		return unqualified.str();
+	return name.str();
+}
 
 /**
  * The LLVM-IR output for Rust will not call the "main"-function the user wrote,
@@ -157,6 +176,50 @@ static auto removeAllocShim(Module &M) -> bool
 }
 
 /**
+ * Since Rust 1.89, the global variable above is replaced by a (mangled) function
+ * "__rustc::__rust_no_alloc_shim_is_unstable_v2" that is called before allocating.
+ * Its definition is part of the allocator shim that rustc only generates when linking the
+ * final binary: an empty function whose sole purpose is to cause a link error if the shim is
+ * missing. As it is not present in our bitcode, and we reroute the allocator calls to
+ * genmc__rust_alloc & co. anyway, its calls have no effect for us and we simply remove them.
+ *
+ * Note: Unlike the other allocator symbols, the global is deliberately kept unmangled
+ * by rustc 1.87 and 1.88 (see mangle_internal_symbol() in rustc_symbol_mangling), so
+ * removeAllocShim() still finds it by its plain name in these versions.
+ */
+static auto removeAllocShimCalls(Module &M) -> bool
+{
+	SmallVector<Function *, 2> shims;
+	for (Function &F : M) {
+		if (getRustcInternalName(F.getName()) == "__rust_no_alloc_shim_is_unstable_v2")
+			shims.push_back(&F);
+	}
+
+	bool modified = false;
+	for (Function *shim : shims) {
+		/* Collect the calls to remove; the shim returns void */
+		SmallVector<CallInst *, 8> callsToRemove;
+		for (User *U : shim->users()) {
+			auto *CI = dyn_cast<CallInst>(U);
+			if (CI && CI->getCalledFunction() == shim)
+				callsToRemove.push_back(CI);
+		}
+
+		for (CallInst *CI : callsToRemove) {
+			CI->eraseFromParent();
+			modified = true;
+		}
+
+		/* Remove the shim if not used otherwise */
+		if (shim->use_empty()) {
+			shim->eraseFromParent();
+			modified = true;
+		}
+	}
+	return modified;
+}
+
+/**
  * Replace all calls to __rust_alloc and co. with calls to genmc__rust_alloc & co.
  * instead.
  */
@@ -185,7 +248,7 @@ static auto replaceRustAllocCalls(Function &F) -> bool
 		if (!calledF) // Skip indirect function calls
 			continue;
 
-		const std::string fName = calledF->getName().str();
+		const std::string fName = getRustcInternalName(calledF->getName());
 		if ("__rust_alloc" == fName) {
 			CI->setCalledFunction(genmc__rust_alloc);
 			modified = true;
@@ -281,7 +344,8 @@ auto RustPrepPass::run(Module &M, ModuleAnalysisManager & /*AM*/) -> PreservedAn
 		modified |= cleanDbgSpill(F);
 	}
 
-	modified |= removeAllocShim(M);
+	/* The shim function only exists if the shim global does not (Rust >= 1.89) */
+	modified |= removeAllocShim(M) || removeAllocShimCalls(M);
 
 	return modified ? PreservedAnalyses::none() : PreservedAnalyses::all();
 }
