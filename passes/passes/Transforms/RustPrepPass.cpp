@@ -17,6 +17,7 @@
 #include "passes/InternalFunctions.hpp"
 
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/Demangle/Demangle.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/DebugInfo.h>
 #include <llvm/IR/DerivedTypes.h>
@@ -39,6 +40,24 @@
 #include <vector>
 
 using namespace llvm;
+
+/**
+ * Since Rust 1.87, the compiler-internal allocator symbols (__rust_alloc & co.) are no longer
+ * emitted unmangled, but v0-mangled under the "__rustc" namespace instead
+ * (e.g., _RNvCs<hash>_7___rustc12___rust_alloc => __rustc::__rust_alloc).
+ * Returns the unqualified name for such symbols, and the name unchanged otherwise.
+ */
+static auto getRustcInternalName(StringRef name) -> std::string
+{
+	if (!name.starts_with("_R") || !name.contains("__rustc"))
+		return name.str();
+
+	const std::string demangled = llvm::demangle(name.str());
+	StringRef unqualified(demangled);
+	if (unqualified.consume_front("__rustc::"))
+		return unqualified.str();
+	return name.str();
+}
 
 /**
  * The LLVM-IR output for Rust will not call the "main"-function the user wrote,
@@ -185,7 +204,7 @@ static auto replaceRustAllocCalls(Function &F) -> bool
 		if (!calledF) // Skip indirect function calls
 			continue;
 
-		const std::string fName = calledF->getName().str();
+		const std::string fName = getRustcInternalName(calledF->getName());
 		if ("__rust_alloc" == fName) {
 			CI->setCalledFunction(genmc__rust_alloc);
 			modified = true;
